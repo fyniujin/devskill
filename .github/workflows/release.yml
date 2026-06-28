@@ -32,81 +32,91 @@ jobs:
           echo "changed=${CHANGED}" >> $GITHUB_OUTPUT
           echo "Detected changes in:${CHANGED}"
 
-      - name: Create Release for each skill
+      - name: Create Release + Update README
         if: steps.changed.outputs.changed != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          for skill in ${{ steps.changed.outputs.changed }}; do
-            echo "--- Processing skill: ${skill} ---"
-            VERSION=$(grep -m1 '^version:' "${skill}/SKILL.md" | sed 's/version: *//')
-            TAG="${skill}-v${VERSION}"
-            echo "Creating release ${TAG}"
-            DESC=$(sed -n '/^description:/p' "${skill}/SKILL.md" | head -1 | sed 's/description:[ ]*//')
-            BODY="## ${skill} v${VERSION}
-
-${DESC}
-
-See [SKILL.md](https://github.com/${{ github.repository }}/blob/main/${skill}/SKILL.md) for details."
-            curl -s -X POST \
-              -H "Authorization: token ${GITHUB_TOKEN}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/${{ github.repository }}/releases" \
-              -d "{\"tag_name\":\"${TAG}\",\"name\":\"${skill} v${VERSION}\",\"body\":\"$(echo "$BODY" | sed 's/"/\\"/g')\",\"draft\":false,\"prerelease\":false}" \
-              || echo "Release may already exist."
-            echo "Done with ${skill}"
-          done
-
-      - name: Update README.md index
-        if: steps.changed.outputs.changed != ''
+          REPO: ${{ github.repository }}
+          CHANGED_SKILLS: ${{ steps.changed.outputs.changed }}
         run: |
           python3 << 'PYEOF'
-          import re
+          import os, re, json, urllib.request, subprocess
           from datetime import datetime
 
-          SKILLS = ["wps-office-suite", "zwjh-skill", "dgngjx-skill", "winskill"]
+          token = os.environ["GITHUB_TOKEN"]
+          repo = os.environ["REPO"]
+          changed_skills = os.environ["CHANGED_SKILLS"].strip().split()
 
-          table_rows = []
-          for skill in SKILLS:
-              path = f"{skill}/SKILL.md"
+          headers = {
+              "Authorization": f"token {token}",
+              "Accept": "application/vnd.github.v3+json"
+          }
+
+          # --- Create Releases ---
+          for skill in changed_skills:
+              sk_path = f"{skill}/SKILL.md"
+              with open(sk_path, "r", encoding="utf-8") as f:
+                  content = f.read()
+
+              ver_m = re.search(r'^version:\s*(.+)$', content, re.MULTILINE)
+              version = ver_m.group(1).strip() if ver_m else "unknown"
+              tag = f"{skill}-v{version}"
+              desc_m = re.search(r'^description:\s*["\']?(.+?)["\']?\s*$', content, re.MULTILINE)
+              desc = desc_m.group(1).strip("'\"") if desc_m else ""
+              body = f"## {skill} v{version}\n\n{desc}\n\nSee [SKILL.md](https://github.com/{repo}/blob/main/{sk_path}) for details."
+
+              print(f"Creating release {tag}...")
+              payload = json.dumps({
+                  "tag_name": tag,
+                  "name": f"{skill} v{version}",
+                  "body": body,
+                  "draft": False,
+                  "prerelease": False
+              }).encode()
+              req = urllib.request.Request(
+                  f"https://api.github.com/{repo}/releases",
+                  data=payload,
+                  headers={**headers, "Content-Type": "application/json"},
+                  method="POST"
+              )
               try:
-                  with open(path, "r", encoding="utf-8") as f:
-                      content = f.read()
-              except FileNotFoundError:
-                  print(f"WARNING: {path} not found, skipping")
-                  continue
+                  resp = urllib.request.urlopen(req)
+                  print(f"Release created: {json.loads(resp.read())['html_url']}")
+              except Exception as e:
+                  print(f"Release may already exist or error: {e}")
 
-              desc_match = re.search(r'^description:\s*["\']?(.+?)["\']?\s*$', content, re.MULTILINE)
-              desc = desc_match.group(1).strip("'\"") if desc_match else ""
-              if len(desc) > 120:
-                  desc = desc[:120] + "..."
+          # --- Update README ---
+          SKILLS = ["wps-office-suite", "zwjh-skill", "dgngjx-skill", "winskill"]
+          rows = []
+          for s in SKILLS:
+              p = f"{s}/SKILL.md"
+              with open(p, "r", encoding="utf-8") as f:
+                  c = f.read()
+              dm = re.search(r'^description:\s*["\']?(.+?)["\']?\s*$', c, re.MULTILINE)
+              d = (dm.group(1).strip("'\"") if dm else "")[:120]
+              vm = re.search(r'^version:\s*(.+)$', c, re.MULTILINE)
+              v = vm.group(1).strip() if vm else "-"
+              rows.append(f"| {s} | `{s}/SKILL.md` | v{v} | {d} |")
 
-              ver_match = re.search(r'^version:\s*(.+)$', content, re.MULTILINE)
-              ver = ver_match.group(1).strip() if ver_match else "-"
-
-              table_rows.append(f"| {skill} | `{skill}/SKILL.md` | v{ver} | {desc} |")
+          new_table = "## 📦 Skill 索引\n\n| 技能 | 路径 | 最新版本 | 描述 |\n|------|------|----------|------|\n" + "\n".join(rows) + "\n"
 
           with open("README.md", "r", encoding="utf-8") as f:
               readme = f.read()
-
-          new_table = "## 📦 Skill 索引\n\n| 技能 | 路径 | 最新版本 | 描述 |\n|------|------|----------|------|\n"
-          new_table += "\n".join(table_rows) + "\n"
 
           readme = re.sub(
               r'## 📦 Skill 索引\n\n\| 技能 \| 路径 \| 最新版本 \| 描述 \|\n\|------\|------\|----------\|------\|\n(?:\|.+\n)*',
               new_table,
               readme
           )
-
           now = datetime.now().strftime("%Y-%m-%d %H:%M")
           readme = re.sub(r'\*最后更新：.*\*', f"*最后更新：{now}*", readme)
 
           with open("README.md", "w", encoding="utf-8") as f:
               f.write(readme)
-          print("README.md updated successfully")
+          print("README updated")
           PYEOF
 
-      - name: Commit updated README
+      - name: Commit and push
         if: steps.changed.outputs.changed != ''
         run: |
           git config user.name "github-actions[bot]"
