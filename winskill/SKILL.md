@@ -2,9 +2,9 @@
 name: winskill
 slug: winskill
 displayName: "Windows 运维工具箱"
-description: "Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控。只读分析+安全确认，绝不误删文件，完全免费离线运行。"
-description_zh: "Windows 运维工具箱 - 磁盘分析、清理、IIS 管理、批量操作、服务监控、更新诊断、性能监控、安全审计、注册表审计、磁盘健康、网络监控。只读+确认模式，零依赖离线运行。"
-version: 1.3.0
+description: "Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控、事件日志诊断、已安装程序管理、用户会话监控。只读分析+安全确认，绝不误删文件，完全免费离线运行。"
+description_zh: "Windows 运维工具箱 - 磁盘分析、清理、IIS 管理、批量操作、服务监控、更新诊断、性能监控、安全审计、注册表审计、磁盘健康、网络监控、事件日志、程序管理、会话监控。只读+确认模式，零依赖离线运行。"
+version: 1.4.0
 category: system-administration
 platforms:
   - windows
@@ -22,10 +22,13 @@ tags:
   - registry
   - disk-health
   - network
+  - event-log
+  - software
+  - session
 requires_api_key: false
 ---
 
-# Winskill — Windows 服务器运维工具箱 v1.3.0
+# Winskill — Windows 服务器运维工具箱 v1.4.0
 
 ## 快速开始
 
@@ -44,6 +47,9 @@ requires_api_key: false
 | 检查可疑启动项 | `"有没有可疑的自启动程序"` |
 | 磁盘健康状态 | `"硬盘还健康吗？有没有坏道"` |
 | 网络连接监控 | `"谁在连我的服务器"` |
+| 系统日志哪里错了 | `"系统日志有没有最近的错误"` |
+| 服务器装了什么程序 | `"看看系统安装了哪些软件"` |
+| 谁在服务器上 | `"当前有谁登录了服务器"` |
 | 搞不定了 | `"我遇到报错了，帮我看看"` |
 
 > ⚠️ **AI 必须遵守**：凡涉及删除、停止服务、修改系统的操作，必须先展示操作清单，等用户明确说"确认执行"后才可执行。
@@ -61,6 +67,7 @@ requires_api_key: false
 | 日志记录 | 操作记录到 `C:\AdminScripts\winskill.log` |
 | 排除保护 | `pagefile.sys`、`hiberfil.sys` 等系统文件不可操作 |
 | 注册表保护 | 注册表分析只读，任何修改需双重确认 |
+| 日志读取保护 | 事件日志只读查看，不修改任何日志记录 |
 
 ---
 
@@ -549,7 +556,7 @@ Get-Counter '\Process(*)\Read Bytes/sec',
     Where-Object { $_.CookedValue -gt 0 } |
     Sort-Object CookedValue -Descending |
     Select-Object -First 15 @{N='进程';E={
-        $_.Path -replace '\\Process\((.*)\)\\reads bytes/sec$','$1' |
+        $_.Path -replace '\\Process\((.*)\)\\Read Bytes/sec$','$1' |
         ForEach-Object { if ($_ -eq 'idle') { 'System Idle' } else { $_ }
     }}, @{N='Bytes/s';E={[math]::Round($_.CookedValue, 0)}} |
     Format-Table -AutoSize
@@ -1049,6 +1056,388 @@ Get-NetFirewallRule -Direction Inbound -Enabled True -ErrorAction SilentlyContin
 
 ---
 
+## 🆕 模块 14：Windows 事件日志诊断
+
+**用途**：快速定位系统错误、警告，按时间/级别筛选关键日志。
+
+**常你说**：`"系统日志有没有最近错误"` / `"最近系统出了什么问题"` / `"看看日志"`
+
+> ⚠️ **本模块仅读取日志，不会修改或清除日志文件。**
+
+### 14.1 系统最近错误日志（最近 2 小时）
+
+<details>
+<summary>📋 展开查看命令 — 最近系统错误</summary>
+
+```powershell
+$since = (Get-Date).AddHours(-2)
+
+Write-Host "════════ 最近 2 小时系统日志（错误/警告）════════"
+Get-WinEvent -FilterHashtable @{
+    LogName='System';Level=2,3;StartTime=$since
+} -ErrorAction SilentlyContinue |
+    Select-Object @{N='时间';E={$_.TimeCreated}},
+        @{N='来源';E={$_.Message.Split("`r`n")[0] -replace '^.*?: '}},
+        @{N='级别';E={if ($_.Level -eq 2) { '❌错误' } else { '⚠️警告' }}} |
+    Select-Object -First 30 |
+    Format-Table -AutoSize -Wrap
+```
+
+</details>
+
+### 14.2 应用程序错误日志
+
+<details>
+<summary>📋 展开查看命令 — 最近应用程序错误</summary>
+
+```powershell
+$since = (Get-Date).AddHours(-24)
+
+Write-Host "════════ 最近 24 小时应用程序错误 ════════"
+Get-WinEvent -FilterHashtable @{
+    LogName='Application'; Level=2; StartTime=$since
+} -ErrorAction SilentlyContinue |
+    Select-Object @{N='时间';E={$_.TimeCreated}},
+        @{N='来源';E={$_.ProviderName}},
+        @{N='错误摘要';E={
+            ($_.Message -replace "`r`n",' ' | Select-Object -First 120)
+        }} |
+    Select-Object -First 20 |
+    Format-Table -AutoSize -Wrap
+```
+
+</details>
+
+### 14.3 关键系统事件扫描（蓝屏/重启/故障）
+
+<details>
+<summary>📋 展开查看命令 — 关键系统事件</summary>
+
+```powershell
+Write-Host "════════ 关键系统事件（最近 7 天）════════"
+Get-WinEvent -FilterHashtable @{
+    LogName='System';
+    ID=1074, 6005, 6006, 6008, 6009, 41, 1001, 1002;
+    StartTime=(Get-Date).AddDays(-7)
+} -ErrorAction SilentlyContinue |
+    Select-Object @{N='时间';E={$_.TimeCreated}},
+        @{N='事件ID';E={$_.Id}},
+        @{N='说明';E={
+            switch ($_.Id) {
+                1074 {'系统关机/重启 (User initiated)'}
+                6005 {'系统启动'}
+                6006 {'系统正常关机'}
+                6008 {'非正常关机 (意外断电/崩溃)'}
+                6009 {'系统启动 (新会话)'}
+                41  {'Kernel-Power 重启 (无干净关机)'}
+                1001{'BugCheck (蓝屏)'}
+                1002{'应用程序挂起/无响应'}
+                default {$_.Message.Split("`r`n")[0]}
+            }
+        }} |
+    Format-Table -AutoSize -Wrap
+```
+
+</details>
+
+### 14.4 Setup 日志审计（最近 7 天）
+
+<details>
+<summary>📋 展开查看命令 — Setup 最近事件</summary>
+
+```powershell
+Write-Host "════════ Setup 最近 7 天事件 ════════"
+Get-WinEvent -FilterHashtable @{
+    LogName='Setup';
+    StartTime=(Get-Date).AddDays(-7)
+} -ErrorAction SilentlyContinue |
+    Select-Object @{N='时间';E={$_.TimeCreated}},
+        @{N='来源';E={$_.ProviderName}},
+        @{N='摘要';E={
+            ($_.Message -replace "`r`n",' ' | Select-Object -First 120)
+        }} |
+    Select-Object -First 15 |
+    Format-Table -AutoSize -Wrap
+```
+
+</details>
+
+**风险等级**：🟢 无（只读阅读）
+
+| 报错 | 含义 | 解决 |
+|-----|------|-----|
+| `No events were found ...` | 没有符合条件的日志 | 正常，说明期间无异常 |
+| `RPC server is unavailable` | 事件日志服务未运行 | 检查 EventLog 服务 |
+| `Access denied` | 权限不足 | 管理员身份执行 |
+
+**常见坑 & 解决**：
+
+| 场景 | 说明 |
+|-----|------|
+| 每天大量 Error 日志 | 说明存在持续性故障，需逐条排查来源 |
+| 非正常关机 (6008) | 可能存在硬件/电源问题 |
+| 蓝屏 (1001) | 记录蓝屏代码，排查驱动/硬件 |
+
+---
+
+## 🆕 模块 15：已安装程序与补丁管理
+
+**用途**：查看所有已安装的软件、补丁，检测缺失或不一致情况。
+
+**常你说**：`"看看系统安装了哪些软件"` / `"服务器装了什么程序"` / `"补丁检查"`
+
+> ⚠️ **本模块仅读，不会卸载/安装/修改任何软件。**
+
+### 15.1 已安装程序清单
+
+<details>
+<summary>📋 展开查看命令 — 系统已安装程序</summary>
+
+```powershell
+Write-Host "════════ 已安装程序清单 ════════"
+Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
+    Where-Object { $_.DisplayName -and $_.UninstallString -notlike '*{*' } |
+    Select-Object @{N='程序名';E={$_.DisplayName}},
+        @{N='版本';E={$_.DisplayVersion}},
+        @{N='安装日期';E={$_.InstallDate}},
+        @{N='大小';E={if($_.EstimatedSize){[math]::Round($_.EstimatedSize/1MB,1)}else{'?'}}} |
+    Sort-Object DisplayName |
+    Format-Table -AutoSize
+```
+
+</details>
+
+### 15.2 已安装 Windows 补丁
+
+<details>
+<summary>📋 展开查看命令 — Windows 补丁列表</summary>
+
+```powershell
+Write-Host "════════ 已安装 Windows 补丁 ════════"
+Get-HotFix | Sort-Object InstalledOn -Descending |
+    Select-Object @{N='补丁ID';E={$_.HotFixID}},
+        @{N='安装日期';E={$_.InstalledOn}},
+        @{N='描述';E={$_.Description}} |
+    Format-Table -AutoSize
+```
+
+</details>
+
+### 15.3 安装时间线分析
+
+<details>
+<summary>📋 展开查看命令 — 软件安装时间线</summary>
+
+```powershell
+Write-Host "════════ 最近安装的软件 ════════"
+Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
+    Where-Object { $_.InstallDate } |
+    Sort-Object InstallDate -Descending |
+    Select-Object -First 20 @{N='程序名';E={$_.DisplayName}},
+        @{N='版本';E={$_.DisplayVersion}},
+        @{N='安装日期';E={$_.InstallDate}} |
+    Format-Table -AutoSize
+```
+
+</details>
+
+### 15.4 补丁对比（检测缺失）
+
+<details>
+<summary>📋 展开查看命令 — 补丁一致性检查</summary>
+
+```powershell
+$hotfixes = Get-HotFix -ErrorAction SilentlyContinue | Select-Object -ExpandProperty HotFixID
+$currentBuild = [System.Environment]::OSVersion.Version
+$expectedPatches = @()
+
+# 检测 Windows 10/11 常见缺失补丁
+if ($currentBuild.Major -ge 10) {
+    $kbToCheck = @(
+        "KB5034441",  # Secure Boot DBX
+        "KB5036897",  # 最新 .NET
+        "KB5037771"   # 最新累积
+    )
+    foreach ($kb in $kbToCheck) {
+        if ($hotfixes -notcontains $kb) {
+            $expectedPatches += "$kb - 缺失"
+        }
+    }
+}
+
+Write-Host "════════ 补丁一致性检查 ════════"
+Write-Host "  当前版本: $($currentBuild.Major).$($currentBuild.Minor).$($currentBuild.Build)"
+Write-Host ""
+if ($expectedPatches.Count -gt 0) {
+    Write-Host "  ⚠️ 缺失补丁:"
+    foreach ($p in $expectedPatches) { Write-Host "    ❌ $p" }
+} else {
+    Write-Host "  ✅ 常用补丁均已安装"
+}
+```
+
+</details>
+
+**风险等级**：🟢 无（只读阅读）
+
+| 报错 | 含义 | 解决 |
+|-----|------|-----|
+| `Requested registry access is not allowed` | 部分注册表权限限制 | 管理员身份执行 |
+| `Get-HotFix` 报错 | 需要管理员权限 | 管理员身份执行 |
+
+**常见坑 & 解决**：
+
+| 场景 | 说明 |
+|-----|------|
+| 某台服务器明显比其他机器少很多补丁 | 可能 WSUS/自动更新未运行 |
+| 安装时间线上出现未知日期的软件 | 可能未经授权安装，需排查 |
+| KB 补丁安装失败 | Windows Update 服务或缓存异常 |
+
+---
+
+## 🆕 模块 16：用户会话与登录状态监控
+
+**用途**：监控当前登录的用户、远程会话、僵尸会话、账户状态。
+
+**常你说**：`"谁在服务器上"` / `"有没有异常登录"` / `"查看远程会话"`
+
+> ⚠️ **本模块仅读，不会结束会话、锁定账户或修改密码策略。**
+
+### 16.1 当前登录用户概览
+
+<details>
+<summary>📋 展开查看命令 — 当前登录用户</summary>
+
+```powershell
+Write-Host "════════ 当前登录用户 ════════"
+Get-CimInstance Win32_LogonSession | Where-Object { $_.LogonType -ne 0 } |
+    Select-Object @{N='用户名';E={
+        $user = Get-CimInstance Win32_ComputerSystem | Select-Object UserName
+        $user.UserName ?? "未知"
+    }},
+    @{N='会话ID';E={$_.LogonId}},
+    @{N='登录类型';E={
+        switch ($_.LogonType) {
+            2 {'交互 (本地登录)'}
+            3 {'网络登录'}
+            4 {'批处理'}
+            5 {'服务'}
+            7 {'解锁'}
+            8 {'网络明文'}
+            9 {'新凭据'}
+            10 {'远程交互 (RDP)'}
+            11 {'缓存交互'}
+            default {"其他 ($($_.LogonType))"}
+        }
+    }},
+    @{N='登录时间';E={$_.StartTime}} |
+    Format-Table -AutoSize
+```
+
+</details>
+
+### 16.2 远程桌面会话监控
+
+<details>
+<summary>📋 展开查看命令 — RDP 会话列表</summary>
+
+```powershell
+Write-Host "════════ 远程桌面会话 (RDP) ════════"
+Get-CimInstance Win32_LogonSession | Where-Object { $_.LogonType -eq 10 } |
+    Select-Object @{N='用户名';E={
+        $user = Get-CimInstance Win32_ComputerSystem | Select-Object UserName
+        $user.UserName ?? "未知"
+    }},
+    @{N='会话ID';E={$_.LogonId}},
+    @{N='登录时间';E={$_.StartTime}},
+    @{N='空闲时间(分钟)';E={
+        if ($_.StartTime) {
+            [math]::Round(((Get-Date) - $_.StartTime).TotalMinutes, 0)
+        } else { 0 }
+    }} |
+    Format-Table -AutoSize
+Write-Host "`n💡 空闲 >60 分钟的会话可能为僵尸会话"
+```
+
+</details>
+
+### 16.3 异常登录检测（多 IP / 异地登录）
+
+<details>
+<summary>📋 展开查看命令 — 异常登录分析</summary>
+
+```powershell
+Write-Host "════════ 最近 7 天的登录来源 ════════"
+Get-WinEvent -FilterHashtable @{
+    LogName='Security';
+    ID=4624;
+    StartTime=(Get-Date).AddDays(-7)
+} -ErrorAction SilentlyContinue |
+    Where-Object { $_.Properties[18].Value -ne '-' } |
+    Select-Object @{N='登录时间';E={$_.TimeCreated}},
+        @{N='用户名';E={$_.Properties[5].Value}},
+        @{N='来源IP';E={$_.Properties[18].Value}},
+        @{N='登录类型';E={
+            switch ($_.Properties[8].Value) {
+                2 {'交互(本地)'}
+                3 {'网络'}
+                10 {'远程(RDP)'}
+                default {"其他"}
+            }
+        }} |
+    Group-Object SourceIP |
+    Sort-Object Count -Descending |
+    Select-Object -First 10 @{N='来源IP';E={$_.Name}},
+        @{N='登录次数';E={$_.Count}},
+        @{N='最近登录';E={$_.Group[0].TimeCreated}} |
+    Format-Table -AutoSize
+
+Write-Host "`n💡 任何未知来源IP 的登录都值得警惕"
+```
+
+</details>
+
+### 16.4 系统账户状态检查
+
+<details>
+<summary>📋 展开查看命令 — 账户状态审计</summary>
+
+```powershell
+Write-Host "════════ 本地用户账户状态 ════════"
+Get-LocalUser | Where-Object { $_.Enabled -eq $true } |
+    Select-Object @{N='账户名';E={$_.Name}},
+        @{N='状态';E={if ($_.Enabled) {'启用'}else{'禁用'}}},
+        @{N='最后登录';E={$_.LastLogon}},
+        @{N='密码过期';E={
+            if ($_.PasswordExpires) { $_.PasswordExpires } else { '永不过期 ⚠️' }
+        }},
+        @{N='需要密码';E={if ($_.PasswordRequired) {'是'}else{'否 ⚠️'}}} |
+    Format-Table -AutoSize
+
+Write-Host "`n⚠️ 标记的账户存在安全风险：无密码或密码永不过期"
+```
+
+</details>
+
+**风险等级**：🟢 无（只读监控）
+
+| 报错 | 含义 | 解决 |
+|-----|------|-----|
+| `Get-LocalUser` 报错 | 需要管理员权限 | 管理员身份执行 |
+| `Get-CimInstance` 报错 | WMI 未启动 | 检查 Winmgmt |
+| `No events found` | 没有相关日志 | 正常 |
+
+**常见坑 & 解决**：
+
+| 场景 | 说明 |
+|-----|------|
+| 多个 RDP 会话来自同一 IP | 可能正常（NAT），也可能为多人共用账户 |
+| Guest 账户启用 | 不必要的安全风险，建议禁用 |
+| 僵尸 RDP 会话 | 占用资源，闲置超时后应自动断开 |
+| 密码永不过期 | 合规风险，建议设置密码策略 |
+
+---
+
 ## 前置要求与依赖
 
 | 需求 | 说明 | 检测方法 |
@@ -1058,6 +1447,7 @@ Get-NetFirewallRule -Direction Inbound -Enabled True -ErrorAction SilentlyContin
 | WebAdministration | IIS 管理可选 | `Install-WindowsFeature Web-Mgmt-Tools` |
 | 执行策略 | 可能需调整 | `Set-ExecutionPolicy RemoteSigned` |
 | 存储诊断模块 | 磁盘健康检测需要 | `Get-PhysicalDisk` 可用 |
+| Winmgmt (WMI) | 系统事件/会话监控需要 | `Get-CimInstance` 可用 |
 
 **管理员权限自动检测**：
 ```powershell
@@ -1094,7 +1484,7 @@ if (-not $isAdmin) {
 只读审计和导出操作不会产生额外日志。但性能计数器采集会占用少量系统资源。
 
 ### Q8: 注册表审计会不会误删系统关键项？
-不会。模块 11 所有操作均为只读分析，绝不修改任何注册表键值。如需清理，AI 会先展示可疑项并等待用户确认。
+不会。模块 11 所有操作均为只读分析，绝不修改任何注册表键值。
 
 ### Q9: 磁盘健康检测会损伤磁盘吗？
 不会。SMART 信息和错误计数均为只读读取，不会执行磁盘擦除或修复操作。
@@ -1102,7 +1492,16 @@ if (-not $isAdmin) {
 ### Q10: 网络连接监控会不会泄露隐私？
 不会。所有检测均在本地进行，不会将任何连接信息发送到外部。
 
-### Q11: 怎么升级 winskill？
+### Q11: 事件日志会清除或修改吗？
+不会。模块 14 仅读取日志内容，不会清除、修改或停止日志服务。
+
+### Q12: 软件清单会篡改卸载程序吗？
+不会。模块 15 仅读取注册表卸载键值，不会修改任何安装信息或卸载程序。
+
+### Q13: 会话监控会踢出用户吗？
+不会。模块 16 仅读取会话信息，不会结束、锁定或断开任何用户会话。
+
+### Q14: 怎么升级 winskill？
 ```bash
 skillhub upgrade winskill
 ```
@@ -1126,6 +1525,9 @@ skillhub upgrade winskill
 | `"可疑启动项"` | 模块 11 |
 | `"硬盘健康吗"` | 模块 12 |
 | `"谁在连我"` | 模块 13 |
+| `"系统日志错误"` | 模块 14 |
+| `"装了什么软件"` | 模块 15 |
+| `"谁在服务器上"` | 模块 16 |
 
 ---
 
@@ -1140,6 +1542,9 @@ skillhub upgrade winskill
 | BIOS/硬件层操作 | 超出操作系统层面 |
 | 磁盘修复/擦除 | 超出工具范围，需专业工具 |
 | 终止网络连接 | 超出工具范围 |
+| 清除/停止事件日志 | 超出工具范围，仅只读 |
+| 卸载/安装软件 | 超出工具范围，只读审计 |
+| 结束/断开用户会话 | 超出工具范围，只读监控 |
 
 ---
 
@@ -1149,7 +1554,7 @@ skillhub upgrade winskill
 - **无需 API Key**
 - **无需联网**（除首次安装 IIS 管理工具外）
 - **无需安装任何第三方软件**
-- ⚠️ **管理员权限检测**：部分功能（IIS 管理、更新缓存清理、安全审计、磁盘健康检测、网络监控）需要管理员权限，AI 会在执行前自动检测并提示
+- ⚠️ **管理员权限检测**：部分功能（IIS 管理、更新缓存清理、安全审计、磁盘健康检测、网络监控、事件日志诊断、会话监控）需要管理员权限，AI 会在执行前自动检测并提示
 
 ## 发布信息
 
@@ -1159,7 +1564,8 @@ skillhub upgrade winskill
 - **安全机制**：所有删除操作需用户确认，不用强制删除
 - **TRACE 评测**：已通过评测，[查看详情](https://skillhub.cn/community/skills/winskill)
 - **更新历史**：
-  - v1.3.0：新增注册表启动项审计、磁盘健康检测、网络端口监控 3 个模块，安全声明增加注册表保护
+  - v1.4.0：新增事件日志诊断、已安装程序管理、用户会话监控 3 个模块，总计 16 个模块
+  - v1.3.0：新增注册表启动项审计、磁盘健康检测、网络端口监控 3 个模块
   - v1.2.0：新增 Windows Update 性能监控 安全审计 3 个模块，所有命令折叠隐藏
   - v1.1.0：新增快速开始/报错指引/FAQ
   - v1.0.0：初始版本，7 个模块
