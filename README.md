@@ -10,7 +10,7 @@
 |------|------|----------|------|
 | wps-office-suite | `wps-office-suite/SKILL.md` | v2.1.0 | WPS Office 全家桶 - 三引擎（WPS/MS Office/纯Python）自动适配，自然语言驱动 Word/Excel/PPT |
 | zwjh-skill | `zwjh-skill/SKILL.md` | v1.5.0 | 会进化的 AI - 自动读取记忆、分析对话、修复问题、优化行为 |
-| dgngjx-skill | `dgngjx-skill/SKILL.md` | - | 多功能工具箱 - 8大模块29个免费工具 |
+| dgngjx-skill | `dgngjx-skill/SKILL.md` | v1.7.0 | 多功能工具箱 - 8大模块29个免费工具 |
 | winskill | `winskill/SKILL.md` | v1.3.0 | Windows 运维工具箱 - 磁盘分析、清理、IIS 管理、服务监控、安全审计 |
 
 > ⚠️ 此表由 GitHub Actions 在发布时自动更新，请勿手动编辑。
@@ -69,6 +69,15 @@ git push → GitHub Actions 触发
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
 | v1.5.0 | - | 更友好的错误处理、预测功能冷启动优化——数据不足也能给有用建议 |
+
+</details>
+
+<details>
+<summary>dgngjx-skill - 点击展开</summary>
+
+| 版本 | 日期 | 本次更新 |
+|------|------|---------|
+| v1.7.0 | - | 8大模块29个免费工具，图片处理/PDF转换/数据换算/文本工具/开发工具/视频工具/教育/生活娱乐 |
 
 </details>
 
