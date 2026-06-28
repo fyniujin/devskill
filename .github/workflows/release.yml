@@ -6,9 +6,9 @@ on:
     paths:
       - 'wps-office-suite/**'
       - 'zwjh-skill/**'
-        - 'dgngjx-skill/**'
-        - 'winskill/**'
-        - '.github/workflows/**'
+      - 'dgngjx-skill/**'
+      - 'winskill/**'
+      - '.github/workflows/**'
 
 permissions:
   contents: write
