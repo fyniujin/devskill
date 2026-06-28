@@ -1,6 +1,6 @@
-# 🎒 WorkBuddy Skills Monorepo
+# 🎒 Skills Monorepo
 
-> 一个仓库管理所有 WorkBuddy Skills，配合 GitHub Actions 实现「改哪个发布哪个」。
+> 一个仓库管理所有 Skills，配合 GitHub Actions 实现「改哪个发布哪个」。
 
 ---
 
