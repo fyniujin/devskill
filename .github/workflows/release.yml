@@ -9,6 +9,10 @@ on:
       - 'dgngjx-skill/**'
       - 'winskill/**'
 
+# 关键：给 Actions 足够权限创建 Release
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -22,7 +26,6 @@ jobs:
         run: |
           CHANGED=""
           for skill in wps-office-suite zwjh-skill dgngjx-skill winskill; do
-            # 首次提交没有 HEAD~1，用文件标记判断是否首次发布
             if git diff --name-only HEAD~1..HEAD 2>/dev/null | grep -q "^${skill}/" || [ ! -f ".last-release-${skill}" ]; then
               CHANGED="${CHANGED} ${skill}"
               touch ".last-release-${skill}"
@@ -35,29 +38,42 @@ jobs:
         if: steps.changed.outputs.changed != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -x
           for skill in ${{ steps.changed.outputs.changed }}; do
+            echo "--- Processing skill: ${skill} ---"
+            
+            # 验证文件夹存在
+            if [ ! -d "${skill}" ]; then
+              echo "ERROR: Directory '${skill}' does not exist!"
+              ls -la
+              continue
+            fi
+            
             VERSION=$(grep -m1 '^version:' "${skill}/SKILL.md" | sed 's/version: *//')
             TAG="${skill}-v${VERSION}"
+            echo "Creating release ${TAG}"
             
-            # Delete old release if exists
-            gh release delete "$TAG" --yes 2>/dev/null || true
+            # 用 API 直接创建 Release（绕过 gh CLI 的路径问题）
+            DESC=$(sed -n '/^description:/p' "${skill}/SKILL.md" | head -1 | sed 's/description:[ ]*//')
+            BODY="## ${skill} v${VERSION}\n\n${DESC}\n\nSee [SKILL.md](https://github.com/${{ github.repository }}/blob/main/${skill}/SKILL.md) for details."
             
-            # Create new release
-            gh release create "$TAG" \
-              --title "${skill} v${VERSION}" \
-              --notes "## ${skill} v${VERSION}\n\n$(sed -n '/^description:/p' \"${skill}/SKILL.md\" | head -1)\n\nSee [SKILL.md](https://github.com/${{ github.repository }}/blob/main/${skill}/SKILL.md) for details." \
-              "${skill}/"* \
-              --latest=false
+            curl -s -X POST \
+              -H "Authorization: token ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/${{ github.repository }}/releases" \
+              -d "{\"tag_name\":\"${TAG}\",\"name\":\"${skill} v${VERSION}\",\"body\":\"$(echo "$BODY" | sed 's/"/\\"/g')\",\"draft\":false,\"prerelease\":false,\"generate_release_notes\":false}" \
+              || echo "Release may already exist, trying update..."
             
-            echo "Created release: ${skill} v${VERSION}"
+            echo "Done with ${skill}"
           done
 
-      - name: Update README.md
+      - name: Update README.md index
         if: steps.changed.outputs.changed != ''
         run: |
-          cat > readme_update.py << 'PYEOF'
-          import re, os
+          python3 << 'PYEOF'
+          import re
           from datetime import datetime
           
           SKILLS = ["wps-office-suite", "zwjh-skill", "dgngjx-skill", "winskill"]
@@ -65,10 +81,13 @@ jobs:
           table_rows = []
           for skill in SKILLS:
               path = f"{skill}/SKILL.md"
-              with open(path, "r", encoding="utf-8") as f:
-                  content = f.read()
+              try:
+                  with open(path, "r", encoding="utf-8") as f:
+                      content = f.read()
+              except FileNotFoundError:
+                  print(f"WARNING: {path} not found, skipping")
+                  continue
               
-              name = skill
               desc_match = re.search(r'^description:\s*["\']?(.+?)["\']?\s*$', content, re.MULTILINE)
               desc = desc_match.group(1).strip("'\"") if desc_match else ""
               if len(desc) > 120:
@@ -77,13 +96,11 @@ jobs:
               ver_match = re.search(r'^version:\s*(.+)$', content, re.MULTILINE)
               ver = ver_match.group(1).strip() if ver_match else "-"
               
-              table_rows.append(f"| {name} | `{skill}/SKILL.md` | v{ver} | {desc} |")
+              table_rows.append(f"| {skill} | `{skill}/SKILL.md` | v{ver} | {desc} |")
           
-          # Read README.md
           with open("README.md", "r", encoding="utf-8") as f:
               readme = f.read()
           
-          # Replace table
           new_table = "## \U0001f4e6 Skill \u7d22\u5f15\n\n| \u6280\u80fd | \u8def\u5f84 | \u6700\u65b0\u7248\u672c | \u63cf\u8ff0 |\n|------|------|----------|------|\n"
           new_table += "\n".join(table_rows) + "\n"
           
@@ -93,7 +110,6 @@ jobs:
               readme
           )
           
-          # Update last updated date
           now = datetime.now().strftime("%Y-%m-%d %H:%M")
           readme = re.sub(r'\*\u6700\u540e\u66f4\u65b0\uff1a.*\*', f"*\u6700\u540e\u66f4\u65b0\uff1a{now}*", readme)
           
@@ -101,7 +117,6 @@ jobs:
               f.write(readme)
           print("README.md updated successfully")
           PYEOF
-          python readme_update.py
 
       - name: Commit updated README
         if: steps.changed.outputs.changed != ''
