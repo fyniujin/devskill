@@ -1,0 +1,89 @@
+# 🎒 WorkBuddy Skills Monorepo
+
+> 一个仓库管理所有 WorkBuddy Skills，配合 GitHub Actions 实现「改哪个发布哪个」。
+
+---
+
+## 📦 Skill 索引
+
+| 技能 | 路径 | 最新版本 | 描述 |
+|------|------|----------|------|
+| wps-office-suite | `wps-office-suite/SKILL.md` | v2.1.0 | WPS Office 全家桶 - 三引擎（WPS/MS Office/纯Python）自动适配，自然语言驱动 Word/Excel/PPT |
+| zwjh-skill | `zwjh-skill/SKILL.md` | v1.5.0 | 会进化的 AI - 自动读取记忆、分析对话、修复问题、优化行为 |
+| dgngjx-skill | `dgngjx-skill/SKILL.md` | - | 多功能工具箱 - 8大模块29个免费工具 |
+| winskill | `winskill/SKILL.md` | v1.3.0 | Windows 运维工具箱 - 磁盘分析、清理、IIS 管理、服务监控、安全审计 |
+
+> ⚠️ 此表由 GitHub Actions 在发布时自动更新，请勿手动编辑。
+
+---
+
+## 🚀 快速开始
+
+### 添加新技能
+
+1. 在仓库根目录创建一个文件夹，以技能名命名
+2. 文件夹内必须包含 `SKILL.md`（技能入口文件）
+3. 可选包含 `scripts/`、`references/`、`assets/` 等子目录
+4. 提交代码，GitHub Actions 会自动检测并发布
+
+### 技能目录结构
+
+```
+your-skill-name/
+├── SKILL.md          # 必须 - 技能入口文件
+├── scripts/          # 可选 - 脚本文件
+├── references/       # 可选 - 参考资料
+└── assets/           # 可选 - 静态资源
+```
+
+---
+
+## 🔄 自动发布流程
+
+```
+git push → GitHub Actions 触发
+  → 检测哪些 skill 文件夹有变更
+  → 为有变更的 skill 创建/更新 GitHub Release
+  → 自动更新本 README.md 的技能索引表
+```
+
+---
+
+## 📝 更新历史
+
+<details>
+<summary>wps-office-suite - 点击展开</summary>
+
+| 版本 | 日期 | 本次更新 |
+|------|------|---------|
+| v2.1.0 | 2026-06-28 | 🆕 目录生成（TOC）；🆕 环境自检（test）；🆕 反馈入口；📚 错误速查手册（10个FAQ+编号）；🎬 用例库（20个端到端场景）；📊 版本兼容矩阵；📖 AI助手完全指南 |
+| v2.0.0 | 2026-06-28 | 🏗️ 三引擎自动切换；🤖 AI助手零学习成本；🛡️ 三道安全防线；📊 多列排序+多条件筛选 |
+| v1.2.0 | 2026-06-28 | 子进程隔离架构 / 多列排序 / 多条件筛选 |
+| v1.0.0 | 2026-06-28 | 初始版本，三大组件 + 格式转换 |
+
+</details>
+
+<details>
+<summary>zwjh-skill - 点击展开</summary>
+
+| 版本 | 日期 | 本次更新 |
+|------|------|---------|
+| v1.5.0 | - | 更友好的错误处理、预测功能冷启动优化——数据不足也能给有用建议 |
+
+</details>
+
+<details>
+<summary>winskill - 点击展开</summary>
+
+| 版本 | 日期 | 本次更新 |
+|------|------|---------|
+| v1.3.0 | - | 新增注册表启动项审计、磁盘健康检测、网络端口监控 3 个模块，安全声明增加注册表保护 |
+| v1.2.0 | - | 新增 Windows Update 性能监控 安全审计 3 个模块，所有命令折叠隐藏 |
+| v1.1.0 | - | 新增快速开始/报错指引/FAQ |
+| v1.0.0 | - | 初始版本，7 个模块 |
+
+</details>
+
+---
+
+*最后更新：2026-06-28 15:45*
