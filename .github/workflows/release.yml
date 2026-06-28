@@ -6,9 +6,9 @@ on:
     paths:
       - 'wps-office-suite/**'
       - 'zwjh-skill/**'
-      - 'dgngjx-skill/**'
-      - 'winskill/**'
-      - '.github/workflows/**'
+        - 'dgngjx-skill/**'
+        - 'winskill/**'
+        - '.github/workflows/**'
 
 permissions:
   contents: write
@@ -142,9 +142,9 @@ jobs:
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
         run: |
-          echo "GITEE_TOKEN is set: ${{ secrets.GITEE_TOKEN != '' }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Use token in HTTPS URL for authentication
           git remote add gitee https://fyniujin_admin:${GITEE_TOKEN}@gitee.com/fyniujin_admin/devskill.git 2>/dev/null || \
           git remote set-url gitee https://fyniujin_admin:${GITEE_TOKEN}@gitee.com/fyniujin_admin/devskill.git
           git push gitee main --force-with-lease
