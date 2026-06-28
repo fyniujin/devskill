@@ -21,13 +21,15 @@ jobs:
         id: changed
         run: |
           CHANGED=""
-          for skill in wps-office-skill zwjh-skill dgngjx-skill winskill; do
-            if git diff --name-only HEAD~1 HEAD | grep -q "^${skill}/" 2>/dev/null || [ ! -f ".last-release-${skill}" ]; then
+          for skill in wps-office-suite zwjh-skill dgngjx-skill winskill; do
+            # 首次提交没有 HEAD~1，用文件标记判断是否首次发布
+            if git diff --name-only HEAD~1..HEAD 2>/dev/null | grep -q "^${skill}/" || [ ! -f ".last-release-${skill}" ]; then
               CHANGED="${CHANGED} ${skill}"
               touch ".last-release-${skill}"
             fi
           done
           echo "changed=${CHANGED}" >> $GITHUB_OUTPUT
+          echo "Detected changes in:${CHANGED}"
 
       - name: Create Release for each skill
         if: steps.changed.outputs.changed != ''
@@ -44,9 +46,11 @@ jobs:
             # Create new release
             gh release create "$TAG" \
               --title "${skill} v${VERSION}" \
-              --notes "## ${skill} v${VERSION}\n\n$(sed -n '/^description:/p' "${skill}/SKILL.md" | head -1)\n\nSee [SKILL.md](https://github.com/${{ github.repository }}/blob/main/${skill}/SKILL.md) for details." \
+              --notes "## ${skill} v${VERSION}\n\n$(sed -n '/^description:/p' \"${skill}/SKILL.md\" | head -1)\n\nSee [SKILL.md](https://github.com/${{ github.repository }}/blob/main/${skill}/SKILL.md) for details." \
               "${skill}/"* \
               --latest=false
+            
+            echo "Created release: ${skill} v${VERSION}"
           done
 
       - name: Update README.md
@@ -54,11 +58,12 @@ jobs:
         run: |
           cat > readme_update.py << 'PYEOF'
           import re, os
+          from datetime import datetime
           
           SKILLS = ["wps-office-suite", "zwjh-skill", "dgngjx-skill", "winskill"]
           
           table_rows = []
-          for skill in SKILL.md:
+          for skill in SKILLS:
               path = f"{skill}/SKILL.md"
               with open(path, "r", encoding="utf-8") as f:
                   content = f.read()
@@ -72,30 +77,29 @@ jobs:
               ver_match = re.search(r'^version:\s*(.+)$', content, re.MULTILINE)
               ver = ver_match.group(1).strip() if ver_match else "-"
               
-              table_rows.append(f"| {name} | {skill}/{path} | v{ver} | {desc} |")
+              table_rows.append(f"| {name} | `{skill}/SKILL.md` | v{ver} | {desc} |")
           
           # Read README.md
           with open("README.md", "r", encoding="utf-8") as f:
               readme = f.read()
           
           # Replace table
-          new_table = "## 📦 Skill 索引\n\n| 技能 | 路径 | 最新版本 | 描述 |\n|------|------|----------|------|\n"
+          new_table = "## \U0001f4e6 Skill \u7d22\u5f15\n\n| \u6280\u80fd | \u8def\u5f84 | \u6700\u65b0\u7248\u672c | \u63cf\u8ff0 |\n|------|------|----------|------|\n"
           new_table += "\n".join(table_rows) + "\n"
           
           readme = re.sub(
-              r'## 📦 Skill 索引\n\n\| 技能 \| 路径 \| 最新版本 \| 描述 \|\n\|------\|------\|----------\|------\|\n(?:\|.+\n)*',
+              r'## \U0001f4e6 Skill \u7d22\u5f15\n\n\| \u6280\u80fd \| \u8def\u5f84 \| \u6700\u65b0\u7248\u672c \| \u63cf\u8ff0 \|\n\|------\|------\|----------\|------\|\n(?:\|.+\n)*',
               new_table,
               readme
           )
           
           # Update last updated date
-          from datetime import datetime
           now = datetime.now().strftime("%Y-%m-%d %H:%M")
-          readme = re.sub(r'\*最后更新：.*\*', f"*最后更新：{now}*", readme)
+          readme = re.sub(r'\*\u6700\u540e\u66f4\u65b0\uff1a.*\*', f"*\u6700\u540e\u66f4\u65b0\uff1a{now}*", readme)
           
           with open("README.md", "w", encoding="utf-8") as f:
               f.write(readme)
-          print("README.md updated")
+          print("README.md updated successfully")
           PYEOF
           python readme_update.py
 
