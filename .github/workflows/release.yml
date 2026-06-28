@@ -8,6 +8,7 @@ on:
       - 'zwjh-skill/**'
       - 'dgngjx-skill/**'
       - 'winskill/**'
+      - '.github/workflows/**'
 
 permissions:
   contents: write
