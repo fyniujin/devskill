@@ -41,7 +41,7 @@ jobs:
           CHANGED_SKILLS: ${{ steps.changed.outputs.changed }}
         run: |
           python3 << 'PYEOF'
-          import os, re, json, urllib.request, subprocess
+          import os, re, json, urllib.request
           from datetime import datetime
 
           token = os.environ["GITHUB_TOKEN"]
@@ -117,8 +117,10 @@ jobs:
           print("README updated")
           PYEOF
 
-      - name: Commit and push
+      - name: Commit, push to GitHub, and sync to Gitee
         if: steps.changed.outputs.changed != ''
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -126,3 +128,8 @@ jobs:
           git add README.md
           git diff --cached --quiet || git commit -m "chore: update README index [skip ci]"
           git push
+
+          # Sync to Gitee
+          git remote add gitee https://fyniujin_admin:${GITEE_TOKEN}@gitee.com/fyniujin_admin/devskill.git 2>/dev/null || \
+          git remote set-url gitee https://fyniujin_admin:${GITEE_TOKEN}@gitee.com/fyniujin_admin/devskill.git
+          git push gitee main --force-with-lease
