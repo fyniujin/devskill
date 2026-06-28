@@ -157,11 +157,13 @@ jobs:
           set -x
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Build safe URL (token may contain special chars)
+          # Build safe URL
           SAFE_URL="https://fyniujin_admin:${GITEE_TOKEN}@gitee.com/fyniujin_admin/devskill.git"
           git remote add gitee "${SAFE_URL}" 2>/dev/null || git remote set-url gitee "${SAFE_URL}"
           echo "--- Remotes ---"
           git remote -v
+          echo "--- Fetching Gitee remote ---"
+          git fetch gitee main 2>&1 || echo "(fetch failed, will try force push)"
           echo "--- Pushing to Gitee ---"
-          git push gitee main --force-with-lease 2>&1
+          git push gitee main 2>&1 || git push gitee main --force 2>&1
           echo "--- Done ---"
