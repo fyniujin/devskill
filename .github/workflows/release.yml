@@ -96,7 +96,7 @@ jobs:
 
               today = datetime.now().strftime("%Y-%m-%d")
               # Find existing history for this skill and add new version row
-              pattern = r'(<details>\s*<summary>' + re.escape(skill) + r'.*?</summary>\s*\n\s*\|\s*鐗堟湰\s*\|\s*鏃ユ湡\s*\|\s*鏈鏇存柊\s*\|\n\s*\|[-|]+\|\n)(.*?)(\n</details>)'
+              pattern = r'(<details>\s*<summary>' + re.escape(skill) + r'.*?</summary>\s*\n\s*\|\s*版本\s*\|\s*日期\s*\|\s*本次更新\s*\|\n\s*\|[-|]+\|\n)(.*?)(\n</details>)'
               match = re.search(pattern, readme, re.DOTALL)
               if match:
                   existing = match.group(0)
