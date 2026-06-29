@@ -11,7 +11,8 @@
 | wps-office-suite | `wps-office-suite/SKILL.md` | v2.1.0 | WPS Office 全家桶 - 三引擎（WPS/MS Office/纯Python）自动适配，AI助手零学习成本，自然语言驱动，含目录生成、环境自检、错误速查手册 |
 | zwjh-skill | `zwjh-skill/SKILL.md` | v1.5.0 | 会进化的 AI — 自动读取记忆、分析对话、修复问题、优化行为。不仅能发现经验教训，更能自动执行修复、主动预防问题、根据反馈持续优化自身，实现真正的自我进化。含友好的错误处理、冷启动优化。 |
 | dgngjx-skill | `dgngjx-skill/SKILL.md` | v1.7.0 | 多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐。48%零开箱即用，52%需确认安装。所有命令都有中文报错+解决方案+在线替代。 |
-| winskill | `winskill/SKILL.md` | v1.4.0 | Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控。只读分析+安全确认，绝不误... |
+| winskill | `winskill/SKILL.md` | v1.4.0 | Windows 服务器运维工具箱
+| tax-receipt-compliance | `tax-receipt-compliance/SKILL.md` | v1.0.0 | 财税合规全链路助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。 | - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控。只读分析+安全确认，绝不误... |
 
 > ⚠️ 此表由 GitHub Actions 在发布时自动更新，请勿手动编辑。
 
@@ -106,6 +107,15 @@ git push → GitHub Actions 触发
 
 </details>
 
+<details>
+<summary>tax-receipt-compliance - 点击展开</summary>
+
+| 版本 | 日期 | 本次更新 |
+|------|------|---------|
+| v1.0.0 | 2026-06-29 | 初始版本发布；支持增值税发票OCR识别；支持多种查验引擎接口；支持模板自适应学习；支持多种审批平台对接；数据本地处理，企业自主配置 |
+
+</details>
+
 ---
 
-*最后更新：2026-06-28 20:01*
+*最后更新：2026-06-29 09:54*
