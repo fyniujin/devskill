@@ -85,26 +85,45 @@ class TemplateMatcher:
         if not path.exists():
             raise FileNotFoundError(f"模板文件不存在: {path}")
 
-        wb = openpyxl.load_workbook(path)
+        # 检查文件扩展名
+        if path.suffix.lower() not in ('.xlsx', '.xlsm', '.xltx', '.xltm'):
+            raise ValueError(f"不支持的模板文件格式: {path.suffix}，请使用.xlsx格式")
+
+        try:
+            wb = openpyxl.load_workbook(path, read_only=True)
+        except Exception as e:
+            raise ValueError(f"无法打开模板文件: {path}，错误: {e}")
+
         ws = wb.active
+        if ws is None:
+            raise ValueError(f"模板文件没有活动工作表: {path}")
 
         # 读取表头（第一行）
         headers = []
-        for cell in ws[1]:
-            if cell.value:
-                headers.append({
-                    'column': cell.column,
-                    'letter': openpyxl.utils.get_column_letter(cell.column),
-                    'value': str(cell.value).strip(),
-                })
+        try:
+            for cell in ws[1]:
+                if cell.value:
+                    headers.append({
+                        'column': cell.column,
+                        'letter': openpyxl.utils.get_column_letter(cell.column),
+                        'value': str(cell.value).strip(),
+                    })
+        except Exception as e:
+            raise ValueError(f"读取模板表头失败: {e}")
 
-        return {
+        if not headers:
+            raise ValueError(f"模板文件第一行为空，没有检测到表头: {path}")
+
+        result = {
             'path': str(path),
             'sheet': ws.title,
             'headers': headers,
             'total_rows': ws.max_row,
             'total_cols': ws.max_column,
         }
+
+        wb.close()
+        return result
 
     def auto_match_fields(self, template_headers):
         """
@@ -214,14 +233,27 @@ class TemplateMatcher:
         if not path.exists():
             raise FileNotFoundError(f"模板文件不存在: {path}")
 
-        wb = openpyxl.load_workbook(path)
+        # 检查expense_data是否有效
+        if not expense_data or not isinstance(expense_data, dict):
+            raise ValueError("expense_data参数无效，需要dict类型数据")
+
+        try:
+            wb = openpyxl.load_workbook(path)
+        except Exception as e:
+            raise ValueError(f"无法打开模板文件: {path}，错误: {e}")
+
         ws = wb.active
+        if ws is None:
+            raise ValueError("模板文件没有活动工作表")
 
         # 构建字段位置映射（列号）
         header_map = {}
         for cell in ws[1]:
             if cell.value:
                 header_map[str(cell.value).strip()] = cell.column
+
+        if not header_map:
+            raise ValueError("模板文件第一行为空，没有检测到表头")
 
         # 填充数据
         filled = []
