@@ -12,7 +12,7 @@
 | zwjh-skill | `zwjh-skill/SKILL.md` | v1.5.0 | 会进化的 AI — 自动读取记忆、分析对话、修复问题、优化行为。不仅能发现经验教训，更能自动执行修复、主动预防问题、根据反馈持续优化自身，实现真正的自我进化。含友好的错误处理、冷启动优化。 |
 | dgngjx-skill | `dgngjx-skill/SKILL.md` | v1.7.0 | 多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐。48%零开箱即用，52%需确认安装。所有命令都有中文报错+解决方案+在线替代。 |
 | winskill | `winskill/SKILL.md` | v1.4.0 | Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控、事件日志诊断、已安装程序管 |
-| tax-receipt-compliance | `tax-receipt-compliance/SKILL.md` | v2.0.0 | 财税合规全链路助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。 |
+| tax-receipt-compliance | `tax-receipt-compliance/SKILL.md` | v2.5.0 | 财税合规全链路助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。 |
 
 > ⚠️ 此表由 GitHub Actions 在发布时自动更新，请勿手动编辑。
 
@@ -120,4 +120,4 @@ git push → GitHub Actions 触发
 
 ---
 
-*最后更新：2026-06-29 08:40*
+*最后更新：2026-06-29 19:49*
