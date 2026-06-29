@@ -48,6 +48,8 @@ def process_directory(input_dir, output_path, config_path=None, template_path=No
 
     results = []
     receipts = []
+    failed_files = []
+    total_amount = 0.0
 
     for i, file_path in enumerate(files, 1):
         print(f"[{i}/{len(files)}] 识别: {file_path.name}")
@@ -57,11 +59,18 @@ def process_directory(input_dir, output_path, config_path=None, template_path=No
             ocr_result = ocr_engine.extract_structured_data(file_path)
 
             if not ocr_result.get('success'):
-                print(f"  失败: {ocr_result.get('error', '未知错误')}")
+                error_msg = ocr_result.get('error', '未知错误')
+                print(f"  失败: {error_msg}")
+                failed_files.append({
+                    'file': str(file_path),
+                    'error': error_msg,
+                    'tip': ocr_result.get('tip', ''),
+                    'suggestions': ocr_result.get('suggestions', [])
+                })
                 results.append({
                     'file': str(file_path),
                     'success': False,
-                    'error': ocr_result.get('error', '未知错误')
+                    'error': error_msg
                 })
                 continue
 
@@ -71,19 +80,38 @@ def process_directory(input_dir, output_path, config_path=None, template_path=No
             # 校验
             validation = rp.validate(parsed)
             if not validation['valid']:
-                print(f"  校验不通过: {', '.join(validation['issues'])}")
+                print(f"  校验不通过: {', '.join(issue['message'] for issue in validation['issues'])}")
+                # 校验不通过不阻止加入receipts，但记录问题
+                parsed['validation'] = validation
+                results.append(parsed)
+                # 如果只是警告，仍然计入
+                if parsed.get('success'):
+                    receipts.append(parsed)
+                    total_amount += parsed.get('total', 0)
+                    print(f"  类型: {parsed['invoice_type']}")
+                    print(f"  金额: ¥{parsed['total']:.2f}")
+                    print(f"  费用类型: {parsed['expense_type']}")
+                    if validation.get('warnings'):
+                        print(f"  警告: {', '.join(validation['warnings'])}")
+                continue
 
             parsed['validation'] = validation
             results.append(parsed)
 
             if parsed.get('success'):
                 receipts.append(parsed)
+                total_amount += parsed.get('total', 0)
                 print(f"  类型: {parsed['invoice_type']}")
                 print(f"  金额: ¥{parsed['total']:.2f}")
                 print(f"  费用类型: {parsed['expense_type']}")
 
         except Exception as e:
             print(f"  失败: {str(e)}")
+            failed_files.append({
+                'file': str(file_path),
+                'error': str(e),
+                'tip': '未知错误，请检查文件是否损坏'
+            })
             results.append({
                 'file': str(file_path),
                 'success': False,
@@ -93,10 +121,9 @@ def process_directory(input_dir, output_path, config_path=None, template_path=No
         print()
 
     # 汇总
-    total_amount = sum(r.get('total', 0) for r in receipts)
-
     print(f"=== 处理完成 ===")
     print(f"成功识别: {len(receipts)}/{len(files)} 张发票")
+    print(f"失败: {len(failed_files)} 张")
     print(f"合计金额: ¥{total_amount:.2f}")
 
     # 生成合并报销单
@@ -127,6 +154,8 @@ def process_directory(input_dir, output_path, config_path=None, template_path=No
         'total_files': len(files),
         'processed': len(receipts),
         'total_amount': round(total_amount, 2),
+        'failed_count': len(failed_files),
+        'failed_files': failed_files,
         'invoices': receipts,
         'results': results,
     }
