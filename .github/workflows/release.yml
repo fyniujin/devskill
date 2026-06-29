@@ -8,6 +8,7 @@ on:
       - 'zwjh-skill/**'
       - 'dgngjx-skill/**'
       - 'winskill/**'
+      - 'tax-receipt-compliance/**'
       - '.github/workflows/**'
 
 permissions:
@@ -27,7 +28,7 @@ jobs:
         id: changed
         run: |
           CHANGED=""
-          for skill in wps-office-suite zwjh-skill dgngjx-skill winskill; do
+          for skill in wps-office-suite zwjh-skill dgngjx-skill winskill tax-receipt-compliance; do
             if git diff --name-only HEAD~1..HEAD 2>/dev/null | grep -q "^${skill}/"; then
               CHANGED="${CHANGED} ${skill}"
             fi
@@ -89,7 +90,7 @@ jobs:
                   print(f"Release may already exist or error: {e}")
 
           # --- Update README ---
-          SKILLS = ["wps-office-suite", "zwjh-skill", "dgngjx-skill", "winskill"]
+          SKILLS = ["wps-office-suite", "zwjh-skill", "dgngjx-skill", "winskill", "tax-receipt-compliance"]
           rows = []
           for s in SKILLS:
               p = f"{s}/SKILL.md"
