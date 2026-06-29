@@ -1,4 +1,5 @@
 name: Release Skills
+
 on:
   push:
     branches: [ main ]
@@ -8,8 +9,10 @@ on:
       - 'dgngjx-skill/**'
       - 'winskill/**'
       - 'tax-receipt-compliance/**'
+
 permissions:
   contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -19,6 +22,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Detect changed skills
         id: changed
         run: |
@@ -30,6 +34,7 @@ jobs:
           done
           echo "changed=${CHANGED}" >> $GITHUB_OUTPUT
           echo "Detected changes in:${CHANGED}"
+
       - name: Create Release + Update README
         if: steps.changed.outputs.changed != ''
         env:
@@ -41,85 +46,78 @@ jobs:
           import os, re, json, urllib.request
           from datetime import datetime
 
-          token = os.environ["GITHUB_TOKEN"]
-          repo = os.environ["REPO"]
-          changed_skills = os.environ["CHANGED_SKILLS"].strip().split()
-          headers = {"Authorization": "token " + token, "Accept": "application/vnd.github.v3+json"}
+          token = os.environ['GITHUB_TOKEN']
+          repo = os.environ['REPO']
+          changed_skills = os.environ['CHANGED_SKILLS'].strip().split()
+          headers = {'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json'}
 
           for skill in changed_skills:
-              sk_path = skill + "/SKILL.md"
-              with open(sk_path, "r", encoding="utf-8") as f:
+              sk_path = skill + '/SKILL.md'
+              with open(sk_path, 'r', encoding='utf-8') as f:
                   content = f.read()
               ver_m = re.search(r'^version:\s*(.+)$', content, re.MULTILINE)
-              version = ver_m.group(1).strip() if ver_m else "unknown"
-              tag = skill + "-v" + version
-              desc_m = re.search(r'^description:\s*["\']?(.+?)["\']?\s*$', content, re.MULTILINE)
-              desc = desc_m.group(1).strip("'\"") if desc_m else ""
-              body = "## " + skill + " v" + version + "\n\n" + desc + "\n\nSee [SKILL.md](https://github.com/" + repo + "/blob/main/" + sk_path + ") for details."
-              print("Creating release " + tag + "...")
-              payload = json.dumps({"tag_name": tag, "name": skill + " v" + version, "body": body, "draft": False, "prerelease": False}).encode()
-              req = urllib.request.Request("https://api.github.com/" + repo + "/releases", data=payload, headers=dict(headers, **{"Content-Type": "application/json"}), method="POST")
+              version = ver_m.group(1).strip() if ver_m else 'unknown'
+              tag = skill + '-v' + version
+              desc_m = re.search(r'^description:\s*[' + "'" + '"' + ']?(' + '[^' + "'" + '"' + ']+?)[' + "'" + '"' + ']?\s*$', content, re.MULTILINE)
+              desc = desc_m.group(1).strip("' + "'" + '"' + '") if desc_m else ''
+              body = '## ' + skill + ' v' + version + '\n\n' + desc + '\n\nSee [SKILL.md](https://github.com/' + repo + '/blob/main/' + sk_path + ') for details.'
+              print('Creating release ' + tag + '...')
+              payload = json.dumps({'tag_name': tag, 'name': skill + ' v' + version, 'body': body, 'draft': False, 'prerelease': False}).encode()
+              req = urllib.request.Request('https://api.github.com/' + repo + '/releases', data=payload, headers=dict(headers, **{'Content-Type': 'application/json'}), method='POST')
               try:
                   resp = urllib.request.urlopen(req)
-                  print("Release created: " + json.loads(resp.read())["html_url"])
+                  print('Release created: ' + json.loads(resp.read())['html_url'])
               except Exception as e:
-                  print("Release may already exist or error: " + str(e))
+                  print('Release may already exist or error: ' + str(e))
 
           # --- Update README ---
-          SKILLS = ["wps-office-suite", "zwjh-skill", "dgngjx-skill", "winskill", "tax-receipt-compliance"]
+          SKILLS = ['wps-office-suite', 'zwjh-skill', 'dgngjx-skill', 'winskill', 'tax-receipt-compliance']
           rows = []
           for s in SKILLS:
-              p = s + "/SKILL.md"
-              with open(p, "r", encoding="utf-8") as f:
+              p = s + '/SKILL.md'
+              with open(p, 'r', encoding='utf-8') as f:
                   c = f.read()
-              dm = re.search(r'^description:\s*["\']?(.+?)["\']?\s*$', c, re.MULTILINE)
-              d = (dm.group(1).strip("'\"") if dm else "")[:120]
+              dm = re.search(r'^description:\s*[' + "'" + '"' + ']?(' + '[^' + "'" + '"' + ']+?)[' + "'" + '"' + ']?\s*$', c, re.MULTILINE)
+              d = (dm.group(1).strip("' + "'" + '"' + '") if dm else '')[:120]
               vm = re.search(r'^version:\s*(.+)$', c, re.MULTILINE)
-              v = vm.group(1).strip() if vm else "-"
-              rows.append("| " + s + " | `" + s + "/SKILL.md` | v" + v + " | " + d + " |")
+              v = vm.group(1).strip() if vm else '-'
+              rows.append('| ' + s + ' | `' + s + '/SKILL.md` | v' + v + ' | ' + d + ' |')
 
-          new_table = "## 馃摝 Skill 绱㈠紩\n\n| 鎶€鑳?| 璺緞 | 鏈€鏂扮増鏈?| 鎻忚堪 |\n|------|------|----------|------|\n" + "\n".join(rows) + "\n"
+          new_table = '## 📦 Skill 索引\n\n| 技能 | 路径 | 最新版本 | 描述 |\n|------|------|----------|------|\n' + '\n'.join(rows) + '\n'
 
-          with open("README.md", "r", encoding="utf-8") as f:
+          with open('README.md', 'r', encoding='utf-8') as f:
               readme = f.read()
 
-          readme = re.sub(r'## 馃摝 Skill 绱㈠紩\n\n\| 鎶€鑳?\| 璺緞 \| 鏈€鏂扮増鏈?\| 鎻忚堪 \|\n\|------\|------\|----------\|------\|\n(?:\|.+\n)*', new_table, readme)
+          readme = re.sub(r'## 📦 Skill 索引\n\n\| 技能 \| 路径 \| 最新版本 \| 描述 \|\n\|------\|------\|----------\|------\|\n(?:\|.+\n)*', new_table, readme)
 
           # Update history entries
           for skill in changed_skills:
-              sk_path = skill + "/SKILL.md"
-              with open(sk_path, "r", encoding="utf-8") as f:
+              sk_path = skill + '/SKILL.md'
+              with open(sk_path, 'r', encoding='utf-8') as f:
                   c = f.read()
               ver_m = re.search(r'^version:\s*(.+)$', c, re.MULTILINE)
-              version = ver_m.group(1).strip() if ver_m else "unknown"
-              tag = skill + "-v" + version
-
-              today = datetime.now().strftime("%Y-%m-%d")
-              # Find existing history for this skill and add new version row
+              version = ver_m.group(1).strip() if ver_m else 'unknown'
+              today = datetime.now().strftime('%Y-%m-%d')
+              cl_m = re.search(r'^changelog:\s*(.+)$', c, re.MULTILINE)
+              changelog = cl_m.group(1).strip().strip("' + "'" + '"' + '") if cl_m else '更新发布'
+              new_row = '| v' + version + ' | ' + today + ' | ' + changelog + ' |\n'
               pattern = r'(<details>\s*<summary>' + re.escape(skill) + r'.*?</summary>\s*\n\s*\|\s*版本\s*\|\s*日期\s*\|\s*本次更新\s*\|\n\s*\|[-|]+\|\n)(.*?)(\n</details>)'
               match = re.search(pattern, readme, re.DOTALL)
               if match:
                   existing = match.group(0)
-                  # Extract changelog from SKILL.md changelog field
-                  with open(sk_path, "r", encoding="utf-8") as f:
-                      sk_content = f.read()
-                  cl_m = re.search(r'^changelog:\s*(.+)$', sk_content, re.MULTILINE)
-                  changelog = cl_m.group(1).strip().strip("'\"") if cl_m else "鏇存柊鍙戝竷"
-                  new_row = "| v" + version + " | " + today + " | " + changelog + " |\n"
-                  # Insert new row after the header separator
                   new_history = re.sub(
-                      r'(\|\s*鐗堟湰\s*\|\s*鏃ユ湡\s*\|\s*鏈鏇存柊\s*\|\n\s*\|[-|]+\|\n)',
+                      r'(\|\s*版本\s*\|\s*日期\s*\|\s*本次更新\s*\|\n\s*\|[-|]+\|\n)',
                       r'\g<1>' + new_row,
                       existing
                   )
                   readme = readme.replace(existing, new_history)
 
-          now = datetime.now().strftime("%Y-%m-%d %H:%M")
-          readme = re.sub(r'\*鏈€鍚庢洿鏂帮細.*\*', "*鏈€鍚庢洿鏂帮細" + now + "*", readme)
+          now = datetime.now().strftime('%Y-%m-%d %H:%M')
+          readme = re.sub(r'\*最后更新：.*\*', '*最后更新：' + now + '*', readme)
 
-          with open("README.md", "w", encoding="utf-8") as f:
+          with open('README.md', 'w', encoding='utf-8') as f:
               f.write(readme)
-          print("README updated (index + history)")
+          print('README updated (index + history)')
           PYEOF
 
       - name: Commit and push README
