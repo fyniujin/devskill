@@ -249,8 +249,8 @@ class OCREngine:
                 structured_data['timestamp'] = datetime.now().isoformat()
                 structured_data['image_path'] = str(image_path)
 
-                # 低置信度提醒
-                if structured_data.get('confidence', 0) < 0.6:
+                # 低置信度提醒（阈值0.7）
+                if structured_data.get('confidence', 0) < 0.7:
                     structured_data['warning'] = '识别置信度较低，建议人工核对关键字段（发票代码、号码、金额）'
 
                 return structured_data
