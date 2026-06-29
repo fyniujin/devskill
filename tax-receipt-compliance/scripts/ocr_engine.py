@@ -285,9 +285,12 @@ class OCREngine:
 
     def _calculate_confidence(self, data):
         """计算识别置信度（简化版）"""
-        filled_fields = sum(1 for v in data.values() if v and v != 0.0)
-        total_fields = len(data)
-        return round(filled_fields / total_fields, 2)
+        # 排除 confidence 本身和 raw_text、image_path 等非字段信息
+        exclude_keys = {'confidence', 'raw_text', 'image_path', 'success', 'timestamp'}
+        field_data = {k: v for k, v in data.items() if k not in exclude_keys}
+        filled_fields = sum(1 for v in field_data.values() if v and v != 0.0)
+        total_fields = len(field_data)
+        return round(filled_fields / total_fields, 2) if total_fields > 0 else 0.0
 
 
 def main():
@@ -321,16 +324,24 @@ def main():
             results = []
             temp_dir = Path(tempfile.gettempdir()) / "tax_receipt_temp"
             temp_dir.mkdir(exist_ok=True)
-            for i, img in enumerate(images):
-                temp_path = temp_dir / f"pdf_page_{i}.png"
-                img.save(temp_path, 'PNG')
-                result = engine.extract_structured_data(temp_path)
-                result['page'] = i + 1
-                results.append(result)
+            try:
+                for i, img in enumerate(images):
+                    temp_path = temp_dir / f"pdf_page_{i}.png"
+                    img.save(temp_path, 'PNG')
+                    result = engine.extract_structured_data(temp_path)
+                    result['page'] = i + 1
+                    results.append(result)
+                    try:
+                        os.remove(temp_path)
+                    except OSError:
+                        pass  # 清理失败不影响主流程
+            finally:
+                # 清理临时目录
                 try:
-                    os.remove(temp_path)
+                    if not any(temp_dir.iterdir()):
+                        temp_dir.rmdir()
                 except OSError:
-                    pass  # 清理失败不影响主流程
+                    pass
             output_data = results
         else:
             output_data = engine.extract_structured_data(input_path)
@@ -357,7 +368,7 @@ def main():
                     })
 
         output_data = {
-            'total_files': len(list(input_path.iterdir())),
+            'total_files': len(files),
             'processed': len(results),
             'results': results
         }
