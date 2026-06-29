@@ -30,9 +30,11 @@ class DingTalkApproval:
         self.process_code = process_code
         self._token = None
         self._token_expire = 0
+        self._max_retries = 3
+        self._retry_delay = 2  # 秒
 
     def _get_token(self):
-        """获取钉钉 AccessToken"""
+        """获取钉钉 AccessToken（带重试机制）"""
         if self._token and time.time() < self._token_expire:
             return self._token
 
@@ -42,19 +44,36 @@ class DingTalkApproval:
             "appSecret": self.app_secret
         }).encode('utf-8')
 
-        req = urllib.request.Request(
-            url, data=payload,
-            headers={'Content-Type': 'application/json'}
-        )
+        for attempt in range(self._max_retries):
+            try:
+                req = urllib.request.Request(
+                    url, data=payload,
+                    headers={'Content-Type': 'application/json'}
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    data = json.loads(resp.read().decode('utf-8'))
+                    if data.get('accessToken'):
+                        self._token = data['accessToken']
+                        self._token_expire = time.time() + data.get('expireIn', 7200) - 300
+                        return self._token
+                    else:
+                        error_msg = data.get('message', '未知错误')
+                        if attempt < self._max_retries - 1:
+                            time.sleep(self._retry_delay * (attempt + 1))
+                            continue
+                        return None
+            except urllib.error.URLError as e:
+                if attempt < self._max_retries - 1:
+                    time.sleep(self._retry_delay * (attempt + 1))
+                    continue
+                return None
+            except Exception as e:
+                if attempt < self._max_retries - 1:
+                    time.sleep(self._retry_delay * (attempt + 1))
+                    continue
+                return None
 
-        try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-                self._token = data.get('accessToken')
-                self._token_expire = time.time() + data.get('expireIn', 7200) - 300
-                return self._token
-        except Exception as e:
-            return None
+        return None
 
     def submit_approval(self, expense_file, applicant_user_id=None, **kwargs):
         """
@@ -67,28 +86,42 @@ class DingTalkApproval:
         Returns:
             dict: 提交结果
         """
-        if not self.app_key or not self.app_secret:
+        # 配置完整性检查
+        config_issues = []
+        if not self.app_key:
+            config_issues.append('app_key')
+        if not self.app_secret:
+            config_issues.append('app_secret')
+        if not self.process_code:
+            config_issues.append('process_code')
+
+        if config_issues:
             return {
                 'engine': self.name,
                 'status': 'config_incomplete',
-                'message': '缺少AppKey或AppSecret',
+                'message': f'缺少配置项：{", ".join(config_issues)}',
                 'apply_url': 'https://open.duxiaoman.com',
+                'config_hint': '请在config.yaml中配置dingtalk.app_key、dingtalk.app_secret和dingtalk.process_code',
             }
 
-        if not self.process_code:
+        # 检查报销单文件是否存在
+        if not Path(expense_file).exists():
             return {
                 'engine': self.name,
-                'status': 'process_code_missing',
-                'message': '缺少审批流程编码',
-                'tip': '请在钉钉管理后台创建审批流程后获取process_code',
+                'status': 'file_not_found',
+                'message': f'报销单文件不存在：{expense_file}',
+                'hint': '请检查expense_file路径是否正确',
             }
 
+        # 获取Token
         token = self._get_token()
         if not token:
             return {
                 'engine': self.name,
                 'status': 'token_failed',
-                'message': '获取钉钉AccessToken失败，请检查AppKey和AppSecret',
+                'message': '获取钉钉AccessToken失败，请检查AppKey和AppSecret是否正确',
+                'hint': '1. 确认app_key和app_secret正确无误\n2. 确认应用已开通审批权限\n3. 确认IP白名单已配置',
+                'apply_url': 'https://open.duxiaoman.com',
             }
 
         # 注意：实际生产环境需要实现完整的API调用
@@ -118,34 +151,71 @@ class WeComApproval:
         self.template_id = template_id
         self._token = None
         self._token_expire = 0
+        self._max_retries = 3
+        self._retry_delay = 2
 
     def _get_token(self):
-        """获取企业微信 AccessToken"""
+        """获取企业微信 AccessToken（带重试机制）"""
         if self._token and time.time() < self._token_expire:
             return self._token
 
         url = (f"https://qyapi.weixin.qq.com/cgi-bin/gettoken?"
                f"corpid={self.corp_id}&corpsecret={self.secret}")
 
-        try:
-            with urllib.request.urlopen(url, timeout=10) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-                if data.get('errcode') == 0:
-                    self._token = data.get('access_token')
-                    self._token_expire = time.time() + data.get('expires_in', 7200) - 300
-                    return self._token
+        for attempt in range(self._max_retries):
+            try:
+                with urllib.request.urlopen(url, timeout=15) as resp:
+                    data = json.loads(resp.read().decode('utf-8'))
+                    if data.get('errcode') == 0:
+                        self._token = data.get('access_token')
+                        self._token_expire = time.time() + data.get('expires_in', 7200) - 300
+                        return self._token
+                    else:
+                        error_msg = data.get('errmsg', '未知错误')
+                        if attempt < self._max_retries - 1:
+                            time.sleep(self._retry_delay * (attempt + 1))
+                            continue
+                        return None
+            except urllib.error.URLError as e:
+                if attempt < self._max_retries - 1:
+                    time.sleep(self._retry_delay * (attempt + 1))
+                    continue
                 return None
-        except Exception:
-            return None
+            except Exception as e:
+                if attempt < self._max_retries - 1:
+                    time.sleep(self._retry_delay * (attempt + 1))
+                    continue
+                return None
+
+        return None
 
     def submit_approval(self, expense_file, applicant_user_id=None, **kwargs):
         """提交企业微信审批"""
-        if not self.corp_id or not self.secret:
+        # 配置完整性检查
+        config_issues = []
+        if not self.corp_id:
+            config_issues.append('corp_id')
+        if not self.secret:
+            config_issues.append('secret')
+        if not self.template_id:
+            config_issues.append('template_id')
+
+        if config_issues:
             return {
                 'engine': self.name,
                 'status': 'config_incomplete',
-                'message': '缺少CorpID或Secret',
+                'message': f'缺少配置项：{", ".join(config_issues)}',
                 'apply_url': 'https://work.weixin.qq.com',
+                'config_hint': '请在config.yaml中配置wecom.corp_id、wecom.secret和wecom.template_id',
+            }
+
+        # 检查报销单文件是否存在
+        if not Path(expense_file).exists():
+            return {
+                'engine': self.name,
+                'status': 'file_not_found',
+                'message': f'报销单文件不存在：{expense_file}',
+                'hint': '请检查expense_file路径是否正确',
             }
 
         token = self._get_token()
@@ -154,6 +224,8 @@ class WeComApproval:
                 'engine': self.name,
                 'status': 'token_failed',
                 'message': '获取企业微信AccessToken失败',
+                'hint': '1. 确认corp_id和secret正确无误\n2. 确认应用已开通审批权限\n3. 确认IP白名单已配置',
+                'apply_url': 'https://work.weixin.qq.com',
             }
 
         return {
@@ -181,9 +253,11 @@ class FeishuApproval:
         self.approval_code = approval_code
         self._token = None
         self._token_expire = 0
+        self._max_retries = 3
+        self._retry_delay = 2
 
     def _get_token(self):
-        """获取飞书 Tenant AccessToken"""
+        """获取飞书 Tenant AccessToken（带重试机制）"""
         if self._token and time.time() < self._token_expire:
             return self._token
 
@@ -198,25 +272,60 @@ class FeishuApproval:
             headers={'Content-Type': 'application/json'}
         )
 
-        try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-                if data.get('code') == 0:
-                    self._token = data.get('tenant_access_token')
-                    self._token_expire = time.time() + data.get('expire', 7200) - 300
-                    return self._token
+        for attempt in range(self._max_retries):
+            try:
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    data = json.loads(resp.read().decode('utf-8'))
+                    if data.get('code') == 0:
+                        self._token = data.get('tenant_access_token')
+                        self._token_expire = time.time() + data.get('expire', 7200) - 300
+                        return self._token
+                    else:
+                        error_msg = data.get('msg', '未知错误')
+                        if attempt < self._max_retries - 1:
+                            time.sleep(self._retry_delay * (attempt + 1))
+                            continue
+                        return None
+            except urllib.error.URLError as e:
+                if attempt < self._max_retries - 1:
+                    time.sleep(self._retry_delay * (attempt + 1))
+                    continue
                 return None
-        except Exception:
-            return None
+            except Exception as e:
+                if attempt < self._max_retries - 1:
+                    time.sleep(self._retry_delay * (attempt + 1))
+                    continue
+                return None
+
+        return None
 
     def submit_approval(self, expense_file, applicant_user_id=None, **kwargs):
         """提交飞书审批"""
-        if not self.app_id or not self.app_secret:
+        # 配置完整性检查
+        config_issues = []
+        if not self.app_id:
+            config_issues.append('app_id')
+        if not self.app_secret:
+            config_issues.append('app_secret')
+        if not self.approval_code:
+            config_issues.append('approval_code')
+
+        if config_issues:
             return {
                 'engine': self.name,
                 'status': 'config_incomplete',
-                'message': '缺少AppID或AppSecret',
+                'message': f'缺少配置项：{", ".join(config_issues)}',
                 'apply_url': 'https://open.feishu.cn',
+                'config_hint': '请在config.yaml中配置feishu.app_id、feishu.app_secret和feishu.approval_code',
+            }
+
+        # 检查报销单文件是否存在
+        if not Path(expense_file).exists():
+            return {
+                'engine': self.name,
+                'status': 'file_not_found',
+                'message': f'报销单文件不存在：{expense_file}',
+                'hint': '请检查expense_file路径是否正确',
             }
 
         token = self._get_token()
@@ -225,6 +334,8 @@ class FeishuApproval:
                 'engine': self.name,
                 'status': 'token_failed',
                 'message': '获取飞书TenantAccessToken失败',
+                'hint': '1. 确认app_id和app_secret正确无误\n2. 确认应用已开通审批权限\n3. 确认IP白名单已配置',
+                'apply_url': 'https://open.feishu.cn',
             }
 
         return {
@@ -248,6 +359,7 @@ class ApprovalManager:
     def __init__(self, config_path=None):
         self.config = {}
         self.engine = None
+        self.config_path = config_path
 
         if config_path and Path(config_path).exists():
             with open(config_path, 'r', encoding='utf-8') as f:
@@ -279,16 +391,38 @@ class ApprovalManager:
                 app_secret=fs.get('app_secret', ''),
                 approval_code=fs.get('approval_code', ''),
             )
+        elif platform == 'custom':
+            custom = approval.get('custom', {})
+            self.engine = None  # 企业自行实现
+        elif platform == 'none' or not platform:
+            self.engine = None
         else:
             self.engine = None
 
     def submit_approval(self, expense_file, **kwargs):
         if not self.engine:
-            return {
-                'status': 'not_configured',
-                'message': '审批系统未配置，请编辑config.yaml',
-                'file_path': str(expense_file),
-            }
+            platform = self.config.get('approval', {}).get('platform', 'none')
+            if platform == 'none' or not platform:
+                return {
+                    'status': 'not_configured',
+                    'message': '审批系统未配置，当前platform设置为"none"',
+                    'hint': '如需启用审批功能，请编辑config.yaml，将approval.platform设置为dingtalk/wecom/feishu',
+                    'file_path': str(expense_file),
+                }
+            elif platform == 'custom':
+                return {
+                    'status': 'custom_required',
+                    'message': '企业需自行实现审批系统接口',
+                    'hint': '请参考references/api-endpoints.md实现自定义审批接口',
+                    'file_path': str(expense_file),
+                }
+            else:
+                return {
+                    'status': 'config_error',
+                    'message': f'审批平台"{platform}"初始化失败，请检查config.yaml配置',
+                    'config_path': self.config_path,
+                    'file_path': str(expense_file),
+                }
 
         return self.engine.submit_approval(expense_file, **kwargs)
 
