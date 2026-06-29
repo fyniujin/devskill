@@ -168,3 +168,5 @@ jobs:
           echo "--- Pushing to Gitee ---"
           git push gitee main 2>&1 || git push gitee main --force 2>&1
           echo "--- Done ---"
+
+# Gitee sync enabled
