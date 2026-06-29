@@ -227,7 +227,10 @@ def main():
     
     all_ok = True
     for name, result in results:
-        status = "✓ 通过" if result else "✗ 失败"
+        if result:
+            status = "✅ 通过"
+        else:
+            status = "❌ 失败  ← 需要处理"
         print(f"  {status}  {name}")
         if not result:
             all_ok = False
@@ -241,9 +244,10 @@ def main():
         print("  2. 编辑 config.yaml 配置企业信息")
         print("  3. 运行: python scripts/ocr_engine.py --input 发票图片.png")
     else:
-        print("⚠️ 环境未完全就绪，请按上述提示安装缺失组件。")
+        print("⚠️  环境未完全就绪，请按上述提示安装缺失组件。")
         print("")
-        print("最常缺失的是 Tesseract OCR 和中文语言包。")
+        print("💡 最常缺失的是 Tesseract OCR 和中文语言包。")
+        print("   推荐使用 winget 一键安装（见上方方案一）。")
     
     return 0 if all_ok else 1
 
