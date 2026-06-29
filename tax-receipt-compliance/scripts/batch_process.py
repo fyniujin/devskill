@@ -19,7 +19,7 @@ from scripts.receipt_parser import ReceiptParser
 from scripts.template_matcher import TemplateMatcher
 
 
-defprocess_directory(input_dir, output_path, config_path=None, template_path=None):
+def process_directory(input_dir, output_path, config_path=None, template_path=None):
     """批量处理目录中的发票"""
 
     print(f"=== 批量发票处理 ===")
