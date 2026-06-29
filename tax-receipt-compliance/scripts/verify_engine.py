@@ -29,6 +29,7 @@ class TaxBureauVerifier:
         self.verify_url = f"{self.base_url}/index.html"
         self._last_request_time = 0
         self._min_interval = 1.0  # 最小请求间隔（秒）
+        self._max_retries = 3  # 最大重试次数
 
     def _wait_rate_limit(self):
         """控制请求频率"""
@@ -45,12 +46,17 @@ class TaxBureauVerifier:
             match = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', date)
             if match:
                 normalized_date = f"{match.group(1)}-{int(match.group(2)):02d}-{int(match.group(3)):02d}"
+        elif re.match(r'^\d{4}-\d{2}-\d{2}$', date):
+            normalized_date = date
+        elif re.match(r'^\d{8}$', date):
+            # 格式：20260628
+            normalized_date = f"{date[:4]}-{date[4:6]}-{date[6:8]}"
 
         params = {
-            'fpdm': invoice_code,
-            'fphm': invoice_number,
+            'fpdm': str(invoice_code).strip(),
+            'fphm': str(invoice_number).strip(),
             'kprq': normalized_date,
-            'fpje': str(amount),
+            'fpje': str(amount).strip(),
             'yzm': '',  # 验证码（需要OCR识别或人工输入）
             'yzmSj': '',
             'index': '0',
@@ -95,6 +101,38 @@ class TaxBureauVerifier:
                 'hint': '需要：发票代码、发票号码、开票日期、金额',
             }
 
+        # 参数格式校验
+        if not re.match(r'^\d{10,12}$', str(invoice_code)):
+            return {
+                'engine': self.name,
+                'status': 'param_error',
+                'message': f'发票格式不正确：{invoice_code}，应为10-12位数字',
+                'hint': '请检查发票代码是否正确',
+            }
+
+        if not re.match(r'^\d{8,20}$', str(invoice_number)):
+            return {
+                'engine': self.name,
+                'status': 'param_error',
+                'message': f'发票号码格式不正确：{invoice_number}，应为8-20位数字',
+                'hint': '请检查发票号码是否正确',
+            }
+
+        # 金额格式校验和转换
+        try:
+            if isinstance(amount, str):
+                amount = float(amount.replace(',', '').replace('¥', '').strip())
+            amount = float(amount)
+            if amount < 0:
+                raise ValueError('金额不能为负数')
+        except (ValueError, TypeError) as e:
+            return {
+                'engine': self.name,
+                'status': 'param_error',
+                'message': f'金额格式不正确：{amount}，错误：{e}',
+                'hint': '金额应为正数，支持格式：10000、10,000、¥10000',
+            }
+
         self._wait_rate_limit()
 
         # 方式一：直接构造查验URL
@@ -134,11 +172,42 @@ class ThirdPartyVerifier:
         self.name = f"{platform}查验"
 
     def verify(self, invoice_code, invoice_number, date=None, amount=None):
+        # 检查API Key是否配置
         if not self.api_key:
             return {
                 'engine': self.name,
                 'status': 'key_required',
                 'message': f'请在config.yaml中配置{self.platform}的API Key',
+                'hint': f'编辑config.yaml，在{self.platform}.api_key处填写您的API密钥',
+                'config_example': f'{self.platform}:\n  api_key: "您的API Key"\n  api_secret: "您的Secret"',
+            }
+
+        # 检查API Secret是否配置（部分平台需要）
+        if not self.api_secret and self.platform in ('bairong', 'nuonuo'):
+            return {
+                'engine': self.name,
+                'status': 'secret_required',
+                'message': f'{self.platform}需要同时配置API Key和Secret',
+                'hint': f'请在config.yaml的{self.platform}.api_secret处填写Secret',
+            }
+
+        # 参数校验
+        missing = []
+        if not invoice_code:
+            missing.append('发票代码')
+        if not invoice_number:
+            missing.append('发票号码')
+        if not date:
+            missing.append('开票日期')
+        if amount is None or amount == '':
+            missing.append('金额')
+
+        if missing:
+            return {
+                'engine': self.name,
+                'status': 'param_error',
+                'message': f'参数不完整，缺少：{", ".join(missing)}',
+                'hint': '需要：发票代码、发票号码、开票日期、金额',
             }
 
         # TODO: 企业自行实现第三方API
@@ -167,27 +236,37 @@ class CompositeVerifier:
         self.engines.append(verifier)
 
     def verify(self, invoice_code, invoice_number, date=None, amount=None):
-        """依次尝试所有可用的查验引擎"""
+        """依次尝试所有可用的查验引擎，带重试机制"""
         results = []
+        errors = []
 
         # 1. 先尝试国税总局（免费）
-        result = self.tax_bureau.verify(
-            invoice_code, invoice_number, date, amount
-        )
-        results.append(result)
-
-        # 国税总局返回ready时也视为成功（返回了查验链接）
-        if result.get('status') in ('success', 'ready'):
-            return result
+        for retry in range(self.tax_bureau._max_retries):
+            try:
+                result = self.tax_bureau.verify(
+                    invoice_code, invoice_number, date, amount
+                )
+                results.append(result)
+                # 国税总局返回ready时也视为成功（返回了查验链接）
+                if result.get('status') in ('success', 'ready'):
+                    return result
+                break  # 参数错误等不需要重试
+            except Exception as e:
+                errors.append(f"国税总局第{retry+1}次尝试失败: {str(e)}")
+                if retry < self.tax_bureau._max_retries - 1:
+                    time.sleep(2 ** retry)  # 指数退避
 
         # 2. 尝试其他引擎
         for engine in self.engines:
-            result = engine.verify(
-                invoice_code, invoice_number, date, amount
-            )
-            results.append(result)
-            if result.get('status') in ('success', 'ready', 'framework_ready'):
-                return result
+            try:
+                result = engine.verify(
+                    invoice_code, invoice_number, date, amount
+                )
+                results.append(result)
+                if result.get('status') in ('success', 'ready', 'framework_ready'):
+                    return result
+            except Exception as e:
+                errors.append(f"{engine.name}查验失败: {str(e)}")
 
         # 所有引擎都失败了，返回汇总
         return {
@@ -195,6 +274,7 @@ class CompositeVerifier:
             'status': 'all_failed',
             'message': '所有查验引擎均未返回有效结果',
             'results': results,
+            'errors': errors if errors else None,
             'verify_time': datetime.now().isoformat(),
         }
 
