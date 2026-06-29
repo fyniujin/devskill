@@ -81,34 +81,57 @@ class ReceiptParser:
         return parsed
 
     def _normalize_amount(self, value):
-        """标准化金额"""
+        """标准化金额（支持更多格式）"""
         if isinstance(value, (int, float)):
             return round(float(value), 2)
         if isinstance(value, str):
-            # 移除货币符号和千位分隔符
+            # 移除货币符号、千位分隔符、空格
             cleaned = re.sub(r'[¥￥,\s]', '', value)
+            # 处理负数
+            negative = cleaned.startswith('-') or cleaned.startswith('(-')
+            cleaned = cleaned.replace('-', '').replace('(', '').replace(')', '')
+            # 处理"万"单位
+            multiplier = 1
+            if '万' in cleaned:
+                multiplier = 10000
+                cleaned = cleaned.replace('万', '')
             try:
-                return round(float(cleaned), 2)
+                amount = round(float(cleaned) * multiplier, 2)
+                return -amount if negative else amount
             except (ValueError, TypeError):
                 return 0.0
         return 0.0
 
     def _normalize_date(self, date_str):
-        """标准化日期格式"""
+        """标准化日期格式（支持更多格式）"""
         if not date_str:
             return ''
+
+        # 去除首尾空白
+        date_str = date_str.strip()
 
         # 尝试多种日期格式
         patterns = [
             (r'(\d{4})年(\d{1,2})月(\d{1,2})日', lambda m: f"{m.group(1)}年{int(m.group(2)):02d}月{int(m.group(3)):02d}日"),
             (r'(\d{4})-(\d{1,2})-(\d{1,2})', lambda m: f"{m.group(1)}年{int(m.group(2)):02d}月{int(m.group(3)):02d}日"),
             (r'(\d{4})/(\d{1,2})/(\d{1,2})', lambda m: f"{m.group(1)}年{int(m.group(2)):02d}月{int(m.group(3)):02d}日"),
+            (r'(\d{4})\.(\d{1,2})\.(\d{1,2})', lambda m: f"{m.group(1)}年{int(m.group(2)):02d}月{int(m.group(3)):02d}日"),
+            (r'(\d{8})', lambda m: f"{m.group(1)[:4]}年{int(m.group(1)[4:6]):02d}月{int(m.group(1)[6:8]):02d}日"),
         ]
 
         for pattern, formatter in patterns:
             match = re.search(pattern, date_str)
             if match:
-                return formatter(match)
+                try:
+                    result = formatter(match)
+                    # 验证日期有效性
+                    parts = re.findall(r'\d+', result)
+                    if len(parts) == 3:
+                        year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
+                        if 1900 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
+                            return result
+                except (ValueError, IndexError):
+                    continue
 
         return date_str
 
@@ -144,38 +167,69 @@ class ReceiptParser:
             dict: 验证结果
         """
         issues = []
+        warnings = []
 
         # 必要字段检查
         if not parsed_data.get('invoice_code'):
-            issues.append('发票代码缺失')
+            issues.append({'field': 'invoice_code', 'message': '发票代码缺失', 'hint': '请检查OCR识别结果或手动输入'})
         if not parsed_data.get('invoice_number'):
-            issues.append('发票号码缺失')
+            issues.append({'field': 'invoice_number', 'message': '发票号码缺失', 'hint': '请检查OCR识别结果或手动输入'})
         if not parsed_data.get('invoice_date'):
-            issues.append('开票日期缺失')
+            issues.append({'field': 'invoice_date', 'message': '开票日期缺失', 'hint': '请检查OCR识别结果或手动输入'})
         if parsed_data.get('total', 0) <= 0:
-            issues.append('价税合计金额无效')
+            issues.append({'field': 'total', 'message': '价税合计金额无效', 'hint': '金额应大于0'})
 
         # 发票代码格式检查
         code = parsed_data.get('invoice_code', '')
         if code and not re.match(r'^\d{10,12}$', code):
-            issues.append('发票代码格式不正确')
+            issues.append({'field': 'invoice_code', 'message': f'发票代码格式不正确：{code}', 'hint': '应为10-12位数字'})
 
         # 发票号码格式检查
         number = parsed_data.get('invoice_number', '')
         if number and not re.match(r'^\d{8,20}$', number):
-            issues.append('发票号码格式不正确')
+            issues.append({'field': 'invoice_number', 'message': f'发票号码格式不正确：{number}', 'hint': '应为8-20位数字'})
 
         # 金额勾稽检查
         if parsed_data.get('amount', 0) > 0 and parsed_data.get('tax_amount', 0) > 0:
             expected_total = round(parsed_data['amount'] + parsed_data['tax_amount'], 2)
             actual_total = parsed_data.get('total', 0)
             if actual_total > 0 and abs(expected_total - actual_total) > 0.01:
-                issues.append('金额勾稽关系不匹配（金额+税额≠价税合计）')
+                issues.append({
+                    'field': 'total',
+                    'message': f'金额勾稽关系不匹配：金额({parsed_data["amount"]}) + 税额({parsed_data["tax_amount"]}) = {expected_total} ≠ 价税合计({actual_total})',
+                    'hint': '请检查金额、税额、价税合计是否正确'
+                })
+
+        # 日期有效性检查
+        date_str = parsed_data.get('invoice_date', '')
+        if date_str:
+            try:
+                parts = re.findall(r'\d+', date_str)
+                if len(parts) == 3:
+                    year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
+                    if not (1900 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31):
+                        warnings.append(f'日期可能无效：{date_str}')
+            except (ValueError, IndexError):
+                warnings.append(f'日期格式异常：{date_str}')
+
+        # 金额异常检查
+        amount = parsed_data.get('amount', 0)
+        if amount > 10000000:  # 1000万
+            warnings.append(f'金额异常大：{amount}，请确认是否正确')
+        elif amount < 0:
+            warnings.append(f'金额为负数：{amount}，请确认是否正确')
+
+        # 税率检查
+        tax_rate = parsed_data.get('tax_rate', 0)
+        if tax_rate > 0:
+            valid_rates = [0.13, 0.09, 0.06, 0.03, 0.01, 0.0]
+            if tax_rate not in valid_rates:
+                warnings.append(f'税率异常：{tax_rate}，常见税率：13%、9%、6%、3%、1%、0%')
 
         return {
             'valid': len(issues) == 0,
             'issues': issues,
-            'warnings': [],
+            'warnings': warnings,
         }
 
     def to_expense_data(self, parsed_data, template_mapping=None):
