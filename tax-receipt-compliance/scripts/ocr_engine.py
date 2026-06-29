@@ -9,6 +9,7 @@ import os
 import sys
 import json
 import re
+import time
 import argparse
 from pathlib import Path
 from datetime import datetime
@@ -175,7 +176,7 @@ class OCREngine:
 
     def extract_structured_data(self, image_path):
         """
-        从发票图片中提取结构化数据
+        从发票图片中提取结构化数据（带重试机制）
 
         Args:
             image_path: 发票图片路径
@@ -183,67 +184,97 @@ class OCREngine:
         Returns:
             dict: 结构化发票数据
         """
-        # 提取原始文本
-        raw_text = self.extract_text(image_path)
+        max_retries = 3
+        last_error = None
 
-        if not raw_text:
-            # 提供更详细的错误诊断
-            error_msg = '未识别到任何文字。'
-            tip = ''
-            suggestions = []
+        for attempt in range(max_retries):
             try:
-                img = Image.open(image_path)
-                w, h = img.size
-                # 图片尺寸检查
-                if w < 200 or h < 200:
-                    tip = '图片尺寸过小，建议分辨率≥800x600。'
-                    suggestions.append('请使用更高分辨率的图片（建议800x600以上）')
-                # 图片模式检查
-                if img.mode == 'RGBA':
-                    tip += ' 图片带透明背景，建议转换为JPG格式。'
-                    suggestions.append('图片带有透明背景，请转换为JPG或PNG格式')
-                elif img.mode == 'RGB':
-                    # 检查是否偏色或过暗
-                    extrema = img.getextrema()
-                    if extrema:
-                        avg_brightness = sum(sum(c) / len(c) for c in extrema) / len(extrema)
-                        if avg_brightness < 80:
-                            tip += ' 图片过亮或过暗。'
-                            suggestions.append('图片亮度不均衡，建议在光线均匀的环境下拍摄')
-                # 检查Tesseract语言包
-                try:
-                    langs = pytesseract.get_languages()
-                    if 'chi_sim' not in langs:
-                        suggestions.append('未检测到中文语言包，请重新安装Tesseract并勾选中文语言包')
-                except Exception:
-                    pass
+                # 提取原始文本
+                raw_text = self.extract_text(image_path)
+
+                if not raw_text:
+                    # 提供更详细的错误诊断
+                    error_msg = '未识别到任何文字。'
+                    tip = ''
+                    suggestions = []
+                    try:
+                        img = Image.open(image_path)
+                        w, h = img.size
+                        # 图片尺寸检查
+                        if w < 200 or h < 200:
+                            tip = '图片尺寸过小，建议分辨率≥800x600。'
+                            suggestions.append('请使用更高分辨率的图片（建议800x600以上）')
+                        # 图片模式检查
+                        if img.mode == 'RGBA':
+                            tip += ' 图片带透明背景，建议转换为JPG格式。'
+                            suggestions.append('图片带有透明背景，请转换为JPG或PNG格式')
+                        elif img.mode == 'RGB':
+                            # 检查是否偏色或过暗
+                            extrema = img.getextrema()
+                            if extrema:
+                                avg_brightness = sum(sum(c) / len(c) for c in extrema) / len(extrema)
+                                if avg_brightness < 80:
+                                    tip += ' 图片过亮或过暗。'
+                                    suggestions.append('图片亮度不均衡，建议在光线均匀的环境下拍摄')
+                        # 检查Tesseract语言包
+                        try:
+                            langs = pytesseract.get_languages()
+                            if 'chi_sim' not in langs:
+                                suggestions.append('未检测到中文语言包，请重新安装Tesseract并勾选中文语言包')
+                        except Exception:
+                            pass
+                    except Exception as e:
+                        suggestions.append(f'图片文件可能损坏或格式不支持: {e}')
+
+                    if not suggestions:
+                        suggestions = [
+                            '请检查图片是否清晰完整',
+                            '确认是否为支持的发票类型（增值税专票/普票/电子票）',
+                            '确认图片光线均匀，无反光或阴影',
+                            '尝试重新拍摄或扫描发票'
+                        ]
+
+                    return {
+                        'success': False,
+                        'error': error_msg,
+                        'tip': tip,
+                        'suggestions': suggestions,
+                        'raw_text': ''
+                    }
+
+                # 解析发票字段
+                structured_data = self._parse_invoice_fields(raw_text)
+                structured_data['raw_text'] = raw_text
+                structured_data['success'] = True
+                structured_data['timestamp'] = datetime.now().isoformat()
+                structured_data['image_path'] = str(image_path)
+
+                # 低置信度提醒
+                if structured_data.get('confidence', 0) < 0.6:
+                    structured_data['warning'] = '识别置信度较低，建议人工核对关键字段（发票代码、号码、金额）'
+
+                return structured_data
+
             except Exception as e:
-                suggestions.append(f'图片文件可能损坏或格式不支持: {e}')
+                last_error = e
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt  # 指数退避：1秒、2秒、4秒
+                    print(f"识别失败，正在重试 ({attempt+1}/{max_retries})，等待{wait_time}秒...")
+                    time.sleep(wait_time)
 
-            if not suggestions:
-                suggestions = [
-                    '请检查图片是否清晰完整',
-                    '确认是否为支持的发票类型（增值税专票/普票/电子票）',
-                    '确认图片光线均匀，无反光或阴影',
-                    '尝试重新拍摄或扫描发票'
-                ]
-
-            return {
-                'success': False,
-                'error': error_msg,
-                'tip': tip,
-                'suggestions': suggestions,
-                'raw_text': ''
-            }
-
-        # 解析发票字段
-        structured_data = self._parse_invoice_fields(raw_text)
-        structured_data['raw_text'] = raw_text
-        structured_data['success'] = True
-        structured_data['timestamp'] = datetime.now().isoformat()
-        structured_data['image_path'] = str(image_path)
-
-        return structured_data
+        # 最终失败，返回友好提示
+        return {
+            'success': False,
+            'error': f'识别失败，已重试{max_retries}次',
+            'error_detail': str(last_error),
+            'suggestions': [
+                '请检查图片是否清晰',
+                '尝试重新拍摄或扫描',
+                '确认是否为支持的发票类型（增值税专票/普票/电子票）',
+                '检查Tesseract中文语言包是否安装完整'
+            ],
+            'tip': '如持续失败，建议手动输入发票信息'
+        }
 
     def _parse_invoice_fields(self, text):
         """
@@ -475,6 +506,24 @@ def main():
         print(f"结果已保存到: {args.output}")
     else:
         print(json.dumps(output_data, ensure_ascii=False, indent=2))
+
+    # 识别完成后给出友好提示
+    if isinstance(output_data, dict) and output_data.get('success'):
+        confidence = output_data.get('confidence', 0)
+        if confidence >= 0.8:
+            print("\n✅ 识别效果良好，置信度较高，可直接使用。", file=sys.stderr)
+        elif confidence >= 0.6:
+            print("\n⚠️ 识别置信度一般，建议核对关键字段（发票代码、号码、金额）。", file=sys.stderr)
+        else:
+            print("\n❌ 识别置信度较低，建议重新拍摄或手动输入发票信息。", file=sys.stderr)
+    elif isinstance(output_data, dict) and not output_data.get('success'):
+        print(f"\n❌ 识别失败: {output_data.get('error', '未知错误')}", file=sys.stderr)
+        if output_data.get('tip'):
+            print(f"💡 提示: {output_data['tip']}", file=sys.stderr)
+        if output_data.get('suggestions'):
+            print("📋 建议操作:", file=sys.stderr)
+            for i, s in enumerate(output_data['suggestions'], 1):
+                print(f"   {i}. {s}", file=sys.stderr)
 
 
 if __name__ == '__main__':
