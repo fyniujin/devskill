@@ -34,6 +34,14 @@ def check_tesseract():
         if result.returncode == 0:
             version = result.stdout.strip().split('\n')[0]
             print(f"  ✓ {version}")
+            # 检查版本号是否>=4.0
+            try:
+                ver_num = result.stdout.strip().split()[1]
+                major = int(ver_num.split('.')[0])
+                if major < 4:
+                    print(f"  ⚠ Tesseract版本较低({ver_num})，建议升级到4.0+以获得更好的中文识别效果")
+            except (IndexError, ValueError):
+                pass
             return True
     except FileNotFoundError:
         pass
@@ -47,6 +55,9 @@ def check_tesseract():
         print("  2. 安装时勾选 'Chinese (Simplified)' 语言包")
         print("  3. 将安装目录 (如 C:\\Program Files\\Tesseract-OCR) 添加到系统PATH")
         print("  4. 重启终端后重试")
+        print("")
+        print("  【Windows快速安装】")
+        print("   winget install UB-Mannheim.TesseractOCR")
     else:
         print("  Ubuntu/Debian: sudo apt-get install tesseract-ocr tesseract-ocr-chi-sim")
         print("  CentOS/RHEL:  sudo yum install tesseract tesseract-langpack-chi_sim")
@@ -66,8 +77,9 @@ def check_python_packages():
     all_ok = True
     for module, package in required.items():
         try:
-            __import__(module)
-            print(f"  ✓ {package}")
+            mod = __import__(module)
+            version = getattr(mod, '__version__', '未知版本')
+            print(f"  ✓ {package} ({version})")
         except ImportError:
             print(f"  ✗ {package} 未安装")
             print(f"    安装命令: pip install {package}")
@@ -99,6 +111,13 @@ def check_language_data():
             langs = result.stdout.strip().split('\n')[1:]  # 跳过第一行标题
             if 'chi_sim' in langs:
                 print("  ✓ 中文简体语言包 (chi_sim) 已安装")
+                # 检查语言包文件大小（chi_sim约10MB）
+                for path in possible_paths:
+                    if Path(path).exists():
+                        size_mb = Path(path).stat().st_size / (1024 * 1024)
+                        if size_mb < 5:
+                            print(f"  ⚠ 语言包文件过小({size_mb:.1f}MB)，可能不完整")
+                        break
                 return True
             else:
                 print(f"  ✗ 中文简体语言包未安装")
