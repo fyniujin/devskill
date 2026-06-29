@@ -86,9 +86,20 @@ class OCREngine:
         if img.mode != 'L':
             img = img.convert('L')
 
-        # 对比度增强
+        # 对比度增强（自适应：根据图片亮度调整增强系数）
         enhancer = ImageEnhance.Contrast(img)
-        img = enhancer.enhance(2.0)
+        # 计算平均亮度，暗图片增强更多
+        stat = img.convert('L')
+        extrema = stat.getextrema()
+        avg_brightness = sum(extrema) / 2 if extrema else 128
+        # 暗图片(亮度<100)增强更多，亮图片(亮度>180)增强较少
+        if avg_brightness < 100:
+            enhance_factor = 2.5
+        elif avg_brightness > 180:
+            enhance_factor = 1.5
+        else:
+            enhance_factor = 2.0
+        img = enhancer.enhance(enhance_factor)
 
         # 锐化
         img = img.filter(ImageFilter.SHARPEN)
@@ -102,7 +113,7 @@ class OCREngine:
 
     def extract_text(self, image_path):
         """
-        从图片中提取文字
+        从图片中提取文字（支持PSM回退机制）
 
         Args:
             image_path: 图片文件路径
@@ -113,16 +124,54 @@ class OCREngine:
         # 预处理
         processed_img = self.preprocess_image(image_path)
 
-        # OCR识别
+        # PSM模式回退列表：6(统一文本块) → 3(自动分页) → 4(单列可变) → 11(稀疏文本) → 12(稀疏文本+OSD)
+        psm_modes = [6, 3, 4, 11, 12]
+        best_text = ''
+        best_psm = None
+
+        for psm in psm_modes:
+            try:
+                config = f'--psm {psm}'
+                text = pytesseract.image_to_string(
+                    processed_img,
+                    lang=self.lang,
+                    config=config
+                ).strip()
+                # 如果识别到中文字符数>10，认为结果可用
+                chinese_chars = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
+                if chinese_chars >= 10:
+                    return text
+                # 记录最佳结果（字符数最多）
+                if len(text) > len(best_text):
+                    best_text = text
+                    best_psm = psm
+            except Exception:
+                continue
+
+        # 如果所有PSM都未识别到足够中文，返回最佳结果
+        if best_text:
+            return best_text
+
+        # 尝试原始图像（未预处理）- 某些情况下预处理反而降低质量
         try:
-            text = pytesseract.image_to_string(
-                processed_img,
-                lang=self.lang,
-                config='--psm 6'  # 假设为统一文本块
-            )
-            return text.strip()
-        except Exception as e:
-            raise RuntimeError(f"OCR识别失败: {e}")
+            original_img = Image.open(image_path)
+            for psm in [6, 3]:
+                try:
+                    config = f'--psm {psm}'
+                    text = pytesseract.image_to_string(
+                        original_img,
+                        lang=self.lang,
+                        config=config
+                    ).strip()
+                    chinese_chars = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
+                    if chinese_chars >= 10:
+                        return text
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        return best_text
 
     def extract_structured_data(self, image_path):
         """
@@ -138,9 +187,52 @@ class OCREngine:
         raw_text = self.extract_text(image_path)
 
         if not raw_text:
+            # 提供更详细的错误诊断
+            error_msg = '未识别到任何文字。'
+            tip = ''
+            suggestions = []
+            try:
+                img = Image.open(image_path)
+                w, h = img.size
+                # 图片尺寸检查
+                if w < 200 or h < 200:
+                    tip = '图片尺寸过小，建议分辨率≥800x600。'
+                    suggestions.append('请使用更高分辨率的图片（建议800x600以上）')
+                # 图片模式检查
+                if img.mode == 'RGBA':
+                    tip += ' 图片带透明背景，建议转换为JPG格式。'
+                    suggestions.append('图片带有透明背景，请转换为JPG或PNG格式')
+                elif img.mode == 'RGB':
+                    # 检查是否偏色或过暗
+                    extrema = img.getextrema()
+                    if extrema:
+                        avg_brightness = sum(sum(c) / len(c) for c in extrema) / len(extrema)
+                        if avg_brightness < 80:
+                            tip += ' 图片过亮或过暗。'
+                            suggestions.append('图片亮度不均衡，建议在光线均匀的环境下拍摄')
+                # 检查Tesseract语言包
+                try:
+                    langs = pytesseract.get_languages()
+                    if 'chi_sim' not in langs:
+                        suggestions.append('未检测到中文语言包，请重新安装Tesseract并勾选中文语言包')
+                except Exception:
+                    pass
+            except Exception as e:
+                suggestions.append(f'图片文件可能损坏或格式不支持: {e}')
+
+            if not suggestions:
+                suggestions = [
+                    '请检查图片是否清晰完整',
+                    '确认是否为支持的发票类型（增值税专票/普票/电子票）',
+                    '确认图片光线均匀，无反光或阴影',
+                    '尝试重新拍摄或扫描发票'
+                ]
+
             return {
                 'success': False,
-                'error': '未识别到任何文字',
+                'error': error_msg,
+                'tip': tip,
+                'suggestions': suggestions,
                 'raw_text': ''
             }
 
