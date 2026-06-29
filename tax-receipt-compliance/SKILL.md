@@ -3,7 +3,7 @@ name: tax-receipt-compliance
 slug: tax-receipt-compliance
 displayName: 财税合规全链路助手
 description: 财税合规全链路助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。
-version: 1.2.0
+version: 2.0.0
 category: 财税管理
 appName: 财税合规
 platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
@@ -43,22 +43,148 @@ platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
 | 提交审批 | "提交报销审批"、"发起审批"、"报销审批" |
 | 批量处理 | "批量识别"、"批量报销" |
 
-## 快速开始
+## 对话示例
 
-### 第一步：环境准备（必做）
+本Skill支持通过自然语言对话方式使用，无需记忆复杂命令。
 
-运行前请确认：
+### 场景1：识别单张发票
+
+```
+用户：请帮我识别这张发票 D:\invoices\20260628_001.png
+AI：正在识别发票...
+    ✓ 发票类型: 增值税专用发票
+    ✓ 发票代码: 3100204130
+    ✓ 发票号码: 00564189
+    ✓ 开票日期: 2026年06月28日
+    ✓ 金额: 10,000.00 元
+    ✓ 税额: 1,300.00 元
+    识别完成，已保存到 receipt.json
+```
+
+### 场景2：批量处理
+
+```
+用户：把文件夹里所有发票都识别出来
+AI：正在批量识别 D:\invoices\ 中的发票...
+    共发现 15 个图片文件
+    ✓ 20260628_001.png - 识别成功
+    ✓ 20260628_002.png - 识别成功
+    ⚠ 20260628_003.png - 识别失败（图片模糊）
+    ...
+    处理完成：成功 12 张，失败 3 张
+    结果已保存到 batch_result.json
+```
+
+### 场景3：查验发票真伪
+
+```
+用户：帮我查验这张发票的真伪
+AI：正在查验发票...
+    发票代码：3100204130
+    发票号码：00564189
+    ✓ 查验平台：国税总局
+    ✓ 发票状态：正常
+    ✓ 查验时间：2026-06-29 10:30:00
+```
+
+### 场景4：生成报销单
+
+```
+用户：用公司模板生成报销单
+AI：正在生成报销单...
+    ✓ 识别到 6 个字段映射
+    ✓ 已填充：开票日期、销方名称、金额、税额、价税合计、费用说明
+    报销单已生成：D:\output\expense_report.xlsx
+```
+
+## API调用示例
+
+### Python调用
+
+```python
+from scripts.ocr_engine import OCREngine
+
+# 初始化引擎
+engine = OCREngine()
+
+# 识别单张发票
+result = engine.extract_structured_data("invoice.png")
+print(f"发票代码: {result['invoice_code']}")
+print(f"金额: {result['amount']}")
+
+# 批量处理
+import glob
+for file in glob.glob("invoices/*.png"):
+    result = engine.extract_structured_data(file)
+    print(f"{file}: {result['success']}")
+```
+
+### HTTP API调用
 
 ```bash
-# Windows (PowerShell)
-.\scripts\install_tesseract.ps1
+# 启动API服务（需安装flask）
+python scripts/api_server.py
 
-# Linux/macOS
+# 识别发票
+curl -X POST http://localhost:8080/api/ocr \
+  -F "file=@invoice.png"
+
+# 批量识别
+curl -X POST http://localhost:8080/api/ocr/batch \
+  -F "files=@invoice1.png" \
+  -F "files=@invoice2.png"
+```
+
+## 快速配置向导（一键配置）
+
+**新手推荐**：运行以下命令自动检测环境并推荐最优配置：
+
+```bash
+python scripts/config_wizard.py
+```
+
+向导会自动完成：
+1. 检测Tesseract是否安装，未安装则提供一键安装命令
+2. 检测中文语言包是否完整
+3. 推荐查验引擎（默认：国税总局平台，免费无需API Key）
+4. 生成初始 `config.yaml` 文件
+5. 验证配置文件有效性
+
+**手动快速配置**（3步完成）：
+
+```bash
+# 1. 复制配置模板
+cp templates/config_template.yaml config.yaml
+
+# 2. 编辑配置（只需填写必填项）
+# 用编辑器打开 config.yaml，填写：
+#   - verify_engine: "tax_bureau" （默认，免费）
+#   - approval.platform: "none" （暂不配置审批）
+
+# 3. 验证配置
+python scripts/check_env.py
+```
+
+> 💡 **提示**：基础功能（发票识别、报销单生成）只需完成环境安装即可使用，无需配置API密钥。查验和审批功能才需要配置API密钥。
+
+## 快速开始
+
+
+
+### 第一步：环境准备（必做，5分钟完成）
+
+**Windows用户**（一键安装）：
+```powershell
+# 自动下载并安装Tesseract（使用国内镜像，速度快）
+.\scripts\install_tesseract.ps1
+```
+
+**Linux/macOS用户**：
+```bash
 bash ./scripts/install_tesseract.sh
 ```
 
-然后安装Python依赖：
-
+**安装Python依赖**：
 ```bash
 pip install Pillow pytesseract openpyxl pyyaml
 ```
@@ -68,24 +194,26 @@ pip install Pillow pytesseract openpyxl pyyaml
 > python scripts/check_env.py
 > ```
 
-### 第二步：配置
+### 第二步：配置（可选，基础功能无需配置）
 
 ```bash
+# 复制配置模板
 cp templates/config_template.yaml config.yaml
-# 编辑 config.yaml，填写您的企业配置
 ```
+
+> 💡 **新手提示**：不编辑 `config.yaml` 也能使用基础功能（发票识别、报销单生成）。只有查验真伪和提交审批才需要配置对应API密钥。
 
 ### 第三步：开始使用
 
 ```bash
-# 识别单张发票（直接可用）
+# 识别单张发票（直接可用，无需配置）
 python scripts/ocr_engine.py --input path/to/invoice.png --output receipt.json
+
+# 生成报销单（直接可用，无需配置）
+python scripts/template_matcher.py fill --config config.yaml --receipt receipt.json --template templates/expense_basic.xlsx
 
 # 查验发票真伪（需先配置查验引擎）
 python scripts/verify_engine.py --invoice-code 3100204130 --invoice-number 00564189 --date "2026年06月28日" --amount 10000
-
-# 生成报销单（直接可用）
-python scripts/template_matcher.py fill --config config.yaml --receipt receipt.json --template templates/expense_basic.xlsx
 
 # 提交审批（需先配置审批平台）
 python scripts/approval_engine.py --config config.yaml --expense expense_output.xlsx
