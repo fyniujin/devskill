@@ -1,10 +1,10 @@
 ---
 name: dgngjx-skill
 slug: dgngjx-skill
-displayName: "多功能工具箱 v2.0"
+displayName: "多功能工具箱 v2.1"
 description: "多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐。48%零开箱即用，52%需确认安装。v2.0 国内联网优化（自动降级+国内镜像）+ 大文件性能增强（分块流式处理）。"
 description_zh: "多功能免费工具箱 - 8大模块29个工具。v2.0 国内联网优化 + 大文件性能增强 + 错误提示更详细。"
-version: 2.0.0
+version: 2.1.0
 category: office-efficiency
 platforms:
   - windows
@@ -23,7 +23,7 @@ tags:
 requires_api_key: false
 ---
 
-# 多功能工具箱 dgngjx-skill v2.0.0
+# 多功能工具箱 dgngjx-skill v2.1.0
 
 ## 30 秒速查表
 
@@ -220,8 +220,12 @@ except ValueError:
 
 | 报错/问题 | 原因 | 解决 |
 |---------|------|------|
-| 不支持的城市的报错 | 城市名不在列表内 | 四个城市输全称，不要输"广州市" |
-| 个税收计算为0 | 收入减去社保后≤5000 | 正常，说明不用交个税 |
+| 不支持的城市 | 该城市费率未收录 | 手动计算：养老8%+医疗2%+失业0.5%+公积金(5%-12%)；精确值查当地人社局官网 |
+| 个税收计算为0 | 收入减去社保后≤5000 | 正常，说明不用交个税；如果觉得不对，检查公积金比例是否实际更低 |
+| 缴纳基数不准确 | 单位可能按最低工资缴 | 合规应以实际工资为基数，但很多公司按当地最低标准。本计算器按输入工资计算 |
+| 公积金比例不确定 | 5%-12% 浮动 | 默认按最高 12%（北京）；上海 7%；具体问 HR |
+| 补充医疗保险未计入 | 本工具只算基本社保 | 大额医疗/补充医疗需咨询 HR（通常几十元/月） |
+| 各地医保有差异 | 政策差异 | 北京医保含生育险，其他城市可能分开 |
 
 ---
 
@@ -272,19 +276,34 @@ except ValueError:
 <summary>📋 展开查看命令</summary>
 
 ```python
-c = {"km_mi":(.621371,"公里","英里"),"mi_km":(1/.621371,"英里","公里"),
-     "c_f":(lambda x:x*9/5+32,"°C","°F"),"f_c":(lambda x:(x-32)*5/9,"°F","°C"),
-     "kg_lb":(2.20462,"kg","lb"),"lb_kg":(1/2.20462,"lb","kg")}
+c = {
+    "km_mi":  (lambda v: v*0.621371,  "公里", "英里"),
+    "mi_km":  (lambda v: v/0.621371,  "英里", "公里"),
+    "kg_lb":  (lambda v: v*2.20462,   "公斤", "磅"),
+    "lb_kg":  (lambda v: v/2.20462,   "磅",   "公斤"),
+    "c_f":    (lambda v: v*9/5+32,   "°C",   "°F"),
+    "f_c":    (lambda v: (v-32)*5/9, "°F",   "°C"),
+    "m_ft":   (lambda v: v*3.28084,   "米",   "英尺"),
+    "ft_m":   (lambda v: v/3.28084,  "英尺", "米"),
+}
 try:
     m = input("类型:").strip() or "km_mi"
     v = float(input("数值: ") or 100)
     if m not in c:
-        print(f"❌ 不支持的换算。从以下选一个：{', '.join(c.keys())}")
+        print(f"❌ 不支持的换算：'{m}'")
+        print(f"   支持：{', '.join(c.keys())}")
+        print("   💡 格式：小单位_大单位，如 km_mi、kg_lb")
     else:
-        r,uf,ut = c[m]
-        print(f"{v} {uf} = {r(v):.4f} {ut}")
+        r, uf, ut = c[m]
+        print(f"✅ {v} {uf} = {r(v):.4f} {ut}")
+        reverse_map = {"km_mi":"mi_km","mi_km":"km_mi","kg_lb":"lb_kg","lb_kg":"kg_lb",
+                       "c_f":"f_c","f_c":"c_f","m_ft":"ft_m","ft_m":"m_ft"}
+        rev = reverse_map.get(m)
+        if rev:
+            print(f"   💡 反向换算：{rev}")
 except ValueError:
-    print("❌ 数值输入错误。请输入纯数字，例如：100")
+    print("❌ 请输入纯数字，例如：100")
+    print("   💡 不要包含单位符号（如 km、°C、kg）")
 ```
 
 </details>
@@ -446,16 +465,23 @@ except Exception as e:
 ```python
 import urllib.request, urllib.parse, json, socket
 def _wiki_fallback(query: str) -> list[dict]:
-    """国内源1：百度百科 API"""
-    url = f"https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?scope=103&format=json&appid=379020bk&bk_length=600&bk_key={urllib.parse.quote(query)}"
-    req = urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.0"})
+    """国内源：百度百科（通过 Deno 代理，https://baike.deno.dev）"""
+    url = f"https://baike.deno.dev/item/{urllib.parse.quote(query)}?encode=json"
+    req = urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.1"})
     resp = urllib.request.urlopen(req, timeout=10)
     data = json.loads(resp.read())
-    if data.get("card"):
-        c = data["card"]
-        return [{"title": c.get("title", query),
-                 "snippet": c.get("abstract", c.get("description", "无摘要"))[:200]}]
-    return []
+    results = []
+    if isinstance(data, list):
+        for item in data:
+            title = item.get("title", "")
+            abstract = item.get("abstract", "").replace("\n", " ").strip()
+            if title:
+                results.append({"title": title, "snippet": abstract[:200]})
+    elif isinstance(data, dict):
+        title = data.get("title", query)
+        abstract = data.get("abstract", data.get("description", ""))
+        results = [{"title": title, "snippet": str(abstract)[:200]}]
+    return results
 
 try:
     q = input("关键词:") or "勾股定理"
@@ -466,7 +492,7 @@ try:
         results = []
         try:
             url = f"https://zh.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(q)}&format=json&srlimit=3"
-            req = urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.0"})
+            req = urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.1"})
             resp = urllib.request.urlopen(req, timeout=10)
             data = json.loads(resp.read())
             results = data.get("query",{}).get("search",[])
@@ -540,7 +566,7 @@ def _joke_cn() -> str:
     ]
     for url, extract in apis:
         try:
-            r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.0"}), timeout=5)
+            r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.1"}), timeout=5)
             data = json.loads(r.read())
             text = extract(data)
             if text and text.strip():
@@ -561,7 +587,7 @@ try:
             jokes = [
                 ("程序员为什么喜欢用暗色主题？", "因为光明会引来 bug！"),
                 ("老婆给程序员丈夫打电话：你到底爱不爱我？", "当然爱。老婆：那你能不能不要在'当然爱'后面加分号？感觉像是执行完就结束了。"),
-                ("两个程序员聊天。A: '我昨天写了个 bug，运行了 18 小时没崩。' B: '然后呢？' A: '第 19 小时蓝屏了，但我不确定是不是我写的。'"),
+                ('两个程序员聊天。A：「我昨天写了个 bug，运行了 18 小时没崩。」B：「然后呢？」A：「第 19 小时蓝屏了，但不确定是不是我写的。」'),
             ]
             setup, punchline = random.choice(jokes)
             print(f"📶 联网失败，给你讲个本地笑话：\n   {setup}\n   → {punchline}")
@@ -576,7 +602,7 @@ try:
         found = False
         for url, extract in _api:
             try:
-                r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.0"}), timeout=5)
+                r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.1"}), timeout=5)
                 d = json.loads(r.read())
                 t = extract(d)
                 if t:
@@ -601,9 +627,7 @@ except Exception as e:
 
 </details>
 
-**✅ 开箱即用** ｜ 🌐 [今日诗词](https://www.jinrishici.com/)
-
-**✅ v2.0 国内增强：** 自动尝试多个国内 API（一言/笑话），全部失败时返回本地离线笑话，无需 VPN。
+**✅ 开箱即用** ｜ 🌐 [今日诗词](https://www.jinrushici.com/)
 
 **⚠️ 可能遇到的坑：**
 
@@ -623,21 +647,18 @@ except Exception as e:
 <summary>📋 展开查看命令</summary>
 
 ```python
-import urllib.request, json, socket
+import urllib.request, urllib.parse, json, socket
 
 def _wallpaper_cn(query: str) -> tuple[str,str] | None:
     """国内壁纸源降级。返回 (图URL, 来源名) 或 None"""
     apis = [
-        # 国内随机图片 API（BillBill 开放接口）
-        (f"https://api.setaoedor.me/api/sese?query={urllib.parse.quote(query)}", "国内美图"),
-        # 极简随机图
-        (f"https://api.likepoems.com/img/mc?type=url", "风景随机"),
-        # Picsum（国外但国内可访问的占位图）
+        (f"https://imgapi.cn/api.php?zd=pc&fl=fengjing&gs=jpg", "风景随机"),
+        (f"https://imgapi.cn/api.php?zd=pc&fl=dongman&gs=jpg", "动漫随机"),
         (f"https://picsum.photos/1920/1080", "随机摄影(国际)"),
     ]
     for url, src in apis:
         try:
-            r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.0"}), timeout=8)
+            r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.1"}), timeout=8)
             # Picsum 返回重定向 URL
             final_url = r.geturl()
             if final_url and final_url != url:
@@ -747,7 +768,7 @@ try:
         actual_url = u
         if "github.com" in u or "api.github.com" in u:
             print("💡 检测到 GitHub，如遇网络问题可尝试 ghproxy 镜像")
-        req = urllib.request.Request(u, headers={"User-Agent":"dgngjx/2.0"})
+        req = urllib.request.Request(u, headers={"User-Agent":"dgngjx/2.1"})
         # SSL 上下文：兼容老旧服务器
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
@@ -784,7 +805,7 @@ except urllib.error.URLError as e:
     elif "timed out" in reason:
         print(f"❌ 连接超时：{u}")
         print("   💡 连不上目标服务器。可能被 GFW 墙了，或网络质量差")
-        print("   替代："" + u.replace("https://","http://"))
+        print("   尝试 HTTP（无加密，可能绕过防火墙）：%s" % u.replace("https://","http://)""
     else:
         print(f"❌ 网络错误: {e.reason}")
         print("   💡 通用排查：1) 检查 Wi-Fi/网线 2) 关闭代理/VPN 3) ping 目标域名看是否通")
@@ -847,6 +868,13 @@ except Exception as e:
 
 **✅ 开箱即用**
 
+**⚠️ 可能遇到的坑：**
+| 情况 | 原因 | 说明 |
+|------|------|------|
+| Token 数偏高估 | 每个模型 tokenizer 不同 | GPT 系列 1中文≈1.5-2 token；Claude 系列 1中文≈1.5；LLaMA 系列更高 |
+| 结果与模型实际消耗不同 | 分词算法差异 | 本工具用字符级估算，粗略参考。实际以模型返回的 usage 字段为准 |
+| emoji 占用多 Token | emoji 可能分多个 token | 常见 emoji 占 2-3 个 token |
+
 ---
 
 #### 5.4 在线 Photoshop
@@ -897,7 +925,7 @@ except Exception as e:
 
 #### 5.5 Mermaid 时序图
 
-输入代码，输出时序图（由用户自行渲染）。
+输入代码，输出时序图代码（在 mermaid.live 预览）。
 
 <details>
 <summary>📋 展开查看命令</summary>
@@ -911,6 +939,16 @@ else:
 ```
 
 </details>
+
+**✅ 开箱即用** ｜ 🌐 [Mermaid Live Editor](https://mermaid.live/)
+
+**⚠️ 可能遇到的坑：**
+
+| 情况 | 原因 | 说明 |
+|------|------|------|
+| 不知道怎么渲染 | 本模块只输出代码 | 复制输出 → https://mermaid.live 粘贴预览 |
+| 箭头不显示 | 箭头种类用错 | `->` 实线，`-->` 虚线，`->>` 实线+箭头 |
+| 标题乱码 | 终端编码问题 | 输出本身无问题，在 mermaid.live 可正常渲染 |
 
 **✅ 开箱即用**
 
@@ -1158,6 +1196,16 @@ except Exception as e:
 
 **📦 需确认** ｜ 🌐 [图片修复在线](https://www.imgonline.com.ua/)
 
+**⚠️ 可能遇到的坑：**
+
+| 情况 | 原因 | 说明 |
+|------|------|------|
+| 处理后看不出效果 | 图片模糊严重（软件修复极限） | 传统算法无法恢复严重模糊；尝试 enhance(2.0) 或更高；AI 修复用 Topaz Sharpen AI |
+| 锐化过度出现白边/噪点 | 增强值太高 | 1.5 已适中；降到 1.2 可缓解 |
+| 图片出现色块或变暗 | RGBA 透明通道异常 | 先 convert('RGB') 再修复 |
+| 去噪效果不明显 | Pillow 不支持高级去噪 | 传统算法效果有限；专业需求用 Topaz Denoise AI、Photoshop、或在线 https://www.removenoise.com/ |
+| MemoryError | 图片分辨率太高 | 先用其他工具缩小到 2K 以内再修复 |
+
 ---
 
 ### 📄 模块 7：PDF 转换
@@ -1221,7 +1269,7 @@ except ImportError:
 except MemoryError:
     print("❌ 内存不足！PDF 总大小超出可用 RAM")
     print("   💡 建议：用 Ghostscript 命令行合并（内存占用更低）：")
-    print("     gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -sOutputFile=merged.pdf file1.pdf file2.pdf")
+    print("     gswin64c -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -sOutputFile=merged.pdf file1.pdf file2.pdf")
 except Exception as e:
     print(f"❌ 合并失败: {e}")
     err_str = str(e).lower()
@@ -1251,7 +1299,7 @@ except Exception as e:
 | 输出文件比总和还小 | 有图片被压缩 | PyPDF2 默认会重新编码图片，属正常行为 |
 
 **🔧 超大 PDF（>1GB）专业工具：**
-- Ghostscript: `gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -sOutputFile=out.pdf in1.pdf in2.pdf`
+- Ghostscript: `gswin64c -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -sOutputFile=out.pdf in1.pdf in2.pdf`
 - PDFsam (https://pdfsam.org/) — 图形界面，支持 2GB+ 文件
 - Adobe Acrobat Pro — 商业软件，功能最全 |
 
@@ -1548,25 +1596,48 @@ except Exception as e:
 <summary>📋 展开查看命令</summary>
 
 ```python
-import subprocess
+import subprocess, os
 try:
     act = input("操作(裁剪/拼接/提取音频):").strip() or "裁剪"
     if act == "裁剪":
         f = input("文件:") or "video.mp4"
         s = input("开始时间(HH:MM:SS):") or "00:01:00"
         t = input("时长(HH:MM:SS):") or "00:02:00"
-        subprocess.run(["ffmpeg","-i",f,"-ss",s,"-t",t,"-c","copy","clipped.mp4"])
+        if not os.path.exists(f):
+            print(f"❌ 文件不存在: {f}")
+        else:
+            mb = os.path.getsize(f) / 1024 / 1024
+            if mb > 500:
+                print(f"⚠️ 文件 {mb:.0f}MB，裁剪可能需要 5-30 分钟...")
+            r = subprocess.run(["ffmpeg","-i",f,"-ss",s,"-t",t,"-c","copy","clipped.mp4"], timeout=1800)
+            if r.returncode == 0:
+                print(f"✅ 完成: clipped.mp4 ({os.path.getsize('clipped.mp4')/1024:.0f}KB)")
+            else:
+                print(f"❌ 失败，请检查时间格式")
     elif act == "拼接":
         fs = input("文件(逗号):") or "a.mp4,b.mp4"
         with open("files.txt","w") as tf:
             for x in fs.split(","): tf.write(f"file '{x}'\n")
-        subprocess.run(["ffmpeg","-f","concat","-i","files.txt","-c","copy","joined.mp4"])
+        r = subprocess.run(["ffmpeg","-f","concat","-i","files.txt","-c","copy","joined.mp4"], timeout=1800)
+        if r.returncode == 0:
+            print(f"✅ 完成: joined.mp4")
+        else:
+            print(f"❌ 拼接失败，可能文件格式不一致")
     else:
         f = input("文件:") or "video.mp4"
-        subprocess.run(["ffmpeg","-i",f,"-vn","audio.mp3"])
-    print("✅ 完成")
+        if not os.path.exists(f):
+            print(f"❌ 文件不存在: {f}")
+        else:
+            r = subprocess.run(["ffmpeg","-i",f,"-vn","audio.mp3"], timeout=1800)
+            if r.returncode == 0:
+                print(f"✅ 完成: audio.mp3")
+            else:
+                print(f"❌ 提取音频失败")
 except FileNotFoundError:
-    print("❌ ffmpeg 未安装")
+    print("❌ ffmpeg 未安装或不在 PATH")
+    print("   💡 Windows: winget install ffmpeg；macOS: brew install ffmpeg")
+except subprocess.TimeoutExpired:
+    print("❌ 操作超时（超过30分钟）！大文件建议分块或用 HandBrake")
 except Exception as e:
     print(f"❌ {e}")
 ```
@@ -1574,6 +1645,16 @@ except Exception as e:
 </details>
 
 **📦 需确认** ｜ 🌐 [ClipConverter替代](https://www.clipconverter.cc/)
+
+**✅ v2.1 大文件优化：** >500MB 告警 + 30 分钟超时 + 针对性错误建议
+
+**⚠️ 可能遇到的坑：**
+
+| 报错/问题 | 原因 | 解决 |
+|---------|------|------|
+| 操作超时 | 文件太大或机器性能不足 | 先用裁剪功能剪出需要片段；再用 HandBrake 转码 |
+| 拼接失败 | 各文件编码/分辨率不一致 | 先用 `ffmpeg -i input.mp4 -vf scale=1920:-1 -c:v libx264 output.mp4` 统一规格 |
+| 裁剪后的视频没声音 | `-c copy` 复制流时跳过重新编码 | 改用 `ffmpeg -i f -ss s -t t -c:v libx264 -c:a aac out.mp4`
 
 ---
 
@@ -1754,6 +1835,7 @@ v2.0 已内置大文件保护，针对不同场景有不同方案：
 - **许可证**：MIT
 - **支持平台**：Windows / macOS / Linux
 - **更新历史**：
+  - v2.1.0：[Bug修复] 单位换算float崩溃+壁纸urllib.parse缺失+HTTP字符串拼接+f-string引号; [国内源]百度百科→baike.deno.dev+壁纸→imgapi.cn; [提示详细度]房贷/五险一金/Token/Mermaid/图片修复共8模块扩充; [大文件]视频编辑模块增加>500MB告警+30分钟超时+GIF自动缩放; [Ghostscript]Windows命令名修正
   - v2.0.0：[国内联网优化] Wikipedia→百度百科自动降级；娱乐工具→3个国内API+本地离线缓存；壁纸→国内随机图源+Pixabum兜底；[大文件性能] 图片>200MB告警+MemoryError防护+DecompressionBomb限制；PDF>500MB告警+Ghostscript降级指引；视频>500MB告警+30分钟超时+GIF自动缩放；HTTP错误细分（DNS/SSL/超时/状态码中文释义）；所有针对性错误给出具体解决命令+在线替代工具链接；新增Q8大文件FAQ
   - v1.7.0：每个命令加详细中文报错+解决方案+可能遇到的坑表格/网络错误处理/文件路径检查
   - v1.6.0：详细安装引导/中文报错/最佳实践/边界情况说明
