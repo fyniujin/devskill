@@ -1,26 +1,42 @@
 """
-WPS Worker v2.1 - 三引擎自动切换
-WPS > MS Office > Pure Python
+WPS Worker v2.2 - 智能引擎切换 v2.0
+引擎优先级: WPS > MS Office > LibreOffice > 纯Python
 
-新增：目录生成 / 环境自检 / 反馈入口
+v2.2 变更:
+  - 智能引擎检测（wps_engine.py替代硬编码的三引擎切换）
+  - 新增 LibreOffice Headless 引擎（跨平台兜底）
+  - PURE模式下自动尝试LibreOffice转换
+  - 全面中文化错误提示
+  - 错误ID系统（E001-E015）
 """
 import sys
 import json
+import subprocess
 import traceback
 from pathlib import Path
 
+# 智能引擎检测器（v2.2 新增）
+from wps_engine import detect_best_engine, get_engine
+
+# WPS/MS COM 对象管理
 from wps_common import (
-    detect_engine, get_engine, get_wps, get_ms_word,
+    get_wps, get_ms_word,
     safe_path, ensure_desktop_path, release_wps, release_ms, with_retry
 )
+
+# 纯 Python 模式
 from wps_pure import (
     pure_create_word, pure_edit_word, pure_info_word,
     pure_create_excel, pure_input_excel, pure_info_excel,
     pure_create_ppt, pure_info_ppt
 )
 
+# 错误处理模块
+from wps_error import wps_error
+
 # MS Office 兼容层
 wps_ms = None
+
 
 def get_ms_module():
     global wps_ms
@@ -30,37 +46,103 @@ def get_ms_module():
     return wps_ms
 
 
+# ==================== LibreOffice Headless ====================
+
+def libreoffice_convert(input_path: str, output_format: str = "pdf") -> dict:
+    """
+    调用 LibreOffice Headless 进行格式转换。
+    命令: soffice --headless --convert-to pdf --outdir /path /input.docx
+
+    返回: {"success": bool, "path": str, "error": str}
+    """
+    input_p = Path(input_path).resolve()
+    if not input_p.exists():
+        return {"success": False, "error": wps_error("E013", path=input_path)}
+
+    output_dir = input_p.parent
+
+    try:
+        cmd = [
+            "soffice" if sys.platform != "win32" else str(
+                Path("C:/Program Files/LibreOffice/program/soffice.exe")
+            ),
+            "--headless",
+            "--convert-to", output_format,
+            "--outdir", str(output_dir),
+            str(input_p)
+        ]
+
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=120
+        )
+
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            return {
+                "success": False,
+                "error": wps_error("E012", detail=stderr[:200]),
+            }
+
+        output_file = input_p.with_suffix(f".{output_format}")
+        if not output_file.exists():
+            return {"success": False, "error": wps_error("E015")}
+
+        return {"success": True, "path": str(output_file), "engine": "LIBREOFFICE"}
+
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": wps_error("E006")}
+    except FileNotFoundError:
+        return {"success": False, "error": wps_error("E011")}
+    except Exception as e:
+        return {"success": False, "error": wps_error("E014", detail=str(e))}
+
+
 # ==================== Word ====================
 
 def cmd_create_word(args):
     engine = get_engine()
     title = args.get("title", "新建文档")
-    
-    if engine == "WPS":
-        wps = get_wps()
-        doc = wps.Documents.Add()
-        if title:
-            para = doc.Paragraphs.Add()
-            para.Range.Text = title
-            para.Range.Font.Size = 16
-            para.Range.Font.Bold = True
-            para.Range.ParagraphFormat.Alignment = 1
-        filepath = ensure_desktop_path(f"{title}.docx")
-        doc.SaveAs(filepath)
-        doc.Close()
-        release_wps()
-        return {"success": True, "path": filepath, "engine": "WPS"}
 
-    elif engine == "MSOFFICE":
-        ms = get_ms_module()
-        filepath = ensure_desktop_path(f"{title}.docx")
-        result = ms.ms_create_word(title, filepath)
-        release_ms()
-        return {**result, "engine": "MSOFFICE"}
-
-    else:
+    # PURE 模式：新建用 python-docx
+    if engine == "PURE":
         filepath = args.get("filepath", str(ensure_desktop_path(f"{title}.docx")))
         return pure_create_word(title, filepath)
+
+    # LIBREOFFICE：不支持创建，回退到 PURE
+    if engine == "LIBREOFFICE":
+        filepath = args.get("filepath", str(ensure_desktop_path(f"{title}.docx")))
+        result = pure_create_word(title, filepath)
+        result["engine"] = "PURE"
+        result["note"] = "检测到 LibreOffice，已用纯Python模式创建（建议安装WPS获得完整功能）"
+        return result
+
+    try:
+        if engine == "WPS":
+            wps = get_wps()
+            doc = wps.Documents.Add()
+            if title:
+                para = doc.Paragraphs.Add()
+                para.Range.Text = title
+                para.Range.Font.Size = 16
+                para.Range.Font.Bold = True
+                para.Range.ParagraphFormat.Alignment = 1
+            filepath = ensure_desktop_path(f"{title}.docx")
+            doc.SaveAs(filepath)
+            doc.Close()
+            release_wps()
+            return {"success": True, "path": filepath, "engine": "WPS"}
+
+        if engine == "MSOFFICE":
+            ms = get_ms_module()
+            filepath = ensure_desktop_path(f"{title}.docx")
+            result = ms.ms_create_word(title, filepath)
+            release_ms()
+            return {**result, "engine": "MSOFFICE"}
+
+    except Exception as e:
+        release_wps()
+        release_ms()
+        return {"success": False, "error": wps_error("E014", detail=str(e)), "engine": engine}
 
 
 def cmd_edit_word(args):
@@ -69,111 +151,155 @@ def cmd_edit_word(args):
     text = args["text"]
     position = args.get("position", "end")
 
-    if engine == "WPS":
-        wps = get_wps()
-        doc = wps.Documents.Open(filepath.__str__())
-        if position == "end":
-            doc.Content.InsertAfter(Text=text)
-        elif position == "start":
-            doc.Content.InsertBefore(Text=text)
-        doc.Save()
-        doc.Close()
-        release_wps()
-        return {"success": True, "engine": "WPS"}
+    if engine == "LIBREOFFICE":
+        return {"success": False, "error": wps_error("E010", feature="编辑文档")}
 
-    elif engine == "MSOFFICE":
-        ms = get_ms_module()
-        result = ms.ms_edit_word(filepath.__str__(), text, position)
-        release_ms()
-        return {**result, "engine": "MSOFFICE"}
-
-    else:
+    if engine == "PURE":
         return pure_edit_word(filepath.__str__(), text, position)
+
+    try:
+        if engine == "WPS":
+            wps = get_wps()
+            doc = wps.Documents.Open(filepath.__str__())
+            if position == "end":
+                doc.Content.InsertAfter(Text=text)
+            elif position == "start":
+                doc.Content.InsertBefore(Text=text)
+            doc.Save()
+            doc.Close()
+            release_wps()
+            return {"success": True, "engine": "WPS"}
+
+        if engine == "MSOFFICE":
+            ms = get_ms_module()
+            result = ms.ms_edit_word(filepath.__str__(), text, position)
+            release_ms()
+            return {**result, "engine": "MSOFFICE"}
+
+    except Exception as e:
+        release_wps()
+        release_ms()
+        return {"success": False, "error": wps_error("E014", detail=str(e)), "engine": engine}
 
 
 def cmd_format_word(args):
     engine = get_engine()
     filepath = safe_path(args["filepath"])
-    
-    if engine == "WPS":
-        wps = get_wps()
-        doc = wps.Documents.Open(filepath.__str__())
-        for para in doc.Paragraphs:
-            rng = para.Range
-            if not rng.Text.strip():
-                continue
-            am = {"center": 1, "left": 0, "right": 2}
-            if args.get("align") in am:
-                rng.ParagraphFormat.Alignment = am[args["align"]]
-        doc.Save()
-        doc.Close()
+
+    if engine in ("PURE", "LIBREOFFICE"):
+        return {"success": False, "error": wps_error("E010", feature="格式设置（需WPS/MS Office）")}
+
+    try:
+        if engine == "WPS":
+            wps = get_wps()
+            doc = wps.Documents.Open(filepath.__str__())
+            for para in doc.Paragraphs:
+                rng = para.Range
+                if not rng.Text.strip():
+                    continue
+                am = {"center": 1, "left": 0, "right": 2}
+                if args.get("align") in am:
+                    rng.ParagraphFormat.Alignment = am[args["align"]]
+            doc.Save()
+            doc.Close()
+            release_wps()
+            return {"success": True, "engine": "WPS"}
+
+        if engine == "MSOFFICE":
+            ms = get_ms_module()
+            result = ms.ms_format_word(filepath.__str__(),
+                                       args.get("align", "center"),
+                                       args.get("font", ""),
+                                       args.get("size", 0),
+                                       args.get("indent", 0))
+            release_ms()
+            return {**result, "engine": "MSOFFICE"}
+
+    except Exception as e:
         release_wps()
-        return {"success": True, "engine": "WPS"}
-    
-    elif engine == "MSOFFICE":
-        ms = get_ms_module()
-        result = ms.ms_format_word(filepath.__str__(), 
-                                   args.get("align", "center"),
-                                   args.get("font", ""),
-                                   args.get("size", 0),
-                                   args.get("indent", 0))
         release_ms()
-        return {**result, "engine": "MSOFFICE"}
-    
-    else:
-        return {"success": False, "error": "纯 Python 模式暂不支持格式设置"}
+        return {"success": False, "error": wps_error("E014", detail=str(e)), "engine": engine}
 
 
 def cmd_export_word(args):
     engine = get_engine()
     filepath = safe_path(args["filepath"])
-    
+    fmt = args.get("format", "pdf")
+
+    if engine == "LIBREOFFICE":
+        # LibreOffice Headless 调用
+        return libreoffice_convert(filepath.__str__(), fmt)
+
+    if engine == "PURE":
+        # 尝试 LibreOffice
+        info = detect_best_engine()
+        if info.get("libreoffice"):
+            return libreoffice_convert(filepath.__str__(), fmt)
+        return {"success": False, "error": wps_error("E010", feature="格式转换（需WPS/MS Office/LibreOffice）")}
+
     if engine == "WPS":
-        wps = get_wps()
-        doc = wps.Documents.Open(filepath.__str__())
-        fmt = args.get("format", "pdf")
-        fmt_map = {"pdf": 17, "txt": 7, "html": 8}
-        if fmt not in fmt_map:
+        try:
+            wps = get_wps()
+            doc = wps.Documents.Open(filepath.__str__())
+            fmt_map = {"pdf": 17, "txt": 7, "html": 8}
+            if fmt not in fmt_map:
+                doc.Close()
+                release_wps()
+                return {"success": False, "error": wps_error("E015")}
+            out = filepath.with_suffix(f".{fmt}")
+            doc.SaveAs(out.__str__(), fmt_map[fmt])
             doc.Close()
             release_wps()
-            return {"success": False, "error": f"Word 不支持转 {fmt}，支持: {list(fmt_map.keys())}"}
-        out = filepath.with_suffix(f".{fmt}")
-        doc.SaveAs(out.__str__(), fmt_map[fmt])
-        doc.Close()
-        release_wps()
-        return {"success": True, "path": out.__str__(), "engine": "WPS"}
+            return {"success": True, "path": out.__str__(), "engine": "WPS"}
+        except Exception as e:
+            release_wps()
+            return {"success": False, "error": wps_error("E014", detail=str(e))}
 
-    elif engine == "MSOFFICE":
-        ms = get_ms_module()
-        result = ms.ms_export_word(filepath.__str__(), args.get("format", "pdf"))
-        release_ms()
-        return {**result, "engine": "MSOFFICE"}
+    if engine == "MSOFFICE":
+        try:
+            ms = get_ms_module()
+            result = ms.ms_export_word(filepath.__str__(), fmt)
+            release_ms()
+            return {**result, "engine": "MSOFFICE"}
+        except Exception as e:
+            release_ms()
+            return {"success": False, "error": wps_error("E014", detail=str(e))}
 
-    else:
-        return {"success": False, "error": "纯 Python 模式不支持格式转换，请安装 WPS 或 MS Office"}
+    return {"success": False, "error": wps_error("E014", detail=f"未知引擎: {engine}")}
 
 
 def cmd_info_word(args):
     engine = get_engine()
     filepath = safe_path(args["filepath"])
-    
+
+    if engine == "LIBREOFFICE":
+        return pure_info_word(filepath.__str__)
+
+    if engine == "PURE":
+        return pure_info_word(filepath.__str__)
+
     if engine == "WPS":
-        wps = get_wps()
-        doc = wps.Documents.Open(filepath.__str__())
-        info = {
-            "success": True,
-            "name": filepath.name,
-            "path": filepath.__str__(),
-            "page_count": doc.ComputeStatistics(2),
-            "word_count": doc.ComputeStatistics(0),
-            "paragraph_count": doc.Paragraphs.Count,
-            "engine": "WPS",
-        }
-        doc.Close()
-        release_wps()
-        return info
-    else:
-        return pure_info_word(filepath.__str__())
+        try:
+            wps = get_wps()
+            doc = wps.Documents.Open(filepath.__str__())
+            info = {
+                "success": True,
+                "name": filepath.name,
+                "path": filepath.__str__(),
+                "page_count": doc.ComputeStatistics(2),
+                "word_count": doc.ComputeStatistics(0),
+                "paragraph_count": doc.Paragraphs.Count,
+                "engine": "WPS",
+            }
+            doc.Close()
+            release_wps()
+            return info
+        except Exception as e:
+            release_wps()
+            return {"success": False, "error": wps_error("E014", detail=str(e))}
+
+    # MSOFFICE
+    return pure_info_word(filepath.__str__())
 
 
 # ==================== Excel ====================
@@ -181,33 +307,41 @@ def cmd_info_word(args):
 def cmd_create_excel(args):
     engine = get_engine()
     name = args.get("name", "新建表格")
-    
-    if engine == "WPS":
-        wps = get_wps()
-        wb = wps.Workbooks.Add()
-        sheets = args.get("sheets")
-        if sheets:
-            for i, sn in enumerate(sheets):
-                if i < wb.Sheets.Count:
-                    wb.Sheets(i+1).Name = sn
-                else:
-                    wb.Sheets.Add().Name = sn
-        filepath = ensure_desktop_path(f"{name}.xlsx")
-        wb.SaveAs(filepath)
-        wb.Close()
-        release_wps()
-        return {"success": True, "path": filepath.__str__(), "engine": "WPS"}
 
-    elif engine == "MSOFFICE":
-        ms = get_ms_module()
-        result = ms.ms_create_excel(name, args.get("sheets"))
-        release_ms()
-        return {**result, "engine": "MSOFFICE"}
-
-    else:
+    if engine in ("PURE", "LIBREOFFICE"):
         filepath = args.get("filepath", str(ensure_desktop_path(f"{name}.xlsx")))
         sheets = args.get("sheets", ["Sheet1"])
-        return pure_create_excel(name, sheets, filepath)
+        result = pure_create_excel(name, sheets, filepath)
+        result["engine"] = "PURE"
+        return result
+
+    try:
+        if engine == "WPS":
+            wps = get_wps()
+            wb = wps.Workbooks.Add()
+            sheets = args.get("sheets")
+            if sheets:
+                for i, sn in enumerate(sheets):
+                    if i < wb.Sheets.Count:
+                        wb.Sheets(i + 1).Name = sn
+                    else:
+                        wb.Sheets.Add().Name = sn
+            filepath = ensure_desktop_path(f"{name}.xlsx")
+            wb.SaveAs(filepath)
+            wb.Close()
+            release_wps()
+            return {"success": False, "path": filepath.__str__(), "engine": "WPS"}
+
+        if engine == "MSOFFICE":
+            ms = get_ms_module()
+            result = ms.ms_create_excel(name, args.get("sheets"))
+            release_ms()
+            return {**result, "engine": "MSOFFICE"}
+
+    except Exception as e:
+        release_wps()
+        release_ms()
+        return {"success": False, "error": wps_error("E014", detail=str(e)), "engine": engine}
 
 
 def cmd_input_excel(args):
@@ -216,25 +350,29 @@ def cmd_input_excel(args):
     sheet = args.get("sheet", "Sheet1")
     data = args.get("data", [])
 
-    if engine == "WPS":
-        wps = get_wps()
-        wb = wps.Workbooks.Open(filepath.__str__())
-        ws = wb.Sheets(sheet)
-        for r, row in enumerate(data, start=1):
-            for c, val in enumerate(row, start=1):
-                ws.Cells(r, c).Value = val
-        wb.Save()
-        wb.Close()
-        release_wps()
-        return {"success": True, "input_rows": len(data), "engine": "WPS"}
-
-    elif engine == "MSOFFICE":
-        ms = get_ms_module()
-        # 复用 WPS 实现（简化）
-        return {"success": False, "error": "MS Office 模式暂不支持数据录入，请使用 WPS 模式"}
-
-    else:
+    if engine in ("PURE", "LIBREOFFICE"):
         return pure_input_excel(filepath.__str__(), sheet, data)
+
+    if engine == "WPS":
+        try:
+            wps = get_wps()
+            wb = wps.Workbooks.Open(filepath.__str__())
+            ws = wb.Sheets(sheet)
+            for r, row in enumerate(data, start=1):
+                for c, val in enumerate(row, start=1):
+                    ws.Cells(r, c).Value = val
+            wb.Save()
+            wb.Close()
+            release_wps()
+            return {"success": True, "input_rows": len(data), "engine": "WPS"}
+        except Exception as e:
+            release_wps()
+            return {"success": False, "error": wps_error("E014", detail=str(e))}
+
+    if engine == "MSOFFICE":
+        return {"success": False, "error": wps_error("E010", feature="数据录入（MS Office模式）")}
+
+    return {"success": False, "error": wps_error("E014", detail=f"未知引擎: {engine}")}
 
 
 def cmd_formula_excel(args):
@@ -244,7 +382,13 @@ def cmd_formula_excel(args):
     cell = args.get("cell", "A1")
     formula = args.get("formula", "")
 
-    if engine == "WPS":
+    if engine in ("PURE", "LIBREOFFICE"):
+        return {"success": False, "error": wps_error("E010", feature="公式计算")}
+
+    if engine != "WPS":
+        return {"success": False, "error": wps_error("E010", feature="公式计算（MS Office模式）")}
+
+    try:
         wps = get_wps()
         wb = wps.Workbooks.Open(filepath.__str__())
         ws = wb.Sheets(sheet)
@@ -254,22 +398,20 @@ def cmd_formula_excel(args):
         release_wps()
         return {"success": True, "formula_set": True, "engine": "WPS"}
 
-    elif engine == "MSOFFICE":
-        return {"success": False, "error": "MS Office 模式暂不支持公式，请使用 WPS 模式"}
-
-    else:
-        return {"success": False, "error": "纯 Python 模式暂不支持公式"}
+    except Exception as e:
+        release_wps()
+        return {"success": False, "error": wps_error("E014", detail=str(e))}
 
 
 def cmd_sort_excel(args):
-    """多列排序（WPS 模式）"""
+    """多列排序（仅 WPS 模式）"""
     engine = get_engine()
     filepath = safe_path(args["filepath"])
     sheet = args.get("sheet", "Sheet1")
-    sorts = args.get("sorts", [])  # [{"column":"金额","ascending":false}, ...]
+    sorts = args.get("sorts", [])
 
-    if engine not in ("WPS",):
-        return {"success": False, "error": "排序需要 WPS 模式，请安装 WPS Office"}
+    if engine != "WPS":
+        return {"success": False, "error": wps_error("E005", engine=engine)}
 
     try:
         wps = get_wps()
@@ -282,7 +424,6 @@ def cmd_sort_excel(args):
             release_wps()
             return {"success": True, "note": "数据不足，无需排序"}
 
-        # 读取数据
         data = []
         for r in range(1, used.Rows.Count + 1):
             row = [ws.Cells(r, c).Value for c in range(1, used.Columns.Count + 1)]
@@ -291,7 +432,6 @@ def cmd_sort_excel(args):
         header = data[0]
         body = data[1:]
 
-        # 构建排序键
         def sort_key(row):
             keys = []
             for s in sorts:
@@ -317,7 +457,6 @@ def cmd_sort_excel(args):
 
         body.sort(key=sort_key)
 
-        # 写回
         for r, row in enumerate(body, start=2):
             for c, val in enumerate(row, start=1):
                 ws.Cells(r, c).Value = val
@@ -329,18 +468,18 @@ def cmd_sort_excel(args):
 
     except Exception as e:
         release_wps()
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": wps_error("E014", detail=str(e))}
 
 
 def cmd_filter_excel(args):
-    """多条件筛选"""
+    """多条件筛选（AND 逻辑）"""
     engine = get_engine()
     filepath = safe_path(args["filepath"])
     sheet = args.get("sheet", "Sheet1")
     conditions = args.get("conditions", [])
 
-    if engine not in ("WPS",):
-        return {"success": False, "error": "筛选需要 WPS 模式，请安装 WPS Office"}
+    if engine != "WPS":
+        return {"success": False, "error": wps_error("E005", engine=engine)}
 
     try:
         wps = get_wps()
@@ -415,19 +554,19 @@ def cmd_filter_excel(args):
 
     except Exception as e:
         release_wps()
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": wps_error("E014", detail=str(e))}
 
 
 def cmd_chart_excel(args):
-    """生成图表"""
+    """生成图表（仅 WPS 模式）"""
     engine = get_engine()
     filepath = safe_path(args["filepath"])
     sheet = args.get("sheet", "Sheet1")
     chart_type = args.get("type", "bar")
     data_range = args.get("data", "A1:B10")
 
-    if engine not in ("WPS",):
-        return {"success": False, "error": "图表需要 WPS 模式，请安装 WPS Office"}
+    if engine != "WPS":
+        return {"success": False, "error": wps_error("E005", engine=engine)}
 
     try:
         wps = get_wps()
@@ -446,7 +585,7 @@ def cmd_chart_excel(args):
 
     except Exception as e:
         release_wps()
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": wps_error("E014", detail=str(e))}
 
 
 # ==================== PPT ====================
@@ -454,28 +593,34 @@ def cmd_chart_excel(args):
 def cmd_create_ppt(args):
     engine = get_engine()
     title = args.get("title", "新建演示")
-    
-    if engine == "WPS":
-        wps = get_wps()
-        ppt = wps.Presentations.Add()
-        slide = ppt.Slides.Add(1, 1)
-        if title and slide.Shapes.Count > 0:
-            slide.Shapes(1).TextFrame.TextRange.Text = title
-        filepath = ensure_desktop_path(f"{title}.pptx")
-        ppt.SaveAs(filepath)
-        ppt.Close()
-        release_wps()
-        return {"success": True, "path": filepath.__str__(), "engine": "WPS"}
 
-    elif engine == "MSOFFICE":
-        ms = get_ms_module()
-        result = ms.ms_create_ppt(title)
-        release_ms()
-        return {**result, "engine": "MSOFFICE"}
-
-    else:
+    if engine in ("PURE", "LIBREOFFICE"):
         filepath = args.get("filepath", str(ensure_desktop_path(f"{title}.pptx")))
         return pure_create_ppt(title, filepath)
+
+    try:
+        if engine == "WPS":
+            wps = get_wps()
+            ppt = wps.Presentations.Add()
+            slide = ppt.Slides.Add(1, 1)
+            if title and slide.Shapes.Count > 0:
+                slide.Shapes(1).TextFrame.TextRange.Text = title
+            filepath = ensure_desktop_path(f"{title}.pptx")
+            ppt.SaveAs(filepath)
+            ppt.Close()
+            release_wps()
+            return {"success": True, "path": filepath.__str__(), "engine": "WPS"}
+
+        if engine == "MSOFFICE":
+            ms = get_ms_module()
+            result = ms.ms_create_ppt(title)
+            release_ms()
+            return {**result, "engine": "MSOFFICE"}
+
+    except Exception as e:
+        release_wps()
+        release_ms()
+        return {"success": False, "error": wps_error("E014", detail=str(e)), "engine": engine}
 
 
 def cmd_add_ppt_slide(args):
@@ -484,7 +629,13 @@ def cmd_add_ppt_slide(args):
     layout = args.get("layout", "title_content")
     title = args.get("title", "")
 
-    if engine == "WPS":
+    if engine in ("PURE", "LIBREOFFICE"):
+        return {"success": False, "error": wps_error("E010", feature="添加幻灯片")}
+
+    if engine != "WPS":
+        return {"success": False, "error": wps_error("E010", feature="添加幻灯片（MS Office模式）")}
+
+    try:
         wps = get_wps()
         ppt = wps.Presentations.Open(filepath.__str__())
         layout_map = {"title": 1, "title_content": 2, "text": 3, "blank": 12}
@@ -501,11 +652,9 @@ def cmd_add_ppt_slide(args):
         release_wps()
         return {"success": True, "total_slides": total, "engine": "WPS"}
 
-    elif engine == "MSOFFICE":
-        return {"success": False, "error": "MS Office 模式暂不支持添加幻灯片"}
-
-    else:
-        return {"success": False, "error": "纯 Python 模式暂不支持添加幻灯片"}
+    except Exception as e:
+        release_wps()
+        return {"success": False, "error": wps_error("E014", detail=str(e))}
 
 
 def cmd_insert_ppt(args):
@@ -514,13 +663,19 @@ def cmd_insert_ppt(args):
     slide_num = args.get("slide", 1)
     content = args.get("content", "")
 
-    if engine == "WPS":
+    if engine in ("PURE", "LIBREOFFICE"):
+        return {"success": False, "error": wps_error("E010", feature="插入内容")}
+
+    if engine != "WPS":
+        return {"success": False, "error": wps_error("E010", feature="插入内容（MS Office模式）")}
+
+    try:
         wps = get_wps()
         ppt = wps.Presentations.Open(filepath.__str__())
         if slide_num < 1 or slide_num > ppt.Slides.Count:
             ppt.Close()
             release_wps()
-            return {"success": False, "error": f"幻灯片 {slide_num} 不存在"}
+            return {"success": False, "error": wps_error("E013", path=f"幻灯片 {slide_num}")}
         slide = ppt.Slides(slide_num)
         shape = slide.Shapes.AddTextbox(1, 100, 120, 500, 350)
         shape.TextFrame.TextRange.Text = content
@@ -529,11 +684,9 @@ def cmd_insert_ppt(args):
         release_wps()
         return {"success": True, "inserted": True, "engine": "WPS"}
 
-    elif engine == "MSOFFICE":
-        return {"success": False, "error": "MS Office 模式暂不支持插入内容"}
-
-    else:
-        return {"success": False, "error": "纯 Python 模式暂不支持插入内容"}
+    except Exception as e:
+        release_wps()
+        return {"success": False, "error": wps_error("E014", detail=str(e))}
 
 
 def cmd_theme_ppt(args):
@@ -541,7 +694,13 @@ def cmd_theme_ppt(args):
     filepath = safe_path(args["filepath"])
     theme_name = args.get("name", "business")
 
-    if engine == "WPS":
+    if engine in ("PURE", "LIBREOFFICE"):
+        return {"success": False, "error": wps_error("E010", feature="主题应用")}
+
+    if engine != "WPS":
+        return {"success": False, "error": wps_error("E010", feature="主题应用（MS Office模式）")}
+
+    try:
         wps = get_wps()
         ppt = wps.Presentations.Open(filepath.__str__())
         theme_map = {
@@ -553,7 +712,7 @@ def cmd_theme_ppt(args):
         if not display_name:
             ppt.Close()
             release_wps()
-            return {"success": False, "error": f"不支持的主题: {theme_name}"}
+            return {"success": False, "error": wps_error("E015")}
         wps_dirs = [
             Path("C:/Program Files/WPS Office/Office6/Theme"),
             Path("C:/Program Files (x86)/WPS Office/Office6/Theme"),
@@ -572,11 +731,9 @@ def cmd_theme_ppt(args):
         release_wps()
         return {"success": True, "applied": applied, "theme": theme_name, "engine": "WPS"}
 
-    elif engine == "MSOFFICE":
-        return {"success": False, "error": "MS Office 模式暂不支持主题"}
-
-    else:
-        return {"success": False, "error": "纯 Python 模式暂不支持主题"}
+    except Exception as e:
+        release_wps()
+        return {"success": False, "error": wps_error("E014", detail=str(e))}
 
 
 def cmd_export_ppt(args):
@@ -584,46 +741,68 @@ def cmd_export_ppt(args):
     filepath = safe_path(args["filepath"])
     fmt = args.get("format", "pdf")
 
+    if engine == "LIBREOFFICE":
+        return libreoffice_convert(filepath.__str__(), fmt)
+
+    if engine == "PURE":
+        info = detect_best_engine()
+        if info.get("libreoffice"):
+            return libreoffice_convert(filepath.__str__(), fmt)
+        return {"success": False, "error": wps_error("E010", feature="导出（需WPS/MS Office/LibreOffice）")}
+
     if engine == "WPS":
-        wps = get_wps()
-        ppt = wps.Presentations.Open(filepath.__str__())
-        fmt_map = {"pdf": 32, "pptx": 1, "png": 17}
-        if fmt not in fmt_map:
+        try:
+            wps = get_wps()
+            ppt = wps.Presentations.Open(filepath.__str__())
+            fmt_map = {"pdf": 32, "pptx": 1, "png": 17}
+            if fmt not in fmt_map:
+                ppt.Close()
+                release_wps()
+                return {"success": False, "error": wps_error("E015")}
+            out = filepath.with_suffix(f".{fmt}")
+            ppt.SaveAs(out.__str__(), fmt_map[fmt])
             ppt.Close()
             release_wps()
-            return {"success": False, "error": f"PPT 不支持转 {fmt}"}
-        out = filepath.with_suffix(f".{fmt}")
-        ppt.SaveAs(out.__str__(), fmt_map[fmt])
-        ppt.Close()
-        release_wps()
-        return {"success": True, "path": out.__str__(), "engine": "WPS"}
+            return {"success": True, "path": out.__str__(), "engine": "WPS"}
+        except Exception as e:
+            release_wps()
+            return {"success": False, "error": wps_error("E014", detail=str(e))}
 
-    elif engine == "MSOFFICE":
-        return {"success": False, "error": "MS Office 模式暂不支持导出"}
+    if engine == "MSOFFICE":
+        return {"success": False, "error": wps_error("E010", feature="导出（MS Office模式）")}
 
-    else:
-        return {"success": False, "error": "纯 Python 模式不支持导出"}
+    return {"success": False, "error": wps_error("E014", detail=f"未知引擎: {engine}")}
 
 
 def cmd_info_ppt(args):
     engine = get_engine()
     filepath = safe_path(args["filepath"])
-    
-    if engine == "WPS":
-        wps = get_wps()
-        ppt = wps.Presentations.Open(filepath.__str__())
-        info = {
-            "success": True,
-            "name": filepath.name,
-            "path": filepath.__str__(),
-            "slide_count": ppt.Slides.Count,
-            "engine": "WPS",
-        }
-        ppt.Close()
-        release_wps()
-        return info
-    else:
+
+    if engine == "LIBREOFFICE":
         return pure_info_ppt(filepath.__str__())
+
+    if engine == "PURE":
+        return pure_info_ppt(filepath.__str__)
+
+    if engine == "WPS":
+        try:
+            wps = get_wps()
+            ppt = wps.Presentations.Open(filepath.__str__())
+            info = {
+                "success": True,
+                "name": filepath.name,
+                "path": filepath.__str__(),
+                "slide_count": ppt.Slides.Count,
+                "engine": "WPS",
+            }
+            ppt.Close()
+            release_wps()
+            return info
+        except Exception as e:
+            release_wps()
+            return {"success": False, "error": wps_error("E014", detail=str(e))}
+
+    return pure_info_ppt(filepath.__str__())
 
 
 # ==================== 格式转换 ====================
@@ -633,13 +812,24 @@ def cmd_convert(args):
     fmt = args.get("output_format", "pdf")
 
     if not filepath.exists():
-        return {"success": False, "error": f"文件不存在: {filepath}"}
+        return {"success": False, "error": wps_error("E013", path=filepath.__str__())}
 
     engine = get_engine()
-    if engine not in ("WPS", "MSOFFICE"):
-        return {"success": False, "error": "格式转换需要 WPS 或 MS Office 模式"}
-
     ext = filepath.suffix.lower()
+
+    # PURE 模式自动尝试 LibreOffice
+    if engine == "PURE":
+        info = detect_best_engine()
+        if info.get("libreoffice"):
+            return libreoffice_convert(filepath.__str__(), fmt)
+
+    if engine == "LIBREOFFICE":
+        return libreoffice_convert(filepath.__str__(), fmt)
+
+    # WPS / MSOFFICE 走原有逻辑
+    if engine not in ("WPS", "MSOFFICE"):
+        return {"success": False, "error": wps_error("E014", detail=f"未知引擎: {engine}")}
+
     output_path = filepath.with_suffix(f".{fmt}")
 
     try:
@@ -650,7 +840,7 @@ def cmd_convert(args):
             if fmt not in fmt_map:
                 doc.Close()
                 release_wps()
-                return {"success": False, "error": f"Word 不支持转 {fmt}"}
+                return {"success": False, "error": wps_error("E015")}
             doc.SaveAs(output_path.__str__(), fmt_map[fmt])
             doc.Close()
         elif ext == ".xlsx":
@@ -662,7 +852,7 @@ def cmd_convert(args):
             else:
                 wb.Close()
                 release_wps()
-                return {"success": False, "error": f"Excel 不支持转 {fmt}"}
+                return {"success": False, "error": wps_error("E015")}
             wb.Close()
         elif ext == ".pptx":
             ppt = wps.Presentations.Open(filepath.__str__())
@@ -671,24 +861,36 @@ def cmd_convert(args):
             else:
                 ppt.Close()
                 release_wps()
-                return {"success": False, "error": f"PPT 不支持转 {fmt}"}
+                return {"success": False, "error": wps_error("E015")}
             ppt.Close()
         else:
             release_wps()
-            return {"success": False, "error": f"不支持的文件类型: {ext}"}
-        
+            return {"success": False, "error": wps_error("E015")}
+
         release_wps()
         return {"success": True, "path": output_path.__str__(), "engine": engine}
 
     except Exception as e:
         release_wps()
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": wps_error("E014", detail=str(e))}
 
 
 # ==================== 引擎信息 ====================
 
 def cmd_engine_info(args):
-    return {"engine": detect_engine()}
+    info = detect_best_engine()
+    return {
+        "engine": info["engine"],
+        "word": info["word"],
+        "excel": info["excel"],
+        "ppt": info["ppt"],
+        "wps": info.get("wps", False),
+        "msword": info.get("msword", False),
+        "msexcel": info.get("msexcel", False),
+        "msppt": info.get("msppt", False),
+        "libreoffice": info.get("libreoffice", False),
+        "platform": info["platform"],
+    }
 
 
 # ==================== 命令路由表 ====================
@@ -734,7 +936,7 @@ def run():
                 break
 
             if cmd not in COMMANDS:
-                resp = {"ok": False, "error": f"未知命令: {cmd}"}
+                resp = {"ok": False, "error": wps_error("E014", detail=f"未知命令: {cmd}")}
             else:
                 try:
                     result = COMMANDS[cmd](args)
@@ -742,7 +944,7 @@ def run():
                 except Exception as e:
                     resp = {
                         "ok": False,
-                        "error": str(e),
+                        "error": wps_error("E014", detail=str(e)),
                         "hint": traceback.format_exc().split("\n")[-3] if hasattr(e, '__traceback__') else "",
                     }
 
@@ -750,10 +952,10 @@ def run():
             sys.stdout.flush()
 
         except json.JSONDecodeError as e:
-            print(json.dumps({"ok": False, "error": f"JSON 解析错误: {e}"}))
+            print(json.dumps({"ok": False, "error": wps_error("E014", detail=f"JSON解析错误: {e}")}))
             sys.stdout.flush()
         except Exception as e:
-            print(json.dumps({"ok": False, "error": f"致命错误: {e}"}))
+            print(json.dumps({"ok": False, "error": wps_error("E014", detail=str(e))}))
             sys.stdout.flush()
 
         line = sys.stdin.readline()
