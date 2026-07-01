@@ -1,0 +1,349 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+DAG 验证器 - 多Agent协作编排引擎
+
+功能：
+  1. 验证 JSON Schema 结构完整性
+  2. 检测循环依赖（Kahn 算法拓扑排序）
+  3. 检测孤立节点（无上游也无下游的节点）
+  4. 输出拓扑排序执行顺序
+
+零第三方依赖，仅使用 Python 标准库
+
+★★★ 使用时机 ★★★
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+强烈推荐在创建 pipeline.json 后运行验证：
+  python orchestrator.py validate <pipeline.json>
+  python orchestrator.py plan <pipeline.json>
+
+验证时机：
+  - 创建新的 pipeline.json 后
+  - 修改 DAG 结构后
+  - 运行 run/step 之前（虽然 run 内部也会验证，但提前验证更友好）
+
+★★★ 不通过时的处理 ★★★
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Schema 错误→ 必须修复后才能继续
+循环依赖→ 必须修复后才能继续（否则无限递归）
+孤立节点→ 仅警告，可正常执行
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+
+import json
+import sys
+import os
+from collections import defaultdict
+
+
+def load_pipeline(filepath):
+    """加载 pipeline JSON 文件
+
+    如果文件不存在或格式错误，会给出清晰的修复提示。
+    """
+    if not filepath:
+        print("错误：缺少[DAG文件路径]，请提供 pipeline JSON 文件路径")
+        print("用法：python dag_validator.py <pipeline.json>")
+        print("示例：python dag_validator.py templates/pipeline_dag_template.json")
+        sys.exit(1)
+    if not os.path.exists(filepath):
+        print(f"错误：文件不存在 [{filepath}]")
+        print(f"  请检查路径是否正确（区分大小写）")
+        print(f"  确认文件确实存在于该路径")
+        sys.exit(1)
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"错误：JSON 格式不合法 [{filepath}]")
+        print(f"  位置：第 {e.lineno} 行，第 {e.colno} 列")
+        print(f"  详情：{e.msg}")
+        print(f"  修复建议：使用 JSON 在线校验工具检查格式")
+        sys.exit(1)
+    except Exception as e:
+        print(f"错误：无法读取文件 [{filepath}] - {e}")
+        sys.exit(1)
+
+
+def validate_schema(pipeline):
+    """验证 Schema 结构完整性
+
+    返回 (errors, warnings) 两个列表。
+    errors 必须修复，warnings 建议优化但不影响执行。
+    """
+    errors = []
+    warnings = []
+
+    if not isinstance(pipeline, dict):
+        errors.append("根节点必须是 JSON 对象")
+        return errors, warnings
+
+    # pipeline_name 必填
+    if 'pipeline_name' not in pipeline:
+        errors.append("缺少必填字段 [pipeline_name]")
+        print("修复：添加 \"pipeline_name\": \"流水线名称\"")
+    elif not isinstance(pipeline['pipeline_name'], str) or not pipeline['pipeline_name'].strip():
+        errors.append("[pipeline_name] 必须是非空字符串")
+
+    # agents 必填
+    if 'agents' not in pipeline:
+        errors.append("缺少必填字段 [agents]")
+        print("修复：添加 \"agents\": [{\"id\": \"node_1\", \"role\": \"角色描述\"}, ...]")
+        return errors, warnings
+
+    if not isinstance(pipeline['agents'], list) or len(pipeline['agents']) == 0:
+        errors.append("[agents] 必须是非空数组（至少包含 1 个节点）")
+        return errors, warnings
+
+    agent_ids = set()
+    for i, agent in enumerate(pipeline['agents']):
+        prefix = f"agents[{i}]"
+
+        if not isinstance(agent, dict):
+            errors.append(f"{prefix} 必须是 JSON 对象")
+            continue
+
+        # id 必填
+        if 'id' not in agent:
+            errors.append(f"{prefix} 缺少必填字段 [id]")
+            print(f"修复：添加 \"id\": \"节点唯一标识\"")
+        elif not isinstance(agent['id'], str) or not agent['id'].strip():
+            errors.append(f"{prefix} [id] 必须是非空字符串")
+        elif agent['id'] in agent_ids:
+            errors.append(f"{prefix} [id={agent['id']}] 重复，每个 Agent 的 id 必须唯一")
+            print(f"修复：修改 id 为不重复的值")
+        else:
+            agent_ids.add(agent['id'])
+
+        if 'name' not in agent:
+            warnings.append(f"{prefix} 建议添加 [name] 字段，便于人类阅读")
+        if 'role' not in agent:
+            warnings.append(f"{prefix} 建议添加 [role] 字段，描述 Agent 的职责")
+
+        # depends_on 可选（默认空数组）
+        if 'depends_on' not in agent:
+            warnings.append(f"{prefix} 未指定 [depends_on]，默认为空（无依赖）")
+        elif not isinstance(agent['depends_on'], list):
+            errors.append(f"{prefix} [depends_on] 必须是数组")
+
+        # retry 验证
+        if 'retry' in agent:
+            if not isinstance(agent['retry'], int) or agent['retry'] < 0:
+                warnings.append(f"{prefix} [retry] 应为非负整数")
+
+        # timeout 验证
+        if 'timeout' in agent:
+            if not isinstance(agent['timeout'], (int, float)) or agent['timeout'] <= 0:
+                warnings.append(f"{prefix} [timeout] 应为正数（秒）")
+
+        # fallback 验证
+        if 'fallback' in agent and agent['fallback'] not in ('retry', 'skip', 'default', 'abort'):
+            warnings.append(f"{prefix} [fallback] 建议为 skip/default/abort 之一（当前值：{agent['fallback']}）")
+
+    return errors, warnings
+
+
+def detect_cycles(pipeline):
+    """检测循环依赖（基于 Kahn 算法）"""
+    errors = []
+    agents = pipeline.get('agents', [])
+    agent_ids = {a['id'] for a in agents if 'id' in a}
+
+    # 构建入度图和邻接表
+    in_degree = defaultdict(int)
+    graph = defaultdict(list)
+
+    for agent in agents:
+        aid = agent.get('id')
+        deps = agent.get('depends_on', [])
+        for dep in deps:
+            # 引用的依赖节点不存在
+            if dep not in agent_ids:
+                errors.append(f"节点 [{aid}] 依赖了不存在的节点 [{dep}]")
+                errors.append(f"  修复：在 agents 中添加 id 为 [{dep}] 的节点，或修改 [{aid}] 的 depends_on")
+                continue
+            graph[dep].append(aid)
+            in_degree[aid] += 1
+
+    # Kahn 算法
+    queue = [aid for aid in agent_ids if in_degree[aid] == 0]
+    visited = 0
+
+    while queue:
+        node = queue.pop(0)
+        visited += 1
+        for neighbor in graph[node]:
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+
+    # 未访问到的节点就是循环依赖的节点
+    if visited < len(agent_ids):
+        cycle_nodes = [aid for aid in agent_ids if in_degree[aid] > 0]
+        errors.append(f"检测到循环依赖！涉及节点：{', '.join(sorted(cycle_nodes))}")
+        errors.append(f"  修复：检查这些节点的 depends_on 字段，移除环路中的至少一条依赖")
+        errors.append(f"  提示：使用 orchestrator.py plan 可查看可视化的依赖关系")
+
+    return errors
+
+
+def detect_orphans(pipeline):
+    """检测孤立节点（无上游也无下游）"""
+    warnings = []
+    agents = pipeline.get('agents', [])
+
+    if len(agents) <= 1:
+        return warnings
+
+    agent_ids = {a['id'] for a in agents if 'id' in a}
+    depended_by = set()
+    has_deps = set()
+
+    for agent in agents:
+        aid = agent.get('id')
+        deps = agent.get('depends_on', [])
+        if deps:
+            has_deps.add(aid)
+        for dep in deps:
+            depended_by.add(dep)
+
+    for agent in agents:
+        aid = agent.get('id')
+        if aid not in has_deps and aid not in depended_by:
+            warnings.append(f"节点 [{aid}] 是孤立节点（无上游也无下游），确认是否遗漏了依赖关系")
+
+    return warnings
+
+
+def topological_sort(pipeline):
+    """拓扑排序，返回执行顺序
+
+    算法：Kahn 算法（入度归零即执行）
+    同层级节点按 id 字母顺序排列
+    """
+    agents = pipeline.get('agents', [])
+    agent_ids = {a['id'] for a in agents if 'id' in a}
+
+    in_degree = defaultdict(int)
+    graph = defaultdict(list)
+
+    for agent in agents:
+        aid = agent.get('id')
+        for dep in agent.get('depends_on', []):
+            if dep in agent_ids:
+                graph[dep].append(aid)
+                in_degree[aid] += 1
+
+    queue = sorted([aid for aid in agent_ids if in_degree[aid] == 0])
+    result = []
+
+    while queue:
+        node = queue.pop(0)
+        result.append(node)
+        neighbors = sorted(graph[node])
+        for neighbor in neighbors:
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+
+    return result
+
+
+def validate(filepath):
+    """完整验证流程
+
+    ★★★ 运行方式 ★★★
+    python dag_validator.py <pipeline.json>
+    python dag_validator.py --help
+    """
+    print("=" * 60)
+    print("  DAG 验证器 - 多Agent协作编排引擎")
+    print("=" * 60)
+
+    pipeline = load_pipeline(filepath)
+    all_errors = []
+    all_warnings = []
+
+    # 1. Schema 验证
+    errors, warnings = validate_schema(pipeline)
+    all_errors.extend(errors)
+    all_warnings.extend(warnings)
+
+    if all_errors:
+        print("\n[1/3] Schema 验证 ... ❌ 失败")
+        print("\n错误列表：")
+        for i, e in enumerate(all_errors, 1):
+            print(f"  {i}. {e}")
+        if all_warnings:
+            print("\n警告列表：")
+            for w in all_warnings:
+                print(f"  [警告] {w}")
+        print(f"\n验证结果：❌ 不通过（存在结构性错误，请先修复）")
+        print("=" * 60)
+        sys.exit(1)
+
+    print("\n[1/3] Schema 验证 ... ✅ 通过")
+
+    # 2. 循环依赖检测
+    cycle_errors = detect_cycles(pipeline)
+    if cycle_errors:
+        print("[2/3] 循环依赖检测 ... ❌ 失败")
+        for e in cycle_errors:
+            print(f"  [错误] {e}")
+        print("\n验证结果：❌ 不通过（存在循环依赖）")
+        print("=" * 60)
+        sys.exit(1)
+    print("[2/3] 循环依赖检测 ... ✅ 通过")
+
+    # 3. 孤立节点检测
+    orphan_warnings = detect_orphans(pipeline)
+    if orphan_warnings:
+        print("[3/3] 孤立节点检测 ... ⚠️ 发现警告")
+        for w in orphan_warnings:
+            print(f"  [警告] {w}")
+    else:
+        print("[3/3] 孤立节点检测 ... ✅ 无警告")
+
+    # 拓扑排序展示
+    order = topological_sort(pipeline)
+    print(f"\n执行顺序（拓扑排序）：{' → '.join(order)}")
+
+    # 汇总
+    total_warnings = len(all_warnings) + len(orphan_warnings)
+    if total_warnings > 0:
+        print(f"\n验证结果：✅ 通过（{total_warnings} 个警告，建议优化但不影响执行）")
+    else:
+        print("\n验证结果：✅ 完全通过")
+    print("=" * 60)
+
+
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print("错误：缺少[DAG文件路径]")
+        print("用法：python dag_validator.py <pipeline.json>")
+        print("示例：python dag_validator.py templates/pipeline_dag_template.json")
+        sys.exit(1)
+
+    if sys.argv[1] in ('-h', '--help'):
+        print("DAG 验证器 - 多Agent协作编排引擎")
+        print("=" * 50)
+        print("用法：python dag_validator.py <pipeline.json>")
+        print("")
+        print("验证内容：")
+        print("  1. JSON Schema 结构完整性（id/role/depends_on 等）")
+        print("  2. 循环依赖检测（A→B→C→A 为非法循环）")
+        print("  3. 孤立节点检测（节点无前驱也无后继）")
+        print("  4. 输出拓扑排序执行顺序")
+        print("")
+        print("使用时机：")
+        print("  - 创建新的 pipeline.json 后")
+        print("  - 修改 DAG 结构后")
+        print("  - 运行 run/step 之前")
+        print("")
+        print("验证结果：")
+        print("  ✅ 通过 → 可安全使用")
+        print("  ⚠️ 通过+警告 → 可执行但有改进空间")
+        print("  ❌ 不通过 → 必须修复后才能使用")
+        sys.exit(0)
+
+    validate(sys.argv[1])
