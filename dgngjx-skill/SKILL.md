@@ -1,10 +1,10 @@
 ---
 name: dgngjx-skill
 slug: dgngjx-skill
-displayName: "多功能工具箱 v2.2"
+displayName: "多功能工具箱 v2.5"
 description: "多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐。48%零开箱即用，52%需确认安装。v2.0 国内联网优化（自动降级+国内镜像）+ 大文件性能增强（分块流式处理）。"
 description_zh: "多功能免费工具箱 - 8大模块29个工具。v2.0 国内联网优化 + 大文件性能增强 + 错误提示更详细。"
-version: 2.2.0
+version: 2.5.0
 category: office-efficiency
 platforms:
   - windows
@@ -23,7 +23,7 @@ tags:
 requires_api_key: false
 ---
 
-# 多功能工具箱 dgngjx-skill v2.2.0
+# 多功能工具箱 dgngjx-skill v2.5.0
 
 ## 30 秒速查表
 
@@ -261,8 +261,11 @@ except ValueError:
 
 | 报错/问题 | 原因 | 解决 |
 |---------|------|------|
-| `ValueError` | 格式不对 | 用英文横杠分隔：2026-6-26 |
-| 结果负数 | 目标日期已经过去 | 正常，说明X天前 |
+| `ValueError` 日期格式错误 | 格式不符合要求 | 使用 YYYY-MM-DD 格式（如 2026-10-01），注意月份和日期用零填充 |
+| 结果为负数 | 目标日期早于今天 | 正常，表示已经过去多少天 |
+| 月份或日期超出范围 | 输入了无效日期（如 13 月、32 日） | 检查日期是否真实存在 |
+| 不支持农历计算 | 仅支持公历（阳历） | 农历日期请使用在线转换工具转换后再计算 |
+| 跨年度计算结果异常 | 系统 `date.today()` 基于本地时间 | 确保系统时间设置正确 |
 
 ---
 
@@ -355,7 +358,10 @@ else:
 
 | 报错/问题 | 原因 | 解决 |
 |---------|------|------|
-| "没有检测到输入" | 运行时没输入任何文字 | 输入一段文字再运行 |
+| "没有检测到输入" | 运行时直接回车，无任何内容 | 输入一段文字后再运行 |
+| 总字符数包含换行符 | `len(t)` 计入了 `\n` | 这是设计行为，统计全部字符 |
+| 中文计数偏差 | 中文范围是 Unicode [一-鿿] | 部分生僻字/繁体可能不在此区间 |
+| 英文词数不准 | 基于空格分词 | 多个空格/制表符会导致单词数偏多 |
 
 ---
 
@@ -401,8 +407,10 @@ except Exception as e:
 
 | 报错/问题 | 原因 | 解决 |
 |---------|------|------|
-| 解码失败 | 输入了非Base64字符 | 解码前确认是标准Base64字符串 |
-| 不识别的方法 | 输入了中文名 | 输英文：Base64 |
+| 解码失败 | 输入了非 Base64 字符（如中文、特殊符号） | 确认输入是标准 Base64（仅含 A-Z, a-z, 0-9, +, /, =） |
+| 不识别的方法 | 输入中文方法名（如"编码"） | 输英文：Base64 / URL / Unicode |
+| URL 编码输出 `%XX` 格式 | urllib.parse.quote 默认行为 | 这是正确格式；可直接用于 URL 参数 |
+| Unicode 输出 `\uXXXX` | 每字符转为 4 位十六进制 | 这是标准 Unicode 转义，可在 JS/Python 中直接使用 |
 
 ---
 
@@ -442,7 +450,10 @@ except Exception as e:
 
 | 报错/问题 | 原因 | 解决 |
 |---------|------|------|
-| 没有有效词 | 只有数字或符号 | 输入中文文章或英文段落 |
+| 没有有效词 | 只输入了数字、符号或空格 | 输入有意义的中文或英文文本 |
+| "的"、"是"等停用词被统计 | 工具未做停用词过滤 | 建议导入 jieba 库做更精准的中文分词 |
+| 英文大小写区分 | "Python" 和 "python" 算两个词 | 需用 `.lower()` 预处理（本工具未做） |
+| 单字也被计入 | 正则 `len(x)>1` 过滤单字 | 所有长度 >1 的词都会被统计 |
 
 ---
 
@@ -467,7 +478,7 @@ import urllib.request, urllib.parse, json, socket
 def _wiki_fallback(query: str) -> list[dict]:
     """国内源：百度百科（通过 Deno 代理，https://baike.deno.dev）"""
     url = f"https://baike.deno.dev/item/{urllib.parse.quote(query)}?encode=json"
-    req = urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.1"})
+    req = urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.5"})
     resp = urllib.request.urlopen(req, timeout=10)
     data = json.loads(resp.read())
     results = []
@@ -492,7 +503,7 @@ try:
         results = []
         try:
             url = f"https://zh.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(q)}&format=json&srlimit=3"
-            req = urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.1"})
+            req = urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.5"})
             resp = urllib.request.urlopen(req, timeout=10)
             data = json.loads(resp.read())
             results = data.get("query",{}).get("search",[])
@@ -566,7 +577,7 @@ def _joke_cn() -> str:
     ]
     for url, extract in apis:
         try:
-            r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.1"}), timeout=5)
+            r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.5"}), timeout=5)
             data = json.loads(r.read())
             text = extract(data)
             if text and text.strip():
@@ -602,7 +613,7 @@ try:
         found = False
         for url, extract in _api:
             try:
-                r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.1"}), timeout=5)
+                r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.5"}), timeout=5)
                 d = json.loads(r.read())
                 t = extract(d)
                 if t:
@@ -658,7 +669,7 @@ def _wallpaper_cn(query: str) -> tuple[str,str] | None:
     ]
     for url, src in apis:
         try:
-            r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.1"}), timeout=8)
+            r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/2.5"}), timeout=8)
             # Picsum 返回重定向 URL
             final_url = r.geturl()
             if final_url and final_url != url:
@@ -742,7 +753,10 @@ except json.JSONDecodeError as e:
 
 | 报错/问题 | 原因 | 解决 |
 |---------|------|------|
-| JSON 错误 | 语法问题 | 检查：键有没有加引号、有没有多逗号 |
+| `JSONDecodeError` | JSON 语法错误 | 常见原因：1) 键名缺少双引号 `{"key":1}` 2) 末尾多余逗号 `{1,2,}` 3) 使用了单引号 `'key'` |
+| 格式化后字段顺序变乱 | Python 3.7+ 字典有序，但 `ensure_ascii` 影响中文 | 已设置 `ensure_ascii=False`，中文正常显示 |
+| 压缩后仍有多余空格 | `separators` 参数设置 | 默认 `(',',':')` 已是最紧凑 |
+| 输入了空字符串 | 无任何内容 | 重新输入合法的 JSON 字符串 |
 
 ---
 
@@ -768,7 +782,7 @@ try:
         actual_url = u
         if "github.com" in u or "api.github.com" in u:
             print("💡 检测到 GitHub，如遇网络问题可尝试 ghproxy 镜像")
-        req = urllib.request.Request(u, headers={"User-Agent":"dgngjx/2.1"})
+        req = urllib.request.Request(u, headers={"User-Agent":"dgngjx/2.5"})
         # SSL 上下文：兼容老旧服务器
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
@@ -805,7 +819,7 @@ except urllib.error.URLError as e:
     elif "timed out" in reason:
         print(f"❌ 连接超时：{u}")
         print("   💡 连不上目标服务器。可能被 GFW 墙了，或网络质量差")
-        print("   尝试 HTTP（无加密，可能绕过防火墙）：%s" % u.replace("https://","http://)""
+        print("   尝试 HTTP（无加密，可能绕过防火墙）：%s" % u.replace("https://","http://"))"
     else:
         print(f"❌ 网络错误: {e.reason}")
         print("   💡 通用排查：1) 检查 Wi-Fi/网线 2) 关闭代理/VPN 3) ping 目标域名看是否通")
@@ -866,7 +880,7 @@ except Exception as e:
 
 </details>
 
-**✅ 开箱即用**
+**✅ 开箱即用** ｜ 🌐 [Tokenizer在线](https://platform.openai.com/tokenizer)
 
 **⚠️ 可能遇到的坑：**
 | 情况 | 原因 | 说明 |
@@ -1837,6 +1851,7 @@ v2.0 已内置大文件保护，针对不同场景有不同方案：
 - **更新历史**：
   - v2.2.0：[Bug修复]
   - v2.1.0：[Bug修复] 单位换算float崩溃+壁纸urllib.parse缺失+HTTP字符串拼接+f-string引号; [国内源]百度百科→baike.deno.dev+壁纸→imgapi.cn; [提示详细度]房贷/五险一金/Token/Mermaid/图片修复共8模块扩充; [大文件]视频编辑模块增加>500MB告警+30分钟超时+GIF自动缩放; [Ghostscript]Windows命令名修正
+  - v2.5.0：[适用性优化] HTTP模块P0语法修复；8个模块（日期/文本/编码/词频/JSON/证件照/PDF加密/PDF解密）"坑表格"从1-2行扩充至4-5行；Token计算器在线链接修正
   - v2.0.0：[国内联网优化] Wikipedia→百度百科自动降级；娱乐工具→3个国内API+本地离线缓存；壁纸→国内随机图源+Pixabum兜底；[大文件性能] 图片>200MB告警+MemoryError防护+DecompressionBomb限制；PDF>500MB告警+Ghostscript降级指引；视频>500MB告警+30分钟超时+GIF自动缩放；HTTP错误细分（DNS/SSL/超时/状态码中文释义）；所有针对性错误给出具体解决命令+在线替代工具链接；新增Q8大文件FAQ
   - v1.7.0：每个命令加详细中文报错+解决方案+可能遇到的坑表格/网络错误处理/文件路径检查
   - v1.6.0：详细安装引导/中文报错/最佳实践/边界情况说明
