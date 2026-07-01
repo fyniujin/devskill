@@ -14,6 +14,7 @@
 | winskill | `winskill/SKILL.md` | v1.5.0 | Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控、事件日志诊断、已安装程序管 |
 | tax-receipt-compliance | `tax-receipt-compliance/SKILL.md` | v2.7.0 | 财税合规全链路助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。 |
 
+| multi-agent-pro | multi-agent-pro/SKILL.md | v1.0.0 | 多智能体编排框架：DAG调度+状态共享+错误恢复+断点续传+执行报告生成。AI即编排器，脚本提供基础设施。 |
 > ⚠️ 此表由 GitHub Actions 在发布时自动更新，请勿手动编辑。
 
 ---
@@ -126,6 +127,16 @@ git push → GitHub Actions 触发
 | v2.0.0 | 2026-06-29 | 全平台版本统一：清理skillhub字段，ClawHub/GitHub同步发布 |
 | v1.1.0 | 2026-06-29 | 更新发布 |
 | v1.0.0 | 2026-06-29 | 初始版本发布；支持增值税发票OCR识别；支持多种查验引擎接口；支持模板自适应学习；支持多种审批平台对接；数据本地处理，企业自主配置 |
+
+</details>
+
+
+<details>
+<summary>multi-agent-pro - 点击展开</summary>
+
+| 版本 | 日期 | 本次更新 |
+|------|------|---------|
+| v1.0.0 | 2026-07-01 | 初始版本：多智能体编排框架（DAG调度+状态共享+断点续传） |
 
 </details>
 
