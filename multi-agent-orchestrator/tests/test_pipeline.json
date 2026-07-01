@@ -1,0 +1,44 @@
+{
+  "pipeline_name": "测试流水线",
+  "version": "1.0",
+  "agents": [
+    {
+      "id": "node_a",
+      "name": "测试节点A",
+      "role": "首节点，无依赖",
+      "inputs": ["source_data"],
+      "outputs": ["result_a"],
+      "depends_on": [],
+      "retry": 2,
+      "timeout": 30,
+      "fallback": "skip"
+    },
+    {
+      "id": "node_b",
+      "name": "测试节点B",
+      "role": "依赖节点A",
+      "inputs": ["result_a"],
+      "outputs": ["result_b"],
+      "depends_on": ["node_a"],
+      "retry": 2,
+      "timeout": 30,
+      "fallback": "default",
+      "default_value": {"result_b": "默认值"}
+    },
+    {
+      "id": "node_c",
+      "name": "测试节点C",
+      "role": "依赖节点A和B",
+      "inputs": ["result_a", "result_b"],
+      "outputs": ["result_c"],
+      "depends_on": ["node_a", "node_b"],
+      "retry": 1,
+      "timeout": 30,
+      "fallback": "abort"
+    }
+  ],
+  "state_store": {
+    "type": "json",
+    "path": "./test_pipeline_state.json"
+  }
+}
