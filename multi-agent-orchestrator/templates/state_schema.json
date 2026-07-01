@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Pipeline State Schema",
+  "description": "多Agent协作编排引擎 - 状态文件格式规范",
+  "type": "object",
+  "required": ["pipeline_id", "pipeline_name", "status", "nodes", "created_at", "updated_at"],
+  "properties": {
+    "pipeline_id": {
+      "type": "string",
+      "description": "流水线唯一标识符，格式：{name}_{timestamp}"
+    },
+    "pipeline_name": {
+      "type": "string",
+      "description": "流水线名称"
+    },
+    "version": {
+      "type": "string",
+      "description": "DAG 定义版本号",
+      "default": "1.0"
+    },
+    "created_at": {
+      "type": "string",
+      "description": "创建时间（ISO 8601）"
+    },
+    "updated_at": {
+      "type": "string",
+      "description": "最后更新时间（ISO 8601）"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["initialized", "running", "completed", "aborted"],
+      "description": "流水线总体状态"
+    },
+    "nodes": {
+      "type": "object",
+      "description": "节点状态映射表，key 为节点 id",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["status", "depends_on", "retry_count"],
+        "properties": {
+          "name": {"type": "string"},
+          "role": {"type": "string"},
+          "status": {
+            "type": "string",
+            "enum": ["pending", "running", "completed", "failed", "skipped"]
+          },
+          "depends_on": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "retry_count": {"type": "integer", "minimum": 0},
+          "max_retry": {"type": "integer", "default": 3},
+          "timeout": {"type": "number", "default": 60},
+          "fallback": {
+            "type": "string",
+            "enum": ["retry", "skip", "default", "abort"],
+            "default": "abort"
+          },
+          "inputs": {"type": "array", "items": {"type": "string"}},
+          "outputs": {"type": "array", "items": {"type": "string"}},
+          "output_data": {"type": "object"},
+          "error": {"type": ["string", "null"]},
+          "started_at": {"type": ["string", "null"]},
+          "completed_at": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}
