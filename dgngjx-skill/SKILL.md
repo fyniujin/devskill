@@ -1,10 +1,10 @@
 ---
 name: dgngjx-skill
 slug: dgngjx-skill
-displayName: "多功能工具箱 v2.1"
+displayName: "多功能工具箱 v2.2"
 description: "多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐。48%零开箱即用，52%需确认安装。v2.0 国内联网优化（自动降级+国内镜像）+ 大文件性能增强（分块流式处理）。"
 description_zh: "多功能免费工具箱 - 8大模块29个工具。v2.0 国内联网优化 + 大文件性能增强 + 错误提示更详细。"
-version: 2.1.0
+version: 2.2.0
 category: office-efficiency
 platforms:
   - windows
@@ -23,7 +23,7 @@ tags:
 requires_api_key: false
 ---
 
-# 多功能工具箱 dgngjx-skill v2.1.0
+# 多功能工具箱 dgngjx-skill v2.2.0
 
 ## 30 秒速查表
 
@@ -1835,6 +1835,7 @@ v2.0 已内置大文件保护，针对不同场景有不同方案：
 - **许可证**：MIT
 - **支持平台**：Windows / macOS / Linux
 - **更新历史**：
+  - v2.2.0：[Bug修复]
   - v2.1.0：[Bug修复] 单位换算float崩溃+壁纸urllib.parse缺失+HTTP字符串拼接+f-string引号; [国内源]百度百科→baike.deno.dev+壁纸→imgapi.cn; [提示详细度]房贷/五险一金/Token/Mermaid/图片修复共8模块扩充; [大文件]视频编辑模块增加>500MB告警+30分钟超时+GIF自动缩放; [Ghostscript]Windows命令名修正
   - v2.0.0：[国内联网优化] Wikipedia→百度百科自动降级；娱乐工具→3个国内API+本地离线缓存；壁纸→国内随机图源+Pixabum兜底；[大文件性能] 图片>200MB告警+MemoryError防护+DecompressionBomb限制；PDF>500MB告警+Ghostscript降级指引；视频>500MB告警+30分钟超时+GIF自动缩放；HTTP错误细分（DNS/SSL/超时/状态码中文释义）；所有针对性错误给出具体解决命令+在线替代工具链接；新增Q8大文件FAQ
   - v1.7.0：每个命令加详细中文报错+解决方案+可能遇到的坑表格/网络错误处理/文件路径检查
