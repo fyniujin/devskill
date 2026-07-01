@@ -1,0 +1,58 @@
+{
+  "pipeline_name": "市场调研报告生成",
+  "version": "1.0",
+  "agents": [
+    {
+      "id": "collector",
+      "name": "数据采集Agent",
+      "role": "从指定数据源采集原始数据，包括网页内容、API数据、文件内容等",
+      "inputs": ["data_source", "query_params"],
+      "outputs": ["raw_data"],
+      "depends_on": [],
+      "retry": 3,
+      "timeout": 60,
+      "fallback": "skip",
+      "default_value": null
+    },
+    {
+      "id": "cleaner",
+      "name": "数据清洗Agent",
+      "role": "对原始数据进行去重、格式标准化、异常值过滤",
+      "inputs": ["raw_data"],
+      "outputs": ["cleaned_data"],
+      "depends_on": ["collector"],
+      "retry": 2,
+      "timeout": 90,
+      "fallback": "default",
+      "default_value": {"cleaned_data": "数据清洗失败，使用原始数据"}
+    },
+    {
+      "id": "analyzer",
+      "name": "数据分析Agent",
+      "role": "对清洗后数据进行统计分析、趋势识别、关键指标提取",
+      "inputs": ["cleaned_data"],
+      "outputs": ["analysis_result", "key_metrics"],
+      "depends_on": ["cleaner"],
+      "retry": 2,
+      "timeout": 120,
+      "fallback": "default",
+      "default_value": {"analysis_result": "数据不足，无法完成分析", "key_metrics": {}}
+    },
+    {
+      "id": "reporter",
+      "name": "报告生成Agent",
+      "role": "基于分析结果生成结构化 Markdown 报告，包含摘要、图表建议、结论",
+      "inputs": ["analysis_result", "key_metrics"],
+      "outputs": ["report"],
+      "depends_on": ["analyzer"],
+      "retry": 1,
+      "timeout": 180,
+      "fallback": "abort",
+      "default_value": null
+    }
+  ],
+  "state_store": {
+    "type": "json",
+    "path": "./pipeline_state.json"
+  }
+}
