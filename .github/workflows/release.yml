@@ -3,13 +3,6 @@ name: Release Skills
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'wps-office-suite/**'
-      - 'zwjh-skill/**'
-      - 'dgngjx-skill/**'
-      - 'winskill/**'
-      - 'tax-receipt-compliance/**'
-      - 'multi-agent-pro/**'
   workflow_dispatch:
 
 permissions:
@@ -25,13 +18,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect changed skills
+      - name: Detect changed skills (auto-discovery)
         id: changed
         run: |
           CHANGED=""
-          for skill in wps-office-suite zwjh-skill dgngjx-skill winskill tax-receipt-compliance multi-agent-pro; do
-            if git diff --name-only HEAD~1..HEAD 2>/dev/null | grep -q "^${skill}/"; then
-              CHANGED="${CHANGED} ${skill}"
+          for skill_dir in $(find . -maxdepth 2 -name 'SKILL.md' -printf '%P\n' | sed 's|/SKILL.md||' | sort); do
+            if git diff --name-only HEAD~1..HEAD 2>/dev/null | grep -q "^${skill_dir}/"; then
+              CHANGED="${CHANGED} ${skill_dir}"
             fi
           done
           echo "changed=${CHANGED}" >> $GITHUB_OUTPUT
@@ -60,8 +53,8 @@ jobs:
               ver_m = re.search(r'^version:\s*(.+)$', content, re.MULTILINE)
               version = ver_m.group(1).strip() if ver_m else 'unknown'
               tag = skill + '-v' + version
-              desc_m = re.search(r'^description:\s*[' + "'" + '"' + ']?(' + '[^' + "'" + '"' + ']+?)[' + "'" + '"' + ']?\s*$', content, re.MULTILINE)
-              desc = desc_m.group(1).strip("' + "'" + '"' + '") if desc_m else ''
+              desc_m = re.search(r'^description:\s*[\'"]([^\'"]+)[\'"]?\s*$', content, re.MULTILINE)
+              desc = desc_m.group(1).strip() if desc_m else ''
               body = '## ' + skill + ' v' + version + '\n\n' + desc + '\n\nSee [SKILL.md](https://github.com/' + repo + '/blob/main/' + sk_path + ') for details.'
               print('Creating release ' + tag + '...')
               payload = json.dumps({'tag_name': tag, 'name': skill + ' v' + version, 'body': body, 'draft': False, 'prerelease': False}).encode()
@@ -72,25 +65,27 @@ jobs:
               except Exception as e:
                   print('Release may already exist or error: ' + str(e))
 
-          # --- Update README ---
-          SKILLS = ['wps-office-suite', 'zwjh-skill', 'dgngjx-skill', 'winskill', 'tax-receipt-compliance', 'multi-agent-pro']
+          # --- Auto-discover all skills ---
+          # Find every directory that has a SKILL.md
+          SKILLS = sorted([s for s in os.listdir('.') if os.path.exists(s + '/SKILL.md')])
+          print('Auto-discovered skills:', SKILLS)
           rows = []
           for s in SKILLS:
               p = s + '/SKILL.md'
               with open(p, 'r', encoding='utf-8') as f:
                   c = f.read()
-              dm = re.search(r'^description:\s*[' + "'" + '"' + ']?(' + '[^' + "'" + '"' + ']+?)[' + "'" + '"' + ']?\s*$', c, re.MULTILINE)
-              d = (dm.group(1).strip("' + "'" + '"' + '") if dm else '')[:120]
+              dm = re.search(r'^description:\s*[\'"]([^\'"]+)[\'"]?\s*$', c, re.MULTILINE)
+              d = (dm.group(1).strip() if dm else '')[:120]
               vm = re.search(r'^version:\s*(.+)$', c, re.MULTILINE)
               v = vm.group(1).strip() if vm else '-'
               rows.append('| ' + s + ' | `' + s + '/SKILL.md` | v' + v + ' | ' + d + ' |')
 
-          new_table = '## 📦 Skill 索引\n\n| 技能 | 路径 | 最新版本 | 描述 |\n|------|------|----------|------|\n' + '\n'.join(rows) + '\n'
+          new_table = '## \\U0001f4e6 Skill 索引\n\n| 技能 | 路径 | 最新版本 | 描述 |\n|------|------|----------|------|\n' + '\n'.join(rows) + '\n'
 
           with open('README.md', 'r', encoding='utf-8') as f:
               readme = f.read()
 
-          readme = re.sub(r'## 📦 Skill 索引\n\n\| 技能 \| 路径 \| 最新版本 \| 描述 \|\n\|------\|------\|----------\|------\|\n(?:\|.+\n)*', new_table, readme)
+          readme = re.sub(r'## \\U0001f4e6 Skill 索引\n\n\| 技能 \| 路径 \| 最新版本 \| 描述 \|\n\|------\|------\|----------\|------\|\n(?:\|.+\n)*', new_table, readme)
 
           # Update history entries
           for skill in changed_skills:
@@ -100,9 +95,10 @@ jobs:
               ver_m = re.search(r'^version:\s*(.+)$', c, re.MULTILINE)
               version = ver_m.group(1).strip() if ver_m else 'unknown'
               today = datetime.now().strftime('%Y-%m-%d')
-              cl_m = re.search(r'^changelog:\s*(.+)$', c, re.MULTILINE)
-              changelog = cl_m.group(1).strip().strip("' + "'" + '"' + '") if cl_m else '更新发布'
+              cl_m = re.search(r'^changelog:\s*[\'"]([^\'"]+)[\'"]?\s*$', c, re.MULTILINE)
+              changelog = cl_m.group(1).strip() if cl_m else '更新发布'
               new_row = '| v' + version + ' | ' + today + ' | ' + changelog + ' |\n'
+              # Match the existing <details> block for this skill
               pattern = r'(<details>\s*<summary>' + re.escape(skill) + r'.*?</summary>\s*\n\s*\|\s*版本\s*\|\s*日期\s*\|\s*本次更新\s*\|\n\s*\|[-|]+\|\n)(.*?)(\n</details>)'
               match = re.search(pattern, readme, re.DOTALL)
               if match:
@@ -120,6 +116,7 @@ jobs:
           with open('README.md', 'w', encoding='utf-8') as f:
               f.write(readme)
           print('README updated (index + history)')
+          print('Skills in index:', SKILLS)
           PYEOF
 
       - name: Commit and push README
@@ -134,7 +131,7 @@ jobs:
   sync-to-gitee:
     runs-on: ubuntu-latest
     needs: release
-    if: always()
+    if: success()
     steps:
       - uses: actions/checkout@v4
         with:
