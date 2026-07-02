@@ -151,6 +151,16 @@ git push → GitHub Actions 触发
 
 </details>
 
+
+<details>
+<summary>contract-review - 鐐瑰嚮灞曞紑</summary>
+
+| 鐗堟湰 | 鏃ユ湡 | 鏈鏇存柊 |
+|------|------|---------|
+| v1.0.0 | 2026-07-02 | v1.0.0 — AI 法律合同审查：41 风险类别识别，支持 NDA/SaaS/M&A/雇佣/支付等合同 |
+
+</details>
+
 ---
 
 *最后更新：2026-07-01 07:09*
