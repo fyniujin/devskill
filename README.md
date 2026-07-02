@@ -15,7 +15,7 @@
 | tax-receipt-compliance | `tax-receipt-compliance/SKILL.md` | v2.7.0 | 财税合规全链路助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。 |
 | multi-agent-pro | `multi-agent-pro/SKILL.md` | v1.0.0 | 多智能体编排框架：DAG调度+状态共享+错误恢复+断点续传+执行报告生成。AI即编排器，脚本提供基础设施。 |
 | kingdoc | `kingdoc/SKILL.md` | v2.1.0 | 金山文档 AI 协作助手 — 6品类在线文档全生命周期管理，对标腾讯文档覆盖8大功能，支持政企合规。 |
-| contract-review | contract-review/SKILL.md | v1.0.0 | AI 法律合同审查：41 风险类别识别，支持 NDA/SaaS/M&A/雇佣/支付等合同，覆盖买卖/技术/租赁/劳动等常见合同。 |
+| contract-review | `contract-review/SKILL.md` | v1.0.0 | AI 法律合同审查：41 风险类别识别，支持 NDA/SaaS/M&A/雇佣/支付等合同，覆盖买卖/技术/租赁/劳动等常见合同。 |：41 风险类别识别，支持 NDA/SaaS/M&A/雇佣/支付等合同，覆盖买卖/技术/租赁/劳动等常见合同。 |
 > ⚠️ 此表由 GitHub Actions 在发布时自动更新，请勿手动编辑。
 
 ---
