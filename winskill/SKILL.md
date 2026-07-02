@@ -2,9 +2,9 @@
 name: winskill
 slug: winskill
 displayName: "Windows 运维工具箱"
-description: "Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控、事件日志诊断、已安装程序管理、用户会话监控、计划任务审计、文件共享审计、DNS网卡诊断。只读分析+安全确认，绝不误删文件，完全免费离线运行。"
-description_zh: "Windows 运维工具箱 - 磁盘分析、清理、IIS 管理、批量操作、服务监控、更新诊断、性能监控、安全审计、注册表审计、磁盘健康、网络监控、事件日志、程序管理、会话监控、计划任务、共享审计、DNS诊断。只读+确认模式，零依赖离线运行。"
-version: 1.5.0
+description: "Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控、事件日志诊断、已安装程序管理、用户会话监控、计划任务审计、文件共享审计、DNS网卡诊断、SSL证书过期检测、防火墙规则审计、服务崩溃恢复状态。只读分析+安全确认，绝不误删文件，完全免费离线运行。"
+description_zh: "Windows 运维工具箱 - 磁盘分析、清理、IIS 管理、批量操作、服务监控、更新诊断、性能监控、安全审计、注册表审计、磁盘健康、网络监控、事件日志、程序管理、会话监控、计划任务、共享审计、DNS诊断、SSL证书、防火墙审计、服务崩溃记录。只读+确认模式，零依赖离线运行。"
+version: 1.6.0
 category: system-administration
 platforms:
   - windows
@@ -28,10 +28,13 @@ tags:
   - scheduled-tasks
   - smb-share
   - dns
+  - ssl-certificate
+  - firewall
+  - service-recovery
 requires_api_key: false
 ---
 
-# Winskill — Windows 服务器运维工具箱 v1.5.0
+# Winskill — Windows 服务器运维工具箱 v1.6.0
 
 ## 快速开始
 
@@ -1938,6 +1941,498 @@ Write-Host "💡 0.0.0.0/0 为默认路由（所有出网流量由此控制）"
 
 ---
 
+## 🆕 模块 20：SSL 证书过期检测
+
+**用途**：检测本机 IIS / 所有 HTTPS 站点的 SSL 证书到期时间，提前预警，避免网站突然报"证书无效"。
+
+**常你说**：`"SSL 证书快到期了吗"` / `"证书检查"` / `"HTTPS 站点证书还有多久"` / `"哪些证书要过期了"`
+
+> ⚠️ **本模块仅读，不会申请、续签或删除任何证书。**
+
+### 20.1 本机证书仓库扫描（个人 + 机器）
+
+<details>
+<summary>📋 展开查看命令 — 本机所有证书到期时间</summary>
+
+```powershell
+Write-Host "════════ 本机证书过期检查 ════════"
+$warningDays = 30
+$now = Get-Date
+
+$stores = @(
+    [System.Security.Cryptography.X509Certificates.StoreLocation]::LocalMachine,
+    [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
+)
+$storeNames = @('My', 'WebHosting', 'Root', 'CA')
+
+$certs = foreach ($loc in $stores) {
+    foreach ($name in $storeNames) {
+        try {
+            $store = [System.Security.Cryptography.X509Certificates.X509Store]::new($name, $loc)
+            $store.Open('ReadOnly')
+            foreach ($cert in $store.Certificates) {
+                $daysLeft = ($cert.NotAfter - $now).Days
+                [PSCustomObject]@{
+                    主体       = ($cert.Subject -replace 'CN=', '' -split ',')[0].Trim()
+                    存储位置   = "$loc\$name"
+                    到期时间   = $cert.NotAfter.ToString('yyyy-MM-dd')
+                    剩余天数   = $daysLeft
+                    状态       = if ($daysLeft -lt 0) { '❌ 已过期' }
+                                 elseif ($daysLeft -lt $warningDays) { '⚠️ 即将过期' }
+                                 else { '✅ 正常' }
+                    颁发者     = ($cert.Issuer -replace 'CN=', '' -split ',')[0].Trim()
+                }
+            }
+            $store.Close()
+        } catch {}
+    }
+}
+
+$result = $certs | Where-Object { $_.剩余天数 -lt 90 } |
+    Sort-Object 剩余天数
+
+if ($result) {
+    $result | Format-Table -AutoSize
+} else {
+    Write-Host "✅ 未发现 90 天内到期的证书"
+}
+```
+
+</details>
+
+### 20.2 IIS 绑定的 HTTPS 证书检查
+
+<details>
+<summary>📋 展开查看命令 — IIS 站点 HTTPS 证书</summary>
+
+```powershell
+Write-Host "════════ IIS HTTPS 绑定证书 ════════"
+Import-Module WebAdministration -ErrorAction SilentlyContinue
+
+$httpsBindings = Get-WebBinding | Where-Object { $_.protocol -eq 'https' }
+if (-not $httpsBindings) {
+    Write-Host "  未发现 HTTPS 绑定"
+} else {
+    foreach ($binding in $httpsBindings) {
+        $hash = $binding.certificateHash
+        if ($hash) {
+            $cert = Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.Thumbprint -eq $hash }
+            if ($cert) {
+                $daysLeft = ($cert.NotAfter - (Get-Date)).Days
+                $status = if ($daysLeft -lt 0) { '❌ 已过期' }
+                           elseif ($daysLeft -lt 30) { '⚠️ 即将过期' }
+                           else { '✅ 正常' }
+                Write-Host "  站点: $($binding.bindingInformation)"
+                Write-Host "  证书: $($cert.Subject)"
+                Write-Host "  到期: $($cert.NotAfter.ToString('yyyy-MM-dd'))  剩余: $daysLeft 天  $status"
+                Write-Host ""
+            }
+        }
+    }
+}
+```
+
+</details>
+
+### 20.3 远程域名证书探测（本地无证书的站点）
+
+<details>
+<summary>📋 展开查看命令 — 探测远程域名证书</summary>
+
+```powershell
+# 将下方域名替换为你需要检测的站点
+$domains = @('www.baidu.com', 'www.taobao.com')  # 示例，替换为你的域名
+
+Write-Host "════════ 远程域名 SSL 证书检测 ════════"
+foreach ($domain in $domains) {
+    try {
+        $tcpClient = New-Object System.Net.Sockets.TcpClient($domain, 443)
+        $sslStream  = New-Object System.Net.Security.SslStream($tcpClient.GetStream(), $false, { $true })
+        $sslStream.AuthenticateAsClient($domain)
+        $cert = $sslStream.RemoteCertificate
+        $expiry = [DateTime]::Parse($cert.GetExpirationDateString())
+        $daysLeft = ($expiry - (Get-Date)).Days
+        $status = if ($daysLeft -lt 0) { '❌ 已过期' }
+                   elseif ($daysLeft -lt 30) { '⚠️ 即将过期' }
+                   else { '✅ 正常' }
+        Write-Host "  $domain → 到期: $($expiry.ToString('yyyy-MM-dd'))  剩余: $daysLeft 天  $status"
+        $sslStream.Close()
+        $tcpClient.Close()
+    } catch {
+        Write-Host "  $domain → ❌ 连接失败: $($_.Exception.Message.Split('.')[0])"
+    }
+}
+```
+
+</details>
+
+### 20.4 即将过期证书汇总报告
+
+<details>
+<summary>📋 展开查看命令 — 30 天内到期汇总</summary>
+
+```powershell
+Write-Host "════════ 30 天内到期证书汇总 ════════"
+$now = Get-Date
+$soon = @()
+
+foreach ($loc in @('LocalMachine','CurrentUser')) {
+    foreach ($name in @('My','WebHosting')) {
+        try {
+            $store = [System.Security.Cryptography.X509Certificates.X509Store]::new($name, $loc)
+            $store.Open('ReadOnly')
+            $soon += $store.Certificates | Where-Object {
+                ($_.NotAfter - $now).Days -le 30 -and ($_.NotAfter - $now).Days -ge 0
+            } | Select-Object @{N='证书名';E={($_.Subject -replace 'CN=','' -split ',')[0].Trim()}},
+                @{N='剩余天数';E={($_.NotAfter - $now).Days}},
+                @{N='到期日期';E={$_.NotAfter.ToString('yyyy-MM-dd')}},
+                @{N='存储';E={"$loc\$name"}}
+            $store.Close()
+        } catch {}
+    }
+}
+
+if ($soon.Count -gt 0) {
+    $soon | Sort-Object 剩余天数 | Format-Table -AutoSize
+    Write-Host "`n🔴 以上证书需要尽快续签！"
+} else {
+    Write-Host "✅ 30 天内无证书过期"
+}
+```
+
+</details>
+
+**风险等级**：🟢 无（只读，不修改任何证书）
+
+| 报错 | 含义 | 解决 |
+|-----|------|-----|
+| `Access denied` | 需管理员权限 | 管理员身份执行 |
+| `WebAdministration not found` | IIS 未安装 | 跳过模块 20.2 |
+| `Connection refused` | 远程域名 443 不可达 | 检查域名和防火墙 |
+| `AuthenticationException` | SSL 握手失败 | 域名可能证书异常 |
+
+**常见坑 & 解决**：
+
+| 场景 | 说明 |
+|-----|------|
+| 证书显示"已过期"但网站仍在访问 | 浏览器有缓存，实际用户已经开始看到警告 |
+| IIS 绑定的证书和仓库里的不一致 | IIS 用指纹引用，需手动在 IIS 管理器重新绑定 |
+| Let's Encrypt 证书 90 天到期周期 | 需设置自动续签（如 win-acme） |
+
+---
+
+## 🆕 模块 21：Windows 防火墙规则审计
+
+**用途**：列出所有防火墙规则，识别过度开放（Any/Any）、可疑来源的规则，找出安全漏洞。
+
+**常你说**：`"防火墙规则有没有问题"` / `"防火墙审计"` / `"哪些端口对外开放"` / `"有没有高危防火墙规则"`
+
+> ⚠️ **本模块仅读，不会新增、删除或修改任何防火墙规则。**
+
+### 21.1 所有入站规则概览
+
+<details>
+<summary>📋 展开查看命令 — 入站规则列表</summary>
+
+```powershell
+Write-Host "════════ 入站防火墙规则（启用中）════════"
+$inbound = Get-NetFirewallRule -Direction Inbound -Enabled True -ErrorAction SilentlyContinue
+
+Write-Host "  启用的入站规则总数: $(($inbound | Measure-Object).Count)"
+Write-Host ""
+
+$inbound | ForEach-Object {
+    $rule = $_
+    $filter = $rule | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
+    $addrFilter = $rule | Get-NetFirewallAddressFilter -ErrorAction SilentlyContinue
+    [PSCustomObject]@{
+        规则名     = $rule.DisplayName.Substring(0, [Math]::Min(40, $rule.DisplayName.Length))
+        协议       = if ($filter.Protocol) { $filter.Protocol } else { '任意' }
+        本地端口   = if ($filter.LocalPort) { $filter.LocalPort -join ',' } else { '任意' }
+        来源地址   = if ($addrFilter.RemoteAddress) { ($addrFilter.RemoteAddress -join ',').Substring(0, [Math]::Min(30, ($addrFilter.RemoteAddress -join ',').Length)) } else { '任意' }
+        动作       = $rule.Action
+    }
+} | Select-Object -First 30 | Format-Table -AutoSize
+```
+
+</details>
+
+### 21.2 高危规则检测（Any → Any / 暴露全端口）
+
+<details>
+<summary>📋 展开查看命令 — 高危防火墙规则扫描</summary>
+
+```powershell
+Write-Host "════════ 高危防火墙规则扫描 ════════"
+$risks = @()
+
+Get-NetFirewallRule -Direction Inbound -Action Allow -Enabled True -ErrorAction SilentlyContinue | ForEach-Object {
+    $rule = $_
+    $portFilter = $rule | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
+    $addrFilter  = $rule | Get-NetFirewallAddressFilter -ErrorAction SilentlyContinue
+
+    $anyPort = ($portFilter.LocalPort -eq 'Any' -or -not $portFilter.LocalPort)
+    $anyAddr = ($addrFilter.RemoteAddress -eq 'Any' -or $addrFilter.RemoteAddress -contains 'Any' -or -not $addrFilter.RemoteAddress)
+
+    if ($anyPort -and $anyAddr) {
+        $risks += [PSCustomObject]@{
+            风险等级 = '🔴 高危'
+            规则名   = $rule.DisplayName
+            说明     = '允许任意来源访问任意端口'
+            建议     = '收紧来源地址或端口范围'
+        }
+    } elseif ($anyAddr) {
+        # 检查是否暴露高危端口（135/445/3389/5985）
+        $dangerousPorts = @('135','445','3389','5985','5986','23','21','1433','3306','6379')
+        $portStr = ($portFilter.LocalPort -join ',')
+        foreach ($p in $dangerousPorts) {
+            if ($portStr -match "\b$p\b" -or $anyPort) {
+                $risks += [PSCustomObject]@{
+                    风险等级 = '⚠️ 中危'
+                    规则名   = $rule.DisplayName
+                    说明     = "端口 $p 对任意来源开放"
+                    建议     = '限制来源 IP 白名单'
+                }
+                break
+            }
+        }
+    }
+}
+
+if ($risks.Count -gt 0) {
+    $risks | Format-Table -AutoSize -Wrap
+    Write-Host "`n建议: 使用「来源 IP 白名单」替代「任意来源」"
+} else {
+    Write-Host "✅ 未发现明显高危防火墙规则"
+}
+```
+
+</details>
+
+### 21.3 按端口查看谁在放行
+
+<details>
+<summary>📋 展开查看命令 — 指定端口放行规则</summary>
+
+```powershell
+# 修改此处为你想查询的端口
+$targetPorts = @('3389', '445', '80', '443', '1433', '3306')
+
+Write-Host "════════ 关键端口放行规则 ════════"
+foreach ($port in $targetPorts) {
+    $rules = Get-NetFirewallRule -Direction Inbound -Action Allow -Enabled True -ErrorAction SilentlyContinue | Where-Object {
+        $pf = $_ | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
+        ($pf.LocalPort -eq 'Any' -or $pf.LocalPort -contains $port)
+    }
+
+    if ($rules) {
+        Write-Host "`n  端口 $port — 有 $(($rules | Measure-Object).Count) 条放行规则:"
+        $rules | Select-Object -First 5 @{N='规则名';E={$_.DisplayName}} |
+            ForEach-Object { Write-Host "    - $($_.规则名)" }
+    } else {
+        Write-Host "`n  端口 $port — 无放行规则（默认拒绝）"
+    }
+}
+```
+
+</details>
+
+### 21.4 防火墙配置文件状态
+
+<details>
+<summary>📋 展开查看命令 — 防火墙整体状态</summary>
+
+```powershell
+Write-Host "════════ 防火墙配置文件状态 ════════"
+Get-NetFirewallProfile | Select-Object @{N='配置文件';E={$_.Name}},
+    @{N='是否启用';E={if($_.Enabled){'✅ 启用'}else{'❌ 已禁用 ⚠️'}}},
+    @{N='入站默认';E={$_.DefaultInboundAction}},
+    @{N='出站默认';E={$_.DefaultOutboundAction}},
+    @{N='通知';E={$_.NotifyOnListen}} |
+    Format-Table -AutoSize
+
+Write-Host "`n💡 防火墙应对所有配置文件均启用，入站默认「Block」"
+Write-Host "💡 如果任一配置文件显示「已禁用」，立即排查原因"
+```
+
+</details>
+
+**风险等级**：🟢 无（只读审计，不修改任何规则）
+
+| 报错 | 含义 | 解决 |
+|-----|------|-----|
+| `Get-NetFirewallRule` 报错 | 需管理员权限 | 管理员身份执行 |
+| `WinRM` 相关报错 | 防火墙服务异常 | 检查 `mpssvc` 服务状态 |
+| `Access denied on Get-NetFirewallPortFilter` | 域策略限制 | 以域管理员身份执行 |
+
+**常见坑 & 解决**：
+
+| 场景 | 说明 |
+|-----|------|
+| 防火墙被关闭（Enabled=False） | 极高风险，任何连接均可进入 |
+| 3389 对 Any 开放 | RDP 暴力破解首要目标 |
+| 445 对 Any 开放 | WannaCry/勒索病毒入侵路径 |
+| 大量"Any → Any"规则 | 常见于软件安装时自动添加，需逐条清理 |
+
+---
+
+## 🆕 模块 22：关键服务崩溃与自动恢复状态
+
+**用途**：查看服务异常停止记录、自动恢复策略、"应该运行却未运行"的服务。
+
+**常你说**：`"哪些服务崩过"` / `"服务崩溃记录"` / `"服务自动恢复设置"` / `"有服务没跑起来吗"`
+
+> ⚠️ **本模块仅读，不会启动、停止或修改任何服务。**
+
+### 22.1 已停止但设为自动启动的服务（"应跑未跑"）
+
+<details>
+<summary>📋 展开查看命令 — 应运行却已停止的服务</summary>
+
+```powershell
+Write-Host "════════ 应运行却已停止的服务 ════════"
+$deadServices = Get-Service | Where-Object {
+    $_.StartType -in @('Automatic', 'AutomaticDelayedStart') -and
+    $_.Status -eq 'Stopped'
+}
+
+if ($deadServices) {
+    $deadServices | Select-Object @{N='服务名';E={$_.Name}},
+        @{N='显示名';E={$_.DisplayName}},
+        @{N='启动类型';E={$_.StartType}},
+        @{N='状态';E={$_.Status}} |
+        Sort-Object 显示名 |
+        Format-Table -AutoSize
+    Write-Host "`n⚠️ 以上服务设置了自动启动但当前已停止，需要排查原因"
+} else {
+    Write-Host "✅ 所有自动启动的服务均在运行"
+}
+```
+
+</details>
+
+### 22.2 服务崩溃事件记录（事件日志 7034/7036）
+
+<details>
+<summary>📋 展开查看命令 — 服务崩溃事件</summary>
+
+```powershell
+Write-Host "════════ 服务崩溃记录（最近 7 天）════════"
+$events = Get-WinEvent -FilterHashtable @{
+    LogName   = 'System'
+    Id        = @(7034, 7035, 7036, 7031, 7040)
+    StartTime = (Get-Date).AddDays(-7)
+} -ErrorAction SilentlyContinue
+
+if ($events) {
+    $events | Select-Object @{N='时间';E={$_.TimeCreated}},
+        @{N='事件ID';E={$_.Id}},
+        @{N='说明';E={
+            switch ($_.Id) {
+                7034 { "❌ 服务意外停止: " + ($_.Message -replace "`r`n",' ').Substring(0,[Math]::Min(80,$_.Message.Length)) }
+                7031 { "❌ 服务停止后触发恢复动作: " + ($_.Message -replace "`r`n",' ').Substring(0,[Math]::Min(60,$_.Message.Length)) }
+                7035 { "→ 服务控制: " + ($_.Message -replace "`r`n",' ').Substring(0,[Math]::Min(60,$_.Message.Length)) }
+                7036 { "● 服务状态变更: " + ($_.Message -replace "`r`n",' ').Substring(0,[Math]::Min(60,$_.Message.Length)) }
+                7040 { "⚙️ 启动类型变更: " + ($_.Message -replace "`r`n",' ').Substring(0,[Math]::Min(60,$_.Message.Length)) }
+                default { $_.Message.Substring(0,[Math]::Min(80,$_.Message.Length)) }
+            }
+        }} |
+        Where-Object { $_.事件ID -in @(7034, 7031) } |
+        Sort-Object 时间 -Descending |
+        Select-Object -First 20 |
+        Format-Table -AutoSize -Wrap
+} else {
+    Write-Host "✅ 最近 7 天无服务崩溃记录"
+}
+```
+
+</details>
+
+### 22.3 服务自动恢复策略查看
+
+<details>
+<summary>📋 展开查看命令 — 服务故障恢复配置</summary>
+
+```powershell
+Write-Host "════════ 关键服务恢复策略 ════════"
+$keyServices = @(
+    'W3SVC',       # IIS
+    'MSSQLSERVER', # SQL Server
+    'WSearch',     # Windows Search
+    'Spooler',     # 打印机
+    'EventLog',    # 事件日志
+    'WinRM',       # 远程管理
+    'Schedule',    # 计划任务
+    'LanmanServer' # 文件共享
+)
+
+foreach ($svcName in $keyServices) {
+    $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
+    if ($svc) {
+        # 使用 sc.exe 读取恢复策略
+        $scOutput = sc.exe qfailure $svcName 2>&1
+        $resetPeriod = ($scOutput | Select-String 'RESET_PERIOD') -replace '.*: ', ''
+        $actions = ($scOutput | Select-String 'FAILURE_ACTIONS') -replace '.*: ', ''
+
+        Write-Host "  $($svc.DisplayName) [$svcName]"
+        Write-Host "    状态: $($svc.Status)"
+        Write-Host "    恢复动作: $(if($actions){$actions}else{'(未配置)'} )"
+        Write-Host ""
+    }
+}
+Write-Host "💡 未配置恢复动作的关键服务，崩溃后不会自动重启，需手动干预"
+```
+
+</details>
+
+### 22.4 服务依赖关系检查（关键服务是否有依赖未启动）
+
+<details>
+<summary>📋 展开查看命令 — 服务依赖链检查</summary>
+
+```powershell
+Write-Host "════════ 关键服务依赖链检查 ════════"
+$keyServices = @('W3SVC', 'MSSQLSERVER', 'WinRM', 'Schedule', 'Netlogon')
+
+foreach ($svcName in $keyServices) {
+    $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
+    if ($svc) {
+        $deps = $svc.ServicesDependedOn
+        $brokenDeps = $deps | Where-Object { $_.Status -ne 'Running' }
+
+        if ($brokenDeps) {
+            Write-Host "⚠️ $($svc.DisplayName) 依赖以下未运行的服务:"
+            $brokenDeps | ForEach-Object {
+                Write-Host "    ❌ $($_.Name) ($($_.Status))"
+            }
+        } else {
+            Write-Host "✅ $($svc.DisplayName) — 所有依赖服务正常"
+        }
+    }
+}
+```
+
+</details>
+
+**风险等级**：🟢 无（只读，不启动/停止/修改任何服务）
+
+| 报错 | 含义 | 解决 |
+|-----|------|-----|
+| `Get-WinEvent` 无权限 | 需管理员权限 | 管理员身份执行 |
+| `sc.exe qfailure` 返回空 | 部分服务无恢复策略 | 正常，说明未配置 |
+| `Get-Service` 找不到服务 | 该服务未安装 | 跳过该服务 |
+
+**常见坑 & 解决**：
+
+| 场景 | 说明 |
+|-----|------|
+| IIS 停止但事件日志无崩溃记录 | 可能是被人为停止 |
+| 服务崩溃但无恢复动作 | 需通过"服务属性 → 恢复"配置自动重启 |
+| 依赖服务未运行导致主服务无法启动 | 先启动依赖服务 |
+| 事件 7034 大量重复 | 服务反复崩溃重启，存在底层问题 |
+
+---
+
 ## 前置要求与依赖
 
 | 需求 | 说明 | 检测方法 |
@@ -2015,6 +2510,15 @@ skillhub upgrade winskill
 ### Q17: DNS 缓存清空会断网吗？
 不会。Clear-DnsClientCache 清空后会自动从 DNS 服务器重新获取解析记录。只在用户明确说「确认清空 DNS 缓存」后才执行。
 
+### Q18: SSL 证书检测会申请或修改证书吗？
+不会。模块 20 仅读取证书仓库和 IIS 绑定信息，不会申请、续签或删除任何证书。
+
+### Q19: 防火墙规则审计会改动规则吗？
+不会。模块 21 仅读取规则配置，不会新增、删除或修改任何防火墙规则。
+
+### Q20: 服务崩溃检查会重启服务吗？
+不会。模块 22 仅读取服务状态和事件日志，不会启动、停止或修改任何服务配置。
+
 ---
 
 ## 30 秒速查表
@@ -2040,6 +2544,9 @@ skillhub upgrade winskill
 | `"可疑计划任务"` | 模块 17 |
 | `"共享文件夹"` | 模块 18 |
 | `"DNS/网卡诊断"` | 模块 19 |
+| `"SSL证书快到期了吗"` | 模块 20 |
+| `"防火墙规则有没有漏洞"` | 模块 21 |
+| `"哪些服务崩过"` | 模块 22 |
 
 ---
 
@@ -2060,6 +2567,9 @@ skillhub upgrade winskill
 | 创建/删除计划任务 | 超出工具范围，只读审计 |
 | 修改共享权限 | 超出工具范围，只读审计 |
 | 修改网卡 IP/DNS 配置 | 超出工具范围，只读诊断 |
+| 申请/续签/删除 SSL 证书 | 超出工具范围，只读检测 |
+| 新增/删除/修改防火墙规则 | 超出工具范围，只读审计 |
+| 启动/停止/修改服务配置 | 超出工具范围，只读诊断 |
 
 ---
 
@@ -2069,7 +2579,7 @@ skillhub upgrade winskill
 - **无需 API Key**
 - **无需联网**（除首次安装 IIS 管理工具外）
 - **无需安装任何第三方软件**
-- ⚠️ **管理员权限检测**：部分功能（IIS 管理、更新缓存清理、安全审计、磁盘健康检测、网络监控、事件日志诊断、会话监控、计划任务审计、共享审计、DNS 网卡诊断）需要管理员权限，AI 会在执行前自动检测并提示
+- ⚠️ **管理员权限检测**：部分功能（IIS 管理、更新缓存清理、安全审计、磁盘健康检测、网络监控、事件日志诊断、会话监控、计划任务审计、共享审计、DNS 网卡诊断、SSL 证书检测、防火墙审计、服务崩溃检查）需要管理员权限，AI 会在执行前自动检测并提示
 
 ## 发布信息
 
@@ -2079,6 +2589,7 @@ skillhub upgrade winskill
 - **安全机制**：所有删除操作需用户确认，不用强制删除
 - **TRACE 评测**：已通过评测，[查看详情](https://skillhub.cn/community/skills/winskill)
 - **更新历史**：
+  - v1.6.0：新增 SSL 证书过期检测、防火墙规则审计、服务崩溃恢复状态 3 个模块，总计 22 个模块
   - v1.5.0：新增计划任务审计、文件共享审计、DNS网卡诊断 3 个模块，总计 19 个模块
   - v1.4.0：新增事件日志诊断、已安装程序管理、用户会话监控 3 个模块，总计 16 个模块
   - v1.3.0：新增注册表启动项审计、磁盘健康检测、网络端口监控 3 个模块
