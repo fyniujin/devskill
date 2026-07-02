@@ -11,7 +11,8 @@
 | wps-office-suite | `wps-office-suite/SKILL.md` | v2.2.0 | WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，AI助手零学习成本，自然语言驱动，含目录生成、环境自检、错误速查手册、格式设置、表格插入 |
 | zwjh-skill | `zwjh-skill/SKILL.md` | v1.6.0 | 会思考的进化 AI — 能像人一样理解问题本质、关联上下文、主动发现隐含需求，自动修复并持续成长。不仅能解决表面问题，更能触达根本原因，实现真正的主动进化。 |
 | dgngjx-skill | `dgngjx-skill/SKILL.md` | v2.5.0 | 多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐。48%零开箱即用，52%需确认安装。v2.0 国内联网优化（自动降级+国内镜像）+ 大文件性能增强（分块流式处理）。 |
-| winskill |  | v1.6.0 | Windows 运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计... | Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控、事件日志诊断、已安装程序管 |
+| winskill | `winskill/SKILL.md` | v1.6.0 | Windows 运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、只读分析+安全确认，零依赖离线运行 |
+ Windows 运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计... | Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控、事件日志诊断、已安装程序管 |
 | tax-receipt-compliance | `tax-receipt-compliance/SKILL.md` | v2.7.0 | 财税合规全链路助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。 |
 | multi-agent-pro | `multi-agent-pro/SKILL.md` | v1.0.0 | 多智能体编排框架：DAG调度+状态共享+错误恢复+断点续传+执行报告生成。AI即编排器，脚本提供基础设施。 |
 | kingdoc | `kingdoc/SKILL.md` | v2.1.0 | 金山文档 AI 协作助手 — 6品类在线文档全生命周期管理，对标腾讯文档覆盖8大功能，支持政企合规。 |
@@ -165,4 +166,4 @@ git push → GitHub Actions 触发
 
 ---
 
-*最后更新：2026/7/2 19:34:33*
+*最后更新：2026/7/2 20:34:40*
