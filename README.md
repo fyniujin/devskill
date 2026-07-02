@@ -14,7 +14,7 @@
 | winskill | `winskill/SKILL.md` | v1.5.0 | Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控、事件日志诊断、已安装程序管 |
 | tax-receipt-compliance | `tax-receipt-compliance/SKILL.md` | v2.7.0 | 财税合规全链路助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。 |
 | multi-agent-pro | `multi-agent-pro/SKILL.md` | v1.0.0 | 多智能体编排框架：DAG调度+状态共享+错误恢复+断点续传+执行报告生成。AI即编排器，脚本提供基础设施。 |
-| kingdoc | kingdoc/SKILL.md | v2.0.0 | 金山文档 AI 协作助手 — 6品类在线文档全生命周期管理，对标腾讯文档覆盖8大功能，支持政企合规。 |
+| kingdoc | `kingdoc/SKILL.md` | v2.0.0 | 金山文档 AI 协作助手 — 6品类在线文档全生命周期管理，对标腾讯文档覆盖8大功能，支持政企合规。 |
 > ⚠️ 此表由 GitHub Actions 在发布时自动更新，请勿手动编辑。
 
 ---
