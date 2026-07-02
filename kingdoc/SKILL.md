@@ -2,7 +2,7 @@
 name: kingdoc
 displayName: 金山文档 KingDoc
 slug: kingdoc
-version: 2.0.0
+version: 2.1.0
 description: >
   金山文档 AI 协作助手 — 6 品类在线文档全生命周期管理
   （文字/电子表格/演示文稿/多维表格/收集表/附件），覆盖创建、编辑、
@@ -17,7 +17,7 @@ license: MIT
 requires_api_key: true
 ---
 
-# KingDoc — 金山文档 AI 协作助手 v2.0.0
+# KingDoc — 金山文档 AI 协作助手 v2.1.0
 
 ## ⚠️ 首次使用必读
 
@@ -294,14 +294,56 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 ---
 
-## SKILL 更新检查
+## 🔄 自动更新提示
+
+**每天首次使用 KingDoc 时自动检查更新。** 发现新版本时，AI 会主动提示您升级，不会自动安装。
 
 ```bash
-# 每天第一次使用时执行
-python -m kingdoc.update_check --version 2.0.0
+# 手动检查更新
+python -m engine.update_check --version 2.1.0
 ```
 
-如有新版本，脚本输出更新指令后按提示升级。
+---
+
+## 📋 更新历史
+
+### v2.1.0 — 2026-07-02
+**新增功能**
+- ✅ 新增每日首次使用自动检查更新提示
+- ✅ 新增文档纯文本提取 API（`kdoc.office.extract`）
+- ✅ 新增格式转换 API（`kdoc.office.convert`）
+- ✅ 新增多维表格 Webhook 事件监听（`kdoc.dbt.webhook.set`）
+- ✅ 新增批量异步任务（`kdoc.batch.create` / `kdoc.batch.query`）
+- ✅ 新增通知推送（`kdoc.notification.send` 支持企微/钉钉/金山协作）
+- ✅ 新增版本历史回滚（`kdoc.version.list` / `kdoc.version.restore`）
+- ✅ 新增回收站完整操作（`kdoc.trash.*`）
+
+**体验优化**
+- 🔧 SKILL.md 新增「⚠️ 首次使用必读」两步引导
+- 🔧 安装脚本自动生成 mcp-config.json、模板文件和占位图标
+- 🔧 错误码从 KD001-KD015 扩展到 15 个精确定位
+- 🔧 11 个常见工作流全部基于真实金山 API
+
+**安全增强**
+- 🛡️ 5 层安全防御模型（用户确认/权限前置/输入校验/操作保护/限流配额）
+- 🛡️ 文件 ID 正则校验
+- 🛡️ 可执行文件 MIME 双层拦截
+- 🛡️ 限流指数退避重试（2^n + 随机抖动）
+- 🛡️ 操作审计日志
+
+---
+
+### v2.0.0 — 2026-07-02
+**初始版本**
+- 🎭 6 品类全功能（文字/电子表格/演示文稿/多维表格/收集表/附件）
+- 📄 40+ MCP 工具实现
+- 🔗 OAuth Client Credentials 鉴权
+- 📝 DOCX/PPTX 本地生成 + 上传覆盖
+- 🧭 场景路由表（4 大类 × 6 品类）
+- 🗃️ 电子表格精细编辑（单元格/公式/图表/筛选/排序）
+- 🗃️ 多维表格精细编辑（记录/字段/视图）
+- 📋 11 个可运行工作流
+- 📖 6 个参考文档
 
 ---
 
@@ -337,4 +379,4 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 ---
 
-*最后更新：2026-07-02 | v2.0.0*
+*最后更新：2026-07-02 | v2.1.0*
