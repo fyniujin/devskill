@@ -1,6 +1,6 @@
 ---
 name: gov-procurement-analyst
-version: "3.5.0"
+version: 3.5.1
 slug: gov-procurement-analyst
 displayName: "政府采购智能分析"
 description: >
