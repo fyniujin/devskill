@@ -76,8 +76,186 @@ jobs:
               try:
                   with open(p, 'r', encoding='utf-8') as f:
                       c = f.read()
-                  dm = re.search(r'^description:\s*[\'"]?([^\'"]+)[\'"]?\s*$', c, re.MULTILINE)
-                  d = (dm.group(1).strip() if dm else '')[:120]
+                          # Parse YAML description: handle > folded, single-quoted, double-quoted, unquoted
+                  d = ''
+                  dm_folded = re.search(r'^description:\s*>\s*\n((?:\s+.+\n?)+)', c, re.MULTILINE)
+                  dm_single = re.search(r'^description:\s*[\'"]([^\'"]+)[\'"]\s*
+                  vm = re.search(r'^version:\s*(.+)$', c, re.MULTILINE)
+                  v = vm.group(1).strip() if vm else '-'
+                  rows.append('| ' + s + ' | `' + s + '/SKILL.md` | v' + v + ' | ' + d + ' |')
+              except Exception as e:
+                  print('Error reading ' + p + ': ' + str(e))
+
+          new_table = '## 📦 Skill 索引\n\n| 技能 | 路径 | 最新版本 | 描述 |\n|------|------|----------|------|\n' + '\n'.join(rows) + '\n'
+
+          try:
+              with open('README.md', 'r', encoding='utf-8') as f:
+                  readme = f.read()
+
+              # Replace existing table
+              readme = re.sub(
+                  r'## .*?Skill 索引\n\n\| 技能 \| 路径 \| 最新版本 \| 描述 \|\n\|------\|------\|----------\|------\|\n(?:\|[^\n]+\n)*',
+                  new_table,
+                  readme
+              )
+
+              # Update history entries for each changed skill
+              for skill in changed_skills:
+                  sk_path2 = skill + '/SKILL.md'
+                  try:
+                      with open(sk_path2, 'r', encoding='utf-8') as f:
+                          c2 = f.read()
+                      ver_m2 = re.search(r'^version:\s*(.+)$', c2, re.MULTILINE)
+                      version2 = ver_m2.group(1).strip() if ver_m2 else 'unknown'
+                      today2 = datetime.now().strftime('%Y-%m-%d')
+                      cl_m2 = re.search(r'^changelog:\s*[\'"]?([^\'"]+)[\'"]?\s*$', c2, re.MULTILINE)
+                      changelog2 = cl_m2.group(1).strip() if cl_m2 else '更新发布'
+                      new_row2 = '| v' + version2 + ' | ' + today2 + ' | ' + changelog2 + ' |\n'
+                      history_pattern = r'(<details>\s*<summary>\s*' + re.escape(skill) + r'.*?</summary>\s*\n\s*\|\s*版本\s*\|\s*日期\s*\|\s*本次更新\s*\|\n\s*\|[-|]+\|\n)(.*?)(\n</details>)'
+                      match = re.search(history_pattern, readme, re.DOTALL)
+                      if match:
+                          existing = match.group(0)
+                          new_history = re.sub(
+                              r'(\|\s*版本\s*\|\s*日期\s*\|\s*本次更新\s*\|\n\s*\|[-|]+\|\n)',
+                              r'\g<1>' + new_row2,
+                              existing
+                          )
+                          readme = readme.replace(existing, new_history)
+                          print('Updated history for ' + skill)
+                  except Exception as e:
+                      print('Error updating history for ' + skill + ': ' + str(e))
+
+              now = datetime.now().strftime('%Y-%m-%d %H:%M')
+              readme = re.sub(r'\*最后更新：\*', '*最后更新：' + now + '*', readme)
+              readme = re.sub(r'\*最后更新：.*\*', '*最后更新：' + now + '*', readme)
+
+              with open('README.md', 'w', encoding='utf-8') as f:
+                  f.write(readme)
+              print('README updated successfully')
+          except Exception as e:
+              print('ERROR updating README: ' + str(e))
+              raise
+          PYEOF
+
+      - name: Commit and push README
+        if: steps.changed.outputs.changed != ''
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git diff --cached --quiet || git commit -m "chore: update README index + history [skip ci]"
+          git push
+
+  sync-to-gitee:
+    runs-on: ubuntu-latest
+    needs: release
+    if: success()
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Sync to Gitee
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          SAFE_URL="https://fyniujin_admin:${GITEE_TOKEN}@gitee.com/fyniujin_admin/devskill.git"
+          git remote add gitee "${SAFE_URL}" 2>/dev/null || git remote set-url gitee "${SAFE_URL}"
+          git pull origin main 2>/dev/null || true
+          git push gitee main 2>&1 || git push gitee main --force 2>&1, c, re.MULTILINE)
+                  dm_unquoted = re.search(r'^description:\s+(.+?)\s*
+                  vm = re.search(r'^version:\s*(.+)$', c, re.MULTILINE)
+                  v = vm.group(1).strip() if vm else '-'
+                  rows.append('| ' + s + ' | `' + s + '/SKILL.md` | v' + v + ' | ' + d + ' |')
+              except Exception as e:
+                  print('Error reading ' + p + ': ' + str(e))
+
+          new_table = '## 📦 Skill 索引\n\n| 技能 | 路径 | 最新版本 | 描述 |\n|------|------|----------|------|\n' + '\n'.join(rows) + '\n'
+
+          try:
+              with open('README.md', 'r', encoding='utf-8') as f:
+                  readme = f.read()
+
+              # Replace existing table
+              readme = re.sub(
+                  r'## .*?Skill 索引\n\n\| 技能 \| 路径 \| 最新版本 \| 描述 \|\n\|------\|------\|----------\|------\|\n(?:\|[^\n]+\n)*',
+                  new_table,
+                  readme
+              )
+
+              # Update history entries for each changed skill
+              for skill in changed_skills:
+                  sk_path2 = skill + '/SKILL.md'
+                  try:
+                      with open(sk_path2, 'r', encoding='utf-8') as f:
+                          c2 = f.read()
+                      ver_m2 = re.search(r'^version:\s*(.+)$', c2, re.MULTILINE)
+                      version2 = ver_m2.group(1).strip() if ver_m2 else 'unknown'
+                      today2 = datetime.now().strftime('%Y-%m-%d')
+                      cl_m2 = re.search(r'^changelog:\s*[\'"]?([^\'"]+)[\'"]?\s*$', c2, re.MULTILINE)
+                      changelog2 = cl_m2.group(1).strip() if cl_m2 else '更新发布'
+                      new_row2 = '| v' + version2 + ' | ' + today2 + ' | ' + changelog2 + ' |\n'
+                      history_pattern = r'(<details>\s*<summary>\s*' + re.escape(skill) + r'.*?</summary>\s*\n\s*\|\s*版本\s*\|\s*日期\s*\|\s*本次更新\s*\|\n\s*\|[-|]+\|\n)(.*?)(\n</details>)'
+                      match = re.search(history_pattern, readme, re.DOTALL)
+                      if match:
+                          existing = match.group(0)
+                          new_history = re.sub(
+                              r'(\|\s*版本\s*\|\s*日期\s*\|\s*本次更新\s*\|\n\s*\|[-|]+\|\n)',
+                              r'\g<1>' + new_row2,
+                              existing
+                          )
+                          readme = readme.replace(existing, new_history)
+                          print('Updated history for ' + skill)
+                  except Exception as e:
+                      print('Error updating history for ' + skill + ': ' + str(e))
+
+              now = datetime.now().strftime('%Y-%m-%d %H:%M')
+              readme = re.sub(r'\*最后更新：\*', '*最后更新：' + now + '*', readme)
+              readme = re.sub(r'\*最后更新：.*\*', '*最后更新：' + now + '*', readme)
+
+              with open('README.md', 'w', encoding='utf-8') as f:
+                  f.write(readme)
+              print('README updated successfully')
+          except Exception as e:
+              print('ERROR updating README: ' + str(e))
+              raise
+          PYEOF
+
+      - name: Commit and push README
+        if: steps.changed.outputs.changed != ''
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git diff --cached --quiet || git commit -m "chore: update README index + history [skip ci]"
+          git push
+
+  sync-to-gitee:
+    runs-on: ubuntu-latest
+    needs: release
+    if: success()
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Sync to Gitee
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          SAFE_URL="https://fyniujin_admin:${GITEE_TOKEN}@gitee.com/fyniujin_admin/devskill.git"
+          git remote add gitee "${SAFE_URL}" 2>/dev/null || git remote set-url gitee "${SAFE_URL}"
+          git pull origin main 2>/dev/null || true
+          git push gitee main 2>&1 || git push gitee main --force 2>&1, c, re.MULTILINE)
+                  if dm_folded:
+                      d = ' '.join(l.strip() for l in dm_folded.group(1).strip().split('\n'))
+                  elif dm_single:
+                      d = dm_single.group(1)
+                  elif dm_unquoted:
+                      d = dm_unquoted.group(1)
+                  d = d[:120]
                   # Escape | in descriptions to not break markdown table
                   d = d.replace('|', '\\|')
                   vm = re.search(r'^version:\s*(.+)$', c, re.MULTILINE)
