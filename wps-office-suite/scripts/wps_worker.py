@@ -24,11 +24,13 @@ from wps_common import (
     safe_path, ensure_desktop_path, release_wps, release_ms, with_retry
 )
 
-# 纯 Python 模式
+# 纯 Python 模式（v2.5 含排序/筛选/图表/统计）
 from wps_pure import (
     pure_create_word, pure_edit_word, pure_info_word,
     pure_create_excel, pure_input_excel, pure_info_excel,
-    pure_create_ppt, pure_info_ppt
+    pure_create_ppt, pure_info_ppt,
+    pure_sort_excel, pure_filter_excel, pure_chart_excel,
+    pure_statistics_excel, pure_add_excel_sheet, pure_formula_excel
 )
 
 # 错误处理模块
@@ -186,8 +188,16 @@ def cmd_format_word(args):
     engine = get_engine()
     filepath = safe_path(args["filepath"])
 
+    # 纯 Python 模式
     if engine in ("PURE", "LIBREOFFICE"):
-        return {"success": False, "error": wps_error("E010", feature="格式设置（需WPS/MS Office）")}
+        return pure_format_word(filepath.__str__(),
+                                 font_name=args.get("font", ""),
+                                 font_size=args.get("size", 0),
+                                 bold=args.get("bold", False),
+                                 align=args.get("align", ""),
+                                 space_after=args.get("space_after", 0),
+                                 first_line_indent=args.get("first_line_indent", 0),
+                                 color=args.get("color", ""))
 
     try:
         if engine == "WPS":
@@ -382,8 +392,9 @@ def cmd_formula_excel(args):
     cell = args.get("cell", "A1")
     formula = args.get("formula", "")
 
+    # 纯 Python 模式：openpyxl 支持写公式
     if engine in ("PURE", "LIBREOFFICE"):
-        return {"success": False, "error": wps_error("E010", feature="公式计算")}
+        return pure_formula_excel(filepath.__str__(), sheet, cell, formula)
 
     if engine != "WPS":
         return {"success": False, "error": wps_error("E010", feature="公式计算（MS Office模式）")}
@@ -403,189 +414,245 @@ def cmd_formula_excel(args):
         return {"success": False, "error": wps_error("E014", detail=str(e))}
 
 
+def cmd_add_sheet_excel(args):
+    """添加 Sheet（所有引擎）"""
+    engine = get_engine()
+    filepath = safe_path(args["filepath"])
+    sheet = args.get("sheet", "Sheet1")
+    headers = args.get("headers")
+    data = args.get("data")
+
+    if engine in ("PURE", "LIBREOFFICE"):
+        return pure_add_excel_sheet(filepath.__str__(), sheet, headers, data)
+
+    # WPS / MSOFFICE 也用纯 Python（openpyxl 兼容性更好）
+    return pure_add_excel_sheet(filepath.__str__(), sheet, headers, data)
+
+
+def cmd_stats_excel(args):
+    """数据汇总统计（SUM/AVG/COUNT/MAX/MIN/COUNTA）"""
+    engine = get_engine()
+    filepath = safe_path(args["filepath"])
+    sheet = args.get("sheet", "Sheet1")
+    column = args.get("column", "A")
+    stat_type = args.get("type", "SUM")
+
+    # 所有引擎都用纯 Python 实现
+    return pure_statistics_excel(filepath.__str__(), sheet, column, stat_type)
+
+
 def cmd_sort_excel(args):
-    """多列排序（仅 WPS 模式）"""
+    """多列排序（WPS 模式 + 纯Python模式双路径）"""
     engine = get_engine()
     filepath = safe_path(args["filepath"])
     sheet = args.get("sheet", "Sheet1")
     sorts = args.get("sorts", [])
 
-    if engine != "WPS":
-        return {"success": False, "error": wps_error("E005", engine=engine)}
+    # 纯 Python 模式
+    if engine in ("PURE", "LIBREOFFICE"):
+        return pure_sort_excel(filepath.__str__(), sheet, sorts)
 
-    try:
-        wps = get_wps()
-        wb = wps.Workbooks.Open(filepath.__str__())
-        ws = wb.Sheets(sheet)
+    # WPS 模式
+    if engine == "WPS":
+        try:
+            wps = get_wps()
+            wb = wps.Workbooks.Open(filepath.__str__())
+            ws = wb.Sheets(sheet)
 
-        used = ws.UsedRange
-        if used.Rows.Count <= 1:
+            used = ws.UsedRange
+            if used.Rows.Count <= 1:
+                wb.Close()
+                release_wps()
+                return {"success": True, "note": "数据不足，无需排序"}
+
+            data = []
+            for r in range(1, used.Rows.Count + 1):
+                row = [ws.Cells(r, c).Value for c in range(1, used.Columns.Count + 1)]
+                data.append(row)
+
+            header = data[0]
+            body = data[1:]
+
+            def sort_key(row):
+                keys = []
+                for s in sorts:
+                    col = s["column"]
+                    asc = s.get("ascending", True)
+                    idx = None
+                    for i, h in enumerate(header):
+                        if h and str(h).strip().lower() == col.lower():
+                            idx = i
+                            break
+                    if idx is None and len(col) == 1:
+                        idx = ord(col.upper()) - ord('A')
+                    if idx is None:
+                        idx = 0
+                    val = row[idx] if idx < len(row) else None
+                    if val is None:
+                        keys.append((2, ""))
+                    elif isinstance(val, (int, float)):
+                        keys.append((0, val if asc else -val))
+                    else:
+                        keys.append((0, str(val).lower()))
+                return tuple(keys)
+
+            body.sort(key=sort_key)
+
+            for r, row in enumerate(body, start=2):
+                for c, val in enumerate(row, start=1):
+                    ws.Cells(r, c).Value = val
+
+            wb.Save()
             wb.Close()
             release_wps()
-            return {"success": True, "note": "数据不足，无需排序"}
+            return {"success": True, "sorts": sorts, "rows": len(body), "engine": "WPS"}
 
-        data = []
-        for r in range(1, used.Rows.Count + 1):
-            row = [ws.Cells(r, c).Value for c in range(1, used.Columns.Count + 1)]
-            data.append(row)
+        except Exception as e:
+            release_wps()
+            return {"success": False, "error": wps_error("E014", detail=str(e))}
 
-        header = data[0]
-        body = data[1:]
+    # MSOFFICE: 回退到纯 Python
+    if engine == "MSOFFICE":
+        return pure_sort_excel(filepath.__str__(), sheet, sorts)
 
-        def sort_key(row):
-            keys = []
-            for s in sorts:
-                col = s["column"]
-                asc = s.get("ascending", True)
-                idx = None
-                for i, h in enumerate(header):
-                    if h and str(h).strip().lower() == col.lower():
-                        idx = i
-                        break
-                if idx is None and len(col) == 1:
-                    idx = ord(col.upper()) - ord('A')
-                if idx is None:
-                    idx = 0
-                val = row[idx] if idx < len(row) else None
-                if val is None:
-                    keys.append((2, ""))
-                elif isinstance(val, (int, float)):
-                    keys.append((0, val if asc else -val))
-                else:
-                    keys.append((0, str(val).lower()))
-            return tuple(keys)
-
-        body.sort(key=sort_key)
-
-        for r, row in enumerate(body, start=2):
-            for c, val in enumerate(row, start=1):
-                ws.Cells(r, c).Value = val
-
-        wb.Save()
-        wb.Close()
-        release_wps()
-        return {"success": True, "sorts": sorts, "rows": len(body), "engine": "WPS"}
-
-    except Exception as e:
-        release_wps()
-        return {"success": False, "error": wps_error("E014", detail=str(e))}
+    return {"success": False, "error": wps_error("E014", detail=f"未知引擎: {engine}")}
 
 
 def cmd_filter_excel(args):
-    """多条件筛选（AND 逻辑）"""
+    """多条件筛选（AND 逻辑），支持 WPS 和 纯Python 模式"""
     engine = get_engine()
     filepath = safe_path(args["filepath"])
     sheet = args.get("sheet", "Sheet1")
     conditions = args.get("conditions", [])
+    logic = args.get("logic", "AND")
 
-    if engine != "WPS":
-        return {"success": False, "error": wps_error("E005", engine=engine)}
+    # 纯 Python 模式
+    if engine in ("PURE", "LIBREOFFICE"):
+        return pure_filter_excel(filepath.__str__(), sheet, conditions, logic)
 
-    try:
-        wps = get_wps()
-        wb = wps.Workbooks.Open(filepath.__str__())
-        ws = wb.Sheets(sheet)
+    # WPS 模式
+    if engine == "WPS":
+        try:
+            wps = get_wps()
+            wb = wps.Workbooks.Open(filepath.__str__())
+            ws = wb.Sheets(sheet)
 
-        used = ws.UsedRange
-        if used.Rows.Count <= 1:
+            used = ws.UsedRange
+            if used.Rows.Count <= 1:
+                wb.Close()
+                release_wps()
+                return {"success": True, "filtered": 0, "rows": []}
+
+            data = []
+            for r in range(1, used.Rows.Count + 1):
+                row = [ws.Cells(r, c).Value for c in range(1, used.Columns.Count + 1)]
+                data.append(row)
+
+            header = data[0]
+            body = data[1:]
+
+            def col_to_idx(col_name):
+                for i, h in enumerate(header):
+                    if h and str(h).strip().lower() == col_name.lower():
+                        return i
+                if len(col_name) == 1:
+                    return ord(col_name.upper()) - ord('A')
+                return None
+
+            filtered = [header]
+            for row in body:
+                match_all = True
+                for cond in conditions:
+                    ci = col_to_idx(cond["column"])
+                    if ci is None:
+                        match_all = False
+                        break
+                    val = row[ci] if ci < len(row) else None
+                    op = cond["op"]
+                    target = cond["value"]
+
+                    if op == ">":
+                        try:
+                            if val is None or float(val) <= float(target):
+                                match_all = False
+                                break
+                        except (ValueError, TypeError):
+                            match_all = False
+                            break
+                    elif op == "<":
+                        try:
+                            if val is None or float(val) >= float(target):
+                                match_all = False
+                                break
+                        except (ValueError, TypeError):
+                            match_all = False
+                            break
+                    elif op == "=":
+                        if val is None or str(val) != target:
+                            match_all = False
+                            break
+                    elif op == "contains":
+                        if val is None or target.lower() not in str(val).lower():
+                            match_all = False
+                            break
+
+                if match_all:
+                    filtered.append(row)
+
             wb.Close()
             release_wps()
-            return {"success": True, "filtered": 0, "rows": []}
+            return {"success": True, "filtered": len(filtered) - 1, "rows": filtered, "engine": "WPS"}
 
-        data = []
-        for r in range(1, used.Rows.Count + 1):
-            row = [ws.Cells(r, c).Value for c in range(1, used.Columns.Count + 1)]
-            data.append(row)
+        except Exception as e:
+            release_wps()
+            return {"success": False, "error": wps_error("E014", detail=str(e))}
 
-        header = data[0]
-        body = data[1:]
+    # MSOFFICE: 回退到纯 Python
+    if engine == "MSOFFICE":
+        return pure_filter_excel(filepath.__str__(), sheet, conditions, logic)
 
-        def col_to_idx(col_name):
-            for i, h in enumerate(header):
-                if h and str(h).strip().lower() == col_name.lower():
-                    return i
-            if len(col_name) == 1:
-                return ord(col_name.upper()) - ord('A')
-            return None
-
-        filtered = [header]
-        for row in body:
-            match_all = True
-            for cond in conditions:
-                ci = col_to_idx(cond["column"])
-                if ci is None:
-                    match_all = False
-                    break
-                val = row[ci] if ci < len(row) else None
-                op = cond["op"]
-                target = cond["value"]
-
-                if op == ">":
-                    try:
-                        if val is None or float(val) <= float(target):
-                            match_all = False
-                            break
-                    except (ValueError, TypeError):
-                        match_all = False
-                        break
-                elif op == "<":
-                    try:
-                        if val is None or float(val) >= float(target):
-                            match_all = False
-                            break
-                    except (ValueError, TypeError):
-                        match_all = False
-                        break
-                elif op == "=":
-                    if val is None or str(val) != target:
-                        match_all = False
-                        break
-                elif op == "contains":
-                    if val is None or target.lower() not in str(val).lower():
-                        match_all = False
-                        break
-
-            if match_all:
-                filtered.append(row)
-
-        wb.Close()
-        release_wps()
-        return {"success": True, "filtered": len(filtered) - 1, "rows": filtered, "engine": "WPS"}
-
-    except Exception as e:
-        release_wps()
-        return {"success": False, "error": wps_error("E014", detail=str(e))}
+    return {"success": False, "error": wps_error("E014", detail=f"未知引擎: {engine}")}
 
 
 def cmd_chart_excel(args):
-    """生成图表（仅 WPS 模式）"""
+    """生成图表（WPS 模式 + 纯Python模式）"""
     engine = get_engine()
     filepath = safe_path(args["filepath"])
     sheet = args.get("sheet", "Sheet1")
     chart_type = args.get("type", "bar")
     data_range = args.get("data", "A1:B10")
+    title = args.get("title", "")
 
-    if engine != "WPS":
-        return {"success": False, "error": wps_error("E005", engine=engine)}
+    # 纯 Python 模式
+    if engine in ("PURE", "LIBREOFFICE"):
+        return pure_chart_excel(filepath.__str__(), sheet, chart_type, data_range, title)
 
-    try:
-        wps = get_wps()
-        wb = wps.Workbooks.Open(filepath.__str__())
-        ws = wb.Sheets(sheet)
+    # WPS 模式
+    if engine == "WPS":
+        try:
+            wps = get_wps()
+            wb = wps.Workbooks.Open(filepath.__str__())
+            ws = wb.Sheets(sheet)
 
-        type_map = {"bar": 57, "line": 4, "pie": 5, "column": 51}
-        obj = ws.ChartObjects().Add(100, 100, 350, 250)
-        obj.Chart.SetSourceData(ws.Range(data_range))
-        obj.Chart.ChartType = type_map.get(chart_type, 57)
+            type_map = {"bar": 57, "line": 4, "pie": 5, "column": 51}
+            obj = ws.ChartObjects().Add(100, 100, 350, 250)
+            obj.Chart.SetSourceData(ws.Range(data_range))
+            obj.Chart.ChartType = type_map.get(chart_type, 57)
 
-        wb.Save()
-        wb.Close()
-        release_wps()
-        return {"success": True, "chart_created": True, "engine": "WPS"}
+            wb.Save()
+            wb.Close()
+            release_wps()
+            return {"success": True, "chart_created": True, "engine": "WPS"}
 
-    except Exception as e:
-        release_wps()
-        return {"success": False, "error": wps_error("E014", detail=str(e))}
+        except Exception as e:
+            release_wps()
+            return {"success": False, "error": wps_error("E014", detail=str(e))}
+
+    # MSOFFICE: 回退到纯 Python
+    if engine == "MSOFFICE":
+        return pure_chart_excel(filepath.__str__(), sheet, chart_type, data_range, title)
+
+    return {"success": False, "error": wps_error("E014", detail=f"未知引擎: {engine}")}
 
 
 # ==================== PPT ====================
@@ -907,6 +974,8 @@ COMMANDS = {
     "sort_excel": cmd_sort_excel,
     "filter_excel": cmd_filter_excel,
     "chart_excel": cmd_chart_excel,
+    "add_sheet_excel": cmd_add_sheet_excel,
+    "stats_excel": cmd_stats_excel,
     "create_ppt": cmd_create_ppt,
     "add_ppt_slide": cmd_add_ppt_slide,
     "insert_ppt": cmd_insert_ppt,
