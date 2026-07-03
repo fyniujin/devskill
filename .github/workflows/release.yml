@@ -11,7 +11,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     outputs:
-      changed: ${ steps.changed.outputs.changed }
+      changed: ${{ steps.changed.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,7 +22,7 @@ jobs:
         run: |
           CHANGED=""
           for skill_dir in $(find . -maxdepth 2 -name 'SKILL.md' -printf '%P\n' | sed 's|/SKILL.md||' | sort); do
-            if git diff --name-only HEAD~1..HEAD 2>/dev/null | grep -q "^{ skill_dir }/"; then
+            if git diff --name-only HEAD~1..HEAD 2>/dev/null | grep -q "^{skill_dir}/"; then
               CHANGED="${CHANGED} ${skill_dir}"
             fi
           done
@@ -32,9 +32,9 @@ jobs:
       - name: Create Release + Update README
         if: steps.changed.outputs.changed != ''
         env:
-          GITHUB_TOKEN: ${ secrets.GITHUB_TOKEN }
-          REPO: ${ github.repository }
-          CHANGED_SKILLS: ${ steps.changed.outputs.changed }
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          CHANGED_SKILLS: ${{ steps.changed.outputs.changed }}
         run: |
           python3 << 'PYEOF'
           import os, re, json, urllib.request
@@ -146,7 +146,8 @@ jobs:
               print('README updated successfully')
           except Exception as e:
               print('ERROR updating README: ' + str(e))
-              raise          PYEOF
+              raise
+          PYEOF
 
       - name: Commit and push README
         if: steps.changed.outputs.changed != ''
@@ -167,7 +168,7 @@ jobs:
           fetch-depth: 0
       - name: Sync to Gitee
         env:
-          GITEE_TOKEN: ${ secrets.GITEE_TOKEN }
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
