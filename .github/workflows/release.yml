@@ -1,5 +1,4 @@
 name: Release Skills
-
 on:
   push:
     branches: [ main ]
@@ -79,6 +78,8 @@ jobs:
                       c = f.read()
                   dm = re.search(r'^description:\s*[\'"]?([^\'"]+)[\'"]?\s*$', c, re.MULTILINE)
                   d = (dm.group(1).strip() if dm else '')[:120]
+                  # Escape | in descriptions to not break markdown table
+                  d = d.replace('|', '\\|')
                   vm = re.search(r'^version:\s*(.+)$', c, re.MULTILINE)
                   v = vm.group(1).strip() if vm else '-'
                   rows.append('| ' + s + ' | `' + s + '/SKILL.md` | v' + v + ' | ' + d + ' |')
@@ -91,7 +92,7 @@ jobs:
               with open('README.md', 'r', encoding='utf-8') as f:
                   readme = f.read()
 
-              # Replace existing table (match both emoji and literal \U variants)
+              # Replace existing table
               readme = re.sub(
                   r'## .*?Skill 索引\n\n\| 技能 \| 路径 \| 最新版本 \| 描述 \|\n\|------\|------\|----------\|------\|\n(?:\|[^\n]+\n)*',
                   new_table,
