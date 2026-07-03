@@ -8,6 +8,8 @@
 
 ## 📦 Skill 索引
 
+## 📦 Skill 索引
+
 | 技能 | 路径 | 最新版本 | 描述 |
 |------|------|----------|------|
 | contract-review | `contract-review/SKILL.md` | v1.0.0 | 对中文合同进行智能风险审查，识别条款风险、提取关键信息、生成审查报告，覆盖买卖/技术/租赁/劳动等常见合同类型。
@@ -31,7 +33,6 @@ platforms: [WorkBuddy,  |
 | winskill | `winskill/SKILL.md` | v1.6.0 | Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控、事件日志诊断、已安装程序管 |
 | wps-office-suite | `wps-office-suite/SKILL.md` | v2.5.0 | WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板、最佳实践案例、反模式FAQ、环境自检、错误 |
 | zwjh-skill | `zwjh-skill/SKILL.md` | v1.6.0 | 会思考的进化 AI — 能像人一样理解问题本质、关联上下文、主动发现隐含需求，自动修复并持续成长。不仅能解决表面问题，更能触达根本原因，实现真正的主动进化。 |
-
 > ⚠️ 此表由 GitHub Actions 在发布时自动更新，请勿手动编辑。
 
 ---
