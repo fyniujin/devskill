@@ -4,41 +4,24 @@
 
 ---
 
+
 ## 📦 Skill 索引
 
 | 技能 | 路径 | 最新版本 | 描述 |
 |------|------|----------|------|
-| contract-review | `contract-review/SKILL.md` | v1.0.0 | 对中文合同进行智能风险审查，识别条款风险、提取关键信息、生成审查报告，覆盖买卖/技术/租赁/劳动等常见合同类型。
----
-
-# 合同智能审查
-
-## Overview |
+| contract-review | `contract-review/SKILL.md` | v1.0.0 | 对中文合同进行智能风险审查，识别条款风险、提取关键信息、生成审查报告，覆盖买卖/技术/租赁/劳动等常见合同类型。 |
 | dgngjx-skill | `dgngjx-skill/SKILL.md` | v2.5.0 | 多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐。48%零开箱即用，52%需确认安装。v2.0 国内联网优化（自动降级+国内镜像）+ 大文件性能增强（分块流式处理）。 |
-| gov-procurement-analyst | `gov-procurement-analyst/SKILL.md` | v"3.0.0" | >
-  政府采购全流程智能分析助手。覆盖商机发现、投标决策、文件编制、供应商背调、合规审计、
-  中标跟踪、资质管理、政策咨询、保证金管理、质疑投诉、合同分析、验收辅助、
-  采购需求编制、电子卖场比价、中小企业优惠计算15大模块。
-  零 |
-| kingdoc | `kingdoc/SKILL.md` | v2.1.0 | >
-  金山文档 AI 协作助手 — 6 品类在线文档全生命周期管理
-  （文字/电子表格/演示文稿/多维表格/收集表/附件），覆盖创建、编辑、
-  管理、权限、版本历史、回收站全链路。对标腾讯文档、覆盖其全部 8 大功能。
-  额外支持： |
-| multi-agent-orchestrator | `multi-agent-orchestrator/SKILL.md` | v1.0.0 | 支持多Agent流水线编排（采集→分析→报告），基于DAG调度实现跨技能状态共享、错误重试、断点续传和执行报告生成。AI即编排器，脚本提供基础设施。
-version: 1.0.0
-category: developer-tools
-plat |
-| tax-receipt-compliance | `tax-receipt-compliance/SKILL.md` | v2.7.0 | 财税合规全链路助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。
-version: 2.7.0
-category: 财税管理
-appName: 财税合规
-platforms: [WorkBuddy,  |
+| gov-procurement-analyst | `gov-procurement-analyst/SKILL.md` | v"3.0.0" | > |
+| kingdoc | `kingdoc/SKILL.md` | v2.1.0 | > |
+| multi-agent-orchestrator | `multi-agent-orchestrator/SKILL.md` | v1.0.0 | 支持多Agent流水线编排（采集→分析→报告），基于DAG调度实现跨技能状态共享、错误重试、断点续传和执行报告生成。AI即编排器，脚本提供基础设施。 |
+| tax-receipt-compliance | `tax-receipt-compliance/SKILL.md` | v2.7.0 | 财税合规全链路助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。 |
+| v2.7.0 | 2026-06-30 | [feat] v2.7.0: 财税合规助手增强版 | v2.6.5 |
 | winskill | `winskill/SKILL.md` | v1.6.0 | Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控、事件日志诊断、已安装程序管 |
-| wps-office-suite | `wps-office-suite/SKILL.md` | v2.2.0 | WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，AI助手零学习成本，自然语言驱动，含目录生成、环境自检、错误速查手册、格式设置、表格插入
-version: |
+| wps-office-suite | `wps-office-suite/SKILL.md` | v2.2.0 | WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，AI助手零学习成本，自然语言驱动，含目录生成、环境自检、错误速查手册、格式设置、表格插入 |
 | zwjh-skill | `zwjh-skill/SKILL.md` | v1.6.0 | 会思考的进化 AI — 能像人一样理解问题本质、关联上下文、主动发现隐含需求，自动修复并持续成长。不仅能解决表面问题，更能触达根本原因，实现真正的主动进化。 |
+
 > ⚠️ 此表由 GitHub Actions 在发布时自动更新，请勿手动编辑。
+
 
 ---
 
@@ -76,7 +59,6 @@ git push → GitHub Actions 触发
 
 ## 📝 更新历史
 
-<details>
 <summary>wps-office-suite - 点击展开</summary>
 
 | 版本 | 日期 | 本次更新 |
@@ -89,7 +71,6 @@ git push → GitHub Actions 触发
 
 </details>
 
-<details>
 <summary>zwjh-skill - 点击展开</summary>
 
 | 版本 | 日期 | 本次更新 |
@@ -105,7 +86,6 @@ git push → GitHub Actions 触发
 
 </details>
 
-<details>
 <summary>dgngjx-skill - 点击展开</summary>
 
 | 版本 | 日期 | 本次更新 |
@@ -127,7 +107,6 @@ git push → GitHub Actions 触发
 
 </details>
 
-<details>
 <summary>winskill - 点击展开</summary>
 
 | 版本 | 日期 | 本次更新 |
@@ -142,7 +121,6 @@ git push → GitHub Actions 触发
 
 </details>
 
-<details>
 <summary>tax-receipt-compliance - 点击展开</summary>
 
 | 版本 | 日期 | 本次更新 |
@@ -154,8 +132,6 @@ git push → GitHub Actions 触发
 
 </details>
 
-
-<details>
 <summary>multi-agent-pro - 点击展开</summary>
 
 | 版本 | 日期 | 本次更新 |
@@ -164,8 +140,6 @@ git push → GitHub Actions 触发
 
 </details>
 
-
-<details>
 <summary>kingdoc - 点击展开</summary>
 
 | 版本 | 日期 | 本次更新 |
@@ -175,8 +149,6 @@ git push → GitHub Actions 触发
 
 </details>
 
-
-<details>
 <summary>contract-review - 点击展开</summary>
 
 | 版本 | 日期 | 本次更新 |
@@ -185,16 +157,6 @@ git push → GitHub Actions 触发
 
 </details>
 
-
-<details>
-<summary>gov-procurement-analyst - 鐐瑰嚮灞曞紑</summary>
-
-| 鐗堟湰 | 鏃ユ湡 | 鏈鏇存柊 |
-|------|------|---------|
-| v"3.0.0" | 2026-07-03 | Updated via tongyifabu |
-
-</details>
-
 ---
 
-*最后更新：2026-07-03 02:14*
+*最后更新：2026/7/3 10:17:25*
