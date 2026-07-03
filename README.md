@@ -185,6 +185,16 @@ git push → GitHub Actions 触发
 
 </details>
 
+
+<details>
+<summary>gov-procurement-analyst - 鐐瑰嚮灞曞紑</summary>
+
+| 鐗堟湰 | 鏃ユ湡 | 鏈鏇存柊 |
+|------|------|---------|
+| v"3.0.0" | 2026-07-03 | Updated via tongyifabu |
+
+</details>
+
 ---
 
 *最后更新：2026-07-03 02:14*
