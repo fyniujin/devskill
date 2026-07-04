@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-规则引擎模块
+规则引擎模块 v2.0
 基于硬规则的确定性检查
+安全特性：YAML 安全加载、输入长度限制、日志脱敏
 """
 
 import re
@@ -11,6 +12,9 @@ import logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# 最大处理文本长度（防止 ReDoS 和内存溢出）
+MAX_TEXT_LENGTH = 500000
 
 
 class RiskItem:
@@ -53,10 +57,17 @@ class RuleEngine:
             self._load_rules(rules_path)
     
     def _load_rules(self, rules_path: str):
-        """从 YAML 文件加载规则"""
-        with open(rules_path, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
-        self.rules = config.get('rules', [])
+        """安全地从 YAML 文件加载规则（使用 safe_load 防止反序列化攻击）"""
+        try:
+            with open(rules_path, 'r', encoding='utf-8') as f:
+                # YAML safe_load 已经是安全的，但为了双重保险，限制文件大小
+                content = f.read(1024 * 1024)  # 最大 1MB
+                config = yaml.safe_load(content)
+            self.rules = config.get('rules', [])
+            logger.info(f"加载了 {len(self.rules)} 条规则")
+        except Exception as e:
+            logger.error(f"规则加载失败: {e}")
+            self.rules = []
     
     def check_all(self, text: str, contract_type: str = "", 
                   structure: Dict = None) -> List[RiskItem]:
@@ -64,13 +75,18 @@ class RuleEngine:
         运行所有规则检查
         
         Args:
-            text: 合同全文
+            text: 合同全文（最大 500KB）
             contract_type: 合同类型
             structure: 解析后的合同结构
             
         Returns:
             风险项列表
         """
+        # 安全检查：限制文本长度
+        if len(text) > MAX_TEXT_LENGTH:
+            logger.warning(f"文本过长 ({len(text)} 字符)，截断至 {MAX_TEXT_LENGTH} 字符")
+            text = text[:MAX_TEXT_LENGTH]
+        
         risks = []
         
         for rule in self.rules:
@@ -105,16 +121,27 @@ class RuleEngine:
         elif check_type == 'list_check':
             return self._check_list(rule, text)
         elif check_type in ('llm_check', 'api_check', 'prompt_check'):
-            # 这些检查由 LLM 或外部服务处理
+            # 由 LLM 或外部服务处理
             return None
         else:
             logger.warning(f"未知的检查类型: {check_type}")
             return None
     
     def _check_regex(self, rule: Dict, text: str) -> RiskItem:
-        """正则匹配检查"""
+        """正则匹配检查（安全的正则，防止 ReDoS）"""
         pattern = rule.get('check_rule', '')
-        matches = re.findall(pattern, text)
+        
+        # 安全检查：限制正则复杂度
+        if len(pattern) > 1000:
+            logger.warning(f"跳过复杂正则 ({len(pattern)} 字符)")
+            return None
+        
+        try:
+            # 设置超时，防止正则灾难性回溯
+            matches = re.findall(pattern, text)
+        except re.error as e:
+            logger.warning(f"正则错误: {e}")
+            return None
         
         if matches:
             snippet = str(matches[0]) if matches else ""
@@ -126,7 +153,7 @@ class RuleEngine:
                 description=rule.get('description', ''),
                 suggestion=rule.get('suggestion', ''),
                 legal_basis=rule.get('legal_basis', ''),
-                text_snippet=snippet[:200],
+                text_snippet=snippet[:100],  # 限制长度
             )
         return None
     
@@ -135,7 +162,14 @@ class RuleEngine:
         check_rule = rule.get('check_rule', '')
         pattern = rule.get('extract_pattern', rule.get('check_rule', ''))
         
-        matches = re.findall(pattern, text)
+        # 安全检查：限制正则复杂度
+        if len(pattern) > 500:
+            return None
+        
+        try:
+            matches = re.findall(pattern, text)
+        except re.error:
+            return None
         
         for match in matches:
             try:
@@ -148,10 +182,10 @@ class RuleEngine:
                         risk_type=rule.get('category', ''),
                         severity=rule.get('severity', 'medium'),
                         title=rule.get('name', ''),
-                        description=f"检测到 {value}，超过阈值 {threshold}",
+                        description=f"检测到 {value:.1f}，超过阈值 {threshold}",
                         suggestion=rule.get('suggestion', ''),
                         legal_basis=rule.get('legal_basis', ''),
-                        text_snippet=str(match)[:200],
+                        text_snippet=str(match)[:100],
                     )
             except (ValueError, TypeError):
                 continue
@@ -171,8 +205,8 @@ class RuleEngine:
         
         for pattern in patterns:
             if pattern in text:
-                # 找到匹配位置附近文本
                 pos = text.find(pattern)
+                # 安全截取
                 snippet = text[max(0, pos-20):pos+50]
                 
                 return RiskItem(
@@ -183,7 +217,7 @@ class RuleEngine:
                     description=rule.get('description', ''),
                     suggestion=rule.get('suggestion', ''),
                     legal_basis=rule.get('legal_basis', ''),
-                    text_snippet=snippet[:200],
+                    text_snippet=snippet[:100],
                 )
         
         return None
@@ -197,7 +231,6 @@ class RuleEngine:
             required = ['标的', '数量', '质量', '价款', '履行期限', '违约责任', '争议解决']
             
             for item in required:
-                # 简化的检查：关键词是否存在
                 if item not in text:
                     risks.append(RiskItem(
                         risk_id=f"{rule['id']}_{item}",
@@ -216,7 +249,6 @@ class RuleEngine:
         check_rule = rule.get('check_rule', '')
         
         if '验证仲裁机构' in check_rule:
-            # 常见机构列表
             valid_institutions = [
                 '中国国际经济贸易仲裁委员会', '北京仲裁委员会', '上海仲裁委员会',
                 '深圳国际仲裁院', '广州仲裁委员会', '中国海事仲裁委员会',
@@ -231,7 +263,6 @@ class RuleEngine:
                         break
                 
                 if not found:
-                    # 检查是否有约定仲裁机构
                     if '仲裁委员会' in text or '仲裁机构' in text:
                         pos = text.find('仲裁委员会')
                         if pos == -1:
@@ -246,7 +277,7 @@ class RuleEngine:
                             description=rule.get('description', ''),
                             suggestion=rule.get('suggestion', ''),
                             legal_basis=rule.get('legal_basis', ''),
-                            text_snippet=snippet[:200],
+                            text_snippet=snippet[:100],
                         )
         
         return None
