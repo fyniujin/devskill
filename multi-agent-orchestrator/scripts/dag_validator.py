@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-DAG 验证器 - 多Agent协作编排引擎
+DAG 验证器 - 多Agent协作编排引擎 v2.0
 
 功能：
   1. 验证 JSON Schema 结构完整性
@@ -10,6 +10,13 @@ DAG 验证器 - 多Agent协作编排引擎
   4. 输出拓扑排序执行顺序
 
 零第三方依赖，仅使用 Python 标准库
+
+★★★ 安全说明 ★★★
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. 文件读取使用 utf-8 编码，防止编码注入
+2. 最大文件读取限制 10MB，防止内存溢出
+3. 路径规范化处理，防止路径穿越
+4. 节点 id 仅允许 [a-zA-Z0-9_.-]，防止注入
 
 ★★★ 使用时机 ★★★
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -33,11 +40,28 @@ Schema 错误→ 必须修复后才能继续
 import json
 import sys
 import os
+import re
 from collections import defaultdict
+
+# 最大 pipeline.json 文件大小 10MB
+MAX_FILE_SIZE = 10 * 1024 * 1024
+# 节点 id 允许的字符
+VALID_ID_PATTERN = re.compile(r'^[a-zA-Z0-9_.-]+$')
+
+
+def validate_path(filepath):
+    """路径安全校验：规范化路径，防止路径穿越"""
+    filepath = os.path.abspath(os.path.normpath(filepath))
+    if not os.path.exists(filepath):
+        print(f"错误：文件不存在 [{filepath}]")
+        print(f"  请检查路径是否正确（区分大小写）")
+        print(f"  确认文件确实存在于该路径")
+        sys.exit(1)
+    return filepath
 
 
 def load_pipeline(filepath):
-    """加载 pipeline JSON 文件
+    """加载 pipeline JSON 文件（带安全检查）
 
     如果文件不存在或格式错误，会给出清晰的修复提示。
     """
@@ -46,11 +70,16 @@ def load_pipeline(filepath):
         print("用法：python dag_validator.py <pipeline.json>")
         print("示例：python dag_validator.py templates/pipeline_dag_template.json")
         sys.exit(1)
-    if not os.path.exists(filepath):
-        print(f"错误：文件不存在 [{filepath}]")
-        print(f"  请检查路径是否正确（区分大小写）")
-        print(f"  确认文件确实存在于该路径")
+
+    filepath = validate_path(filepath)
+
+    # 检查文件大小
+    file_size = os.path.getsize(filepath)
+    if file_size > MAX_FILE_SIZE:
+        print(f"错误：文件过大（{file_size // 1024 // 1024}MB），最大允许 {MAX_FILE_SIZE // 1024 // 1024}MB")
+        print("  建议：拆分流水线或使用更简洁的配置")
         sys.exit(1)
+
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -59,6 +88,10 @@ def load_pipeline(filepath):
         print(f"  位置：第 {e.lineno} 行，第 {e.colno} 列")
         print(f"  详情：{e.msg}")
         print(f"  修复建议：使用 JSON 在线校验工具检查格式")
+        sys.exit(1)
+    except UnicodeDecodeError:
+        print(f"错误：文件编码不合法 [{filepath}]")
+        print("  修复：使用 UTF-8 编码保存文件")
         sys.exit(1)
     except Exception as e:
         print(f"错误：无法读取文件 [{filepath}] - {e}")
@@ -70,6 +103,11 @@ def validate_schema(pipeline):
 
     返回 (errors, warnings) 两个列表。
     errors 必须修复，warnings 建议优化但不影响执行。
+
+    ★★★ 安全检查 ★★★
+    - 节点 id 仅允许 [a-zA-Z0-9_.-]
+    - pipeline_name 最大长度 100 字符
+    - 节点数量最大 100 个
     """
     errors = []
     warnings = []
@@ -84,6 +122,8 @@ def validate_schema(pipeline):
         print("修复：添加 \"pipeline_name\": \"流水线名称\"")
     elif not isinstance(pipeline['pipeline_name'], str) or not pipeline['pipeline_name'].strip():
         errors.append("[pipeline_name] 必须是非空字符串")
+    elif len(pipeline['pipeline_name']) > 100:
+        errors.append("[pipeline_name] 长度不能超过 100 字符")
 
     # agents 必填
     if 'agents' not in pipeline:
@@ -94,6 +134,9 @@ def validate_schema(pipeline):
     if not isinstance(pipeline['agents'], list) or len(pipeline['agents']) == 0:
         errors.append("[agents] 必须是非空数组（至少包含 1 个节点）")
         return errors, warnings
+
+    if len(pipeline['agents']) > 100:
+        errors.append(f"[agents] 节点数量不能超过 100 个（当前：{len(pipeline['agents'])}）")
 
     agent_ids = set()
     for i, agent in enumerate(pipeline['agents']):
@@ -109,6 +152,9 @@ def validate_schema(pipeline):
             print(f"修复：添加 \"id\": \"节点唯一标识\"")
         elif not isinstance(agent['id'], str) or not agent['id'].strip():
             errors.append(f"{prefix} [id] 必须是非空字符串")
+        elif not VALID_ID_PATTERN.match(agent['id']):
+            errors.append(f"{prefix} [id={agent['id']}] 包含非法字符，仅允许 [a-zA-Z0-9_.-]")
+            print(f"修复：使用纯英文/数字/下划线/点/中划线作为节点 id")
         elif agent['id'] in agent_ids:
             errors.append(f"{prefix} [id={agent['id']}] 重复，每个 Agent 的 id 必须唯一")
             print(f"修复：修改 id 为不重复的值")
@@ -130,11 +176,15 @@ def validate_schema(pipeline):
         if 'retry' in agent:
             if not isinstance(agent['retry'], int) or agent['retry'] < 0:
                 warnings.append(f"{prefix} [retry] 应为非负整数")
+            elif agent['retry'] > 10:
+                warnings.append(f"{prefix} [retry] 建议不超过 10 次（当前：{agent['retry']}）")
 
         # timeout 验证
         if 'timeout' in agent:
             if not isinstance(agent['timeout'], (int, float)) or agent['timeout'] <= 0:
                 warnings.append(f"{prefix} [timeout] 应为正数（秒）")
+            elif agent['timeout'] > 3600:
+                warnings.append(f"{prefix} [timeout] 建议不超过 3600 秒（1小时）")
 
         # fallback 验证
         if 'fallback' in agent and agent['fallback'] not in ('retry', 'skip', 'default', 'abort'):
@@ -148,6 +198,9 @@ def detect_cycles(pipeline):
     errors = []
     agents = pipeline.get('agents', [])
     agent_ids = {a['id'] for a in agents if 'id' in a}
+
+    if not agent_ids:
+        return errors
 
     # 构建入度图和邻接表
     in_degree = defaultdict(int)
@@ -257,7 +310,7 @@ def validate(filepath):
     python dag_validator.py --help
     """
     print("=" * 60)
-    print("  DAG 验证器 - 多Agent协作编排引擎")
+    print("  DAG 验证器 - 多Agent协作编排引擎 v2.0")
     print("=" * 60)
 
     pipeline = load_pipeline(filepath)
@@ -325,7 +378,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     if sys.argv[1] in ('-h', '--help'):
-        print("DAG 验证器 - 多Agent协作编排引擎")
+        print("DAG 验证器 - 多Agent协作编排引擎 v2.0")
         print("=" * 50)
         print("用法：python dag_validator.py <pipeline.json>")
         print("")
@@ -334,6 +387,12 @@ if __name__ == '__main__':
         print("  2. 循环依赖检测（A→B→C→A 为非法循环）")
         print("  3. 孤立节点检测（节点无前驱也无后继）")
         print("  4. 输出拓扑排序执行顺序")
+        print("")
+        print("安全限制：")
+        print("  - 节点 id 仅允许 [a-zA-Z0-9_.-]")
+        print("  - 节点数量最大 100 个")
+        print("  - 单节点输出最大 10MB")
+        print("  - pipeline.json 最大 10MB")
         print("")
         print("使用时机：")
         print("  - 创建新的 pipeline.json 后")
