@@ -11,7 +11,7 @@
 | gov-procurement-analyst | `gov-procurement-analyst/SKILL.md` | v3.6.0 | 政府采购全流程智能分析助手。覆盖商机发现、投标决策、文件编制、供应商背调、合规审计、 中标跟踪、资质管理、政策咨询、保证金管理、质疑投诉、合同分析、验收辅助、 采购需求编制、电子卖场比价、中小企业优惠计算15大模块。 零配置开箱即用，无需任 |
 | kingdoc | `kingdoc/SKILL.md` | v2.1.0 | 金山文档 AI 协作助手 — 6 品类在线文档全生命周期管理 （文字/电子表格/演示文稿/多维表格/收集表/附件），覆盖创建、编辑、 管理、权限、版本历史、回收站全链路。对标腾讯文档、覆盖其全部 8 大功能。 额外支持：回收站、版本历史、格 |
 | multi-agent-orchestrator | `multi-agent-orchestrator/SKILL.md` | v2.0.1 | 支持多Agent流水线编排（采集→分析→报告），基于DAG调度实现跨技能状态共享、错误重试、断点续传和执行报告生成。AI即编排器，脚本提供基础设施。 |
-| tax-receipt-compliance | `tax-receipt-compliance/SKILL.md` | v2.7.0 | 财税合规全链路助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。 |
+| tax-receipt-compliance | `tax-receipt-compliance/SKILL.md` | v3.0.0 | 财税合规全链路助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。 |
 | winskill | `winskill/SKILL.md` | v1.6.0 | Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控、事件日志诊断、已安装程序管 |
 | wps-office-suite | `wps-office-suite/SKILL.md` | v2.5.0 | WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板、最佳实践案例、反模式FAQ、环境自检、错误 |
 | zwjh-skill | `zwjh-skill/SKILL.md` | v1.6.0 | 会思考的进化 AI — 能像人一样理解问题本质、关联上下文、主动发现隐含需求，自动修复并持续成长。不仅能解决表面问题，更能触达根本原因，实现真正的主动进化。 |
@@ -120,14 +120,15 @@ git push → GitHub Actions 触发
 </details>
 
 <details>
-<summary>tax-receipt-compliance - 点击展开</summary>
+<summary>tax-receipt-compliance - 鐐瑰嚮灞曞紑</summary>
 
-| 版本 | 日期 | 本次更新 |
+| 鐗堟湰 | 鏃ユ湡 | 鏈鏇存柊 |
 |------|------|---------|
-| v2.7.0 | 2026-06-30 | [feat] v2.7.0: 财税合规助手增强版 \| v2.6.5 | 2026-06-30 | [feat] 统一发布脚本 Step 3 自动同步 \| v2.5.0 | 2026-06-29 | 测试发布 |
-| v2.0.0 | 2026-06-29 | 全平台版本统一：清理skillhub字段，ClawHub/GitHub同步发布 |
-| v1.1.0 | 2026-06-29 | 更新发布 |
 | v1.0.0 | 2026-06-29 | 初始版本发布；支持增值税发票OCR识别；支持多种查验引擎接口；支持模板自适应学习；支持多种审批平台对接；数据本地处理，企业自主配置 |
+| v1.1.0 | 2026-06-29 | 更新发布 |
+| v2.0.0 | 2026-06-29 | 全平台版本统一：清理skillhub字段，ClawHub/GitHub同步发布 |
+| v2.7.0 | 2026-06-30 | [feat] v2.7.0: 财税合规助手增强版 \| v2.6.5 | 2026-06-30 | [feat] 统一发布脚本 Step 3 自动同步 \| v2.5.0 | 2026-06-29 | 测试发布 |
+| v3.0.0 | 2026-07-04 | 更新发布 |
 
 </details>
 
