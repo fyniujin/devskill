@@ -49,12 +49,13 @@ function Check-Tesseract {
     return $false
 }
 
-# 下载文件（带重试和进度显示）
+# 下载文件（带重试和进度显示，增加SHA256校验）
 function Download-File {
     param(
         [string]$Url,
         [string]$OutFile,
-        [int]$MaxRetries = 3
+        [int]$MaxRetries = 3,
+        [string]$ExpectedHash = ""  # 可选的SHA256校验值
     )
     
     for ($i = 1; $i -le $MaxRetries; $i++) {
@@ -63,6 +64,9 @@ function Download-File {
             
             # 使用HttpClient显示进度
             $client = New-Object System.Net.Http.HttpClient
+            # 设置超时
+            $client.Timeout = [TimeSpan]::FromMinutes(10)
+            
             $response = $client.GetAsync($Url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
             
             if (-not $response.IsSuccessStatusCode) {
@@ -83,8 +87,8 @@ function Download-File {
                 if ($totalBytes -gt 0) {
                     $progress = [math]::Floor(($totalRead / $totalBytes) * 100)
                     if ($progress -ge $lastProgress + 10) {
-                    $mbRead = [math]::Round($totalRead / [math]::Pow(1024, 2), 1)
-                    $mbTotal = [math]::Round($totalBytes / [math]::Pow(1024, 2), 1)
+                        $mbRead = [math]::Round($totalRead / [math]::Pow(1024, 2), 1)
+                        $mbTotal = [math]::Round($totalBytes / [math]::Pow(1024, 2), 1)
                         Write-Host "    进度: $progress% ($mbRead MB / $mbTotal MB)" -ForegroundColor Gray
                         $lastProgress = $progress
                     }
@@ -93,6 +97,16 @@ function Download-File {
             
             $fileStream.Close()
             $stream.Close()
+            
+            # 验证文件完整性（如果提供了期望值）
+            if ($ExpectedHash -ne "") {
+                Write-Host "  验证文件完整性..." -ForegroundColor Yellow
+                $actualHash = Get-FileHash -Path $OutFile -Algorithm SHA256
+                if ($actualHash.Hash -ne $ExpectedHash) {
+                    throw "文件完整性校验失败！期望值: $ExpectedHash，实际值: $($actualHash.Hash)"
+                }
+                Write-Host "  ✓ 文件完整性验证通过" -ForegroundColor Green
+            }
             
             return $true
         }
