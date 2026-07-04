@@ -1,6 +1,6 @@
 [project]
 name = "contract-review"
-version = "2.3.0"
+version = "2.5.0"
 description = "中文合同智能风险审查工具"
 requires-python = ">=3.8"
 dependencies = [
