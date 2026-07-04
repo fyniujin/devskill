@@ -1,6 +1,7 @@
 {
-  "pipeline_name": "市场调研报告生成",
-  "version": "1.0",
+  "pipeline_name": "多Agent协作流水线模板",
+  "version": "2.0",
+  "description": "v2.0 模板 - 包含完整的安全策略和错误处理配置",
   "agents": [
     {
       "id": "collector",
@@ -12,7 +13,8 @@
       "retry": 3,
       "timeout": 60,
       "fallback": "skip",
-      "default_value": null
+      "default_value": null,
+      "comment": "首节点无依赖；skip=失败时跳过此节点继续执行下游"
     },
     {
       "id": "cleaner",
@@ -24,7 +26,8 @@
       "retry": 2,
       "timeout": 90,
       "fallback": "default",
-      "default_value": {"cleaned_data": "数据清洗失败，使用原始数据"}
+      "default_value": {"cleaned_data": "数据清洗失败，使用原始数据"},
+      "comment": "default=使用预设默认值完成，下游收到默认值继续执行"
     },
     {
       "id": "analyzer",
@@ -48,7 +51,8 @@
       "retry": 1,
       "timeout": 180,
       "fallback": "abort",
-      "default_value": null
+      "default_value": null,
+      "comment": "abort=失败后中止流水线，需要修复后 resume 断点续传"
     }
   ],
   "state_store": {
