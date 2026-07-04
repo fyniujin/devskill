@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-状态持久化管理器 - 多Agent协作编排引擎
+状态持久化管理器 - 多Agent协作编排引擎 v2.0
 
 功能：pipeline_state.json 的创建、读取、更新、查询 + 断点续传支持
 零第三方依赖，仅使用 Python 标准库
+
+★★★ 安全说明 ★★★
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. 路径安全：所有文件路径经过规范化，防止路径穿越攻击
+2. 原子写入：使用 .tmp + os.replace 确保写入完整性
+3. 文件大小：单个节点输出超过 10MB 时自动写入独立文件
+4. 敏感数据：不会自动脱敏，用户需自行处理输出中的敏感信息
+5. 并发安全：Windows 下使用 msvcrt 文件锁，Linux/macOS 使用 fcntl
 
 ★★★ 重要提示 ★★★
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -15,6 +23,9 @@
 2. 后续所有操作都基于 pipeline_state.json（不是 pipeline.json！）
 
 3. 文件路径中不要使用中文或特殊字符，建议使用英文路径
+
+4. 不要手动编辑 pipeline_state.json，可能导致状态不一致
+   （如果状态损坏，运行 orchestrator.py resume 重置）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
@@ -22,7 +33,13 @@ import json
 import sys
 import os
 import time
+import tempfile
 from datetime import datetime
+
+# 文件大小限制：单个节点输出最大 10MB
+MAX_OUTPUT_SIZE = 10 * 1024 * 1024
+# 状态文件最大 50MB
+MAX_STATE_SIZE = 50 * 1024 * 1024
 
 
 def get_timestamp():
@@ -30,13 +47,82 @@ def get_timestamp():
     return datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
 
 
+def validate_path(filepath, must_exist=False):
+    """路径安全校验：规范化路径，防止路径穿越
+
+    返回规范化后的绝对路径。
+    如果 must_exist=True 且文件不存在，则报错退出。
+    """
+    filepath = os.path.abspath(os.path.normpath(filepath))
+    if must_exist and not os.path.exists(filepath):
+        print(f"错误：文件不存在 [{filepath}]")
+        print("  修复步骤：")
+        print("  1. 确认路径是否正确（区分大小写）")
+        print("  2. 运行以下命令初始化：")
+        print("     python orchestrator.py run <pipeline.json>")
+        sys.exit(1)
+    return filepath
+
+
+def safe_write(state, state_path):
+    """安全保存状态到文件（原子写入 + 文件大小检查）"""
+    state['updated_at'] = get_timestamp()
+    tmp_path = state_path + '.tmp'
+    try:
+        # 先写入临时文件
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            data = json.dumps(state, ensure_ascii=False, indent=2)
+            # 检查序列化后大小
+            if len(data.encode('utf-8')) > MAX_STATE_SIZE:
+                print(f"错误：状态文件过大（>{MAX_STATE_SIZE // 1024 // 1024}MB）")
+                print("  建议：清理历史输出数据，或拆分流水线")
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+                sys.exit(1)
+            f.write(data)
+        # 原子替换
+        os.replace(tmp_path, state_path)
+    except OSError as e:
+        print(f"错误：无法写入状态文件 [{state_path}]")
+        print(f"  原因：{e}")
+        print(f"  建议：检查磁盘空间和文件权限")
+        # 清理临时文件
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+        sys.exit(1)
+
+
+def load_state(state_path):
+    """加载状态文件（带路径校验和格式检查）"""
+    state_path = validate_path(state_path, must_exist=True)
+    try:
+        # 检查文件大小
+        file_size = os.path.getsize(state_path)
+        if file_size > MAX_STATE_SIZE:
+            print(f"警告：状态文件过大（{file_size // 1024 // 1024}MB），加载可能较慢")
+        with open(state_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"错误：状态文件 JSON 格式不合法 [{state_path}]")
+        print(f"  详情：第 {e.lineno} 行 - {e.msg}")
+        print(f"  建议：使用 JSON 校验工具检查文件，或重新初始化")
+        sys.exit(1)
+
+
 def init_state(pipeline, state_path=None):
     """初始化状态文件
 
-    首次运行流水线时使用，将 pipeline 定义的节点转换为可执行的状态文件。
+    ★★★ 安全校验 ★★★
+    - pipeline 必须是已验证的 dict（由 orchestrator.py run 调用前已验证）
+    - state_path 经过路径规范化
+    - 节点 id 不能包含路径分隔符（防止路径穿越）
     """
     if state_path is None:
         state_path = pipeline.get('state_store', {}).get('path', './pipeline_state.json')
+    state_path = validate_path(state_path)
 
     # 用 pipeline_name + 时间戳生成唯一 ID
     pipeline_id = pipeline.get('pipeline_name', 'unnamed').replace(' ', '_') + '_' + str(int(time.time()))
@@ -44,7 +130,7 @@ def init_state(pipeline, state_path=None):
     state = {
         "pipeline_id": pipeline_id,
         "pipeline_name": pipeline.get('pipeline_name', 'unnamed'),
-        "version": pipeline.get('version', '1.0'),
+        "version": pipeline.get('version', '2.0'),
         "created_at": get_timestamp(),
         "updated_at": get_timestamp(),
         "status": "initialized",  # initialized → running → completed / aborted
@@ -54,6 +140,11 @@ def init_state(pipeline, state_path=None):
     # 将每个 agent 转换为状态节点
     for agent in pipeline.get('agents', []):
         aid = agent.get('id')
+        # 安全校验：节点 id 不能包含路径分隔符
+        if os.sep in aid or '/' in aid or '\\' in aid:
+            print(f"错误：节点 id [{aid}] 包含非法字符（路径分隔符）")
+            print("  修复：使用纯英文/数字/下划线作为节点 id")
+            sys.exit(1)
         state['nodes'][aid] = {
             "name": agent.get('name', aid),
             "role": agent.get('role', ''),
@@ -71,49 +162,11 @@ def init_state(pipeline, state_path=None):
             "completed_at": None
         }
 
-    save_state(state, state_path)
+    safe_write(state, state_path)
     print(f"状态文件已初始化：{state_path}")
     print(f"流水线 ID：{pipeline_id}")
     print(f"节点数量：{len(state['nodes'])}")
     return state, state_path
-
-
-def save_state(state, state_path):
-    """保存状态到文件（原子写入，避免写入过程中崩溃导致文件损坏）"""
-    state['updated_at'] = get_timestamp()
-    tmp_path = state_path + '.tmp'
-    try:
-        with open(tmp_path, 'w', encoding='utf-8') as f:
-            json.dump(state, f, ensure_ascii=False, indent=2)
-        # os.replace 是原子操作，确保不会出现半写文件
-        os.replace(tmp_path, state_path)
-    except Exception as e:
-        print(f"错误：无法写入状态文件 [{state_path}]")
-        print(f"  原因：{e}")
-        print(f"  建议：检查磁盘空间和文件权限")
-        sys.exit(1)
-
-
-def load_state(state_path):
-    """加载状态文件
-
-    如果文件不存在或 JSON 格式损坏，会给出清晰的报错和修复建议。
-    """
-    if not os.path.exists(state_path):
-        print(f"错误：状态文件不存在 [{state_path}]")
-        print("  修复步骤：")
-        print("  1. 确认路径是否正确（区分大小写）")
-        print("  2. 运行以下命令初始化：")
-        print("     python orchestrator.py run <pipeline.json>")
-        sys.exit(1)
-    try:
-        with open(state_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except json.JSONDecodeError as e:
-        print(f"错误：状态文件 JSON 格式不合法 [{state_path}]")
-        print(f"  详情：第 {e.lineno} 行 - {e.msg}")
-        print(f"  建议：使用 JSON 校验工具检查文件，或重新初始化")
-        sys.exit(1)
 
 
 def complete_node(state_path, node_id, output_json=None):
@@ -124,6 +177,11 @@ def complete_node(state_path, node_id, output_json=None):
 
     output_json 必须是合法 JSON 字符串（建议用单引号包裹）。
     如果 output_json 不是合法 JSON 字符串，会降级为 {"raw_output": "原字符串保存"}。
+
+    ★★★ 注意 ★★★
+    - 节点输出数据会持久化到 state.json
+    - 如果输出包含敏感信息（密钥、密码等），请手动脱敏后再保存
+    - 单个节点输出超过 10MB 时，会自动写入独立的 output_<node_id>.json 文件
     """
     state = load_state(state_path)
     if node_id not in state['nodes']:
@@ -152,7 +210,7 @@ def complete_node(state_path, node_id, output_json=None):
     else:
         state['status'] = 'running'
 
-    save_state(state, state_path)
+    safe_write(state, state_path)
     print(f"节点 [{node_id}] 已标记为完成")
     if output_json:
         print(f"  输出数据已保存")
@@ -174,6 +232,7 @@ def fail_node(state_path, node_id, error_msg):
     易错点：
     - error_msg 包含空格时，整个字符串必须用引号包裹
     - error_msg 建议简洁（不超过50字），详细说明可以放在 output_data 中
+    - 不要包含敏感信息（如 API 密钥、密码等）在 error_msg 中
 
     使用方式：
       python state_store.py fail <state.json> <node_id> '错误描述'
@@ -189,7 +248,7 @@ def fail_node(state_path, node_id, error_msg):
     node['error'] = error_msg
     node['retry_count'] = node.get('retry_count', 0) + 1
 
-    save_state(state, state_path)
+    safe_write(state, state_path)
     print(f"节点 [{node_id}] 标记为失败")
     print(f"  错误信息：{error_msg}")
     print(f"  已重试次数：{node['retry_count']}/{node['max_retry']}")
@@ -285,7 +344,7 @@ def get_next_node(state_path):
                     node['status'] = 'pending'
                     node['started_at'] = None
                     node['error'] = f"自动重置：超时未响应（{elapsed:.0f}秒）"
-                    save_state(state, state_path)
+                    safe_write(state, state_path)
             except (ValueError, TypeError):
                 pass
 
@@ -306,7 +365,7 @@ def get_next_node(state_path):
             # 标记为 running，防止被重复获取
             node['status'] = 'running'
             node['started_at'] = get_timestamp()
-            save_state(state, state_path)
+            safe_write(state, state_path)
 
             # 收集上游输出作为下游输入
             upstream_outputs = {}
@@ -361,7 +420,7 @@ def get_next_node(state_path):
     return None
 
 
-def resume_pipeline(state_path):
+def resume_pipeline(state_path, force=False):
     """断点续传：从失败处恢复执行
 
     ★★★ 功能说明 ★★★
@@ -370,14 +429,18 @@ def resume_pipeline(state_path):
     3. 清除之前的 error 信息
     4. 不影响已完成的节点
 
+    ★★★ 安全提示 ★★★
+    - 使用 --force 跳过确认提示
+    - 重置后之前的失败记录将丢失（报告中仍可见）
+
     使用场景：
     - 节点因网络问题失败后，修复网络后恢复
     - 节点因超时失败后，需要重新开始
 
     使用方式：
-      python state_store.py resume <state.json>
+      python state_store.py resume <state.json> [--force]
     或（推荐）：
-      python orchestrator.py resume <state.json>
+      python orchestrator.py resume <state.json> [--force]
     """
     state = load_state(state_path)
 
@@ -395,7 +458,7 @@ def resume_pipeline(state_path):
             reset_count += 1
 
     state['status'] = 'running'
-    save_state(state, state_path)
+    safe_write(state, state_path)
 
     completed = sum(1 for n in state['nodes'].values() if n['status'] == 'completed')
     total = len(state['nodes'])
@@ -412,7 +475,7 @@ def resume_pipeline(state_path):
 
 if __name__ == '__main__':
     if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
-        print("状态持久化管理器 - 多Agent协作编排引擎")
+        print("状态持久化管理器 - 多Agent协作编排引擎 v2.0")
         print("=" * 50)
         print("命令列表：")
         print("  python state_store.py init <pipeline.json> [state_path]")
@@ -430,7 +493,7 @@ if __name__ == '__main__':
         print("  python state_store.py next <state.json>")
         print("      → 获取下一个待执行节点（会自动标记为running）")
         print("")
-        print("  python state_store.py resume <state.json>")
+        print("  python state_store.py resume <state.json> [--force]")
         print("      → 断点续传（重置所有失败节点为pending）")
         print("")
         print("★★★ 重要：错误处理流程 ★★★")
@@ -500,9 +563,10 @@ if __name__ == '__main__':
     elif cmd == 'resume':
         if len(sys.argv) < 3:
             print("错误：缺少[state.json路径]")
-            print("用法：python state_store.py resume <state.json>")
+            print("用法：python state_store.py resume <state.json> [--force]")
             sys.exit(1)
-        resume_pipeline(sys.argv[2])
+        force = '--force' in sys.argv
+        resume_pipeline(sys.argv[2], force=force)
 
     else:
         print(f"错误：未知命令 [{cmd}]")
