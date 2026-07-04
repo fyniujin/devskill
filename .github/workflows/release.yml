@@ -29,7 +29,7 @@ jobs:
           echo "changed=${CHANGED}" >> $GITHUB_OUTPUT
           echo "Detected changes in:${CHANGED}"
 
-      - name: Create Release + Update README
+      - name: Create Release only (README is managed by tongyifabu.ps1)
         if: steps.changed.outputs.changed != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -38,29 +38,24 @@ jobs:
         run: |
           python3 << 'PYEOF'
           import os, re, json, urllib.request
-          from datetime import datetime
-          
+
           token = os.environ['GITHUB_TOKEN']
           repo = os.environ['REPO']
           changed_skills = os.environ['CHANGED_SKILLS'].strip().split()
           headers = {'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json'}
-          
+
           def parse_description(content):
-              """Parse YAML description field, handling all formats."""
-              # Folded: description: >\n   text...\n   text...
               dm_folded = re.search(r'^description:\s*>\s*\n((?:\s+.+\n?)+)', content, re.MULTILINE)
               if dm_folded:
                   return ' '.join(l.strip() for l in dm_folded.group(1).strip().split('\n'))
-              # Quoted: description: "text" or 'text'
               dm_quoted = re.search(r'^description:\s*[\'"]([^\'"]+)[\'"]\s*$', content, re.MULTILINE)
               if dm_quoted:
                   return dm_quoted.group(1)
-              # Unquoted: description: text
               dm_unquoted = re.search(r'^description:\s+(.+?)\s*$', content, re.MULTILINE)
               if dm_unquoted:
                   return dm_unquoted.group(1)
               return ''
-          
+
           for skill in changed_skills:
               sk_path = skill + '/SKILL.md'
               try:
@@ -81,82 +76,7 @@ jobs:
                       print('Release may already exist or error: ' + str(e))
               except Exception as e:
                   print('Error processing ' + skill + ': ' + str(e))
-          
-          # --- Auto-discover all skills and rebuild table ---
-          SKILLS = sorted([s for s in os.listdir('.') if os.path.exists(s + '/SKILL.md')])
-          print('Auto-discovered skills:', SKILLS)
-          rows = []
-          for s in SKILLS:
-              p = s + '/SKILL.md'
-              try:
-                  with open(p, 'r', encoding='utf-8') as f:
-                      c = f.read()
-                  d = parse_description(c)[:120]
-                  d = d.replace('|', '\\|')
-                  vm = re.search(r'^version:\s*(.+)$', c, re.MULTILINE)
-                  v = vm.group(1).strip() if vm else '-'
-                  rows.append('| ' + s + ' | `' + s + '/SKILL.md` | v' + v + ' | ' + d + ' |')
-              except Exception as e:
-                  print('Error reading ' + p + ': ' + str(e))
-          
-          new_table = '## 📦 Skill 索引\n\n| 技能 | 路径 | 最新版本 | 描述 |\n|------|------|----------|------|\n' + '\n'.join(rows) + '\n'
-          
-          try:
-              with open('README.md', 'r', encoding='utf-8') as f:
-                  readme = f.read()
-          
-              # Replace existing table
-              readme = re.sub(
-                  r'## .*?Skill 索引\n\n\| 技能 \| 路径 \| 最新版本 \| 描述 \|\n\|------\|------\|----------\|------\|\n(?:\|[^\n]+\n)*',
-                  new_table,
-                  readme
-              )
-          
-              # Update history entries for each changed skill
-              for skill in changed_skills:
-                  sk_path2 = skill + '/SKILL.md'
-                  try:
-                      with open(sk_path2, 'r', encoding='utf-8') as f:
-                          c2 = f.read()
-                      ver_m2 = re.search(r'^version:\s*(.+)$', c2, re.MULTILINE)
-                      version2 = ver_m2.group(1).strip() if ver_m2 else 'unknown'
-                      today2 = datetime.now().strftime('%Y-%m-%d')
-                      cl_m2 = re.search(r'^changelog:\s*[\'"]?([^\'"]+)[\'"]?\s*$', c2, re.MULTILINE)
-                      changelog2 = cl_m2.group(1).strip() if cl_m2 else '更新发布'
-                      new_row2 = '| v' + version2 + ' | ' + today2 + ' | ' + changelog2 + ' |\n'
-                      history_pattern = r'(<details>\s*<summary>\s*' + re.escape(skill) + r'.*?</summary>\s*\n\s*\|\s*版本\s*\|\s*日期\s*\|\s*本次更新\s*\|\n\s*\|[-|]+\|\n)(.*?)(\n</details>)'
-                      match = re.search(history_pattern, readme, re.DOTALL)
-                      if match:
-                          existing = match.group(0)
-                          new_history = re.sub(
-                              r'(\|\s*版本\s*\|\s*日期\s*\|\s*本次更新\s*\|\n\s*\|[-|]+\|\n)',
-                              r'\g<1>' + new_row2,
-                              existing
-                          )
-                          readme = readme.replace(existing, new_history)
-                          print('Updated history for ' + skill)
-                  except Exception as e:
-                      print('Error updating history for ' + skill + ': ' + str(e))
-          
-              now = datetime.now().strftime('%Y-%m-%d %H:%M')
-              readme = re.sub(r'\*最后更新：.*\*', '*最后更新：' + now + '*', readme)
-          
-              with open('README.md', 'w', encoding='utf-8') as f:
-                  f.write(readme)
-              print('README updated successfully')
-          except Exception as e:
-              print('ERROR updating README: ' + str(e))
-              raise
           PYEOF
-
-      - name: Commit and push README
-        if: steps.changed.outputs.changed != ''
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          git diff --cached --quiet || git commit -m "chore: update README index + history [skip ci]"
-          git push
 
   sync-to-gitee:
     runs-on: ubuntu-latest
