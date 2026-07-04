@@ -1,44 +1,46 @@
 #!/usr/bin/env python3
 """
-合同审查主入口
+合同审查主入口 v2.0
 串联完整的工作流程：文本提取 → 结构解析 → 风险审查 → 报告生成
-支持实时进度显示
+新增：首次使用向导、Ollama 一键安装、更友好的错误提示
 """
 
 import json
 import os
 import sys
 import time
+import subprocess
 from pathlib import Path
 from typing import Optional
 import argparse
 import logging
 
-# 自定义日志处理器，同时输出到控制台和文件
-class ProgressHandler(logging.Handler):
-    """实时进度日志处理器"""
-    def __init__(self):
-        super().__init__()
-        self.steps = []
-    
-    def emit(self, record):
-        msg = self.format(record)
-        # 只显示包含特定关键词的日志
-        keywords = ['提取', '解析', '规则', 'LLM', '报告', '完成', '发现', '保存']
-        if any(kw in msg for kw in keywords):
-            print(f"  → {msg}", flush=True)
-
-# 配置日志
-progress_handler = ProgressHandler()
-progress_handler.setFormatter(logging.Formatter('%(message)s'))
-file_handler = logging.FileHandler('review.log', encoding='utf-8')
-file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-
+# 日志配置
 logging.basicConfig(
     level=logging.INFO,
-    handlers=[progress_handler, file_handler]
+    format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def print_step(step_num: int, total: int, message: str):
+    """打印进度步骤"""
+    print(f"\n[{step_num}/{total}] {message}", flush=True)
+
+
+def print_success(message: str):
+    """打印成功信息"""
+    print(f"  ✅ {message}", flush=True)
+
+
+def print_warning(message: str):
+    """打印警告信息"""
+    print(f"  ⚠️  {message}", flush=True)
+
+
+def print_error(message: str):
+    """打印错误信息"""
+    print(f"  ❌ {message}", flush=True)
 
 
 def print_progress(step: str, detail: str = "", done: bool = False):
@@ -49,14 +51,136 @@ def print_progress(step: str, detail: str = "", done: bool = False):
         print(f"  ⏳ {step} {detail}...", flush=True)
 
 
+def check_ollama_installed() -> bool:
+    """检查 Ollama 是否已安装"""
+    try:
+        result = subprocess.run(['ollama', '--version'], capture_output=True, text=True, timeout=5)
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def install_ollama():
+    """一键安装 Ollama"""
+    print("\n" + "=" * 50)
+    print("🦙 Ollama 本地模型安装向导")
+    print("=" * 50)
+    print()
+    print("Ollama 允许您在本地运行 AI 模型，无需 API 密钥。")
+    print()
+    
+    if check_ollama_installed():
+        print("✅ Ollama 已安装！")
+        
+        # 检查模型
+        try:
+            result = subprocess.run(['ollama', 'list'], capture_output=True, text=True, timeout=10)
+            if 'qwen' in result.stdout.lower() or 'llama' in result.stdout.lower():
+                print("✅ 已检测到本地模型。")
+                return True
+            else:
+                print("⏳ 检测到 Ollama，但未安装中文模型。")
+                print()
+                install_model = input("是否下载中文模型 qwen2.5:7b（约 4.7GB）？[y/N]: ").strip().lower()
+                if install_model in ('y', 'yes', '是'):
+                    print("⏳ 正在下载模型（可能需要几分钟）...")
+                    subprocess.run(['ollama', 'pull', 'qwen2.5:7b'], check=True)
+                    print("✅ 模型下载完成！")
+                    return True
+                else:
+                    print("您可以稍后手动运行: ollama pull qwen2.5:7b")
+                    return True
+        except Exception:
+            pass
+        
+        return True
+    
+    print("Ollama 未安装。请选择安装方式：")
+    print()
+    print("1. macOS / Linux（一键安装）")
+    print("   运行: curl -fsSL https://ollama.ai/install.sh | sh")
+    print()
+    print("2. Windows")
+    print("   访问 https://ollama.ai/download 下载 OllamaSetup.exe")
+    print()
+    
+    open_browser = input("是否打开 Ollama 下载页面？[y/N]: ").strip().lower()
+    if open_browser in ('y', 'yes', '是'):
+        import webbrowser
+        webbrowser.open('https://ollama.ai/download')
+    
+    return False
+
+
+def first_time_setup():
+    """首次使用向导"""
+    config_path = Path.home() / '.contract-review' / 'config.json'
+    
+    if config_path.exists():
+        return True
+    
+    print("\n" + "=" * 50)
+    print("🎉 欢迎使用合同智能审查！")
+    print("=" * 50)
+    print()
+    print("本工具支持以下运行模式：")
+    print()
+    print("  🥇 最佳体验：安装 Ollama（免费本地模型）")
+    print("     - 完全本地运行，保护隐私")
+    print("     - 无需 API 密钥")
+    print("     - 首次下载模型约 4-8GB")
+    print()
+    print("  🥈 高级体验：配置 OpenAI API")
+    print("     - 设置环境变量 OPENAI_API_KEY")
+    print("     - 需要付费，但效果最佳")
+    print()
+    print("  🥉 基础体验：仅规则引擎")
+    print("     - 开箱即用，无需额外配置")
+    print("     - 覆盖常见风险点")
+    print()
+    
+    choice = input("请选择 [1/2/3，默认 3]: ").strip() or "3"
+    
+    if choice == "1":
+        install_ollama()
+    elif choice == "2":
+        print()
+        print("请设置环境变量：")
+        print("  Windows: set OPENAI_API_KEY=sk-xxx")
+        print("  macOS/Linux: export OPENAI_API_KEY=sk-xxx")
+    else:
+        print("已选择基础模式。您可以随时通过安装 Ollama 升级到完整体验。")
+    
+    # 保存配置
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config = {
+        'setup_completed': True,
+        'mode': 'ollama' if choice == '1' else 'openai' if choice == '2' else 'basic'
+    }
+    with open(config_path, 'w', encoding='utf-8') as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
+    
+    return True
+
+
 def main():
     """主函数"""
-    parser = argparse.ArgumentParser(description='合同智能审查工具')
+    parser = argparse.ArgumentParser(
+        description='合同智能审查工具 v2.0',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+使用示例:
+  python scripts/main.py 合同.pdf                    # 基础审查
+  python scripts/main.py 合同.pdf --role 甲方        # 从甲方视角审查
+  python scripts/main.py 合同.pdf --install-ollama   # 安装本地模型
+  python scripts/main.py 合同.pdf --first-time       # 首次使用向导
+        """
+    )
     parser.add_argument('file', nargs='?', help='合同文件路径（PDF/Word/图片/纯文本）')
     parser.add_argument('--type', '-t', default='', help='合同类型（如不指定则自动识别）')
     parser.add_argument('--role', '-r', default='双方', choices=['甲方', '乙方', '双方'],
                         help='审查视角（默认：双方）')
-    parser.add_argument('--output', '-o', default='report.md', help='输出文件路径（默认：report.md）')
+    parser.add_argument('--output', '-o', default='', help='输出文件路径（默认：report.md）')
     parser.add_argument('--format', '-f', default='markdown', choices=['markdown', 'json'],
                         help='输出格式（默认：markdown）')
     parser.add_argument('--scope', default='全面审查', choices=['全面审查', '重点审查', '快速审查'],
@@ -64,41 +188,75 @@ def main():
     parser.add_argument('--no-llm', action='store_true',
                         help='跳过 LLM 审查（仅使用规则引擎）')
     parser.add_argument('--text', '-x', default='', help='直接传入合同文本（而非文件路径）')
+    parser.add_argument('--install-ollama', action='store_true',
+                        help='一键安装 Ollama 本地模型')
+    parser.add_argument('--first-time', action='store_true',
+                        help='首次使用向导')
     parser.add_argument('--verbose', '-v', action='store_true', help='显示详细日志')
     
     args = parser.parse_args()
     
     start_time = time.time()
     
+    # 特殊命令
+    if args.first_time:
+        first_time_setup()
+        if not args.file:
+            return
+    
+    if args.install_ollama:
+        install_ollama()
+        if not args.file:
+            return
+    
     try:
-        print("=" * 50, flush=True)
-        print("📋 合同智能审查", flush=True)
+        print("\n" + "=" * 50, flush=True)
+        print("📋 合同智能审查 v2.0", flush=True)
         print("=" * 50, flush=True)
         
-        # 1. 获取合同文本
-        print_progress("接收合同文件")
+        total_steps = 5
+        
+        # Step 1: 获取合同文件
+        print_step(1, total_steps, "接收合同文件")
         
         if args.text:
             contract_text = args.text
             file_type = "txt"
             metadata = {}
-            print_progress("接收合同文件", "直接文本输入", done=True)
+            print_success(f"收到文本输入（{len(contract_text)} 字符）")
         elif args.file:
             from extract_text import TextExtractor
-            extractor = TextExtractor()
+            extractor = TextExtractor(enable_security=True)
             result = extractor.extract(args.file)
             contract_text = result['text']
             file_type = result['file_type']
             metadata = result.get('metadata', {})
-            print_progress("接收合同文件", 
-                          f"类型={file_type}, 页数={metadata.get('total_pages', '?')}, 字数={metadata.get('total_words', '?')}", 
-                          done=True)
+            warnings = result.get('warnings', [])
+            
+            print_success(
+                f"文件类型={file_type}, "
+                f"页数={metadata.get('total_pages', '?')}, "
+                f"字数={metadata.get('total_words', '?')}"
+            )
+            
+            if result.get('ocr_confidence'):
+                conf = result['ocr_confidence']
+                if conf >= 0.95:
+                    print_success(f"OCR 置信度: {conf:.0%}")
+                else:
+                    print_warning(f"OCR 置信度: {conf:.0%}，建议核对扫描件")
+            
+            for w in warnings:
+                print_warning(w)
         else:
-            print("请提供合同文件路径（--file）或合同文本（--text）")
+            print_error("请提供合同文件路径或文本内容")
+            print("  --file <路径>    上传合同文件")
+            print("  --text \"内容\"    直接审查文本")
+            print("  --first-time     首次使用向导")
             sys.exit(1)
         
-        # 2. 解析合同结构
-        print_progress("结构化解析")
+        # Step 2: 结构解析
+        print_step(2, total_steps, "结构化解析")
         
         from parse_structure import ContractParser
         parser = ContractParser()
@@ -107,53 +265,63 @@ def main():
         if args.type:
             structure.contract_type = args.type
         
-        print_progress("结构化解析", 
-                      f"标题={structure.title[:20]}..., 类型={structure.contract_type}, 条款数={len(structure.clauses)}", 
-                      done=True)
+        print_success(
+            f"标题={structure.title[:30] if structure.title else '未知'}, "
+            f"类型={structure.contract_type}, "
+            f"条款数={len(structure.clauses)}"
+        )
         
-        # 3. 规则引擎检查
-        print_progress("规则引擎检查")
+        # Step 3: 规则引擎检查
+        print_step(3, total_steps, "规则引擎检查")
         
         from rule_engine import RuleEngine
         rules_path = Path(__file__).parent.parent / 'references' / 'risk_rules.yaml'
         engine = RuleEngine(str(rules_path))
         rule_risks = engine.check_all(contract_text, structure.contract_type, structure.to_dict())
         
-        print_progress("规则引擎检查", f"发现 {len(rule_risks)} 个风险点", done=True)
+        print_success(f"完成 {len(rule_risks)} 项硬规则检查")
         
-        # 4. LLM 审查（可选）
+        # Step 4: LLM 审查（可选）
+        print_step(4, total_steps, "AI 语义审查")
+        
         llm_risks = []
         missing_clauses = []
         special_notes = []
         
         if not args.no_llm:
-            print_progress("LLM 语义审查")
-            
             from llm_review import LLMReviewer
             reviewer = LLMReviewer()
-            llm_result = reviewer.review(
-                contract_text=contract_text,
-                contract_type=structure.contract_type,
-                party_role=args.role,
-            )
-            llm_risks = llm_result.get('risks', [])
-            missing_clauses = llm_result.get('missing_clauses', [])
-            special_notes = llm_result.get('special_notes', [])
             
-            print_progress("LLM 语义审查", f"发现 {len(llm_risks)} 个风险点", done=True)
+            if reviewer.backend != "none":
+                print(f"  🤖 使用 {reviewer.backend} / {reviewer.model}")
+                llm_result = reviewer.review(
+                    contract_text=contract_text,
+                    contract_type=structure.contract_type,
+                    party_role=args.role,
+                )
+                llm_risks = llm_result.get('risks', [])
+                missing_clauses = llm_result.get('missing_clauses', [])
+                special_notes = llm_result.get('special_notes', [])
+                
+                print_success(f"发现 {len(llm_risks)} 个 AI 识别风险")
+                
+                for note in special_notes:
+                    print_warning(note)
+            else:
+                print_warning("未检测到 LLM 后端，仅使用规则引擎结果")
+                print("  💡 安装 Ollama 后可启用完整 AI 审查功能")
+                special_notes.append("LLM 审查未启用（未检测到 OpenAI API 或本地模型）")
         else:
-            print("  ⏭️  跳过 LLM 审查（--no-llm）", flush=True)
+            print("  ⏭️  跳过 LLM 审查（--no-llm）")
         
-        # 5. 合并风险结果
-        print_progress("汇总去重")
+        # Step 5: 生成报告
+        print_step(5, total_steps, "生成审查报告")
         
         all_risks = []
         
-        # 添加规则引擎结果
         for r in rule_risks:
             all_risks.append(r.to_dict())
         
-        # 添加 LLM 结果
         for r in llm_risks:
             all_risks.append({
                 'risk_id': r.get('risk_id', f'LLM_{len(all_risks)+1:03d}'),
@@ -168,7 +336,7 @@ def main():
                 'template': r.get('template', ''),
             })
         
-        # 去重（基于风险类型和条款引用）
+        # 去重
         seen = set()
         unique_risks = []
         for r in all_risks:
@@ -176,11 +344,6 @@ def main():
             if key not in seen:
                 seen.add(key)
                 unique_risks.append(r)
-        
-        print_progress("汇总去重", f"去重后 {len(unique_risks)} 个风险点", done=True)
-        
-        # 6. 生成报告
-        print_progress("生成审查报告")
         
         from generate_report import ReportGenerator
         
@@ -198,36 +361,38 @@ def main():
         generator = ReportGenerator()
         report = generator.generate(unique_risks, contract_info, args.format)
         
-        print_progress("生成审查报告", done=True)
+        print_success("报告生成完成")
         
-        # 7. 输出
-        if args.output:
-            output_path = Path(args.output)
+        # 输出
+        output_path = args.output or 'report.md'
+        if output_path:
+            output_path = Path(output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(report)
-            print_progress("保存报告", f"路径={args.output}", done=True)
+            print_success(f"报告已保存至: {output_path}")
         
         elapsed = time.time() - start_time
         
-        print("", flush=True)
+        print("\n" + "=" * 50, flush=True)
+        print(f"🎉 审查完成！耗时 {elapsed:.1f} 秒", flush=True)
         print("=" * 50, flush=True)
-        print(f"✅ 审查完成！耗时 {elapsed:.1f} 秒", flush=True)
-        print("=" * 50, flush=True)
-        print("", flush=True)
+        print(flush=True)
         
         print(report)
         
     except FileNotFoundError as e:
-        logger.error(f"文件不存在: {e}")
+        print_error(f"文件不存在: {e}")
         sys.exit(1)
     except ImportError as e:
-        logger.error(f"依赖缺失: {e}")
+        print_error(f"依赖缺失: {e}")
+        print("请运行: pip install -r requirements.txt")
         sys.exit(1)
     except Exception as e:
-        logger.error(f"审查失败: {e}")
-        import traceback
-        traceback.print_exc()
+        print_error(f"审查失败: {e}")
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
         sys.exit(1)
 
 
