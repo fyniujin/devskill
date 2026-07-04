@@ -3,7 +3,7 @@ name: multi-agent-pro
 slug: multi-agent-pro
 displayName: 多Agent协作编排引擎
 description: 支持多Agent流水线编排（采集→分析→报告），基于DAG调度实现跨技能状态共享、错误重试、断点续传和执行报告生成。AI即编排器，脚本提供基础设施。
-version: 2.0.0
+version: 2.0.1
 category: developer-tools
 platforms:
   - windows
