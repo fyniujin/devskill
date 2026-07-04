@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-执行报告生成器 - 多Agent协作编排引擎
+执行报告生成器 - 多Agent协作编排引擎 v2.0
 
 功能：根据 pipeline_state.json 生成 Markdown 执行报告
 零第三方依赖，仅使用 Python 标准库
+
+★★★ 安全说明 ★★★
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. 报告文件包含节点输出数据，可能含有敏感信息
+2. 建议将报告文件存放在安全位置，避免未授权访问
+3. 报告中的 output_data 字段会原样输出，注意脱敏
+4. 报告文件默认保存在 state.json 同目录下，注意目录权限
 
 ★★★ 使用时机 ★★★
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -92,11 +99,14 @@ def calc_duration(start, end):
 def generate_report(state_path, output_path=None):
     """生成 Markdown 执行报告
 
+    ★★★ 安全提示 ★★★
+    - 报告包含节点输出数据，可能含有敏感信息
+    - 默认路径：pipeline_report_<pipeline_id>.md（与 state.json 同目录）
+    - 建议将报告存放在受保护的目录中
+
     参数：
       state_path: pipeline_state.json 路径
-      output_path: 输出 Markdown 文件路径（可选，默认为 pipeline_report_<id>.md）
-
-    报告自动生成，不需要任何外部依赖。
+      output_path: 输出 Markdown 文件路径（可选）
     """
     state = load_state(state_path)
 
@@ -238,7 +248,7 @@ def generate_report(state_path, output_path=None):
     elif overall_status == 'aborted':
         lines.append("- 🛑 流水线被中止，建议：")
         lines.append("  1. 查看上方失败节点的错误信息")
-        lines.append("  2. 修复问题后运行断点续传：`python orchestrator.py resume <state.json>`")
+        lines.append("  2. 修复问题后运行断点续传：`python orchestrator.py resume <state.json> --force`")
         lines.append("  3. 重新执行：`python orchestrator.py step <state.json>`")
     elif overall_status == 'running':
         lines.append("- 🔄 流水线正在执行中，继续运行：`python orchestrator.py step <state.json>`")
@@ -256,7 +266,7 @@ def generate_report(state_path, output_path=None):
     # 输出报告
     if output_path is None:
         report_filename = f"pipeline_report_{pipeline_id}.md"
-        output_path = os.path.join(os.path.dirname(state_path) or '.', report_filename)
+        output_path = os.path.join(os.path.dirname(os.path.abspath(state_path)) or '.', report_filename)
 
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(report)
@@ -266,21 +276,26 @@ def generate_report(state_path, output_path=None):
     print(f"  节点统计：{completed}成功 / {failed}失败 / {skipped}跳过 / {pending}待执行")
     print(f"  总重试：{total_retries} 次")
     print(f"  总耗时：{total_duration}")
+    print(f"  ⚠️ 安全提示：报告文件可能包含节点输出数据，请妥善保管")
     return output_path
 
 
 if __name__ == '__main__':
     if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
-        print("执行报告生成器 - 多Agent协作编排引擎")
+        print("执行报告生成器 - 多Agent协作编排引擎 v2.0")
         print("=" * 50)
         print("用法：python pipeline_reporter.py <state.json> [output.md]")
         print("示例：python pipeline_reporter.py pipeline_state.json report.md")
         print("")
         print("报告内容：")
         print("  - 流水线概览（状态/耗时/节点统计）")
-        print("  - 各节点执行详情（状态/时长/重试/输出/错误）")
+        print("  - 各节点执行详情（状态/时长、重试/输出/错误）")
         print("  - 失败节点下游影响分析")
         print("  - 后续操作建议")
+        print("")
+        print("★★★ 安全提示 ★★★")
+        print("  - 报告文件包含节点输出数据，可能含有敏感信息")
+        print("  - 建议将报告存放在安全位置，避免未授权访问")
         print("")
         print("★★★ 使用时机 ★★★")
         print("  - 执行中：查看进度")
