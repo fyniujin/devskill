@@ -1,8 +1,8 @@
-# 合同智能审查 Skill (contract-review) v2.3
+# 合同智能审查 Skill (contract-review) v2.5
 
 中文合同智能风险审查工具，支持 PDF / Word / 图片 / 纯文本，通过"规则引擎 + LLM 语义审查"双轨机制识别合同风险，输出结构化审查报告。
 
-## 🆕 v2.3 新特性
+## 🆕 v2.4 新特性
 
 - 🔒 **安全性增强**：魔术字节校验、50MB 文件上限、个人信息脱敏、安全 YAML 加载
 - 📊 **评分可视化**：扣分逻辑透明化，评分依据一目了然
@@ -58,7 +58,7 @@ python scripts/main.py 买卖合同.pdf --output 报告.md
 
 ```
 contract-review/
-├── SKILL.md                   ← Skill 定义（v2.3，含完整文档）
+├── SKILL.md                   ← Skill 定义（v2.4，含完整文档）
 ├── README.md                  ← 本文件
 ├── pyproject.toml             ← pip 安装配置
 ├── requirements.txt           ← 依赖列表（备选安装）
@@ -126,6 +126,6 @@ ollama serve
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
-| v2.3.0 | 2026-07-04 | 移除 install.bat，新增 pyproject.toml，标准化打包 |
+| v2.5.0 | 2026-07-04 | 版本号修复 |
 | v2.0.0 | 2026-07-04 | 安全性增强、Ollama 向导、首次使用向导、评分可视化 |
 | v1.0.0 | 2026-07-02 | 初始版本 |
