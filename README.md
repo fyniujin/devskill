@@ -178,9 +178,9 @@ git push → GitHub Actions 触发
 
 
 <details>
-<summary>multi-agent-orchestrator - 鐐瑰嚮灞曞紑</summary>
+<summary>multi-agent-orchestrator - 点击展开</summary>
 
-| 鐗堟湰 | 鏃ユ湡 | 鏈鏇存柊 |
+| 版本 | 日期 | 本次更新 |
 |------|------|---------|
 | v2.0.1 | 2026-07-04 | 更新发布 |
 | v1.0.1 | 2026-07-04 | 更新发布 |
