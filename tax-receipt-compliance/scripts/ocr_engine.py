@@ -68,12 +68,17 @@ class OCREngine:
                 "或手动安装: https://github.com/UB-Mannheim/tesseract/wiki"
             )
 
-    def preprocess_image(self, image_path):
+    def preprocess_image(self, image_path, enhance_mode='auto'):
         """
-        图像预处理：灰度化 → 去噪 → 二值化 → 纠偏
+        图像预处理：灰度化 → 去噪 → 对比度增强 → 锐化 → 自适应二值化
 
         Args:
             image_path: 图片文件路径
+            enhance_mode: 增强模式 ('auto'|'normal'|'aggressive'|'gentle')
+                - auto: 根据图片质量自动选择
+                - normal: 标准预处理
+                - aggressive: 激进预处理（适用于模糊/低质量图片）
+                - gentle: 温和预处理（适用于高质量图片）
 
         Returns:
             预处理后的PIL Image对象
@@ -83,47 +88,128 @@ class OCREngine:
         except Exception as e:
             raise ValueError(f"无法打开图片文件: {image_path}, 错误: {e}")
 
-        # 转换为灰度图
-        if img.mode != 'L':
-            img = img.convert('L')
+        # 转换为RGB模式（便于处理）
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
 
-        # 对比度增强（自适应：根据图片亮度调整增强系数）
+        # 转换为灰度图
+        img = img.convert('L')
+
+        # 自动检测图片质量
+        if enhance_mode == 'auto':
+            # 计算图片的清晰度（拉普拉斯方差）
+            try:
+                import numpy as np
+                from PIL import ImageStat
+                stat = ImageStat.Stat(img)
+                mean = stat.mean[0]
+                # 根据平均亮度判断
+                if mean < 100:
+                    enhance_mode = 'aggressive'
+                elif mean > 200:
+                    enhance_mode = 'gentle'
+                else:
+                    enhance_mode = 'normal'
+            except ImportError:
+                enhance_mode = 'normal'  # numpy不可用时使用标准模式
+
+        # 对比度增强（自适应）
         enhancer = ImageEnhance.Contrast(img)
-        # 计算平均亮度，暗图片增强更多
-        stat = img.convert('L')
-        extrema = stat.getextrema()
-        avg_brightness = sum(extrema) / 2 if extrema else 128
-        # 暗图片(亮度<100)增强更多，亮图片(亮度>180)增强较少
-        if avg_brightness < 100:
+        if enhance_mode == 'aggressive':
             enhance_factor = 2.5
-        elif avg_brightness > 180:
-            enhance_factor = 1.5
-        else:
+        elif enhance_mode == 'gentle':
+            enhance_factor = 1.3
+        else:  # normal
             enhance_factor = 2.0
         img = enhancer.enhance(enhance_factor)
 
-        # 锐化
-        img = img.filter(ImageFilter.SHARPEN)
+        # 亮度调整
+        enhancer = ImageEnhance.Brightness(img)
+        img = enhancer.enhance(1.2)
 
-        # 二值化（自适应阈值）
-        # 使用简单的全局阈值，生产环境可考虑自适应阈值
-        threshold = 128
-        img = img.point(lambda x: 0 if x < threshold else 255, '1')
+        # 锐化（多次锐化以提高清晰度）
+        if enhance_mode == 'aggressive':
+            img = img.filter(ImageFilter.SHARPEN)
+            img = img.filter(ImageFilter.SHARPEN)  # 二次锐化
+        img = img.filter(ImageFilter.EDGE_ENHANCE)  # 边缘增强
+
+        # 去噪（中值滤波）
+        if enhance_mode == 'aggressive':
+            img = img.filter(ImageFilter.MedianFilter(size=3))
+
+        # 自适应二值化（代替简单全局阈值）
+        # 使用SAUVOLA阈值或OTSU阈值
+        try:
+            import numpy as np
+            img_array = np.array(img)
+            # OTSU自适应阈值
+            from skimage.filters import threshold_otsu
+            thresh = threshold_otsu(img_array)
+            img = img.point(lambda x: 0 if x < thresh else 255, '1')
+        except ImportError:
+            # 如果没有scikit-image，使用简单自适应阈值
+            stat = img.convert('L')
+            extrema = stat.getextrema()
+            threshold = sum(extrema) / 2 if extrema else 128
+            img = img.point(lambda x: 0 if x < threshold else 255, '1')
 
         return img
 
-    def extract_text(self, image_path):
+    def check_image_quality(self, image_path):
         """
-        从图片中提取文字（支持PSM回退机制）
+        检查图片质量，给出预处理建议
 
         Args:
             image_path: 图片文件路径
 
         Returns:
+            dict: 质量检查结果
+        """
+        try:
+            img = Image.open(image_path)
+            width, height = img.size
+
+            result = {
+                'width': width,
+                'height': height,
+                'resolution_ok': width >= 200 and height >= 200,
+                'suggest_mode': 'normal'
+            }
+
+            # 分辨率建议
+            if width < 200 or height < 200:
+                result['suggestion'] = '图片分辨率过低，建议重新拍摄或扫描'
+                result['suggest_mode'] = 'aggressive'
+            elif width >= 300 and height >= 300:
+                result['suggestion'] = '图片分辨率良好'
+                result['suggest_mode'] = 'gentle'
+
+            # 模式建议
+            if img.mode == 'RGBA':
+                result['note'] = '图片带透明背景，建议转换为JPG格式'
+
+            return result
+        except Exception as e:
+            return {'error': str(e)}
+
+    def extract_text(self, image_path, enhance_mode='auto'):
+        """
+        从图片中提取文字（支持PSM回退机制）
+
+        Args:
+            image_path: 图片文件路径
+            enhance_mode: 预处理模式 ('auto'|'normal'|'aggressive'|'gentle')
+
+        Returns:
             识别到的文字内容
         """
+        # 检查图片质量
+        quality_info = self.check_image_quality(image_path)
+        if enhance_mode == 'auto' and 'suggest_mode' in quality_info:
+            enhance_mode = quality_info['suggest_mode']
+
         # 预处理
-        processed_img = self.preprocess_image(image_path)
+        processed_img = self.preprocess_image(image_path, enhance_mode=enhance_mode)
 
         # PSM模式回退列表：6(统一文本块) → 3(自动分页) → 4(单列可变) → 11(稀疏文本) → 12(稀疏文本+OSD)
         psm_modes = [6, 3, 4, 11, 12]
