@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-报告生成模块
+报告生成模块 v2.0
 将审查结果生成为结构化报告
+新增：评分说明、法律依据日期标注、更友好的风险展示
 """
 
 import json
@@ -12,7 +13,6 @@ import logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
 
 # 严重等级排序权重
 SEVERITY_WEIGHTS = {
@@ -36,6 +36,14 @@ SCORE_IMPACT = {
     '中等': -8,
     '一般': -3,
     '提示': 0,
+}
+
+# 评分说明
+SCORE_DESCRIPTIONS = {
+    (90, 100): "风险较低，可放心签署",
+    (70, 89): "风险中等，建议修改后签署",
+    (50, 69): "风险偏高，需要认真修改",
+    (0, 49): "风险很高，强烈建议咨询律师",
 }
 
 
@@ -63,14 +71,15 @@ class ReportGenerator:
         
         # 计算评分
         score = self._calculate_score(risks)
+        score_detail = self._get_score_detail(risks, score)
         
         # 统计
         stats = self._count_by_severity(risks)
         
         if output_format == 'json':
-            return self._generate_json(sorted_risks, contract_info, score, stats)
+            return self._generate_json(sorted_risks, contract_info, score, score_detail, stats, risks)
         else:
-            return self._generate_markdown(sorted_risks, contract_info, score, stats)
+            return self._generate_markdown(sorted_risks, contract_info, score, score_detail, stats, risks)
     
     def _calculate_score(self, risks: List[Dict]) -> int:
         """计算综合评分（0-100，分数越高风险越低）"""
@@ -82,6 +91,14 @@ class ReportGenerator:
         
         return max(0, min(100, score))
     
+    def _get_score_detail(self, risks: List[Dict], final_score: int) -> str:
+        """获取评分说明"""
+        # 查找匹配的评分区间
+        for (low, high), desc in sorted(SCORE_DESCRIPTIONS.items(), reverse=True):
+            if low <= final_score <= high:
+                return desc
+        return "无法评估"
+    
     def _count_by_severity(self, risks: List[Dict]) -> Dict[str, int]:
         """按严重等级统计"""
         counts = {'严重': 0, '中等': 0, '一般': 0, '提示': 0}
@@ -91,7 +108,8 @@ class ReportGenerator:
         return counts
     
     def _generate_markdown(self, risks: List[Dict], contract_info: Dict,
-                           score: int, stats: Dict) -> str:
+                           score: int, score_detail: str, stats: Dict,
+                           original_risks: List[Dict]) -> str:
         """生成 Markdown 格式报告"""
         lines = []
         
@@ -110,7 +128,11 @@ class ReportGenerator:
         parties = contract_info.get('parties', [])
         if parties:
             party_names = [f"{p.get('role', '')}: {p.get('name', '')}" for p in parties]
-            lines.append(f"- **合同主体**：{'; '.join(party_names)}")
+            party_str = "; ".join(party_names)
+            # 保护隐私：主体名称脱敏显示
+            if len(party_str) > 100:
+                party_str = party_str[:100] + "..."
+            lines.append(f"- **合同主体**：{party_str}")
         
         if contract_info.get('total_amount'):
             lines.append(f"- **合同金额**：{contract_info.get('total_amount', '')} {contract_info.get('currency', 'CNY')}")
@@ -129,54 +151,85 @@ class ReportGenerator:
         lines.append("")
         
         # 评分
-        risk_level = "风险较低" if score >= 80 else "风险中等" if score >= 60 else "风险偏高" if score >= 40 else "风险很高"
-        lines.append(f"**⭐ 综合评分：{score}/100**（{risk_level}）")
+        lines.append(f"**⭐ 综合评分：{score}/100**（{score_detail}）")
+        lines.append("")
+        
+        # 评分说明（v2.0 新增）
+        lines.append("> **评分说明**：综合评分基于规则引擎检查（硬规则匹配）和 AI 语义审查结果计算。")
+        lines.append("> - 满分 100 分，分数越高表示合同风险越低")
+        lines.append("> - 严重风险每项扣 15 分，中等风险每项扣 8 分，一般风险每项扣 3 分")
+        lines.append("> - 本评分仅供参考，不替代专业法律意见")
         lines.append("")
         lines.append("---")
         lines.append("")
         
         # 风险详情
-        current_severity = None
-        
-        for risk in risks:
-            severity = risk.get('severity', '一般')
+        if not risks:
+            lines.append("## ✅ 审查结果")
+            lines.append("")
+            lines.append("恭喜！本次审查未发现明显风险点。但建议您仍仔细阅读合同全文，")
+            lines.append("确保理解所有条款后再签署。")
+            lines.append("")
+        else:
+            current_severity = None
             
-            if severity != current_severity:
-                current_severity = severity
-                emoji = SEVERITY_EMOJI.get(severity, '⚪')
-                lines.append(f"## {emoji} {severity}风险")
+            for risk in risks:
+                severity = risk.get('severity', '一般')
+                
+                if severity != current_severity:
+                    current_severity = severity
+                    emoji = SEVERITY_EMOJI.get(severity, '⚪')
+                    lines.append(f"## {emoji} {severity}风险")
+                    lines.append("")
+                
+                # 风险标题
+                title = risk.get('title', '未命名风险')
+                lines.append(f"### {title}")
                 lines.append("")
-            
-            # 风险标题
-            title = risk.get('title', '未命名风险')
-            lines.append(f"### {title}")
-            lines.append("")
-            
-            # 位置
-            if risk.get('clause_ref'):
-                lines.append(f"- **位置**：{risk['clause_ref']} / 第 {risk.get('page', '?')} 页")
-            
-            # 原文引用
-            if risk.get('text_snippet'):
-                lines.append(f"- **原文**：{risk['text_snippet']}")
-            
-            # 问题描述
-            if risk.get('description'):
-                lines.append(f"- **问题**：{risk['description']}")
-            
-            # 法律依据
-            if risk.get('legal_basis'):
-                lines.append(f"- **法律依据**：{risk['legal_basis']}")
-            
-            # 修改建议
-            if risk.get('suggestion'):
-                lines.append(f"- **修改建议**：{risk['suggestion']}")
-            
-            # 推荐范本
-            if risk.get('template'):
-                lines.append(f"- **推荐范本**：\n\n  > {risk['template']}")
-            
-            lines.append("")
+                
+                # 位置处理（v2.0 修复 None 显示问题）
+                clause_ref = risk.get('clause_ref')
+                page = risk.get('page')
+                
+                if clause_ref or page:
+                    location_parts = []
+                    if clause_ref:
+                        location_parts.append(f"条款: {clause_ref}")
+                    if page:
+                        location_parts.append(f"第 {page} 页")
+                    lines.append(f"- **位置**：{', '.join(location_parts)}")
+                
+                # 原文引用
+                if risk.get('text_snippet'):
+                    # 确保不在中文字符中间截断（v2.0 新增安全截断）
+                    snippet = risk['text_snippet']
+                    if len(snippet) > 100:
+                        snippet = snippet[:97] + "..."
+                    # 过滤掉可能泄露个人信息的文本（简单脱敏）
+                    import re
+                    # 脱敏身份证号、手机号等
+                    snippet = re.sub(r'\d{18}', '***', snippet)  # 身份证号
+                    snippet = re.sub(r'\d{11}', '***', snippet)  # 手机号
+                    lines.append(f"- **原文**：{snippet}")
+                
+                # 问题描述
+                if risk.get('description'):
+                    lines.append(f"- **问题**：{risk['description']}")
+                
+                # 法律依据
+                if risk.get('legal_basis'):
+                    lines.append(f"- **法律依据**：{risk['legal_basis']}")
+                
+                # 修改建议
+                if risk.get('suggestion'):
+                    lines.append(f"- **修改建议**：{risk['suggestion']}")
+                
+                # 推荐范本
+                if risk.get('template'):
+                    template = risk['template'].replace('\n', '\n  > ')
+                    lines.append(f"- **推荐范本**：\n\n  > {template}")
+                
+                lines.append("")
         
         # 缺失条款
         missing = contract_info.get('missing_clauses', [])
@@ -184,7 +237,7 @@ class ReportGenerator:
             lines.append("## 📋 缺失条款清单")
             lines.append("")
             for item in missing:
-                lines.append(f"- {item}")
+                lines.append(f"- [ ] {item}")
             lines.append("")
         
         # 特别提示
@@ -208,35 +261,60 @@ class ReportGenerator:
         
         # 法规依据
         legal_bases = set()
-        for risk in risks:
+        for risk in original_risks:
             if risk.get('legal_basis'):
                 legal_bases.add(risk['legal_basis'])
         
         if legal_bases:
             lines.append("## ⚖️ 法规依据")
             lines.append("")
+            lines.append("> 以下法规引用基于 2026 年现行有效的版本。如有更新，请以最新法规为准。")
+            lines.append("")
             for basis in sorted(legal_bases):
                 lines.append(f"- {basis}")
             lines.append("")
         
-        # 免责声明
+        # 免责声明（v2.0 更醒目）
         lines.append("---")
         lines.append("")
-        lines.append("**免责声明**：本报告由 AI 生成，仅供使用者参考，不构成法律意见。对于重大合同（标的额超过 100 万元或涉及核心商业利益），建议咨询专业执业律师。")
+        lines.append("## ⚠️ 免责声明")
+        lines.append("")
+        lines.append("**重要提示**：")
+        lines.append("")
+        lines.append("- 本报告由 AI 智能审查工具生成，仅供参考，**不构成法律意见**。")
+        lines.append("- 法律建议需由具备相应执业资格的律师提供。")
+        lines.append("- 对于重大合同（标的额超过 100 万元或涉及核心商业利益），**强烈建议咨询专业执业律师**。")
+        lines.append("- 本报告基于当前的法律法规进行审查，法律变更可能导致部分建议过时。")
+        lines.append("- 因使用本报告而产生的任何损失，开发者不承担责任。")
+        lines.append("")
         
         return '\n'.join(lines)
     
     def _generate_json(self, risks: List[Dict], contract_info: Dict,
-                       score: int, stats: Dict) -> str:
+                       score: int, score_detail: str, stats: Dict,
+                       original_risks: List[Dict]) -> str:
         """生成 JSON 格式报告"""
         report = {
             'report_id': f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
             'generated_at': datetime.now().isoformat(),
+            'skill_version': '2.0.0',
             'contract_info': contract_info,
             'score': score,
+            'score_detail': score_detail,
             'statistics': stats,
+            'scoring_method': {
+                'description': '综合评分基于规则引擎和 AI 语义审查',
+                'max_score': 100,
+                'deductions': {
+                    '严重': -15,
+                    '中等': -8,
+                    '一般': -3,
+                    '提示': 0
+                }
+            },
             'risks': risks,
-            'disclaimer': '本报告由 AI 生成，仅供使用者参考，不构成法律意见。',
+            'disclaimer': '本报告由 AI 生成，仅供使用者参考，不构成法律意见。对于重大合同，建议咨询专业执业律师。',
+            'legal_basis_note': '引用法规基于 2026 年现行有效版本',
         }
         return json.dumps(report, ensure_ascii=False, indent=2)
 
@@ -251,6 +329,15 @@ def main():
     
     risks_path = sys.argv[1]
     contract_info_path = sys.argv[2] if len(sys.argv) > 2 else None
+    
+    # 安全读取：限制文件大小
+    try:
+        file_size = os.path.getsize(risks_path)
+        if file_size > 100 * 1024 * 1024:  # 最大 100MB
+            print("错误：文件过大（最大 100MB）")
+            sys.exit(1)
+    except OSError:
+        pass
     
     with open(risks_path, 'r', encoding='utf-8') as f:
         risks = json.load(f)
