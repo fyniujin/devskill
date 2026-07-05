@@ -1,0 +1,132 @@
+# video-analyzer 配置文件
+# 视频分析处理 Skill v2.0.0
+
+# ==================== Whisper 语音识别配置 ====================
+whisper:
+  # 模型名称: tiny, base, small, medium, large-v3
+  # 设置为 null 则根据硬件自动选择（推荐）
+  model_name: null
+  
+  # 语言设置: auto(自动检测), zh, en, ja, ko, fr, de, es, ru 等
+  language: auto
+  
+  # 计算设备: cpu, cuda, null(自动检测)
+  device: null
+  
+  # beam_size，越大越准确但越慢
+  beam_size: 5
+  
+  # 温度参数，影响输出多样性
+  temperature: 0.0
+
+# ==================== 场景检测配置 ====================
+scene_detection:
+  # 直方图差分阈值 (0-1)，越低越敏感（检测更多场景切换）
+  threshold: 0.5
+  
+  # 最小场景时长（秒），低于此时长的场景会被合并
+  min_scene_duration: 2.0
+  
+  # HSV 直方图 bins 数
+  hist_bins: 50
+  
+  # 使用的颜色空间: hsv, rgb, lab
+  color_space: hsv
+
+# ==================== 视觉分析配置 ====================
+visual_analysis:
+  # 启用场景分类
+  enable_scene_classification: true
+  
+  # 启用物体检测
+  enable_object_detection: true
+  
+  # 启用 OCR
+  enable_ocr: true
+  
+  # 场景分类模型路径 (null 则使用内置轻量模型)
+  scene_model_path: null
+  
+  # 物体检测模型路径 (null 则使用内置轻量模型)
+  object_model_path: null
+  
+  # OCR 语言: ch, en, multilang
+  ocr_lang: ch
+  
+  # 视觉分析采样间隔（秒），每 N 秒分析一次关键帧
+  sampling_interval: 3
+
+# ==================== 报告生成配置 ====================
+report:
+  # 输出格式: html, json, md (可同时指定多个，用逗号分隔)
+  formats: html,json,md
+  
+  # 是否生成时间轴可视化图表
+  enable_timeline_chart: true
+  
+  # 是否生成音频波形图
+  enable_waveform: true
+  
+  # HTML 报告每页显示的场景数
+  scenes_per_page: 20
+  
+  # HTML 报告配色主题: dark, light
+  theme: dark
+
+# ==================== 处理配置 ====================
+processing:
+  # 并行工作进程数 (0 = 自动检测)
+  num_workers: 0
+  
+  # 是否保留中间文件（缓存）
+  keep_cache: true
+  
+  # 缓存目录
+  cache_dir: .cache
+  
+  # 临时文件目录
+  temp_dir: .temp
+  
+  # 输出文件目录
+  output_dir: output
+  
+  # 最大视频时长（秒），超过则提示用户
+  max_duration: 7200
+  
+  # 下载超时（秒）
+  download_timeout: 300
+  
+  # ======== 性能与资源控制（v2.0 新增） ========
+  
+  # 进程优先级（Linux/macOS nice 值，0-19，越大优先级越低）
+  # 建议：高性能电脑设为 5，低配电脑设为 15
+  nice_level: 5
+  
+  # 最大内存使用（GB），防止 OOM # 默认根据内存自动计算
+  max_memory_gb: 0
+  
+  # 帧缓存数量上限（防止内存爆炸） 0 = 自动计算
+  frame_cache_limit: 0
+
+# ==================== 精华提取配置 ====================
+highlight:
+  # 高光时刻检测灵敏度 (0-1)
+  sensitivity: 0.6
+  
+  # 提取的精华片段数量
+  top_n: 10
+  
+  # 最小精华片段时长（秒）
+  min_highlight_duration: 5
+  
+  # 音频权重 (用于高光检测)
+  audio_weight: 0.5
+  
+  # 视觉权重 (用于高光检测)
+  visual_weight: 0.5
+
+# ==================== 日志配置 ====================
+logging:
+  level: INFO
+  format: "[%(asctime)s] %(levelname)s: %(message)s"
+  date_format: "%H:%M:%S"
