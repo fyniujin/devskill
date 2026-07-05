@@ -191,6 +191,16 @@ git push → GitHub Actions 触发
 
 </details>
 
+
+<details>
+<summary>video-analyzer - 点击展开</summary>
+
+| 版本 | 日期 | 本次更新 |
+|------|------|---------|
+| v2.0.0 | 2026-07-05 | v2.0 init video analyzer tool |
+
+</details>
+
 ---
 
-**最后更新：2026-07-05 18:45*
+**最后更新：2026-07-05 22:50*
