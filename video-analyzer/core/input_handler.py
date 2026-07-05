@@ -1,0 +1,196 @@
+"""输入处理模块 — 支持本地文件、URL、在线视频链接"""
+
+import os
+import re
+import urllib.parse
+from pathlib import Path
+from typing import Dict, Any, Optional
+import tempfile
+import shutil
+
+from .logger import get_logger
+
+logger = get_logger(__name__)
+
+
+class InputHandler:
+    """处理各种视频输入来源，统一转为本地路径"""
+    
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+        self.temp_dir = config.get("processing", {}).get("temp_dir", ".temp")
+        self.timeout = config.get("processing", {}).get("download_timeout", 300)
+        os.makedirs(self.temp_dir, exist_ok=True)
+    
+    def process(self, input_source: str) -> str:
+        """
+        处理输入，返回本地视频文件路径。
+        
+        Args:
+            input_source: 本地路径、URL 或在线视频链接
+            
+        Returns:
+            本地文件绝对路径
+        """
+        source = input_source.strip()
+        
+        # 判断输入类型
+        if self._is_local_path(source):
+            return self._handle_local(source)
+        elif self._is_url(source):
+            return self._handle_url(source)
+        else:
+            # 尝试作为本地路径处理
+            if os.path.exists(source):
+                return os.path.abspath(source)
+            raise ValueError(f"无法识别的输入: {input_source}")
+    
+    def _is_local_path(self, source: str) -> bool:
+        """判断是否为本地路径"""
+        # 检查是否为 Windows 路径或 Unix 路径
+        return (
+            os.path.exists(source) or
+            (len(source) >= 2 and source[0].isalpha() and source[1] == ":") or
+            source.startswith(("/", "\\", "./", "../"))
+        )
+    
+    def _is_url(self, source: str) -> bool:
+        """判断是否为 URL"""
+        return source.startswith(("http://", "https://", "ftp://"))
+    
+    def _handle_local(self, source: str) -> str:
+        """处理本地文件路径"""
+        path = Path(source).resolve()
+        
+        if not path.exists():
+            raise FileNotFoundError(f"文件不存在: {source}")
+        
+        if not path.is_file():
+            raise ValueError(f"不是有效文件: {source}")
+        
+        # 验证是否为视频文件
+        valid_extensions = {
+            ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm",
+            ".m4v", ".mpg", ".mpeg", ".ts", ".m3u8"
+        }
+        if path.suffix.lower() not in valid_extensions:
+            logger.warning(f"文件扩展名可能不是视频格式: {path.suffix}")
+        
+        logger.info(f"本地文件: {path}")
+        return str(path)
+    
+    def _handle_url(self, url: str) -> str:
+        """下载远程视频到本地"""
+        logger.info(f"下载远程视频: {url}")
+        
+        # 生成本地文件名
+        filename = self._get_filename_from_url(url)
+        local_path = os.path.join(self.temp_dir, filename)
+        
+        # 如果文件已存在，直接返回
+        if os.path.exists(local_path):
+            logger.info(f"文件已缓存: {local_path}")
+            return local_path
+        
+        # 尝试使用 yt-dlp 下载（支持 YouTube/B站等）
+        if self._try_ytdlp(url, local_path):
+            return local_path
+        
+        # 回退到 curl 直接下载
+        if self._try_curl(url, local_path):
+            return local_path
+        
+        # 回退到 Python requests
+        if self._try_requests(url, local_path):
+            return local_path
+        
+        raise RuntimeError(f"无法下载视频: {url}")
+    
+    def _get_filename_from_url(self, url: str) -> str:
+        """从 URL 中提取文件名"""
+        try:
+            parsed = urllib.parse.urlparse(url)
+            path = parsed.path
+            filename = os.path.basename(path)
+            if filename and "." in filename:
+                return filename
+        except Exception:
+            pass
+        return f"video_{hash(url) % 10000:04d}.mp4"
+    
+    def _try_ytdlp(self, url: str, output_path: str) -> bool:
+        """尝试使用 yt-dlp 下载"""
+        try:
+            import subprocess
+            cmd = [
+                "yt-dlp",
+                "-f", "best[ext=mp4]/best",
+                "-o", output_path,
+                "--no-check-certificates",
+                "--quiet",
+                "--no-warnings",
+                url
+            ]
+            result = subprocess.run(
+                cmd, capture_output=True, timeout=self.timeout
+            )
+            return result.returncode == 0 and os.path.exists(output_path)
+        except FileNotFoundError:
+            logger.debug("yt-dlp 未安装")
+            return False
+        except Exception as e:
+            logger.debug(f"yt-dlp 下载失败: {e}")
+            return False
+    
+    def _try_curl(self, url: str, output_path: str) -> bool:
+        """尝试使用 curl 下载"""
+        try:
+            import subprocess
+            cmd = [
+                "curl",
+                "-L",  # 跟随重定向
+                "-o", output_path,
+                "--connect-timeout", "30",
+                "--max-time", str(self.timeout),
+                "--silent",
+                "--show-error",
+                url
+            ]
+            result = subprocess.run(
+                cmd, capture_output=True, timeout=self.timeout + 30
+            )
+            return result.returncode == 0 and os.path.exists(output_path)
+        except FileNotFoundError:
+            logger.debug("curl 未安装")
+            return False
+        except Exception as e:
+            logger.debug(f"curl 下载失败: {e}")
+            return False
+    
+    def _try_requests(self, url: str, output_path: str) -> bool:
+        """使用 Python requests 下载"""
+        try:
+            import requests
+            response = requests.get(
+                url, stream=True, timeout=self.timeout, verify=False
+            )
+            response.raise_for_status()
+            
+            total_size = int(response.headers.get("content-length", 0))
+            downloaded = 0
+            
+            with open(output_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+            
+            return os.path.exists(output_path) and os.path.getsize(output_path) > 0
+        except Exception as e:
+            logger.debug(f"requests 下载失败: {e}")
+            return False
+    
+    def cleanup(self):
+        """清理临时文件"""
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
