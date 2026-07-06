@@ -2,9 +2,8 @@
 
 import json
 import os
-import re
 import subprocess
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from .logger import get_logger
 
@@ -35,8 +34,11 @@ class MediaProcessor:
                     raise RuntimeError(f"{tool} 不可用")
             except FileNotFoundError:
                 raise RuntimeError(
-                    f"{tool} 未安装。请先安装: "
-                    f"https://ffmpeg.org/download.html"
+                    f"❌ {tool} 未安装。请先安装 ffmpeg:\n"
+                    f"  Windows: scoop install ffmpeg  أو  choco install ffmpeg\n"
+                    f"  macOS: brew install ffmpeg\n"
+                    f"  Ubuntu/Debian: sudo apt install ffmpeg\n"
+                    f"  下载地址: https://ffmpeg.org/download.html"
                 )
     
     def get_media_info(self, video_path: str) -> Dict[str, Any]:
@@ -60,7 +62,15 @@ class MediaProcessor:
         
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
-            raise RuntimeError(f"ffprobe 失败: {result.stderr}")
+            error_msg = result.stderr or "未知错误"
+            # 检查是否是文件损坏
+            if "Invalid data" in error_msg or "error reading" in error_msg.lower():
+                raise ValueError(
+                    f"文件可能损坏或不是有效的视频文件。\n"
+                    f"路径: {video_path}\n"
+                    f"ffprobe 错误: {error_msg}"
+                )
+            raise RuntimeError(f"ffprobe 失败: {error_msg}")
         
         probe_data = json.loads(result.stdout)
         
@@ -74,7 +84,10 @@ class MediaProcessor:
                 audio_stream = stream
         
         if not video_stream:
-            raise ValueError("视频文件不包含视频流")
+            raise ValueError(
+                f"文件不包含视频流，请确认输入的是视频文件而非纯音频文件。\n"
+                f"路径: {video_path}"
+            )
         
         # 解析帧率
         fps = self._parse_fps(video_stream.get("r_frame_rate", "30/1"))
@@ -137,7 +150,14 @@ class MediaProcessor:
         
         result = subprocess.run(cmd, capture_output=True)
         if result.returncode != 0:
-            raise RuntimeError(f"音频提取失败: {result.stderr.decode()}")
+            error_msg = result.stderr.decode() if result.stderr else "未知错误"
+            if "Invalid data" in error_msg:
+                raise RuntimeError(
+                    f"音频提取失败：视频文件可能损坏。\n"
+                    f"建议尝试用 ffmpeg 手动修复：\n"
+                    f"  ffmpeg -i input.mp4 -c copy output.mp4"
+                )
+            raise RuntimeError(f"音频提取失败: {error_msg}")
         
         logger.info(f"音频已提取: {output_path}")
         return output_path
@@ -171,7 +191,8 @@ class MediaProcessor:
         
         result = subprocess.run(cmd, capture_output=True)
         if result.returncode != 0:
-            raise RuntimeError(f"帧提取失败: {result.stderr.decode()}")
+            error_msg = result.stderr.decode() if result.stderr else "未知错误"
+            raise RuntimeError(f"帧提取失败: {error_msg}")
         
         frame_count = len([f for f in os.listdir(frames_dir) if f.endswith(".jpg")])
         logger.info(f"提取 {frame_count} 帧到: {frames_dir}")
@@ -214,7 +235,8 @@ class MediaProcessor:
         
         return frames_dir
     
-    def _parse_fps(self, fps_str: str) -> float:
+    @staticmethod
+    def _parse_fps(fps_str: str) -> float:
         """解析帧率字符串，如 '30/1' -> 30.0"""
         try:
             if "/" in fps_str:
