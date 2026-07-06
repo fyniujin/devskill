@@ -7,96 +7,63 @@
 ### 安装
 
 ```bash
-# 1. 克隆或下载本项目
-git clone <https://github.com/your-repo/video-analyzer.git>
-cd video-analyzer
-
-# 2. 安装 Python 依赖
+# 1. 安装 Python 依赖
 pip install -r requirements.txt
 
-# 3. 安装 ffmpeg（Windows scoop）
-scoop install ffmpeg
-# macOS
-brew install ffmpeg
-# Ubuntu/Debian
-sudo apt install ffmpeg
+# 2. 安装 ffmpeg（必须）
+# Windows: scoop install ffmpeg  أو  choco install ffmpeg
+# macOS: brew install ffmpeg
+# Ubuntu/Debian: sudo apt install ffmpeg
+
+# 3. 验证安装
+ffmpeg -version
 ```
 
 ### 使用
 
 ```bash
-# 分析本地视频
-python main.py -i my_video.mp4
+# 最简用法 — 自动检测硬件、自动选择模型
+python main.py -i video.mp4
 
-# 分析在线视频
-python main.py -i "https://example.com/video.mp4"
+# 完整参数
+python main.py -i video.mp4 -o ./report --model medium --lang zh
 
-# 使用 medium 模型，中文
-python main.py -i video.mp4 --model medium --lang zh
+# 低配电脑 — 限制资源
+python main.py -i video.mp4 --max-memory 4 --no-visual
 
-# 跳过视觉分析（加速）
-python main.py -i video.mp4 --no-visual
+# 仅语音转文字（最快）
+python main.py -i video.mp4 --no-visual --no-ocr
 ```
 
-### 参数说明
+## 常见问题
 
-| 参数 | 简写 | 说明 |
-|------|------|------|
-| `--input` | `-i` | 视频文件路径或 URL（必填） |
-| `--output` | `-o` | 输出目录（默认 `./output`） |
-| `--model` | `-m` | Whisper 模型：`small`/`medium`/`large-v3` |
-| `--lang` | `-l` | 语言代码，默认 auto |
-| `--no-visual` |  | 跳过视觉分析 |
-| `--no-ocr` |  | 跳过 OCR |
-| `--force` | `-f` | 强制重新分析 |
-| `--verbose` |  | 显示详细日志 |
+**Q: 模型下载慢怎么办？**
+设置 pip 镜像：
+```bash
+pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+**Q: 下载在线视频失败？**
+工具已内置 3 次自动重试。如果仍然失败，请确认 URL 可访问；YouTube/B站等需安装 yt-dlp：`pip install yt-dlp`
+
+**Q: 处理时电脑变卡？**
+加 `--nice 15 --max-memory 4`，工具会自动降低优先级并限制内存。
+
+**Q: 语音识别结果是空白？**
+可能是音频编码不兼容，先用 ffmpeg 手动转码：
+```bash
+ffmpeg -i input.mp4 -vn -ar 16000 -ac 1 output.wav
+```
+然后用 `--input output.wav --no-visual` 重新分析。
 
 ## 输出
 
 ```
 output/
-├── report.html      # 交互式 HTML 报告
-├── data.json        # 完整 JSON 数据
+├── report.html      # 交互式报告（用浏览器打开）
+├── data.json        # 结构化数据
 ├── script.md        # Markdown 剧本
-└── scenes/          # 场景关键帧
-```
-
-## 依赖说明
-
-### 系统要求
-
-- Python >= 3.10
-- ffmpeg + ffprobe（系统级工具）
-
-### Python 库
-
-| 库 | 用途 |
-|----|------|
-| openai-whisper | 语音识别 |
-| numpy | 数值计算 |
-| opencv-python | 图像处理/场景检测 |
-| Pillow | 图像读写 |
-| PyYAML | 配置文件 |
-
-### 可选依赖
-
-| 库 | 功能 | 安装命令 |
-|----|------|---------|
-| paddlepaddle + paddleocr | 画面 OCR | `pip install paddlepaddle paddleocr` |
-
-## 架构
-
-```
-视频输入 → ffmpeg 处理 → [并行]
-                           ├── whisper 语音转文字
-                           ├── OpenCV 场景检测
-                           └── ONNX/PaddleOCR 视觉分析
-                                 ↓
-                           时间轴对齐引擎
-                                 ↓
-                           跨模态语义融合
-                                 ↓
-                           精华提取 + 报告生成
+└── scenes/          # 关键帧缩略图
 ```
 
 ## License
