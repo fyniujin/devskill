@@ -15,7 +15,7 @@
 | winskill | `winskill/SKILL.md` | v1.6.0 | Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控、事件日志诊断、已安装程序管 |
 | wps-office-suite | `wps-office-suite/SKILL.md` | v2.5.0 | WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板、最佳实践案例、反模式FAQ、环境自检、错误 |
 | zwjh-skill | `zwjh-skill/SKILL.md` | v1.7.0 | 会思考的进化 AI — 能像人一样理解问题本质、关联上下文、主动发现隐含需求，自动修复并持续成长。不仅能解决表面问题，更能触达根本原因，实现真正的主动进化。 |
-| video-analyzer | `video-analyzer/SKILL.md` | v2.1.0 | 视频分析处理 — 本地视频反编译分析工具。将视频拆解为时间轴剧本、语音转文字、场景分析、跨模态关联和精华摘要。 |
+| video-analyzer | `video-analyzer/SKILL.md` | v2.2.0 | 视频分析处理 — 本地视频反编译分析工具。将视频拆解为时间轴剧本、语音转文字、场景分析、跨模态关联和精华摘要。 |
 
 ---
 
@@ -196,8 +196,9 @@ git push → GitHub Actions 触发
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
-| v2.1.0 | 2026-07-06 | 2.1.0 评测优化：重试机制、友好报错、FAQ补充、边界说明 |
 | v2.0.0 | 2026-07-05 | v2.0 init video analyzer tool |
+| v2.1.0 | 2026-07-06 | 2.1.0 评测优化：重试机制、友好报错、FAQ补充、边界说明 |
+| v2.2.0 | 2026-07-06 | 增加: 支持3次自动重试机制，修复: 版本校验，参数化仓库名 |
 
 </details>
 
@@ -210,4 +211,4 @@ git push → GitHub Actions 触发
 
 如有任何建议、插件纠错等请联系 njskills@agent.qq.com
 
-**最后更新：2026-07-06 08:42*
+**最后更新：2026-07-06 11:37*
