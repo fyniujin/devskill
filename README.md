@@ -187,14 +187,9 @@ git push → GitHub Actions 触发
 
 
 
-<details>
-<summary>video-analyzer - 点击展开</summary>
 
-| 版本 | 日期 | 本次更新 |
-|------|------|---------|
-| v2.1.0 | 2026-07-06 | 2.1.0 评测优化：重试机制、友好报错、FAQ补充、边界说明 |
 
-</details>
+
 
 <details>
 <summary>video-analyzer - 点击展开</summary>
@@ -202,10 +197,12 @@ git push → GitHub Actions 触发
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
 | v2.1.0 | 2026-07-06 | 2.1.0 评测优化：重试机制、友好报错、FAQ补充、边界说明 |
+| v2.0.0 | 2026-07-05 | v2.0 init video analyzer tool |
 
 </details>
 
 ---
+
 
 
 
