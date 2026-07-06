@@ -1,16 +1,19 @@
 """输入处理模块 — 支持本地文件、URL、在线视频链接"""
 
 import os
-import re
+import time
 import urllib.parse
 from pathlib import Path
 from typing import Dict, Any, Optional
-import tempfile
 import shutil
 
 from .logger import get_logger
 
 logger = get_logger(__name__)
+
+# 最大重试次数
+MAX_RETRIES = 3
+RETRY_DELAY = 2  # 秒
 
 
 class InputHandler:
@@ -47,7 +50,6 @@ class InputHandler:
     
     def _is_local_path(self, source: str) -> bool:
         """判断是否为本地路径"""
-        # 检查是否为 Windows 路径或 Unix 路径
         return (
             os.path.exists(source) or
             (len(source) >= 2 and source[0].isalpha() and source[1] == ":") or
@@ -63,7 +65,10 @@ class InputHandler:
         path = Path(source).resolve()
         
         if not path.exists():
-            raise FileNotFoundError(f"文件不存在: {source}")
+            raise FileNotFoundError(
+                f"文件不存在: {source}\n"
+                f"请确认文件路径是否正确，并确保有读取权限。"
+            )
         
         if not path.is_file():
             raise ValueError(f"不是有效文件: {source}")
@@ -80,7 +85,7 @@ class InputHandler:
         return str(path)
     
     def _handle_url(self, url: str) -> str:
-        """下载远程视频到本地"""
+        """下载远程视频到本地（带自动重试）"""
         logger.info(f"下载远程视频: {url}")
         
         # 生成本地文件名
@@ -92,19 +97,39 @@ class InputHandler:
             logger.info(f"文件已缓存: {local_path}")
             return local_path
         
-        # 尝试使用 yt-dlp 下载（支持 YouTube/B站等）
-        if self._try_ytdlp(url, local_path):
-            return local_path
+        # 尝试多种下载方式，每种最多重试 3 次
+        download_methods = [
+            ("yt-dlp", self._try_ytdlp),
+            ("curl", self._try_curl),
+            ("requests", self._try_requests),
+        ]
         
-        # 回退到 curl 直接下载
-        if self._try_curl(url, local_path):
-            return local_path
+        last_error = None
+        for method_name, method_func in download_methods:
+            for attempt in range(1, MAX_RETRIES + 1):
+                try:
+                    if method_func(url, local_path):
+                        return local_path
+                except Exception as e:
+                    last_error = e
+                    logger.debug(f"{method_name} 第 {attempt} 次尝试失败: {e}")
+                
+                if attempt < MAX_RETRIES:
+                    logger.info(f"第 {attempt} 次下载失败，{RETRY_DELAY}秒后重试...")
+                    time.sleep(RETRY_DELAY)
         
-        # 回退到 Python requests
-        if self._try_requests(url, local_path):
-            return local_path
+        # 所有方法均失败
+        error_msg = (
+            f"无法下载视频（已重试 {MAX_RETRIES} 次）: {url}\n"
+            f"请检查：\n"
+            f"  1. URL 是否可正常访问\n"
+            f"  2. 网络连接是否稳定\n"
+            f"  3. 对于 YouTube/B站等网站，请安装 yt-dlp: pip install yt-dlp"
+        )
+        if last_error:
+            error_msg += f"\n最后错误: {last_error}"
         
-        raise RuntimeError(f"无法下载视频: {url}")
+        raise RuntimeError(error_msg)
     
     def _get_filename_from_url(self, url: str) -> str:
         """从 URL 中提取文件名"""
@@ -176,14 +201,10 @@ class InputHandler:
             )
             response.raise_for_status()
             
-            total_size = int(response.headers.get("content-length", 0))
-            downloaded = 0
-            
             with open(output_path, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
-                        downloaded += len(chunk)
             
             return os.path.exists(output_path) and os.path.getsize(output_path) > 0
         except Exception as e:
