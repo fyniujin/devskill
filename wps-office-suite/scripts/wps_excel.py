@@ -1,5 +1,5 @@
 """
-WPS Excel CLI v3.0 - 完整命令集
+WPS Excel CLI v3.1 - 完整命令集
 """
 import subprocess
 import json
