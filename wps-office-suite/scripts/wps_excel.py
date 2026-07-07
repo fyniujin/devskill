@@ -1,5 +1,5 @@
 """
-WPS Excel CLI v2.0 - 三引擎自动调用
+WPS Excel CLI v3.0 - 完整命令集
 """
 import subprocess
 import json
@@ -10,6 +10,8 @@ WORKER = Path(__file__).parent / "wps_worker.py"
 
 
 def call_worker(cmd: str, args: dict) -> dict:
+    """调用 Worker（带超时和错误处理）"""
+    import time
     req = json.dumps({"cmd": cmd, "args": args}, ensure_ascii=False)
     proc = subprocess.Popen(
         [sys.executable, str(WORKER)],
@@ -18,7 +20,22 @@ def call_worker(cmd: str, args: dict) -> dict:
         stderr=subprocess.PIPE,
         cwd=str(Path(__file__).parent.parent),
     )
-    stdout, stderr = proc.communicate(input=req.encode("utf-8"), timeout=120)
+    cfg = {"timeout": 120}
+    try:
+        from wps_performance import get_worker_config
+        cfg = get_worker_config()
+    except Exception:
+        pass
+    
+    timeout = cfg.get("timeout", 120)
+    
+    try:
+        stdout, stderr = proc.communicate(input=req.encode("utf-8"), timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        stdout, stderr = proc.communicate()
+        return {"ok": False, "error": f"操作超时（{timeout}秒），请检查文件是否过大或WPS是否卡住"}
+    
     if proc.returncode != 0:
         err_msg = stderr.decode("utf-8") if stderr else "未知错误"
         return {"ok": False, "error": f"WPS Worker 异常: {err_msg[:200]}"}
@@ -30,14 +47,14 @@ def call_worker(cmd: str, args: dict) -> dict:
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="WPS Excel")
+    parser = argparse.ArgumentParser(description="WPS Excel v3.0")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("create")
     p.add_argument("--name", required=True)
     p.add_argument("--sheets", default="")
     p.add_argument("--filepath", default="")
-    p.add_argument("--data", default="", help='JSON: {"Sheet1":[["A",1],["B",2]]}')
+    p.add_argument("--data", default="", help='JSON: {"Sheet1":[["A",1]]}')
 
     p = sub.add_parser("input")
     p.add_argument("--file", required=True)
@@ -83,7 +100,9 @@ def main():
     p = sub.add_parser("info")
     p.add_argument("--file", required=True)
 
-    p = sub.add_parser("engine-info", help="引擎信息")
+    p = sub.add_parser("engine-info", help="引擎+硬件信息")
+
+    p = sub.add_parser("check-update", help="检查更新")
 
     args = parser.parse_args()
 
@@ -91,31 +110,23 @@ def main():
         sheets = [s.strip() for s in args.sheets.split(",") if s.strip()] if args.sheets else None
         data = json.loads(args.data) if args.data else None
         r = call_worker("create_excel", {
-            "name": args.name,
-            "sheets": sheets or ["Sheet1"],
-            "filepath": args.filepath,
-            "data": data or {}
+            "name": args.name, "sheets": sheets or ["Sheet1"],
+            "filepath": args.filepath, "data": data or {}
         })
     elif args.command == "input":
         data = json.loads(args.data)
-        r = call_worker("input_excel", {
-            "filepath": args.file, "sheet": args.sheet, "data": data
-        })
+        r = call_worker("input_excel", {"filepath": args.file, "sheet": args.sheet, "data": data})
     elif args.command == "formula":
         r = call_worker("formula_excel", {
-            "filepath": args.file, "sheet": args.sheet,
-            "cell": args.cell, "formula": args.formula
+            "filepath": args.file, "sheet": args.sheet, "cell": args.cell, "formula": args.formula
         })
     elif args.command == "sort":
         sorts = json.loads(args.sorts)
-        r = call_worker("sort_excel", {
-            "filepath": args.file, "sheet": args.sheet, "sorts": sorts
-        })
+        r = call_worker("sort_excel", {"filepath": args.file, "sheet": args.sheet, "sorts": sorts})
     elif args.command == "filter":
         conds = json.loads(args.conditions)
         r = call_worker("filter_excel", {
-            "filepath": args.file, "sheet": args.sheet,
-            "conditions": conds, "logic": args.logic
+            "filepath": args.file, "sheet": args.sheet, "conditions": conds, "logic": args.logic
         })
     elif args.command == "chart":
         r = call_worker("chart_excel", {
@@ -126,8 +137,7 @@ def main():
         headers = json.loads(args.headers) if args.headers else None
         data = json.loads(args.data) if args.data else None
         r = call_worker("add_sheet_excel", {
-            "filepath": args.file, "sheet": args.sheet,
-            "headers": headers, "data": data
+            "filepath": args.file, "sheet": args.sheet, "headers": headers, "data": data
         })
     elif args.command == "stats":
         r = call_worker("stats_excel", {
@@ -138,6 +148,8 @@ def main():
         r = call_worker("info_excel", {"filepath": args.file})
     elif args.command == "engine-info":
         r = call_worker("engine_info", {})
+    elif args.command == "check-update":
+        r = call_worker("check_update", {})
     else:
         r = {"ok": False, "error": "未知命令"}
 
