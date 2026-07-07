@@ -1,5 +1,7 @@
 name: Sync to Gitee
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -20,5 +22,15 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           SAFE_URL="https://fyniujin_admin:${GITEE_TOKEN}@gitee.com/fyniujin_admin/devskill.git"
           git remote add gitee "${SAFE_URL}" 2>/dev/null || git remote set-url gitee "${SAFE_URL}"
-          git pull origin main 2>/dev/null || true
-          git push gitee main 2>&1 || git push gitee main --force 2>&1
+          for i in 1 2 3; do
+            if git push gitee main 2>/dev/null; then
+              echo "gitee push succeeded (attempt $i)"
+              break
+            fi
+            echo "gitee push attempt $i failed, retrying with --force..."
+            if git push gitee main --force 2>/dev/null; then
+              echo "gitee force-push succeeded (attempt $i)"
+              break
+            fi
+            sleep 5
+          done
