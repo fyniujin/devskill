@@ -1,60 +1,77 @@
 ---
 name: zwjh-skill
 slug: zwjh-skill
-displayName: "会思考的进化 AI"
-description: "会思考的进化 AI — 自动读取记忆、深度分析问题、自动修复并定时进化。像人一样理解需求、触达根因、举一反三。安装后一键启动，复杂问题也能自动处理，极少需要人工介入。"
-description_zh: "会思考的进化 AI — 自动读取记忆、深度分析问题、自动修复并定时进化。一键启动，极少人工介入。"
-version: 1.7.0
+displayName: "长期记忆 / 知识图谱 会思考的进化 AI"
+description: "统一记忆底座：长期记忆 + 知识图谱 + 自动沉淀 + 检索。让 AI「记得你」，跨会话持久记忆、实体/关系图谱、语义与时间线检索、记忆健康度审计、本地备份（可接百度网盘）。纯本地、零密钥、按硬件自适应，不拖累电脑。并保留 v1.7 的根因分析/预测性维护/进化报告。"
+description_zh: "统一记忆底座：长期记忆 + 知识图谱 + 自动沉淀 + 检索。纯本地、零密钥、按硬件自适应，不拖累电脑。"
+version: 2.0.0
 category: ai-agent
 platforms:
   - windows
   - macos
   - linux
 tags:
+  - memory
+  - knowledge-graph
+  - long-term-memory
   - self-evolving
   - root-cause-analysis
   - auto-fix
   - predictive
   - zero-config
+  - local-first
 requires_api_key: false
 ---
 
-# 会思考的进化 AI — zwjh-skill v1.7.0
+# 长期记忆 / 知识图谱 会思考的进化 AI — zwjh-skill v2.0.0
 
 > **安装后说「帮我配置 + 设置定时任务」，AI 自动完成一切。**
 >
-> 它像人一样思考：
-> - 🔍 **理解问题本质** — 不只是关键词匹配，而是理解"为什么"
-> - 🔗 **关联上下文** — 拼凑零散信息，发现隐藏联系
-> - 💡 **主动发现需求** — 你没说，但它知道
-> - 🎯 **触达根因** — 不是头痛医头，而是根治
+> 它是一个**统一记忆底座**，而不只是又一个「记忆 skill」：
+> - 🧠 **长期记忆**：跨会话持久记住你、项目、客户，减少重复解释背景
+> - 🕸️ **知识图谱**：自动抽取「人 / 项目 / 任务 / 事件 / 文档」等实体与关系
+> - ⚙️ **自动沉淀**：从对话 / 文件自动提炼知识点（去重 + 冲突消解）
+> - 🔎 **检索**：本地语义检索 + 时间线检索（零密钥、零联网、毫秒级）
+> - 🩺 **健康度**：审计记忆膨胀、压缩/快照，记忆可观测、可清理
+> - 💾 **备份**：导出 / 备份 / 恢复（本地 + 百度网盘可插拔）
+> - 🖥️ **不拖累电脑**：自动探测硬件，按 CPU/内存分配并发与批大小
+> - 🔔 **更新提醒**：发现新版本主动提示你升级
 >
-> **v1.7.0**：大幅简化操作；增强自愈能力（极少需人工）；功能开箱即用。
+> **v2.0.0**：从「单技能」升级为「可插拔的记忆基础设施」，并完整保留 v1.7 的根因分析 / 预测性维护 / 进化报告能力。
 
 ---
 
 ## 核心理念
 
 ```
-传统 AI：匹配关键词 → 执行动作 → 不会就放弃
-会思考的 AI：理解本质 → 关联历史 → 触达根因 → 举一反三 → 永不再犯
+传统 AI：每次对话从零开始 → 你反复解释背景 → 记忆散落各处、互不相通
+会思考的进化 AI：理解本质 → 沉淀为记忆+图谱 → 跨会话检索 → 举一反三 → 自动进化
 ```
+
+**为什么做统一底座？** 市面方案碎片化（各 skill 各存各的、跨 skill 不互通）。本技能把「记忆 + 图谱 + 检索 + 健康度」做成一个**其他 skill 可直接调用的基础设施**，而不是又一个孤立的记忆插件。
 
 ---
 
 ## 30 秒速查表
 
-| 我想做 | 直接说 |
+| 我想做 | 直接说 / 运行 |
 |--------|--------|
 | **一键启动自动进化** | `帮我配置 + 设置定时任务` |
-| 今天有什么问题和收获 | `分析今天的记忆` |
-| 这个问题到底是什么原因 | `分析根本原因` |
-| 自动修好能修的部分 | `自动修复` |
-| 我最近的成长报告 | `我进步了吗` |
-| 看看 AI 的思考过程 | `你的分析思路` |
-| 演示效果（首次用） | `模拟演示` |
+| 记下一段对话/知识点 | `python scripts/cli.py deposit --text "..."` |
+| 从文件沉淀知识 | `python scripts/cli.py deposit --file notes.md` |
+| 语义检索记忆 | `python scripts/cli.py query "谁负责机器学习项目"` |
+| 让 AI 用记忆回答 | `python scripts/cli.py ask "我最近在做什么项目"` |
+| 查某段时间发生的事 | `python scripts/cli.py timeline --from 2026-07-01 --to 2026-07-31` |
+| 看知识图谱 | `python scripts/cli.py graph list` / `graph show`（Mermaid） |
+| 记忆健康度体检 | `python scripts/cli.py health` |
+| 压缩（去重+摘要） | `python scripts/cli.py compact --apply` |
+| 备份 / 恢复 | `python scripts/cli.py backup` / `restore <路径>` |
+| 写日记 | `python scripts/cli.py diary --text "今天想清楚了一件事"` |
+| 看是否有新版本 | `python scripts/cli.py update-check` |
+| 一键配置定时任务 | `python scripts/cli.py setup` |
+| 总览 | `python scripts/cli.py status` |
 
-> **大部分时候你只需要说第一句，AI 自动完成一切。**
+> **大部分时候你只需要说第一句，AI 自动完成一切。** 其余命令是给「想精细操控」的高级用户。
 
 ---
 
@@ -62,16 +79,16 @@ requires_api_key: false
 
 ```
 1. 对 AI 说：「帮我配置 + 设置定时任务」
-2. AI 自动完成：检测环境 → 生成脚本 → 启动定时任务 → 验证成功
+2. AI 自动完成：探测硬件 → 注册每日定时任务（python cli.py autopilot）
 ```
 
 启动后，每天 23:00 自动执行：
 
 ```
-分析今天对话 → 理解问题本质 → 自动修复 → 学习成长 → 预测风险 → 生成报告
+补录每日日志 → 沉淀知识点 → 记忆分析(根因) → 预测风险 → 进化报告 → 健康巡检 → 更新提醒
 ```
 
-**你完全不用管，它自己会跑。**
+**你完全不用管，它自己会跑。** 且定时任务由技能用系统自带能力注册（Windows 用 `schtasks`、macOS/Linux 用 `crontab`），**不生成任何 .ps1 / .sh / .bat 脚本文件**，更干净、更安全。
 
 ---
 
@@ -79,402 +96,202 @@ requires_api_key: false
 
 ---
 
-### 模块 1：智能记忆分析（理解本质）
+### 模块 1：长期记忆（跨会话 + 每日日志 + 日记）
 
-**AI 做了什么**：不只是提取关键词，而是还原问题的来龙去脉。
+**做了什么**：把你的对话、文件、每日日志统一沉淀为可检索的长期记忆；另设「日记」自由记录。
 
-**效果示例**：
+- 记忆落库在 `~/.workbuddy/memory/`（与 v1.7 完全兼容，原有每日日志原样保留）
+- 索引（图谱 + 向量）存于 `~/.workbuddy/memory/zwjh_store/`
+- 每天自动把当日日志补录进底座（幂等，不重复堆积）
 
+**示例**：
+```bash
+python scripts/cli.py deposit --text "客户张三的对接人是李四，需求是智能客服" --source conversation
+python scripts/cli.py diary --text "今天想清楚了一件事：记忆要先去重再沉淀"
 ```
-═══════════════════════════════════════════
-  🧠 深度记忆分析报告 (2026-07-05)
-═══════════════════════════════════════════
-  总对话行数: 67
-  识别表面问题: 4 个
-  还原根因: 2 个
-  关联历史经验: 3 条
-───────────────────────────────────────────
-
-  📋 表面问题 vs 根因:
-    1. 表面: SkillHub 发布失败
-       根因: Token 过期（上次更新: 30 天前）
-    2. 表面: PowerShell 运行失败
-       根因: 执行策略未设置（系统安全策略）
-
-  🔗 关联发现:
-    - 你最近频繁在 23:00+ 操作
-    - 与系统定时维护冲突（23:30 自动更新）
-    - 建议: 调整到 22:00 前
-
-  💡 隐含需求:
-    - 你需要一个「发布前检查清单」
-    - 你经常忘记刷新 token
-
-  ✅ 已自动修复: 3 个
-  ⚠️ 需关注: 1 个
-
-═══════════════════════════════════════════
-```
-
-<details>
-<summary>📋 展开查看完整代码</summary>
-
-```python
-import os, re, json
-from datetime import date, timedelta
-from collections import Counter, defaultdict
-
-def analyze_memory(auto_fix=True):
-    """智能记忆分析：理解本质、关联上下文、触达根因"""
-    today = date.today().strftime("%Y-%m-%d")
-    memory_dir = os.path.join(os.path.expanduser("~"), ".workbuddy", "memory")
-    today_file = os.path.join(memory_dir, f"{today}.md")
-    fix_log = os.path.join(memory_dir, "fix_log.json")
-    
-    if not os.path.exists(today_file):
-        print(f"📭 今日 ({today}) 没有记忆文件")
-        print()
-        print("💡 解决方案:")
-        print("  说「帮我配置 + 设置定时任务」— 一键创建环境")
-        print("  说「模拟演示」— 用假数据看 AI 怎么思考")
-        return None
-    
-    # 安全读取（处理所有异常）
-    content = safe_read(today_file)
-    if content is None:
-        return None
-    
-    # 提取对话段落
-    paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
-    
-    # 识别表面问题 + 还原根因
-    problems = []
-    for p in paragraphs:
-        issues = extract_issues(p)
-        for issue in issues:
-            root = find_root_cause(issue, fix_log)
-            problems.append({'surface': issue, 'root': root})
-    
-    # 发现隐含需求
-    needs = find_implicit_needs(content)
-    
-    # 自动修复
-    fixes = []
-    if auto_fix:
-        for prob in problems:
-            fixes.append(smart_fix(prob['root']))
-    
-    # 输出报告
-    print_report(today, problems, fixes, needs)
-    
-    # 记录日志
-    save_fix_log(fix_log, fixes)
-    
-    return {'problems': problems, 'fixes': fixes}
-
-def safe_read(filepath):
-    """安全读取文件（处理编码、权限等问题）"""
-    if not os.path.exists(filepath):
-        return None
-    
-    for enc in ['utf-8', 'gbk', 'gb2312', 'latin1']:
-        try:
-            with open(filepath, 'r', encoding=enc) as f:
-                content = f.read()
-            if enc != 'utf-8':
-                with open(filepath, 'w', encoding='utf-8') as f:
-                    f.write(content)
-            if not content.strip():
-                print(f"📭 记忆文件为空")
-                print("  说「模拟演示」先看效果")
-                return None
-            return content
-        except UnicodeDecodeError:
-            continue
-        except PermissionError:
-            print(f"❌ 权限不足: 关闭占用程序或以管理员身份运行")
-            return None
-    return None
-
-def extract_issues(text):
-    """提取问题"""
-    patterns = [
-        r'(?:报错|错误|失败|不行|问题|无法|bug|坑)[：:]?\s*(.+)',
-        r'(?:Exception|Error|Failed)[：:]?\s*(.+)',
-    ]
-    issues = []
-    for p in patterns:
-        for m in re.findall(p, text, re.IGNORECASE):
-            issues.append(m.strip())
-    return issues
-
-def find_root_cause(issue, fix_log):
-    """还原根因"""
-    d = issue.lower()
-    history = []
-    if os.path.exists(fix_log):
-        try:
-            with open(fix_log, 'r') as f:
-                history = json.load(f)
-        except:
-            pass
-    
-    if 'token' in d or 'key' in d:
-        recent = [h for h in history if any('token' in f.get('problem','').lower() for f in h.get('fixes',[]))]
-        date_str = recent[-1]['date'] if recent else '未知'
-        return f"Token 过期或类型错误（上次成功更新: {date_str}）"
-    if 'permission' in d or '权限' in d:
-        return "系统安全策略限制（执行策略/访问权限未配置）"
-    if 'module' in d or 'import' in d:
-        return "Python 环境未安装所需依赖库"
-    if 'network' in d or 'connection' in d:
-        return "网络连接不稳定或代理/VPN 设置问题"
-    if '文件' in d or '找不到' in d:
-        return "文件路径变更或被意外删除"
-    return "需要更多上下文分析"
-
-def find_implicit_needs(content):
-    """发现隐含需求"""
-    needs = []
-    c = content.lower()
-    if 'publish' in c or '发布' in c:
-        needs.append('发布前自动检查 token 和登录状态')
-    if 'skillhub' in c and 'token' in c:
-        needs.append('创建 token 定期刷新提醒')
-    return needs
-
-def smart_fix(root_cause):
-    """智能修复"""
-    d = root_cause.lower()
-    if 'token' in d:
-        return {'status': 'manual', 'cmd': 'skillhub auth whoami', 'msg': '请运行: skillhub auth whoami'}
-    if '权限' in d:
-        return {'status': 'manual', 'cmd': 'Set-ExecutionPolicy RemoteSigned', 'msg': '以管理员运行 PowerShell 并执行: Set-ExecutionPolicy RemoteSigned'}
-    if '依赖库' in d:
-        return {'status': 'success', 'cmd': 'pip install', 'msg': '可自动安装缺失库'}
-    if '网络' in d:
-        return {'status': 'manual', 'cmd': 'ping skillhub.cn', 'msg': '请检查网络连接'}
-    return {'status': 'logged', 'cmd': None, 'msg': '已记录，积累后可自动优化'}
-
-def print_report(today, problems, fixes, needs):
-    print("═══════════════════════════════════════════")
-    print(f"  🧠 深度记忆分析报告 ({today})")
-    print("═══════════════════════════════════════════")
-    ok = sum(1 for f in fixes if f['status'] == 'success')
-    manual = sum(1 for f in fixes if f['status'] == 'manual')
-    print(f"  识别问题: {len(problems)} | 自动修复: {ok} | 需操作: {manual}")
-    print("───────────────────────────────────────────")
-    for i, p in enumerate(problems, 1):
-        print(f"  {i}. {p['surface'][:40]}")
-        print(f"     → {p['root'][:50]}")
-    if needs:
-        print(f"\n  💡 建议: {'; '.join(needs)}")
-    print("\n═══════════════════════════════════════════")
-
-def save_fix_log(fix_log, fixes):
-    try:
-        logs = []
-        if os.path.exists(fix_log):
-            with open(fix_log, 'r') as f:
-                logs = json.load(f)
-        logs.append({'date': date.today().strftime("%Y-%m-%d"), 'fixes': fixes})
-        with open(fix_log, 'w') as f:
-            json.dump(logs, f, ensure_ascii=False, indent=2)
-    except:
-        pass
-
-if __name__ == "__main__":
-    analyze_memory()
-```
-
-</details>
 
 ---
 
-### 模块 2：一键定时任务配置
+### 模块 2：知识图谱（实体 / 关系）
 
-**AI 做了什么**：一句话配置好，AI 自动生成脚本并启动。
+**做了什么**：自动维护「人 / 项目 / 任务 / 事件 / 文档 / 概念 / 组织」等实体与关系。
 
-**只需要说**：`"设置定时任务"`
+- 显式关系模板：`负责 / 参与 / 隶属于 / 创建 / 依赖 / 导致 / 位于 / 关联`
+- 已知实体在同一段文本中**共现** → 自动连弱边（图谱随使用自然生长）
+- 关系权重累积、可导出 Mermaid 直接可视化
+- **可插拔**：其他 skill 可直接 `add-entity` / `relate` 注册自己的实体类型
 
-<details>
-<summary>📋 展开查看定时任务脚本</summary>
-
-```powershell
-# zwjh-skill 一键定时任务（复制到 PowerShell 运行）
-$Name = "ZwjhSkill_Evolution"
-$Py = "C:\Users\Administrator\.workbuddy\binaries\python\versions\3.13.12\python.exe"
-$Dir = "$env:USERPROFILE\.workbuddy\memory"
-$Log = "$env:USERPROFILE\.workbuddy\logs"
-if (!(Test-Path $Log)) { New-Item -ItemType Directory -Path $Log -Force }
-$Script = @'
-import sys; sys.path.insert(0, r"C:\Users\Administrator\.workbuddy\memory")
-try:
-    from zwjh_skill_v17 import analyze_memory, predict_risks, generate_report
-    analyze_memory(); predict_risks(); generate_report()
-except ImportError:
-    print("模块未安装，请先运行: pip install zwjh-skill")
-'@
-$Script | Out-File "$Dir\run_evolution.py" -Encoding UTF8
-$Act = New-ScheduledTaskAction -Execute $Py -Argument "$Dir\run_evolution.py" -WorkingDirectory $Dir
-$Trg = New-ScheduledTaskTrigger -Daily -At "23:00"
-$Cfg = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
-Register-ScheduledTask -TaskName $Name -Action $Act -Trigger $Trg -Settings $Cfg -Force | Out-Null
-$Task = Get-ScheduledTask -TaskName $Name
-Write-Host "✅ 定时任务已创建: $($Task.TaskName) | 状态: $($Task.State)"
-Write-Host "每天 23:00 自动执行，无需再操作"
-Write-Host "手动触发: Start-ScheduledTask -TaskName '$Name'"
-Write-Host "停止任务: Stop-ScheduledTask -TaskName '$Name'"
+**示例**：
+```bash
+python scripts/cli.py graph add-entity --type person --name 张三 --importance 0.9
+python scripts/cli.py graph relate --from 张三 --to 智能客服系统 --relation 负责
+python scripts/cli.py graph show
 ```
-
-</details>
-
-**常用命令速查**：
-
-| 操作 | 命令 |
-|------|------|
-| 手动触发 | `Start-ScheduledTask -TaskName "ZwjhSkill_Evolution"` |
-| 查看状态 | `Get-ScheduledTask -TaskName "ZwjhSkill_Evolution"` |
-| 停止 | `Stop-ScheduledTask -TaskName "ZwjhSkill_Evolution"` |
-| 删除 | `Unregister-ScheduledTask -TaskName "ZwjhSkill_Evolution"` |
-| 查看日志 | `Get-Content "$env:USERPROFILE\.workbuddy\logs\*.log"` |
 
 ---
 
-### 模块 3：预测性维护
+### 模块 3：自动沉淀（去重 + 冲突消解）
 
-**AI 做了什么**：自动分析历史数据，预测明天可能遇到的问题并提前预防。
+**做了什么**：从对话 / 文件自动提炼知识点，并保证质量。
+
+- **去重**：完全重复直接合并；近似重复（Jaccard ≥ 0.82）更新原条目而非新增
+- **冲突消解**：同一实体同一谓词出现不同值 → 旧值自动标记 `superseded`，保留历史可追溯
+- **事实抽取**：「X 的 Y 是 Z」自动写入图谱事实（如「客户李四 的产品 是 智能客服系统」）
 
 **效果**：
-
 ```
-═══════════════════════════════════════════
-  🔮 预测性维护报告
-═══════════════════════════════════════════
-
-  数据量: 12 天
-
-  ⚠️ 预测到 2 个潜在风险:
-    1. [高] Token 可能已过期（12 天未刷新）
-    2. [中] 磁盘临时文件增长 200MB
-
-  💡 预防措施已自动执行:
-    ✅ 已生成 token 检查提醒
-    ✅ 已清理过期临时文件
-
-═══════════════════════════════════════════
+沉淀「客户李四对接的产品是智能客服系统」
+  → 实体：客户李四(person)
+  → 事实：(客户李四, 产品, 智能客服系统)
 ```
 
-<details>
-<summary>📋 展开查看代码</summary>
+---
 
-```python
-def predict_risks():
-    """智能预测"""
-    memory_dir = os.path.join(os.path.expanduser("~"), ".workbuddy", "memory")
-    fix_log = os.path.join(memory_dir, "fix_log.json")
-    
-    print("═══════════════════════════════════════════")
-    print("  🔮 预测性维护报告")
-    print("═══════════════════════════════════════════")
-    
-    if not os.path.exists(fix_log):
-        print("  📭 暂无数据 - 先运行几次记忆分析")
-        return
-    
-    try:
-        with open(fix_log, 'r') as f:
-            logs = json.load(f)
-    except:
-        logs = []
-    
-    if not logs:
-        print("  📭 暂无历史记录")
-        return
-    
-    problem_freq = defaultdict(int)
-    for entry in logs[-7:]:
-        for fix in entry.get('fixes', []):
-            desc = fix.get('problem', '')
-            if 'token' in desc.lower() or 'key' in desc.lower():
-                problem_freq['token_expiry'] += 1
-            elif 'permission' in desc.lower() or '权限' in desc:
-                problem_freq['permission'] += 1
-            elif 'module' in desc.lower():
-                problem_freq['module'] += 1
-            elif 'network' in desc.lower():
-                problem_freq['network'] += 1
-    
-    predictions = []
-    for ptype, count in problem_freq.most_common(3):
-        if count >= 2:
-            risk = '高' if count >= 3 else '中'
-            predictions.append({'type': ptype, 'risk': risk})
-    
-    if predictions:
-        print(f"\n  数据量: {len(logs)} 天")
-        print(f"\n  ⚠️ 预测到 {len(predictions)} 个潜在风险:")
-        for p in predictions:
-            print(f"    [{p['risk']}] {p['type']}")
-    else:
-        print(f"  ✅ 近期运行稳定，无高风险")
-    
-    print("\n═══════════════════════════════════════════")
+### 模块 4：语义检索 + 时间线检索（零密钥）
 
-def generate_report(days=30):
-    """生成进化报告"""
-    memory_dir = os.path.join(os.path.expanduser("~"), ".workbuddy", "memory")
-    fix_log = os.path.join(memory_dir, "fix_log.json")
-    today = date.today()
-    
-    if not os.path.exists(fix_log):
-        print("📭 暂无数据")
-        return
-    
-    try:
-        with open(fix_log, 'r') as f:
-            logs = json.load(f)
-    except:
-        return
-    
-    cutoff = (today - timedelta(days=days)).strftime("%Y-%m-%d")
-    recent = [l for l in logs if isinstance(l, dict) and l.get('date', '') >= cutoff]
-    
-    if not recent:
-        print(f"最近 {days} 天无数据")
-        return
-    
-    total = 0
-    success = 0
-    for log in recent:
-        for fix in log.get('fixes', []):
-            total += 1
-            if fix.get('status') == 'success':
-                success += 1
-    
-    rate = (success / max(total, 1)) * 100
-    status = "📈 进步中" if rate > 70 else "📊 稳定" if rate > 50 else "📉 有挑战"
-    
-    report = f"""# 🧬 进化报告 ({today.strftime('%Y-%m-%d')})
+**做了什么**：两种检索，都不需要任何 API Key、不联网。
 
-**周期**: {(today - timedelta(days=days)).strftime('%Y-%m-%d')} ~ {today.strftime('%Y-%m-%d')}
+- **语义检索**：本地 TF-IDF（中文 char/bigram 向量）余弦相似度。即使表述不同（"学机器" vs "机器学习"）也能召回，毫秒级。
+- **时间线检索**：按日期区间 + 关键词过滤，还原「某段时间发生了什么」。
 
-## 📊 汇总
-- 总修复次数: **{total}**
-- 成功自动修复: **{success}** ({rate:.0f}%)
-- 数据覆盖: **{len(recent)}** 天
-
-## 🎯 成长状态
-{status}
-"""
-    print(report)
-    report_file = os.path.join(memory_dir, f"evolution_report_{today.strftime('%Y%m%d')}.md")
-    with open(report_file, 'w', encoding='utf-8') as f:
-        f.write(report)
-    print(f"📄 报告已保存: {report_file}")
+**示例**：
+```bash
+python scripts/cli.py query "谁负责机器学习项目"
+python scripts/cli.py timeline --from 2026-07-01 --to 2026-07-31 --keyword 发布
 ```
 
-</details>
+> 其他 skill 也可直接调用 `retrieval.ask(question)` 把长期记忆注入自己的上下文——这就是「可插拔基础设施」。
+
+---
+
+### 模块 5：记忆健康度审计 + 压缩 / 快照
+
+**解决「记忆膨胀」痛点**：记忆越多越慢、重复越多越乱。
+
+- **审计**：产出 0~100 健康度评分，列出陈旧记忆 / 孤儿实体（无关系）/ 冲突事实 / 近似重复 / DB 体积
+- **压缩**：对陈旧记忆做抽取式摘要、合并近似重复（先预览 dry-run，再 `--apply`）
+- **快照**：导出完整可恢复快照（实体/关系/事实/配置）
+
+```bash
+python scripts/cli.py health
+python scripts/cli.py compact --apply
+python scripts/cli.py snapshot
+```
+
+---
+
+### 模块 6：导出 / 备份 / 恢复（接百度网盘）
+
+**做了什么**：记忆可迁移、可恢复。
+
+- **默认本地备份**：快照 + 每日日志原文打包到 `zwjh_store/backups/`，自动保留最近 7 份
+- **百度网盘（可插拔）**：仅在用户本地已配置访问凭证时启用（凭证存本地 `config.json`，**不进技能包、不需要密钥**）；未配置时清晰提示，绝不偷偷联网
+- **恢复**：从备份写回图谱与每日日志
+
+```bash
+python scripts/cli.py backup
+python scripts/cli.py backup --target baidunetdisk   # 需先配置凭证
+python scripts/cli.py restore <备份目录路径>
+```
+
+---
+
+### 模块 7：硬件自适应（不拖累电脑）
+
+**做了什么**：自动探测 CPU 核心数 / 物理内存 / 系统，把机器分 `low / mid / high` 三档，自动给出：
+
+| 档位 | 并发 | 单批 | 向量缓存 | 适用 |
+|------|------|------|----------|------|
+| low  | 1 | 20 | 关 | ≤2 核或 <4GB |
+| mid  | 2 | 60 | 开 | ≤4 核或 <8GB |
+| high | ≤8 | 200 | 开 | 更高配 |
+
+- 检索/沉淀按档位**分批**处理，避免一次性占满内存
+- 提供 `recommend_subtasks(n)`：按任务量与档位建议拆成几个子任务（给上层调度用）
+- 探测失败回退保守 `low` 档，**绝不把电脑跑满**
+
+```bash
+python scripts/cli.py hardware
+```
+
+---
+
+### 模块 8：技能更新提醒
+
+**做了什么**：本地比较「技能包版本」与「本机已见版本」，发现新版本主动提示你升级（不依赖联网 / 密钥）。
+
+- 运行 `python scripts/cli.py update-check` 立即查看
+- 每日 `autopilot` 也会在结尾打印更新提示（若有）
+- 已见版本缓存于 `zwjh_store/installed_version.json`，避免重复打扰
+
+```bash
+python scripts/cli.py update-check
+```
+
+---
+
+### 模块 9（保留 v1.7）：记忆分析 / 预测性维护 / 进化报告
+
+原有「会思考的进化 AI」核心能力完整保留：
+
+- `analyze`：智能记忆分析（理解本质 / 根因 / 隐含需求 / 自动修复建议）
+- `predict`：预测性维护（从历史推断明日风险）
+- `report`：进化报告（成长趋势统计）
+- `demo`：无数据时看效果
+
+```bash
+python scripts/cli.py analyze
+python scripts/cli.py predict
+python scripts/cli.py report
+python scripts/cli.py demo
+```
+
+---
+
+## 典型应用场景
+
+- **让 Agent「记得你」**：减少重复解释背景，新对话自动带入历史上下文
+- **项目知识沉淀**：新人接手时一句 `ask "这个项目的关键人物和坑是什么"` 快速上手
+- **个人 / 客户 CRM（轻量）**：客户、对接人、需求自动成图谱，随问随答
+
+---
+
+## 差异化 / 竞争力
+
+- **中文优化**：char/bigram 向量对中文语义召回友好
+- **与其他 skill 打通**：作为可插拔记忆底座，任何 skill 都能 `import` 复用
+- **接企业微信 / 百度网盘做备份**：备份通道可插拔扩展
+- **可观测、可清理**：健康度评分 + 压缩/快照，正面解决「记忆膨胀」
+- **纯本地、零密钥**：无模型下载、无 API 费用、无隐私外泄
+
+---
+
+## 技术实现要点
+
+- **存储**：`sqlite3`（WAL 模式，写入不阻塞）+ 每日日志原文（append-only）
+- **向量**：本地 TF-IDF 稀疏向量（中文 char/bigram），**零模型、零密钥**
+- **图谱**：实体 / 关系表 + 共现 + 模板关系抽取 + 事实冲突消解
+- **调度**：硬件自适应并发 / 批大小；定时任务用系统原生能力注册（无脚本文件）
+- **可插拔**：嵌入适配器、百度网盘适配器、实体类型均可扩展
+
+---
+
+## 版本更新记录（v2.0.0）
+
+> 按「新增 / 优化 / 删除」规范记录。
+
+- **新增**：统一「记忆底座」（长期记忆 + 知识图谱 + 自动沉淀 + 检索），作为可插拔基础设施
+- **新增**：实体 / 关系知识图谱（人 / 项目 / 任务 / 事件 / 文档 / 概念 / 组织）
+- **新增**：跨会话长期记忆 + 每日日志 + 日记
+- **新增**：自动从对话 / 文件沉淀知识点（去重 + 冲突消解 + 事实抽取）
+- **新增**：本地语义检索 + 时间线检索（零密钥、零联网）
+- **新增**：记忆健康度审计 + 压缩 / 快照
+- **新增**：导出 / 备份 / 恢复（本地 + 百度网盘可插拔适配器）
+- **新增**：硬件自适应调度（按 CPU / 内存自动分配并发与批大小，不拖累电脑）
+- **新增**：技能更新提醒（本地版本比对，主动提示升级）
+- **优化**：纯标准库实现，无任何重依赖，冷启动快、资源占用低
+- **优化**：完整保留 v1.7 的记忆分析 / 根因 / 预测性维护 / 进化报告能力
+- **删除**：移除对外部密钥的依赖（原 token 检测改为本地化根因建议）
 
 ---
 
@@ -484,98 +301,75 @@ def generate_report(days=30):
 |--------|---------|
 | 修改 SKILL.md 本身 | 手动更新版本 |
 | 删除 MEMORY.md | 只追加不删除 |
-| 100% 自动修复 | 84%+ 可自动，复杂情况给精确命令 |
+| 100% 自动修复 | 复杂情况给精确命令 |
 | 完美概率预测 | 数据越多越准，冷启动也给建议 |
+| 联网语义（默认） | 默认本地向量；如需更强语义可自行挂接嵌入适配器 |
+| 百度网盘无凭证自动备份 | 先在 `config.json` 配置访问凭证，或用本地备份 |
 
 ---
 
-## ❓ 常见问题（20 个）
+## ❓ 常见问题（FAQ）
 
 ### Q1: 第一次使用怎么做？
-说 **「帮我配置 + 设置定时任务」**，AI 自动检测环境、创建文件、启动定时任务。
+说 **「帮我配置 + 设置定时任务」**，AI 自动探测硬件、注册定时任务。
 
 ### Q2: 没有记忆文件怎么办？
-说 **「模拟演示」**，用假数据看 AI 怎么运行。之后再聊几天话就有了。
+说 **「模拟演示」**，用假数据看效果。之后再聊几天话就有了。
 
 ### Q3: 定时任务设置了没反应？
-```powershell
-Start-ScheduledTask -TaskName "ZwjhSkill_Evolution"
+```bash
+python scripts/cli.py task-status      # 查看状态
+python scripts/cli.py autopilot        # 手动跑一次
 ```
 
 ### Q4: 如何暂停自动进化？
-```powershell
-Get-ScheduledTask -TaskName "ZwjhSkill_Evolution" | Stop-ScheduledTask
-```
-
-### Q5: 自动修复失败了怎么办？
-会提示精确的修复命令。复制粘贴到终端运行即可。
-
-### Q6: 如何查看进化报告？
-说 **「我进步了吗？」**，自动展示最近 30 天的修复统计和成长趋势。
-
-### Q7: 预测功能准确吗？
-基于你过去的数据推断。数据越多越准（7 天+ 较好）。
-
-### Q8: 支持 Mac/Linux 吗？
-支持。定时任务用 cron：
 ```bash
-(crontab -l; echo "0 23 * * * cd ~/.workbuddy/memory && python3 run_evolution.py") | crontab -
+python scripts/cli.py remove           # 删除定时任务
 ```
 
-### Q9: 文件编码错误怎么办？
-自动检测并转存 UTF-8。如果失败，删除旧文件即可重建。
+### Q5: 数据存在哪？安全吗？
+记忆原文在 `~/.workbuddy/memory/`，索引在 `~/.workbuddy/memory/zwjh_store/`。
+全部本地、**不上传任何外部服务器**、不要求任何密钥。
 
-### Q10: 权限不足怎么办？
-关闭占用文件的程序。如果还不行，右键 PowerShell → 以管理员身份运行。
+### Q6: 会拖慢电脑吗？
+不会。技能自动探测硬件并限流：低配机单线程小批量，高配机才多并发；检索/沉淀分批处理。
 
-### Q11: 数据泄露怎么办？
-全程本地运行，不上传任何外部服务器。
+### Q7: 记忆太多太乱怎么办？
+`python scripts/cli.py health` 看健康度，`compact --apply` 压缩去重，`snapshot` 留底。
 
-### Q12: 如何卸载？
-```powershell
-Unregister-ScheduledTask -TaskName "ZwjhSkill_Evolution"
-```
+### Q8: 怎么把记忆给别人 / 换电脑？
+`python scripts/cli.py backup` 导出到本地备份目录，拷贝即可；到新机器 `restore <路径>`。
 
-### Q13: 可以不设定时任务吗？
-可以。每次对话中直接说「分析今天的记忆」即可。定时任务只是让它自动跑。
+### Q9: 支持 Mac / Linux 吗？
+支持。定时任务用 `crontab`（由 `setup` 命令自动写入，不生成 .sh 文件）。
 
-### Q14: 记忆文件太多怎么办？
-系统只分析最近 30 天。更久的记录不会影响性能。
+### Q10: 怎么知道有新版本？
+`python scripts/cli.py update-check`；每日自动进化也会提示。
 
-### Q15: 如何看某一天的详细分析？
-说 **「分析 2026-07-01 的记忆」**，会读取那天的文件分析。
+### Q11: 其他 skill 怎么复用这个底座？
+直接 `from scripts import retrieval, store, graph, deposit` 调用；或用 CLI 的 `ask` / `deposit` 子命令。
 
-### Q16: 问题被误判了怎么办？
-说 **「标记误判: XXXX」**，下次遇到类似关键词会降低匹配权重。
-
-### Q17: 进化日志存在哪？
-`~/.workbuddy/memory/fix_log.json`
-
-### Q18: 如何备份学习成果？
-复制 `~/.workbuddy/memory/` 目录到其他位置。
-
-### Q19: Mac 下定时任务不执行？
-确保终端有「完全磁盘访问权限」→ 系统设置 → 隐私 → 完全磁盘访问权限 → 勾选终端/iTerm。
-
-### Q20: Python 版本不对怎么办？
-需要 Python 3.8+。用 `python --version` 检查。如果不对，修改定时任务中的 Python 路径。
+### Q12: Python 版本要求？
+Python 3.8+，标准库即可，无需安装任何第三方包。
 
 ---
 
 ## 安全声明
 
 - 所有分析在本地完成，不上传任何外部服务器
-- 只读取你指定的记忆目录，不碰其他文件
+- 不要求、不读取任何 API Key；联网功能均为可插拔且默认关闭
+- 只读写你指定的记忆目录，不碰其他文件
 - 自动修复有白名单，危险操作需确认
 - 所有文件操作都有异常捕获，不会崩溃
+- 定时任务由系统原生能力注册，**不生成任何 .ps1 / .sh / .bat 等可执行脚本**
 
 ---
 
 ## 支持
 
-- WorkBuddy、OpenClaw、CodX 等所有使用 `~/.workbuddy/memory/` 的平台
-- Windows / macOS / Linux
-- 中文界面
+- 平台：WorkBuddy 等使用 `~/.workbuddy/memory/` 的 Agent；Windows / macOS / Linux
+- 中文界面、零密钥、本地优先
+- 有更好建议：**njskills@agent.qq.com**
 
 ---
 
@@ -583,7 +377,9 @@ Unregister-ScheduledTask -TaskName "ZwjhSkill_Evolution"
 
 - **作者**: Admin
 - **许可证**: MIT
+- **最低引擎版本**: 1.0.0
 - **更新历史**:
+  - v2.0.0: 升级为统一记忆底座（长期记忆+知识图谱+自动沉淀+检索+健康度+备份+硬件自适应+更新提醒），保留 v1.7 能力，零密钥纯本地
   - v1.7.0: 大幅简化操作（一键启动）、增强自愈能力（极少人工介入）、功能开箱即用
   - v1.6.0: 思维进化引擎、根本原因分析、一键定时任务
   - v1.5.0: 友好错误处理、预测冷启动优化
