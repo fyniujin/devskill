@@ -2,7 +2,7 @@
 slug: wecom-voice-agent
 displayName: 企业微信语音消息 Agent
 name: wecom-voice-agent
-version: 1.1.0
+version: 1.2.0
 description: >
   企业微信语音消息 AI Agent 技能，自动处理语音消息的意图识别、多轮对话与任务执行。
   当用户向企业微信机器人发送语音消息时触发。核心价值：零 API Key 依赖、硬件自适应、轻量本地处理。
@@ -112,7 +112,7 @@ python scripts/session_manager.py stats
 | ❌ 发送超过60秒的语音 | ✅ 控制在 60 秒以内，长内容请打字 |
 | ❌ 在群聊中发语音 | ✅ 只对机器人**私聊**发语音 |
 | ❌ 发送方言（福建话、河南话等） | ✅ 用**普通话**或**粤语**发送 |
-| ❌ 说话时周围有电视/音乐 | ✅ 关掉背景音再说话，会被误识别为指令 |
+| ❌ 说话时周围有电视/音乐 | ✅ 关掉背景音再说话，会被误认为指令 |
 | ❌ 以为能自动打电话/发短信 | ✅ 这个技能**只是聊天助手**，不会主动联系任何人 |
 | ❌ 语音内容涉及密码/银行信息 | ✅ **切勿在语音中透露敏感信息**，所有文字均经过企业微信服务器 |
 
@@ -592,6 +592,32 @@ python D:/skill/wecom-voice-agent/scripts/session_manager.py cleanup --timeout 1
 python D:/skill/wecom-voice-agent/scripts/session_manager.py stats
 ```
 
+#### scripts/wecom_webhook_server.py
+
+企业微信智能机器人回调服务器。接收企业微信推送的消息回调，自动处理语音消息。
+
+```bash
+# 启动服务器（默认端口 8080）
+python D:/skill/wecom-voice-agent/scripts/wecom_webhook_server.py
+
+# 指定端口
+python D:/skill/wecom-voice-agent/scripts/wecom_webhook_server.py --port 9000
+```
+
+**功能**：
+- 接收企业微信智能机器人回调（语音/文本/图片等消息）
+- 自动解析语音消息内容（企业微信内置 ASR）
+- 执行意图识别和任务分发
+- 支持被动回复（同步）和主动回复（异步）
+
+**部署步骤**：
+1. 启动服务器：`python scripts/wecom_webhook_server.py --port 8080`
+2. 使用内网穿透暴露 8080 端口（frp/ngrok）
+3. 将穿透后的 URL 填入企业微信管理后台 → 智能机器人 → 回调 URL
+4. 发送语音消息测试
+
+> 📖 **详细部署指南**：参见 `references/step_by_step_setup.md`
+
 ### 配置文件
 
 本技能无需额外配置文件即可运行。
@@ -640,6 +666,18 @@ max_history: 5     # 单轮最大消息数
 
 ## 更新日志
 
+### v1.2.0 (2026-07-09)
+- ✅ **新增**：`wecom_webhook_server.py` — 企业微信智能机器人回调服务器
+- ✅ **新增**：`step_by_step_setup.md` — 分步部署指南（7步图文教程）
+- ✅ **新增**：健康检查端点 `/health`
+- ✅ **新增**：消息去重机制（基于 msgid）
+- ✅ **新增**：多消息类型支持（文本/语音/图片/混合/文件/视频）
+- ✅ **新增**：中文帮助信息自动回复
+- ✅ **增强**：意图识别支持"下周"等自然表达
+- ✅ **增强**：错误处理全部改为中文友好提示
+- ✅ **增强**：voice_simulator.py 支持 `--userid` 和 `--format json` 参数
+- ✅ **修复**：所有脚本仅依赖 Python 标准库，无需额外安装
+
 ### v1.1.0 (2026-07-09)
 - ✅ **新增**：避坑指南（8个常见坑 + 正确做法）
 - ✅ **新增**：从零开始的一步到位安装教程
@@ -657,7 +695,7 @@ max_history: 5     # 单轮最大消息数
 - ✅ 初始版本发布
 
 ### 后续规划
-- v1.2.0：群聊语音消息支持、更丰富的方言识别
+- v1.3.0：群聊语音消息支持、更丰富的方言识别
 - v2.0.0：长语音文件转写与会议纪要自动生成
 - v3.0.0：多模态能力（图片+语音混合消息）
 
