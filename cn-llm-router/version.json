@@ -1,0 +1,5 @@
+{
+  "version": "1.0.0",
+  "homepage": "https://skillhub.cn/skill/cn-llm-router",
+  "notes": "国产大模型统一路由 v1.0.0 首发：单入口路由 + 任务感知策略 + 跨模型成本聚合 + 硬件自适应 + 更新提醒。"
+}
