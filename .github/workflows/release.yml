@@ -1,4 +1,5 @@
 name: Sync to Gitee
+
 on:
   push:
     branches: [main]
@@ -17,20 +18,37 @@ jobs:
       - name: Sync to Gitee
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_OWNER: fyniujin_admin
+          GITEE_REPO: devskill
         run: |
+          set -e
+          if [ -z "$GITEE_TOKEN" ]; then
+            echo "::error::GITEE_TOKEN secret is EMPTY - cannot push to Gitee"
+            exit 1
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          SAFE_URL="https://fyniujin_admin:${GITEE_TOKEN}@gitee.com/fyniujin_admin/devskill.git"
+          SAFE_URL="https://${GITEE_OWNER}:${GITEE_TOKEN}@gitee.com/${GITEE_OWNER}/${GITEE_REPO}.git"
           git remote add gitee "${SAFE_URL}" 2>/dev/null || git remote set-url gitee "${SAFE_URL}"
+          OK=0
           for i in 1 2 3; do
-            if git push gitee main 2>/dev/null; then
+            echo "--- Attempt $i: git push gitee main ---"
+            if git push gitee main 2>&1; then
               echo "gitee push succeeded (attempt $i)"
+              OK=1
               break
             fi
-            echo "gitee push attempt $i failed, retrying with --force..."
-            if git push gitee main --force 2>/dev/null; then
+            echo "--- Attempt $i: git push gitee main --force ---"
+            if git push gitee main --force 2>&1; then
               echo "gitee force-push succeeded (attempt $i)"
+              OK=1
               break
             fi
+            echo "attempt $i failed"
             sleep 5
           done
+          if [ "$OK" -ne 1 ]; then
+            echo "::error::Gitee push FAILED after 3 attempts. Check GITEE_TOKEN validity and that ${GITEE_OWNER}/${GITEE_REPO} exists on Gitee."
+            exit 1
+          fi
+          echo "Gitee sync OK"
