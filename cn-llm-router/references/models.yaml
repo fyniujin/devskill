@@ -1,0 +1,179 @@
+# 模型注册表（国产大模型统一路由）
+# 说明：
+# - 价格为示例（元 / 每 1M tokens），请以各厂商官方最新定价为准。
+# - 新增厂商：只需在此加一段 provider + 一个 adapter（见 scripts/adapters），不动路由逻辑。
+# - 字段含义：
+#     display       中文名
+#     adapter       适配器类型：openai_compat / ernie / spark
+#     base_url      API 基址（openai_compat / ernie 用）
+#     base_url_openai  文心 Qianfan OpenAI 兼容端点（可选）
+#     env_hint      所需环境变量名（仅提示，密钥不进包）
+#     default_model 默认模型
+#     models[]      name / ctx(上下文窗口 token) / price_in / price_out / reasoner(可选)
+# - 本文件纯数据，不含任何密钥。
+
+providers:
+  deepseek:
+    display: DeepSeek
+    adapter: openai_compat
+    base_url: https://api.deepseek.com
+    env_hint: DEEPSEEK_API_KEY
+    default_model: deepseek-chat
+    models:
+      -
+        name: deepseek-chat
+        ctx: 64000
+        price_in: 1
+        price_out: 2
+      -
+        name: deepseek-reasoner
+        ctx: 64000
+        price_in: 4
+        price_out: 16
+        reasoner: true
+  qwen:
+    display: 阿里通义千问
+    adapter: openai_compat
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    env_hint: DASHSCOPE_API_KEY
+    default_model: qwen-plus
+    models:
+      -
+        name: qwen-turbo
+        ctx: 32000
+        price_in: 0.8
+        price_out: 2
+      -
+        name: qwen-plus
+        ctx: 128000
+        price_in: 0.8
+        price_out: 2
+      -
+        name: qwen-max
+        ctx: 32000
+        price_in: 2.4
+        price_out: 9.6
+      -
+        name: qwen-long
+        ctx: 1000000
+        price_in: 0.5
+        price_out: 2
+  glm:
+    display: 智谱 GLM
+    adapter: openai_compat
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    env_hint: ZHIPU_API_KEY
+    default_model: glm-4-flash
+    models:
+      -
+        name: glm-4-flash
+        ctx: 128000
+        price_in: 0.1
+        price_out: 0.1
+      -
+        name: glm-4-air
+        ctx: 128000
+        price_in: 1
+        price_out: 1
+      -
+        name: glm-4-plus
+        ctx: 128000
+        price_in: 10
+        price_out: 10
+  kimi:
+    display: 月之暗面 Kimi
+    adapter: openai_compat
+    base_url: https://api.moonshot.cn/v1
+    env_hint: MOONSHOT_API_KEY
+    default_model: moonshot-v1-8k
+    models:
+      -
+        name: moonshot-v1-8k
+        ctx: 8000
+        price_in: 1
+        price_out: 1
+      -
+        name: moonshot-v1-32k
+        ctx: 32000
+        price_in: 2.4
+        price_out: 2.4
+      -
+        name: moonshot-v1-128k
+        ctx: 128000
+        price_in: 10
+        price_out: 10
+  hunyuan:
+    display: 腾讯混元
+    adapter: openai_compat
+    base_url: https://api.hunyuan.cloud.tencent.com/v1
+    env_hint: HUNYUAN_API_KEY
+    default_model: hunyuan-lite
+    models:
+      -
+        name: hunyuan-lite
+        ctx: 32000
+        price_in: 0.6
+        price_out: 0.6
+      -
+        name: hunyuan-standard
+        ctx: 32000
+        price_in: 1.2
+        price_out: 1.2
+      -
+        name: hunyuan-pro
+        ctx: 128000
+        price_in: 3
+        price_out: 3
+      -
+        name: hunyuan-long
+        ctx: 256000
+        price_in: 3
+        price_out: 3
+  doubao:
+    display: 字节豆包
+    adapter: openai_compat
+    base_url: https://ark.cn-beijing.volces.com/api/v3
+    env_hint: ARK_API_KEY
+    default_model: doubao-pro-32k
+    models:
+      -
+        name: doubao-pro-32k
+        ctx: 32000
+        price_in: 0.8
+        price_out: 2
+      -
+        name: doubao-lite-32k
+        ctx: 32000
+        price_in: 0.3
+        price_out: 0.6
+  ernie:
+    display: 百度文心
+    adapter: ernie
+    base_url: https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions_pro
+    base_url_openai: https://qianfan.baidubce.com/v2
+    env_hint: ERNIE_OPENAI_KEY
+    default_model: ernie-4.0-8k
+    models:
+      -
+        name: ernie-4.0-8k
+        ctx: 8000
+        price_in: 8
+        price_out: 8
+      -
+        name: ernie-3.5-8k
+        ctx: 8000
+        price_in: 1.2
+        price_out: 1.2
+  spark:
+    display: 讯飞星火
+    adapter: spark
+    version: v3.5
+    domain: generalv3.5
+    env_hint: SPARK_APP_ID / SPARK_API_KEY / SPARK_API_SECRET
+    default_model: spark-v3.5
+    models:
+      -
+        name: spark-v3.5
+        ctx: 32000
+        price_in: 1.2
+        price_out: 1.2
