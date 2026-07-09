@@ -1,8 +1,4 @@
-# 企业微信语音消息 Agent Skill
-
-## 概述
-
-一个轻量级的企业微信语音消息 AI Agent 技能。监听企业微信智能机器人接收到的语音消息，自动进行意图识别、任务执行、多轮对话管理和语音回复。
+# 企业微信语音消息 Agent
 
 ## ✨ 核心特性
 
@@ -12,75 +8,51 @@
 - **性能优先** - 低配电脑也能流畅运行
 - **安全可靠** - 所有数据处理在本地完成，不上传用户隐私
 
+## 🚀 快速开始
+
+```bash
+# 方式一：直接安装体验
+skillhub install wecom-voice-agent
+
+# 方式二：本地体验（无需安装任何 Python 包）
+cd D:/skill/wecom-voice-agent
+python scripts/detect_hardware.py
+python scripts/voice_simulator.py --text "明天有什么会议"
+python scripts/voice_simulator.py --text "北京今天天气怎么样"
+python scripts/voice_simulator.py --text "提醒我下午3点提交报告"
+python scripts/session_manager.py create --userid zhangsan
+```
+
+> ✅ 所有脚本仅使用 Python 标准库，无需任何依赖
+
+## 🪤 避坑指南（必看）
+
+| 常见坑 | 正确做法 |
+|-------|---------|
+| ❌ 在嘈杂环境发送语音指令 | ✅ 在安静环境说话，距离麦克风 20-30cm |
+| ❌ 一次说多句话（如"查日程然后帮我订会议室"） | ✅ 一次只做一件事，分开发送 |
+| ❌ 发送超过60秒的语音 | ✅ 控制在 60 秒以内，长内容请打字 |
+| ❌ 在群聊中发语音 | ✅ 只对机器人**私聊**发语音 |
+| ❌ 发送方言（福建话、河南话等） | ✅ 用**普通话**或**粤语**发送 |
+| ❌ 说话时周围有电视/音乐 | ✅ 关掉背景音再说话 |
+| ❌ 以为能自动打电话/发短信 | ✅ 这个技能**只是聊天助手**，不会主动联系任何人 |
+| ❌ 语音内容涉及密码/银行信息 | ✅ **切勿在语音中透露敏感信息** |
+
 ## 📁 项目结构
 
 ```
 wecom-voice-agent/
-├── SKILL.md                      # 技能主文件（包含可运行命令）
+├── SKILL.md                      # 技能主文件（包含指令 + 可运行命令）
 ├── README.md                     # 项目说明
 ├── references/
 │   └── wecom_bot_api.md          # 企业微信机器人 API 参考
 └── scripts/
     ├── detect_hardware.py        # 硬件检测脚本
-    ├── voice_simulator.py        # 语音消息模拟器
+    ├── voice_simulator.py        # 语音消息模拟器（支持 --userid 和 --format json）
     └── session_manager.py        # 会话管理器
 ```
 
-## 🚀 快速开始
-
-### 1. 安装
-
-```bash
-# 方式1：从 SkillHub 安装
-skillhub install wecom-voice-agent
-
-# 方式2：本地安装
-cd D:/skill/wecom-voice-agent
-```
-
-### 2. 硬件检测
-
-```bash
-python D:/skill/wecom-voice-agent/scripts/detect_hardware.py
-```
-
-### 3. 本地模拟测试
-
-```bash
-# 模拟语音消息回调
-python D:/skill/wecom-voice-agent/scripts/voice_simulator.py --text "明天有什么会议"
-```
-
-### 4. 会话管理
-
-```bash
-# 创建新会话
-python D:/skill/wecom-voice-agent/scripts/session_manager.py create --userid zhangsan
-
-# 查看会话
-python D:/skill/wecom-voice-agent/scripts/session_manager.py get --session_id <id> --format table
-
-# 查看所有会话统计
-python D:/skill/wecom-voice-agent/scripts/session_manager.py stats
-
-# 清理过期会话
-python D:/skill/wecom-voice-agent/scripts/session_manager.py cleanup
-```
-
-## 🔧 配置说明
-
-本技能**无需额外配置文件**即可运行。
-
-如需自定义，可在工作目录创建 `.workbuddy/wecom-voice-agent.yaml`：
-
-```yaml
-tts_engine: edge  # edge 或 volcengine
-log_level: info
-session_timeout: 60
-max_history: 5
-```
-
-## 📋 支持的语音命令示例
+## 📋 支持的命令示例
 
 | 命令示例 | 功能 |
 |---------|------|
@@ -110,6 +82,11 @@ max_history: 5
 如有更好的建议或遇到问题，欢迎发送邮件至：
 
 **njskills@agent.qq.com**
+
+## 📜 版本历史
+
+- **v1.1.0** (2026-07-09) - 新增避坑指南、快速开始教程、模糊表达处理、中文错误提示
+- **v1.0.0** (2026-07-08) - 初始版本
 
 ## 📜 许可证
 
