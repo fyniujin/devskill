@@ -3,7 +3,7 @@ slug: cn-llm-router
 displayName: 国产大模型统一路由
 name: cn-llm-router
 description: 国产大模型统一路由。把 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、字节豆包、百度文心、讯飞星火等 8 家国产大模型收敛成一个命令入口；按任务类型（代码/推理/长文/翻译/摘要/抽取）自动或手动选择最合适、最省钱的模型；自动统计跨厂商 token 成本、硬件自适应限流（不拖累电脑）、本地语义缓存省 token、技能更新提醒。当用户需要「调用国产大模型」「多模型比价/降本」「统一管理多个模型 Key」「本地跑大模型路由」「不想被某一家厂商绑定」时使用。
-version: 1.1.0
+version: 1.2.0
 author: njskills
 license: MIT
 tags: [国产大模型, 模型路由, 成本统计, 多模型, 硬件自适应, 语义缓存, 零密钥]
@@ -357,11 +357,11 @@ python scripts/router.py version
 **运行效果：**
 ```
 $ python scripts/router.py version
-cn-llm-router v1.1.0 | 作者: njskills@agent.qq.com
+cn-llm-router v1.2.0 | 作者: njskills@agent.qq.com
 主页: https://skillhub.cn/skill/cn-llm-router
 
 $ python scripts/router.py update-check
-✅ 已是最新版本 v1.1.0
+✅ 已是最新版本 v1.2.0
 ```
 
 > Windows 用户把 `python` 换成 `python.exe` 或 `py`；PowerShell 里环境变量用 `$env:XXX="..."`。
@@ -537,6 +537,7 @@ python scripts/router.py update-check
 
 | 版本 | 更新内容 |
 |------|----------|
+| v1.2.0 | 修复：文件 BUG；优化：数据处理速度；修改：语法错误 |
 | v1.1.0 | 优化：缓存模糊匹配加入长度惩罚系数与最短查询限制，大幅减少「答非所问」式误命中；提升：流式输出 token 估算精度（无 usage 时按中英文混合规则兜底并标注「估」）；新增：SKILL.md 命令运行效果示例（每个命令均有真实输出样例）、反模式章节（8 条常见坑）、FAQ 扩充至 10 条、使用场景推荐与调优建议章节；修复：displayName 改为中文「国产大模型统一路由」，解决上传后显示英文名的问题 |
 | v1.0.0 | 首发：单入口路由 + 任务感知策略（auto/cheap/quality/manual）+ 跨模型成本聚合 + 硬件自适应并发限制 + 本地语义缓存 + 更新提醒 + 8 家国产大模型全覆盖 |
 
@@ -552,4 +553,4 @@ python scripts/router.py update-check
 
 ---
 
-*版本：v1.1.0 ｜ 许可：MIT ｜ 核心纯标准库（讯飞星火可选 websocket-client）、零密钥打包、可只读审计。*
+*版本：v1.2.0 ｜ 许可：MIT ｜ 核心纯标准库（讯飞星火可选 websocket-client）、零密钥打包、可只读审计。*
