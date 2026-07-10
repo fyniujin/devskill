@@ -2,10 +2,11 @@
 slug: wecom-voice-agent
 displayName: 企业微信语音消息 Agent
 name: wecom-voice-agent
-version: 1.2.0
+version: 1.3.0
 description: >
   企业微信语音消息 AI Agent 技能，自动处理语音消息的意图识别、多轮对话与任务执行。
   当用户向企业微信机器人发送语音消息时触发。核心价值：零 API Key 依赖、硬件自适应、轻量本地处理。
+  v1.3.0 起支持真正的天气查询（wttr.in 免费 API）和当前时间查询（本地计算），无需任何额外配置。
 author: njskills
 category: 办公协作
 platforms:
@@ -597,6 +598,9 @@ python D:/skill/wecom-voice-agent/scripts/session_manager.py stats
 企业微信智能机器人回调服务器。接收企业微信推送的消息回调，自动处理语音消息。
 
 ```bash
+# 一键体验所有功能（无需启动服务）
+python D:/skill/wecom-voice-agent/scripts/wecom_webhook_server.py --quick
+
 # 启动服务器（默认端口 8080）
 python D:/skill/wecom-voice-agent/scripts/wecom_webhook_server.py
 
@@ -604,11 +608,12 @@ python D:/skill/wecom-voice-agent/scripts/wecom_webhook_server.py
 python D:/skill/wecom-voice-agent/scripts/wecom_webhook_server.py --port 9000
 ```
 
-**功能**：
-- 接收企业微信智能机器人回调（语音/文本/图片等消息）
-- 自动解析语音消息内容（企业微信内置 ASR）
-- 执行意图识别和任务分发
-- 支持被动回复（同步）和主动回复（异步）
+**v2.0 核心升级**：
+- ✅ **真正的天气查询**：调用 wttr.in 免费 API（无需 key），中文描述 + 穿衣建议
+- ✅ **当前时间查询**：本地计算，100%可用，无需任何网络依赖
+- ✅ **意图识别增强**：关键词 + 正则混合匹分，置信度评分
+- ✅ **多轮对话**：根据 `msgid` 去重，会话缓存管理
+- ✅ **中文错误提示**：全部错误给出具体解决步骤
 
 **部署步骤**：
 1. 启动服务器：`python scripts/wecom_webhook_server.py --port 8080`
@@ -665,6 +670,21 @@ max_history: 5     # 单轮最大消息数
 ---
 
 ## 更新日志
+
+### v1.3.0 (2026-07-10)
+- ✅ **重大升级**：`wecom_webhook_server.py` 升级到 v2.0
+- ✅ **新增**：真正的天气查询（wttr.in 免费 API，无需 key，中文描述 + 穿衣建议）
+- ✅ **新增**：当前时间查询（本地计算，100%可用）
+- ✅ **新增**：`--quick` 一键体验模式（10 个测试用例自动运行）
+- ✅ **新增**：意图识别增强（关键词 + 正则混合匹配，置信度评分）
+- ✅ **新增**：实体提取增强（时间/地点/人物，支持"下午3点"→15:00 转换）
+- ✅ **新增**：智能确认策略（模糊输入时给出选项菜单而非死回复）
+- ✅ **新增**：消息去重机制（基于 msgid）
+- ✅ **新增**：健康检查端点 `/health`
+- ✅ **新增**：中文帮助信息自动回复
+- ✅ **修复**：所有回复不再出现"需要配置API接入"，改为真正执行或给出可操作指引
+- ✅ **修复**：天气描述含逗号时不再显示原始英文
+- ✅ **修复**：人物提取不再把"张三发"当成人名
 
 ### v1.2.0 (2026-07-09)
 - ✅ **新增**：`wecom_webhook_server.py` — 企业微信智能机器人回调服务器
