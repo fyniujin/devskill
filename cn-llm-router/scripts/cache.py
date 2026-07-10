@@ -15,7 +15,9 @@ import re
 import difflib
 
 DEFAULT_CACHE_DB = os.path.join(os.path.expanduser("~"), ".cn_llm_router", "cache.db")
-FUZZY_THRESHOLD = 0.92
+FUZZY_THRESHOLD = 0.80
+# 模糊匹配最低字符数：过短的 query 容易误命中（如"你好"匹配到"你好吗"），直接跳过模糊。
+MIN_FUZZY_LEN = 8
 
 
 def _norm(text):
@@ -68,20 +70,33 @@ def get(prompt, ttl_hours=168, fuzzy=False, db_path=None):
                 c.commit()
 
         if fuzzy:
-            rows = c.execute(
-                "SELECT provider, model, response, norm_query, created_at FROM cache"
-            ).fetchall()
-            best = None
-            best_ratio = 0.0
-            for provider, model, resp, nq, created in rows:
-                if (now - created) > ttl_hours * 3600:
-                    continue
-                ratio = difflib.SequenceMatcher(None, norm, nq).ratio()
-                if ratio > best_ratio:
-                    best_ratio = ratio
-                    best = (provider, model, resp)
-            if best and best_ratio >= FUZZY_THRESHOLD:
-                return best
+            # 过短的 query 跳过模糊匹配，避免短句误命中
+            if len(norm) < MIN_FUZZY_LEN:
+                pass  # 不做模糊，直接返回 None
+            else:
+                rows = c.execute(
+                    "SELECT provider, model, response, norm_query, created_at FROM cache"
+                ).fetchall()
+                best = None
+                best_ratio = 0.0
+                for provider, model, resp, nq, created in rows:
+                    if (now - created) > ttl_hours * 3600:
+                        continue
+                    ratio = difflib.SequenceMatcher(None, norm, nq).ratio()
+                    # 长度惩罚：两句话长度差异越大，越可能是不同问题
+                    # 惩罚公式：adjusted = raw_ratio × (0.8 + 0.2 × length_ratio)
+                    # 同长时不惩罚(×1.0)，极端差异时保留原始分数的 80%
+                    len_a, len_b = len(norm), len(nq)
+                    if min(len_a, len_b) > 0:
+                        length_penalty = min(len_a, len_b) / max(len_a, len_b)
+                    else:
+                        length_penalty = 0.0
+                    adjusted_ratio = ratio * (0.8 + 0.2 * length_penalty)
+                    if adjusted_ratio > best_ratio:
+                        best_ratio = adjusted_ratio
+                        best = (provider, model, resp)
+                if best and best_ratio >= FUZZY_THRESHOLD:
+                    return best
     finally:
         c.close()
     return None
