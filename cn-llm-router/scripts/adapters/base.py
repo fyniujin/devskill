@@ -9,6 +9,7 @@
 
 import time
 import json
+import re
 import urllib.request
 import urllib.error
 
@@ -40,6 +41,20 @@ def http_post_json(url, headers, payload, timeout=60):
 def _short(text, n=300):
     text = (text or "").replace("\n", " ")
     return text[:n] + ("…" if len(text) > n else "")
+
+
+def _estimate_tokens(text):
+    """根据文本粗略估算 token 数（用于流式输出无 usage 字段时的兜底）。
+    规则：中文/全角字符 ≈ 1.5 tokens/字，英文单词 ≈ 1.3 tokens/词，标点/空白折半。
+    """
+    if not text:
+        return 0
+    cn_chars = len(re.findall(r"[\u4e00-\u9fff\uff00-\uffef]", text))
+    en_matches = re.findall(r"[a-zA-Z]+", text)
+    en_words = len(en_matches)
+    en_chars = sum(len(m) for m in en_matches)  # 英文字符总长度（用于计算 other）
+    other = len(text) - cn_chars - en_chars
+    return int(cn_chars * 1.5 + en_words * 1.3 + other * 0.5)
 
 
 class AdapterBase:
