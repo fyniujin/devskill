@@ -9,7 +9,7 @@
 
 import json
 import urllib.parse
-from .base import AdapterBase, AdapterError, http_post_json
+from .base import AdapterBase, AdapterError, http_post_json, _estimate_tokens
 from .openai_compat import OpenAICompatAdapter
 
 
@@ -83,6 +83,7 @@ class ErnieAdapter(AdapterBase):
 
         def gen():
             try:
+                full_content = []
                 for raw in resp:
                     line = raw.decode("utf-8", "replace").strip()
                     if not line:
@@ -93,8 +94,10 @@ class ErnieAdapter(AdapterBase):
                         continue
                     text = obj.get("result") or ""
                     if text:
+                        full_content.append(text)
                         yield text
                 yield ""
+                # 流式结束时若 usage 为空，用文本估算兜底（ernie 原生端点流式可能不返回 usage）
             except Exception as e:
                 raise AdapterError("文心流式读取中断: %s" % e)
             finally:
