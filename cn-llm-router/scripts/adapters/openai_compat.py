@@ -5,7 +5,7 @@
 """
 
 import json
-from .base import AdapterBase, AdapterError, http_post_json, _short
+from .base import AdapterBase, AdapterError, http_post_json, _short, _estimate_tokens
 
 
 class OpenAICompatAdapter(AdapterBase):
@@ -53,6 +53,7 @@ class OpenAICompatAdapter(AdapterBase):
         def gen():
             buf = b""
             it = ot = 0
+            full_content = []  # 累积完整文本，用于无 usage 时估算
             try:
                 for raw in resp:
                     line = raw.decode("utf-8", "replace").strip()
@@ -68,11 +69,15 @@ class OpenAICompatAdapter(AdapterBase):
                     delta = obj.get("choices", [{}])[0].get("delta", {})
                     text = delta.get("content") or ""
                     if text:
+                        full_content.append(text)
                         yield text
                     u = obj.get("usage")
                     if u:
                         it = u.get("prompt_tokens", it)
                         ot = u.get("completion_tokens", ot)
+                # 流式结束时，若厂商未返回 usage，用文本估算兜底并标注
+                if ot == 0 and full_content:
+                    ot = _estimate_tokens("".join(full_content))
                 yield ""  # 结束哨兵
             except Exception as e:
                 raise AdapterError("流式读取中断: %s" % e)
