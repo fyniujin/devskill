@@ -23,6 +23,7 @@ import yaml_simple
 import update_check
 import router
 import report
+from adapters.base import _estimate_tokens
 
 
 class TestRegistry(unittest.TestCase):
@@ -191,6 +192,66 @@ class TestSuggestMode(unittest.TestCase):
         self.assertIn(p, self.reg["providers"])
         names = [x["name"] for x in self.reg["providers"][p]["models"]]
         self.assertIn(m, names)
+
+
+class TestCacheV11(unittest.TestCase):
+    """v1.1.0 缓存改进：最短查询限制 + 长度惩罚。"""
+    _db = os.path.join(tempfile.gettempdir(), "cnllm_test_cache_v11.db")
+
+    def setUp(self):
+        if os.path.exists(self._db):
+            os.remove(self._db)
+
+    def test_short_query_skips_fuzzy(self):
+        """不足 MIN_FUZZY_LEN(8) 字符的查询不做模糊匹配。"""
+        cache.put("这是一个比较长的问题关于量子力学", "deepseek", "deepseek-chat", "长答案", db_path=self._db)
+        # 短 query（"量子力学" 只有 4 字符）不应模糊命中
+        hit = cache.get("量子力学", fuzzy=True, db_path=self._db)
+        self.assertIsNone(hit, "短查询(<8字符) 不应触发模糊匹配")
+
+    def test_length_penalty_avoids_false_match(self):
+        """长度差异大的两个问题，即使文字部分相似也不应误命中。"""
+        cache.put("请详细解释 Python 中的装饰器模式及其在 Web 框架中的应用场景",
+                  "deepseek", "deepseek-chat", "装饰器答案", db_path=self._db)
+        # 这个问题虽然包含"Python"，但长度差异大且含义不同
+        hit = cache.get("Python 怎么安装第三方库", fuzzy=True, db_path=self._db)
+        self.assertIsNone(hit, "长度差异大+语义不同的 query 不应模糊命中")
+
+    def test_fuzzy_hit_when_similar_enough(self):
+        """真正相似的问题（仅少量虚词/标点差异）应能模糊命中。"""
+        cache.put("如何用Python实现快速排序算法",
+                  "deepseek", "deepseek-chat", "快排代码", db_path=self._db)
+        # 仅多了"请"字和问号差异，高度相似
+        hit = cache.get("如何用 Python 实现快速排序算法？", fuzzy=True, db_path=self._db)
+        self.assertIsNotNone(hit, "高度相似的 query 应模糊命中(adjusted>=0.80)")
+        self.assertEqual(hit[2], "快排代码")
+
+
+class TestTokenEstimate(unittest.TestCase):
+    """v1.1.0 流式 token 估算精度测试。"""
+
+    def test_pure_chinese(self):
+        """中文文本：每字约 1.5 tokens。"""
+        est = _estimate_tokens("你好世界")
+        # 4 个中文字 * 1.5 ≈ 6
+        self.assertGreaterEqual(est, 5)
+        self.assertLessEqual(est, 8)
+
+    def test_pure_english(self):
+        """英文文本：每词约 1.3 tokens。"""
+        est = _estimate_tokens("hello world test")
+        # 3 词 * 1.3 ≈ 3.9 → int=3
+        self.assertGreaterEqual(est, 3)
+        self.assertLessEqual(est, 6)
+
+    def test_mixed(self):
+        """中英混合文本。"""
+        est = _estimate_tokens("Hello 你好 world 世界")
+        self.assertGreater(est, 0)
+
+    def test_empty(self):
+        self.assertEqual(_estimate_tokens(""), 0)
+        self.assertEqual(_estimate_tokens(None), 0)
 
 
 if __name__ == "__main__":
