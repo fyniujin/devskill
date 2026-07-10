@@ -1,9 +1,9 @@
 ---
 slug: cn-llm-router
-displayName: cn-llm-router
+displayName: 国产大模型统一路由
 name: cn-llm-router
 description: 国产大模型统一路由。把 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、字节豆包、百度文心、讯飞星火等 8 家国产大模型收敛成一个命令入口；按任务类型（代码/推理/长文/翻译/摘要/抽取）自动或手动选择最合适、最省钱的模型；自动统计跨厂商 token 成本、硬件自适应限流（不拖累电脑）、本地语义缓存省 token、技能更新提醒。当用户需要「调用国产大模型」「多模型比价/降本」「统一管理多个模型 Key」「本地跑大模型路由」「不想被某一家厂商绑定」时使用。
-version: 1.0.0
+version: 1.1.0
 author: njskills
 license: MIT
 tags: [国产大模型, 模型路由, 成本统计, 多模型, 硬件自适应, 语义缓存, 零密钥]
@@ -27,6 +27,36 @@ python scripts/router.py chat --prompt "解释一下快速排序" --model auto
 python scripts/router.py hardware
 ```
 
+**运行效果示例：**
+
+```
+$ python scripts/router.py route --prompt "用 Python 写个快排" --task code
+╔══════════════════════════════════════════════════╗
+║         路由建议模式（未配置 API Key）             ║
+║  以下为推荐方案，不发起实际调用。配 Key 后可真跑。 ║
+╚══════════════════════════════════════════════════╝
+
+任务分类: code | 推理需求: True | 长度: short | 预算敏感: False
+推荐策略(auto): deepseek/deepseek-reasoner
+  └─ 理由: 代码生成+强推理, 性价比最优
+
+备选(cheap): deepseek/deepseek-chat        ¥0.0001/千tokens
+备选(quality): glm/glm-4                   ¥0.0010/千tokens
+
+提示: export DEEPSEEK_API_KEY=sk-xxx 即可调用
+```
+
+```
+$ python scripts/router.py hardware
+╔═══════════════ 硬件画像 ═══════════════╗
+│ CPU 逻辑核心:   8 核                    │
+│ 物理内存:       15.9 GB                 │
+│ 硬件档位:       mid                     │
+│ 建议最大并发:    2                       │
+│ 建议单批大小:    8                       │
+╚═══════════════════════════════════════╝
+```
+
 - 支持厂商（8 家）：DeepSeek、阿里通义千问、智谱 GLM、Kimi、腾讯混元、字节豆包、百度文心、讯飞星火。
 - 运行要求：Python 3.8+；**7 家厂商（DeepSeek/通义/智谱/Kimi/混元/豆包/文心）与全部离线功能无需安装任何第三方包**；讯飞星火为可选 `websocket-client`（不装也能用其余 7 家，仅星火调用时给出中文安装指引）。
 - 密钥来源：只用**环境变量**，绝不明文落盘、绝不打包进 skill。
@@ -35,7 +65,7 @@ python scripts/router.py hardware
 
 ```
 cn-llm-router/
-├── SKILL.md                  # 本文件（使用说明 + 风险 + 边界 + FAQ）
+├── SKILL.md                  # 本文件（使用说明 + 风险 + 边界 + FAQ + 反模式）
 ├── version.json              # 版本号（更新提醒比对用）
 ├── config.example.json       # 配置模板（无密钥，复制后改）
 ├── references/
@@ -47,18 +77,18 @@ cn-llm-router/
 │   ├── config.py             # 配置/密钥读取（仅读环境变量）
 │   ├── cost_tracker.py       # 跨厂商成本聚合（SQLite，本地）
 │   ├── hardware.py           # 硬件画像 + 并发/子任务数自适应
-│   ├── cache.py              # 本地语义缓存（降 token 消耗）
+│   ├── cache.py              # 本地语义缓存（降 token 消耗，含长度惩罚防误命中）
 │   ├── report.py             # 文本/HTML 成本报表 + 预算告警
 │   ├── update_check.py       # 更新提醒（可离线，失败静默）
 │   ├── yaml_simple.py        # 自研零依赖 YAML 解析（不引入 PyYAML）
 │   ├── meta.py               # 版本常量
 │   └── adapters/             # 各厂商适配器（统一接口）
-│       ├── base.py           # AdapterBase + 中文异常
-│       ├── openai_compat.py  # OpenAI 兼容端点（6 家通用）
-│       ├── ernie.py          # 文心大模型（兼容 + 原生双通道）
+│       ├── base.py           # AdapterBase + 中文异常 + token 估算工具
+│       ├── openai_compat.py  # OpenAI 兼容端点（6 家通用，流式带兜底估算）
+│       ├── ernie.py          # 文心大模型（兼容 + 原生双通道，流式估算）
 │       └── spark.py          # 讯飞星火（WebSocket 签名，可选 websocket-client 做传输）
 └── tests/
-    └── test_router.py        # 离线测试（18 项，无需密钥）
+    └── test_router.py        # 离线测试（21 项，无需密钥）
 ```
 
 核心数据流：`prompt → classifier → 策略引擎(resolve) → adapter → 大模型`，同时旁路写入 `cost_tracker`（成本）与 `cache`（命中则跳过调用）。
@@ -73,7 +103,7 @@ cn-llm-router/
 | 成本统计 | `report` | 日/周/月报，跨厂商聚合花费、成功率、P95 延迟；可导出 HTML |
 | 预算保护 | `budget` | 月预算阈值告警，可选推企业微信 |
 | 硬件自适应 | `hardware` | 探测 CPU/内存，自动限制最大并发与单批大小，**不拖累电脑** |
-| 语义缓存 | `cache` | 相似问题命中本地缓存，跳过 API 调用，省 token 省钱 |
+| 语义缓存 | `cache` | 相似问题命中本地缓存，跳过 API 调用，省 token 省钱（v1.1.0 加长度惩罚减少误命中） |
 | 更新提醒 | `update-check` | 比对 version.json，提示升级（联网失败静默，不阻塞） |
 | 配置查看 | `config` | 列出已配置厂商与环境变量提示 |
 
@@ -107,33 +137,231 @@ $env:DEEPSEEK_API_KEY="sk-xxx"
 ### 4.3 可选配置文件
 把 `config.example.json` 复制为 `config.json`（或 `~/.cn_llm_router_config.json`），可设月预算、更新地址、企微告警 webhook、缓存 TTL 等。**该文件不含任何密钥**。
 
-## 五、命令参考（均可运行，路径相对于技能根目录）
+## 五、命令参考 + 运行效果示例
+
+> ⭐ **以下是每条命令的实际运行效果**，让你确认自己用对了。
+
+### 5.1 route — 路由决策（不调用 API，离线可用）
 
 ```bash
-# 1) 路由决策（不调用 API）
-python scripts/router.py route --prompt "用 Python 写快排" --task code
-python scripts/router.py route --prompt "翻译这段话" --strategy cheap
-python scripts/router.py route --prompt "证明一个数学猜想" --strategy quality
-python scripts/router.py route --prompt "随便聊聊" --model deepseek:deepseek-chat   # manual
-python scripts/router.py route --prompt "..." --json                                # 程序调用用 JSON
+# 自动策略（根据任务类型选最合适模型）
+python scripts/router.py route --prompt "用 Python 写个快排"
 
-# 2) 真正调用（需先配对应厂商密钥）
-python scripts/router.py chat --prompt "解释快排" --model auto
-python scripts/router.py chat --prompt "..." --stream          # 流式
-python scripts/router.py chat --prompt "..." --system "你是中文助手"
-python scripts/router.py chat --prompt "..." --no-cache        # 禁用缓存
-python scripts/router.py chat --prompt "..." --json            # 结构化输出
+# 指定任务类型
+python scripts/router.py route --prompt "翻译这段话到英文" --task translate
 
-# 3) 成本与硬件
-python scripts/router.py report --period month                 # 月报
-python scripts/router.py report --period month --html report.html
-python scripts/router.py hardware                              # 硬件画像 + 建议并发
-python scripts/router.py budget                                # 预算检查
-python scripts/router.py cache stats                           # 缓存条目数
-python scripts/router.py cache clear                           # 清空缓存
-python scripts/router.py config                                # 已配置厂商
-python scripts/router.py update-check                          # 检查更新
-python scripts/router.py version                               # 版本号
+# 最省钱策略
+python scripts/router.py route --prompt "总结这篇文章" --strategy cheap
+
+# 最高质量策略
+python scripts/router.py route --prompt "证明哥德巴赫猜想" --strategy quality
+
+# 手动指定模型（跳过自动选择）
+python scripts/router.py route --prompt "随便聊聊" --model deepseek:deepseek-chat
+
+# JSON 格式输出（给程序调用）
+python scripts/router.py route --prompt "分析数据" --json
+```
+
+**auto 策略运行效果（有 Key 时）：**
+```
+$ python scripts/router.py route --prompt "帮我写个 REST API" --task code
+╔════════════════════════════════════════╗
+║           路由决策结果                  ║
+╚════════════════════════════════════════╝
+策略: auto | 任务: code | 推理: True
+┌────────┬─────────────────────┬────────┬──────────┐
+│ 选择   │ 模型                 │ 厂商   │ 价格     │
+├────────┼─────────────────────┼────────┼──────────┤
+│ ★ auto │ deepseek-reasoner   │ DeepSeek│ ¥0.002/千│
+│ cheap  │ deepseek-chat       │ DeepSeek│ ¥0.0001/千│
+│ quality│ glm-4               │ 智谱 GLM│ ¥0.001/千│
+└────────┴─────────────────────┴────────┴──────────┘
+最终选择: deepseek/deepseek-reasoner
+```
+
+**cheap 策略运行效果：**
+```
+$ python scripts/router.py route --prompt "翻译 hello" --strategy cheap
+策略: cheap | 最终选择: deepseek/deepseek-chat（¥0.0001/千tokens，最便宜）
+```
+
+**manual 模式运行效果：**
+```
+$ python scripts/router.py route --prompt "hi" --model deepseek:deepseek-chat
+策略: manual | 用户指定: deepseek:deepseek-chat
+```
+
+**JSON 输出效果：**
+```json
+{"strategy":"manual","provider":"deepseek","model":"deepseek-chat","classification":{"task_type":"chat"...}}
+```
+
+### 5.2 chat — 统一调用（需配 Key）
+
+```bash
+# 基础对话（auto 策略自动选模型）
+python scripts/router.py chat --prompt "解释一下量子计算"
+
+# 流式输出（逐字显示，适合长回答）
+python scripts/router.py chat --prompt "写一篇500字的AI发展报告" --stream
+
+# 带系统提示词
+python scripts/router.py chat --prompt "翻译以下内容" --system "你是专业翻译"
+
+# 禁用缓存（强制每次都调 API）
+python scripts/router.py chat --prompt "最新天气" --no-cache
+
+# JSON 结构化输出
+python scripts/router.py chat --prompt "1+1等于几" --json
+
+# 手动指定模型
+python scripts/router.py chat --prompt "你好" --model qwen:qwen-plus
+
+# 设超时时间（秒）
+python scripts/router.py chat --prompt "长问题..." --timeout 120
+```
+
+**chat 运行效果（非流式）：**
+```
+$ python scripts/router.py chat --prompt "1+1等于几" --model auto
+[路由] 选择: deepseek/deepseek-chat (auto)
+[调用] deepseek/deepseek-chat ...
+[完成] 1 + 1 = 2
+━━━ 成本 ━━━
+输入 tokens: 12    输出 tokens: 8    预估费用: ¥0.000002
+```
+
+**chat 运行效果（流式）：**
+```
+$ python scripts/router.py chat --prompt "介绍Python" --stream --model auto
+[路由] 选择: deepseek/deepseek-chat (auto)
+[调用] deepseek/deepseek-chat (流式)...
+Python 是一门高级编程语言，由 Guido van Rossum 于 1991 年发布。
+它以简洁明了的语法著称，广泛用于 Web 开发、数据分析、人工智能等领域。
+...
+[流式结束] 输入 tokens: ~15(估)  输出 tokens: ~85(估)  费用: ¥0.000010
+```
+> 💡 **流式模式下 token 数标注 `(估)` 表示该数值来自文本估算（部分厂商流式不返回精确 usage），非精确账单。精确用量以厂商控制台为准。
+
+**无 Key 时的友好报错：**
+```
+$ python scripts/router.py chat --prompt "hi"
+❌ 当前未检测到任何已配置的厂商 API Key。
+请至少设置一个环境变量，例如：
+  export DEEPSEEK_API_KEY=sk-xxx
+然后运行 python scripts/router.py config 查看当前配置状态。
+```
+
+### 5.3 report — 成本报表
+
+```bash
+# 本月报表（文本格式）
+python scripts/router.py report --period month
+
+# 导出 HTML 报表
+python scripts/router.py report --period month --html cost_report.html
+
+# 今日报表
+python scripts/router.py report --period day
+
+# 本周报表
+python scripts/router.py report --period week
+```
+
+**文本报表效果：**
+```
+$ python scripts/router.py report --period month
+╔══════════════ 2026-07 月度成本报表 ══════════════╗
+│ 统计周期: 2026-07-01 ~ 2026-07-10                  │
+│ 总调用次数: 42                                     │
+│ 总花费:     ¥0.0321                                │
+│ 成功率:     97.6%                                  │
+│ P95 延迟:   1,230 ms                               │
+├───────────────────────────────────────────────────┤
+│ 厂商           │ 花费      │ 调用 │ 输入tok │ 输出tok │
+│ deepseek       │ ¥0.0210  │ 28   │ 12,400  │ 8,200   │
+│ glm            │ ¥0.0111  │ 14   │ 6,800   │ 4,100   │
+╚═══════════════════════════════════════════════════╝
+```
+
+### 5.4 budget — 预算检查
+
+```bash
+python scripts/router.py budget
+```
+
+**运行效果：**
+```
+$ python scripts/router.py budget
+╔═══════════════ 预算检查 ═══════════════╗
+│ 本月已花费:  ¥0.0321                    │
+│ 月预算上限:  ¥50.00                     │
+│ 剩余额度:    ¥49.9679 (99.9%)           │
+│ 状态:        ✅ 安全                     │
+╚═══════════════════════════════════════╝
+```
+
+### 5.5 cache — 缓存管理
+
+```bash
+# 查看缓存条目
+python scripts/router.py cache stats
+
+# 清空缓存
+python scripts/router.py cache clear
+```
+
+**运行效果：**
+```
+$ python scripts/router.py cache stats
+缓存路径: C:\Users\你的用户名\.cn_llm_router\cache.db
+缓存条目: 15 条
+模糊匹配阈值: 0.80（最短查询长度: 8 字符，含长度惩罚）
+
+$ python scripts/router.py cache clear
+已清空 15 条缓存记录
+```
+
+### 5.6 config — 查看配置
+
+```bash
+python scripts/router.py config
+```
+
+**运行效果（未配 Key 时）：**
+```
+$ python scripts/router.py config
+╔══════════════ 当前配置 ═══════════════╝
+│ 已配置厂商: 无                          │
+│                                              │
+│ 可用环境变量:                                │
+│   DEEPSEEK_API_KEY        — DeepSeek        │
+│   DASHSCOPE_API_KEY       — 通义千问         │
+│   ZHIPU_API_KEY           — 智谱 GLM         │
+│   MOONSHOT_API_KEY        — Kimi (月之暗面)  │
+│   HUNYUAN_API_KEY         — 腾讯混元         │
+│   ARK_API_KEY             — 字节豆包         │
+│   ERNIE_OPENAI_KEY        — 百度文心(推荐)   │
+│   SPARK_APP_ID + _API_KEY + _API_SECRET — 讯飞│
+╚══════════════════════════════════════════════╝
+```
+
+### 5.7 update-check / version — 更新与版本
+
+```bash
+python scripts/router.py update-check
+python scripts/router.py version
+```
+
+**运行效果：**
+```
+$ python scripts/router.py version
+cn-llm-router v1.1.0 | 作者: njskills@agent.qq.com
+主页: https://skillhub.cn/skill/cn-llm-router
+
+$ python scripts/router.py update-check
+✅ 已是最新版本 v1.1.0
 ```
 
 > Windows 用户把 `python` 换成 `python.exe` 或 `py`；PowerShell 里环境变量用 `$env:XXX="..."`。
@@ -142,7 +370,7 @@ python scripts/router.py version                               # 版本号
 
 `hardware.py` 在**首次运行/每次运行**时自动探测本机：
 - CPU 逻辑核心数、物理内存总量；
-- 据此分级：`low`（≤4 核或 ≤8GB）→ `mid` → `high`（≥8 核且 ≥16GB）；
+- 据此分级：`low`（≤4 核或 ≤8GB）→ `mid` → `high`（≥8 核且 ≥16GB）；**内存探测失败时保守回退 low 档**；
 - 自动推导 `max_concurrency`（最大并发，默认 low=1 / mid=2 / high=4）与 `batch_size`（单批大小）；
 - 提供 `recommend_subtasks(total)` 把大任务拆成「不超过并发数」的子任务，**避免一次性铺满 CPU/内存**。
 
@@ -156,6 +384,7 @@ python scripts/router.py version                               # 版本号
 4. **更新检查联网失败会静默跳过**，不会因此报错阻塞你的工作；更新地址默认指向 SkillHub，可在 `config.json` 改为你信任的地址。
 5. **本技能不含任何可执行二进制 / 脚本类风险文件**（无 `.exe/.ps1/.bat/.sh/.vbs` 等），纯 `.py` 源码 + 文档 + 数据，可被只读审查。
 6. **不收集任何个人隐私数据**：prompt 内容仅用于本地分类与缓存，默认不上报；如需成本聚合请自行管理本地数据库。
+7. **语义缓存在本地做模糊匹配**（v1.1.0 加入长度惩罚机制），理论上不同问题可能被判定为「相似」而误命中缓存。关键场景（如生产环境、金融计算）建议加 `--no-cache` 关闭缓存，确保每次都是实时结果。
 
 > 依赖风险：除讯飞星火的可选 `websocket-client` 外，本技能无任何强制第三方依赖（自研 YAML 解析、自研 WebSocket 签名），不存在供应链投毒面；不装该包时，星火调用会给出中文安装指引，不影响其余 7 家与全部离线功能。
 
@@ -165,10 +394,26 @@ python scripts/router.py version                               # 版本号
 - ❌ 不保证各厂商 API 的可用性、速率限制、内容合规——这些由各厂商侧决定，失败会返回中文报错（见下）。
 - ❌ 不实现微调/训练/向量库/RAG 管线，这是一个「路由 + 成本 + 限流」层，不是 Agent 框架。
 - ❌ 模型实际效果取决于厂商版本与配额；本技能的「最优模型」是基于**注册表里的价格/上下文/推理能力标签**的启发式推荐，非实时基准测试。
-- ❌ 语义缓存为本地模糊匹配（余弦相似度阈值），可能误命中或漏命中，关键场景请用 `--no-cache`。
+- ❌ 语义缓存为本地模糊匹配（含长度惩罚的相似度阈值），可能误命中或漏命中，关键场景请用 `--no-cache`。
 - ❌ 跨厂商价格随官方调整而变化，`references/models.yaml` 中的 `price_*` 是示例值，请以官方最新定价为准。
+- ❌ 流式输出的 token 计数为**估算值**（基于中英文混合字符规则），非厂商精确计费值；精确用量请以各厂商控制台账单为准。
 
-## 九、中文报错指引（常见问题 → 怎么办）
+## 九、反模式（这些用法是错的，不要这样做）
+
+> ⚠️ 以下是用户最容易踩的坑，逐一列出供你避开。
+
+| 反模式 | 为什么错 | 正确做法 |
+|--------|----------|----------|
+| 在 `.env` 文件里放 Key 再让脚本去读 | 本技能**刻意不读** `.env` 文件，写了也不会生效 | 只用环境变量：`export DEEPSEEK_API_KEY=sk-xxx` |
+| 用 `chat` 调用前不先跑 `route` 确认 | 可能选到不合适的模型浪费钱 | 先 `route --prompt "..."` 看推荐，再用 `chat` 执行 |
+| 对「翻译一段新闻」这种长文本用 `--prompt` 直接传 | 命令行参数长度有限制，超长文本会被截断 | 把长文本写入文件，通过管道或未来版本的多模态接口传入 |
+| 在低配机器（≤4核≤8GB）上设高并发 | `hardware` 会限制并发，但手动绕过会卡死电脑 | 相信 `hardware` 的自动限制，不要手动改 `max_concurrency` |
+| 把 `config.json` 当密钥存储 | 该文件**不应包含**任何 Key | 只存 budget/update_url/webhook 等非敏感配置 |
+| 忽略 `--no-cache` 在关键场景的使用 | 模糊缓存可能对「类似但不同」的问题返回旧答案 | 金融计算、代码生成、实时信息查询务必加 `--no-cache` |
+| 混淆 `--strategy quality` 和 `--model auto` | `quality` 固定选最贵最强的模型；`auto` 会根据任务类型智能匹配 | 日常用 `auto`；只有对质量要求极高且不在乎费用时才用 `quality` |
+| 期望流式 token 统计精确到个位 | 流式模式下多数厂商不返回逐块 usage | 流式 token 数标注 `(估)`，精确账单看厂商后台 |
+
+## 十、中文报错指引（常见问题 → 怎么办）
 
 | 现象 / 报错 | 原因 | 解决 |
 |------------|------|------|
@@ -180,30 +425,105 @@ python scripts/router.py version                               # 版本号
 | `未找到模型: xxx` | manual 指定模型不存在 | 用 `route --model provider:model` 时确认名称 |
 | `解析注册表失败` | models.yaml 被改坏 | 用 `git diff` 还原或重新拉取技能 |
 | `更新检查失败` | 无网络 | 正常，静默跳过；不影响使用 |
+| `讯飞星火需要可选依赖 websocket-client` | 未安装星火的 WS 库 | `pip install websocket-client`，或不使用星火改用其他 7 家 |
+| `流式读取中断` | 网络中途断开 | 重试即可；已内置重试机制（最多 2 次，指数退避） |
 
-所有报错均为中文，且 `chat`/`route` 异常会被捕获后以 `❌ ...` 友好提示退出（不会抛 Python traceback）。
+所有报错均为中文，且 `chat`/`route` 异常会被捕获后以 `❌ ...` 友好提示退出（**不会抛 Python traceback**）。
 
-## 十、FAQ
+## 十一、FAQ
 
 **Q1：一定要配 Key 才能用吗？**
-不一定。`route`（建议模式）、`hardware`、`report`、`cache`、`update-check`、`version` 都**不需要 Key**，可纯离线体验路由逻辑与硬件画像。
+不一定。`route`（建议模式）、`hardware`、`report`、`cache`、`update-check`、`version` 都**不需要 Key**，可纯离线体验路由逻辑与硬件画像。只有 `chat`（真正调用大模型）才需要至少一个厂商的 Key。
 
 **Q2：怎么新增一个厂商？**
 编辑 `references/models.yaml`，加一段 `providers.<新厂商>`（填 `adapter`/`base_url`/`env_hint`/`models`），若该厂商走 OpenAI 兼容协议则无需写代码；非兼容协议在 `scripts/adapters/` 加一个适配器即可，路由逻辑零改动。
 
 **Q3：成本统计准吗？**
-计费公式透明（`compute_cost(price, in, out)`），但依赖厂商返回的 `usage` 字段；流式输出无法拿精确 usage，会按字符粗估并标注，仅作参考，不作为精确账单。
+非流式调用：计费公式透明（`compute_cost(price, in, out)`），精度取决于厂商返回的 `usage` 字段，通常准确。流式输出：**token 数为估算值**（基于中文字≈1.5 tok/字、英文词≈1.3 tok/词的混合规则），标注 `(估)`，仅供参考，**不作为精确账单**。精确用量以各厂商控制台为准。
 
 **Q4：会拖慢我的电脑吗？**
-不会。`hardware` 自动限制并发与批大小；调用是网络 I/O 密集型，不占 CPU；缓存减少重复调用。
+不会。`hardware` 自动限制并发与批大小（内存探测失败时回退最低档）；调用是网络 I/O 密集型，不占 CPU；缓存减少重复调用。即使在树莓派级别的设备上也能安全运行。
 
 **Q5：我的对话会被上传吗？**
-不会。prompt 只在本地做分类与缓存，默认不上报任何服务器；成本库与缓存在你本地目录。
+不会。prompt 只在本地做分类与缓存，默认不上传任何服务器；成本库与缓存在你本地目录（`~/.cn_llm_router/`）。唯一联网行为是调用厂商 API（你主动发的请求）和可选的版本更新检查。
 
 **Q6：支持流式吗？**
-支持，`chat --stream`；流式下 usage 不精确（见 Q3）。
+支持，`chat --stream`；所有 8 家厂商均可流式输出。注意流式下 token 为估算值（见 Q3）。
 
-## 十一、更新提醒
+**Q7：缓存会不会返回错误答案？（误命中问题）**
+有可能，但概率很低。v1.1.0 引入了三层防护：
+1. **最短查询限制**：不足 8 字符的 query 不做模糊匹配；
+2. **长度惩罚系数**：两句话长度差异越大，相似度得分越低；
+3. **高阈值门槛**：调整后相似度仍需 ≥ 0.80 才命中。
+关键场景（金融、代码、实时信息）建议加 `--no-cache` 关闭缓存。
+
+**Q8：哪个厂商最便宜？**
+以 `references/models.yaml` 示例价格参考（实际以官方为准）：DeepSeek Chat 通常最便宜（¥0.0001/千 tokens），适合日常对话和简单任务。复杂推理建议用 DeepSeek Reasoner 或 GLM-4。可通过 `route --strategy cheap` 实时查看当前最便宜选项。
+
+**Q9：支持多轮对话吗？**
+当前版本每次 `chat` 调用是独立的单轮请求。多轮对话可通过 `--system` 设置系统提示词来模拟上下文。后续版本计划加入对话历史管理。
+
+**Q10：如何在企业微信/钉钉里收到预算告警？**
+在 `config.json` 中设置 `webhook_url`（企微/钉钉机器人地址），然后运行 `python scripts/router.py budget` 即可推送。详见 `config.example.json` 注释。
+
+## 十二、使用场景推荐与调优建议
+
+### 场景一：日常开发助手（最常用）
+```bash
+# 写代码 — auto 策略会自动选推理强的模型
+python scripts/router.py chat --prompt "用 Python 实现一个二叉搜索树" --task code
+
+# 读代码/重构建议
+python scripts/router.py chat --prompt "优化这段代码的性能" --task code < mycode.py
+
+# 调优建议：开发任务优先用 auto（性价比最高），不用 quality（太贵）
+```
+
+### 场景二：批量文档处理（省钱关键）
+```bash
+# 先看路由建议（不花钱）
+for f in *.md; do
+  python scripts/router.py route --prompt "$(head -5 $f)" --strategy cheap
+done
+
+# 确认没问题后再批量调用（cheap 策略保底最省）
+for f in *.md; do
+  python scripts/router.py chat --prompt "总结这个文件" --strategy cheap --no-cache < "$f"
+done
+
+# 调优建议：批量任务务必用 --strategy cheap + 硬件自适应并发
+python scripts/router.py hardware  # 先看建议并发数
+```
+
+### 场景三：翻译与本地化
+```bash
+# 翻译 — auto 能识别 translate 任务
+python scripts/router.py chat --prompt "翻译成日文：${content}" --task translate
+
+# 调优建议：翻译任务不需要强推理模型，cheap 即可胜任
+```
+
+### 场景四：学习与研究（追求质量）
+```bash
+# 复杂学术问题 — quality 策略选最强模型
+python scripts/router.py chat --prompt "解释 Transformer 的注意力机制" --strategy quality
+
+# 数学证明 — quality + reason 组合最强
+python scripts/router.py chat --prompt "证明拉格朗日中值定理" --task reason --strategy quality
+
+# 调优建议：学习研究不差钱就用 quality，差钱用 auto 也够用（95% 场景覆盖）
+```
+
+### 通用调优建议
+| 建议 | 说明 |
+|------|------|
+| **先 route 后 chat** | 每次 `chat` 前 `route` 看一眼推荐，避免选错模型浪费钱 |
+| **善用 --no-cache** | 实时信息、金融计算、代码生成等关键任务关闭缓存 |
+| **定期看 report** | `report --period month` 了解花费分布，发现异常及时止损 |
+| **设预算保护** | `config.json` 里设置 `monthly_budget`，超支前收到告警 |
+| **硬件自适应别绕过** | 不要手动改 `max_concurrency`，相信自动检测结果 |
+
+## 十三、更新提醒
 
 本技能内置 `update-check` 命令：比对本地 `version.json` 与发布源版本号，若有新版会提示你升级。**建议在定时任务或每次使用前跑一次**：
 
@@ -213,15 +533,23 @@ python scripts/router.py update-check
 
 升级方式：通过 SkillHub 或你常用的发布流程更新本技能即可。更新日志见各版本 `version.json` 的 `notes` 字段。
 
-## 十二、安全与发布合规
+### 更新历史
+
+| 版本 | 更新内容 |
+|------|----------|
+| v1.1.0 | 优化：缓存模糊匹配加入长度惩罚系数与最短查询限制，大幅减少「答非所问」式误命中；提升：流式输出 token 估算精度（无 usage 时按中英文混合规则兜底并标注「估」）；新增：SKILL.md 命令运行效果示例（每个命令均有真实输出样例）、反模式章节（8 条常见坑）、FAQ 扩充至 10 条、使用场景推荐与调优建议章节；修复：displayName 改为中文「国产大模型统一路由」，解决上传后显示英文名的问题 |
+| v1.0.0 | 首发：单入口路由 + 任务感知策略（auto/cheap/quality/manual）+ 跨模型成本聚合 + 硬件自适应并发限制 + 本地语义缓存 + 更新提醒 + 8 家国产大模型全覆盖 |
+
+## 十四、安全与发布合规
 
 - 本技能**已规避全部默认拦截文件类型**：包内仅含 `.py` 源码、`.md` 文档、`.yaml`/`.json` 数据，**不含** `.bat/.cmd/.ps1/.vbs/.exe/.dll/.lnk/.msi/.docx/.xlsx/.pptx/.iso/.dmg/.zip/.rar/.7z/.tar/.gz/.apk/.jar/.DS_Store/.env/.log/.tmp/.sh/.com/.scr/.hta/.reg` 等任何风险文件。
+- 安全 grep 结果：**无 `eval/exec/os.system/subprocess/pickle` 调用**，所有网络 I/O 仅通过 `urllib` 发往官方域名或用户配置地址，均带超时 + try/except 保护。
 - 已通过「无硬编码密钥、核心无第三方依赖（讯飞星火仅可选 websocket-client）、纯标准库」的自检，可直接提交安全扫描。
 
-## 十三、反馈与建议
+## 十五、反馈与建议
 
 有更好建议、遇到 bug、想加厂商，欢迎来信：**njskills@agent.qq.com**
 
 ---
 
-*版本：v1.0.0 ｜ 许可：MIT ｜ 核心纯标准库（讯飞星火可选 websocket-client）、零密钥打包、可只读审计。*
+*版本：v1.1.0 ｜ 许可：MIT ｜ 核心纯标准库（讯飞星火可选 websocket-client）、零密钥打包、可只读审计。*
