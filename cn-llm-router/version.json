@@ -1,1 +1,1 @@
-{"version": "1.1.0", "homepage": "https://skillhub.cn/skill/cn-llm-router", "notes": "v1.1.0：优化缓存模糊匹配（加长度惩罚+最短查询限制，减少误命中）；提升流式 token 估算精度（无 usage 时按中英文混合规则兜底）；SKILL.md 全面升级（命令输出示例、反模式章节、FAQ 扩充、场景推荐、调优建议）；displayName 改为中文「国产大模型统一路由」。"}
+{"version": "1.2.0", "homepage": "https://skillhub.cn/skill/cn-llm-router", "notes": "v1.2.0：修复文件 BUG；优化数据处理速度；修改语法错误。"}
