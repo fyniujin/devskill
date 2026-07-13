@@ -30,13 +30,49 @@ MAGIC_BYTES = {
 # 最大允许文件大小（50MB）
 MAX_FILE_SIZE = 50 * 1024 * 1024
 
+# ===== v3.0 新增：禁止文件类型拦截 =====
+# Windows 可执行 / 批处理脚本
+_BLOCKED_EXEC_EXT = {'.bat', '.cmd', '.ps1', '.vbs', '.exe', '.dll', '.lnk', '.msi'}
+
+# Office 二进制文档（老版本，.doc/.ppt/.xls 等，但 .docx 允许因为合同需要）
+_BLOCKED_OFFICE_EXT = {'.doc', '.xls', '.ppt', '.xlsm', '.docm', '.pptm'}
+
+# 二进制镜像 / 安装包
+_BLOCKED_ARCHIVE_EXT = {'.iso', '.dmg', '.zip', '.rar', '.7z', '.tar', '.gz', '.apk', '.jar'}
+
+# 系统缓存 / 隐藏文件
+_BLOCKED_SYSTEM_EXT = {'.ds_store', '.log', '.tmp'}
+
+# 其他风险脚本
+_BLOCKED_SCRIPT_EXT = {'.sh', '.com', '.scr', '.hta', '.reg'}
+
+# 合并所有禁止后缀
+BLOCKED_EXTENSIONS = (
+    _BLOCKED_EXEC_EXT
+    | _BLOCKED_OFFICE_EXT
+    | _BLOCKED_ARCHIVE_EXT
+    | Blocked_SYSTEM_EXT
+    | _BLOCKED_SCRIPT_EXT
+)
+
+# 禁止文件的魔术字节（用于深层拦截伪装文件）
+BLOCKED_MAGIC_SIGNATURES = [
+    (b'MZ', 'Windows 可执行文件 (.exe/.dll)'),      # PE 文件
+    (b'\x7fELF', 'Linux 可执行文件'),               # ELF 文件
+    (b'PK\x03\x04', '压缩包伪装 (zip/rar/docx)'),   # ZIP 家族（docx 会单独放行）
+    (b'\x1f\x8b', 'Gzip 压缩文件'),                 # gzip
+    (b'Rar', 'RAR 压缩文件'),                       # RAR
+    (b'7z', '7z 压缩文件'),                         # 7z
+    (b'{\\rtf', 'RTF 文档（可能含宏）'),             # RTF
+]
+
 
 def _validate_file_safety(file_path: str) -> None:
     """
-    验证文件安全性
+    验证文件安全性，拦截所有危险文件类型
     
     Raises:
-        ValueError: 文件类型不匹配
+        ValueError: 文件类型被禁止或类型不匹配
         FileNotFoundError: 文件不存在
         RuntimeError: 文件大小超限
     """
@@ -56,8 +92,45 @@ def _validate_file_safety(file_path: str) -> None:
     if file_size == 0:
         raise ValueError("文件为空")
     
-    # 检查魔术字节
+    # ===== v3.0 新增：禁止文件后缀拦截 =====
     ext = path.suffix.lower()
+    
+    if ext in BLOCKED_EXTENSIONS:
+        # 分类提示
+        if ext in _BLOCKED_EXEC_EXT:
+            category = "Windows 可执行/批处理脚本"
+        elif ext in _BLOCKED_OFFICE_EXT:
+            category = "老版本 Office 二进制格式"
+        elif ext in _BLOCKED_ARCHIVE_EXT:
+            category = "压缩包/镜像文件"
+        elif ext in Blocked_SYSTEM_EXT:
+            category = "系统缓存/临时文件"
+        elif ext in _BLOCKED_SCRIPT_EXT:
+            category = "脚本文件"
+        else:
+            category = "危险文件类型"
+        
+        raise PermissionError(
+            f"🚫 安全拦截：{category} ({ext}) 被禁止上传。\n"
+            f"原因：{category} 可能包含恶意代码或宏，存在安全风险。\n"
+            f"建议：请将合同内容复制为纯文本后重新审查。"
+        )
+    
+    # ===== v3.0 新增：魔术字节深层拦截 =====
+    # 对非 docx 文件检查魔术字节（docx 是 zip 家族，单独处理）
+    if ext != '.docx':
+        with open(file_path, 'rb') as f:
+            header = f.read(32)
+        
+        for signature, description in BLOCKED_MAGIC_SIGNATURES:
+            if header.startswith(signature):
+                raise PermissionError(
+                    f"🚫 安全拦截：文件实际内容为 {description}，但被伪装为 {ext} 扩展名。\n"
+                    f"原因：文件魔术字节与后缀不匹配，存在安全风险。\n"
+                    f"建议：请将合同内容复制为纯文本后重新审查。"
+                )
+    
+    # 检查魔术字节与后缀一致性
     if ext in ('.pdf', '.docx', '.doc', '.png', '.jpg', '.jpeg', '.bmp', '.tiff'):
         expected_exts = []
         for magic, magic_ext in MAGIC_BYTES.items():
@@ -126,10 +199,10 @@ class TextExtractor:
             enable_security: 是否启用安全校验（魔术字节、大小限制）
         """
         self.enable_security = enable_security
+        # v3.0: .doc 已移至 BLOCKED_LIST，不再支持（安全风险：可能含宏）
         self.supported_formats = {
             '.pdf': self._extract_pdf,
             '.docx': self._extract_docx,
-            '.doc': self._extract_docx,
             '.txt': self._extract_txt,
             '.md': self._extract_txt,
             '.jpg': self._extract_image,
