@@ -1,65 +1,38 @@
-# MEMORY.md - 财税合规Skill修改记录
+# MEMORY.md - receipt-compliance 修改记录
 
 ## 最近修改
 
-### v1.3.0 (2026-06-29) - 基于评估反馈改进
+### v3.4.0 (2026-07-13) - 安全修复（腾讯云鼎实验室安全评估）
 
-#### 改进内容
+#### 修复内容
 
-**1. SKILL.md 核心文档**
-- 新增「对话示例」章节，展示4个自然语言对话场景
-- 新增「API调用示例」章节，包含Python和HTTP调用方式
-- 新增「快速配置向导」章节，提供一键配置命令
-- 优化「快速开始」章节，减少新手配置步骤，明确标注必填/可选
-- 优化版本号至1.3.0
+**1. 供应链风险修复**
+- 移除 install_tesseract.ps1 中指向个人 Gitee 仓库的下载源（gitee.com/woaini0919/tesseract-ocr）
+- 移除 check_env.py 中 Gitee 镜像推荐
+- 替换为 winget/scoop 官方源和 GitHub 官方 Release 下载
 
-**2. check_env.py 环境预检脚本**
-- 增加Tesseract国内镜像下载选项（gitee镜像）
-- 错误提示改为更通俗易懂的语言，分方案展示
-- 增加「一键安装建议」板块，推荐winget/scoop等包管理器
-- 优化视觉展示，使用框线分隔不同方案
+**2. 审批链接修复**
+- 将 approval_abstract.py 中 `apply_url` 从 `https://open.duxiaoman.com` 改为 `https://open-dev.dingtalk.com`
+- 将 approval_abstract.py 中 `reference_url` 从 `https://open.duxiaoman.com/document` 改为 `https://open-dev.dingtalk.com/document`
+- 将 api-endpoints.md 中钉钉网址从 `https://open.duxiaoman.com` 改为 `https://open-dev.dingtalk.com`
+- 将 setup-guide.md 中钉钉登录地址从 `https://open.duxiaoman.com` 改为 `https://open-dev.dingtalk.com`
+- 将 example-approval.md 中 `reference_url` 从 `https://open.duxiaoman.com/document` 改为 `https://open-dev.dingtalk.com/document`
 
-**3. ocr_engine.py OCR识别引擎**
-- 增加网络波动自动重试机制（最多3次，指数退避）
-- 错误提示更友好易懂，包含具体操作建议
-- 增加识别置信度提示（高/中/低三档）
-- 识别完成后输出友好提示信息
+**3. 命令执行风险修复**
+- verify_engine.py 中 `subprocess.Popen` 移除 `shell=True`，改为 `['cmd', '/c', 'start', short_url]` 列表形式
 
-**4. install_tesseract.ps1 安装脚本**
-- 增加国内镜像源选项（gitee）
-- 新增 `Download-File` 函数，带进度显示和失败重试
-- 提供4种安装方式选择（国内镜像/winget/scoop/手动）
-- 优化下载进度显示（百分比+MB显示）
+#### 对应安全评估问题
 
-#### 评估反馈对应改进
+| 评估发现问题 | 修复措施 |
+|------------|---------|
+| 审批接口链接指向无关第三方平台 | 全部替换为钉钉官方 open-dev.dingtalk.com |
+| 从个人 Gitee 仓库下载二进制文件 | 移除 Gitee 个人镜像，替换为官方源 |
+| 不受限的 shell 执行器 | 移除 shell=True，使用列表参数形式 |
 
-| 反馈项 | 改进措施 |
-|--------|---------|
-| Tesseract安装卡顿 | 增加国内镜像源选项 |
-| 错误提示不够通俗 | 全部改为自然语言+具体操作建议 |
-| 网络波动需手动重试 | ocr_engine.py增加自动重试机制 |
-| 触发方式不清晰 | SKILL.md增加对话示例和API示例 |
-| 新手配置时间长 | 增加一键配置向导，明确必填/可选 |
-| 识别精度无提示 | 增加置信度分级提示 |
+---
 
-#### 待改进
+### v3.3.0 (2026-07-13) - 更名
 
-- [ ] 考虑增加config_wizard.py脚本
-- [ ] 考虑增加api_server.py提供HTTP API
-- [ ] 考虑增加更多发票类型支持
-
-## 历史版本
-
-### v1.2.0 (2026-06-29)
-- OCR引擎增加PSM模式回退机制
-- 增加图片质量预检
-- 增加错误代码速查表
-- 所有脚本增强错误处理
-
-### v1.1.0 (2026-06-29)
-- 环境预检脚本
-- 真伪查验引擎升级
-- 审批引擎升级
-
-### v1.0.0 (2026-06-28)
-- 初始版本
+- 插件文件夹名从 `tax-receipt-compliance` 改为 `receipt-compliance`
+- displayName 从 `财税合规全链路助手` 改为 `会计助手`
+- description、标题同步更新为"会计助手"
