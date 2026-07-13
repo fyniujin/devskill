@@ -59,7 +59,7 @@ approval:
     "process_code": "PROC-XXXXXXXXXXX",
     "expense_file": "D:\\output\\报销单_20260629.xlsx"
   },
-  "reference_url": "https://open.duxiaoman.com/document",
+  "reference_url": "https://open-dev.dingtalk.com/document",
   "submit_time": "2026-06-29T00:15:41+08:00"
 }
 ```
