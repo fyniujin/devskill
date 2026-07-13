@@ -3,7 +3,7 @@ name: receipt-compliance
 slug: receipt-compliance
 displayName: 会计助手
 description: 会计助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。
-version: 3.3.0
+version: 3.4.0
 category: 财税管理
 appName: 财税合规
 platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
@@ -986,6 +986,13 @@ logs/
 - 邮箱：联系Skill开发者
 
 ## 更新日志
+
+### v3.4.0 (2026-07-13)
+
+- **修复**：移除 install_tesseract.ps1 中指向个人 Gitee 仓库的下载源，替换为 winget/scoop 官方源和 GitHub 官方 Release
+- **修复**：移除 check_env.py 中 Gitee 镜像推荐，替换为 GitHub 官方下载地址
+- **修复**：将 approval_abstract.py、api-endpoints.md、setup-guide.md、example-approval.md 中所有 `open.duxiaoman.com` 错误链接替换为钉钉官方地址 `open-dev.dingtalk.com`
+- **修复**：verify_engine.py 中 `subprocess.Popen` 移除 `shell=True`，改为列表参数形式，降低命令注入风险
 
 ### v3.3.0 (2026-07-13)
 
