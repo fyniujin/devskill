@@ -11,10 +11,10 @@ Features:
   5. One-click remediation advice (Chinese fix suggestions)
   6. Report generation (JSON/HTML)
   7. Hardware-aware parallelism (auto-detect CPU/memory for concurrency)
-  8. Update check
+  8. Update check with 24h caching
 
 Author: njskills@agent.qq.com
-Version: 1.2.0
+Version: 1.3.0
 """
 
 import os
@@ -57,13 +57,12 @@ FORBIDDEN_FILES = {'.ds_store', '.env', '.log', '.tmp', 'thumbs.db', 'desktop.in
 
 import base64
 
-def _obfuscate(text):
-    """Obfuscate: base64 encode."""
-    return base64.b64encode(text.encode()).decode()
-
 def _deobfuscate(code):
     """Deobfuscate: base64 decode."""
-    return base64.b64decode(code).decode()
+    try:
+        return base64.b64decode(code).decode()
+    except Exception:
+        return code
 
 # --- Prompt Injection Patterns (obfuscated) ---
 _OBFUSCATED_PROMPT = [
@@ -160,7 +159,7 @@ DANGEROUS_PATTERNS = [
     r'(?i)marshal\.loads?\s*\(',
 ]
 
-# Known vulnerable dependencies
+# Known vulnerable dependencies (expanded list)
 KNOWN_VULN_DEPS = {
     'requests': {'<2.32.0': 'CVE-2024-35195'},
     'urllib3': {'<2.2.0': 'CVE-2024-37891'},
@@ -179,11 +178,20 @@ KNOWN_VULN_DEPS = {
     'lodash': {'<4.17.21': 'CVE-2021-23337'},
     'axios': {'<0.21.1': 'CVE-2021-3749'},
     'express': {'<4.17.3': 'Multiple patches'},
+    # Additional common dependencies
+    'vue': {'<2.7.0': 'XSS vulnerabilities'},
+    'react': {'<17.0.0': 'Known XSS risks'},
+    'webpack': {'<5.0.0': 'Prototype pollution'},
+    'moment': {'<2.29.2': 'ReDoS vulnerability'},
+    'npm': {'<8.19.0': 'Multiple security fixes'},
+    'tough-cookie': {'<4.1.3': 'CVE-2023-26136'},
+    'word-wrap': {'<1.2.4': 'CVE-2023-26115'},
+    'protobuf': {'<3.19.5': 'CVE-2022-1941'},
 }
 
-# Update check URL
+# Update check URL and version info
 UPDATE_CHECK_URL = "https://api.github.com/repos/njskills/skill-security-checker/releases/latest"
-CURRENT_VERSION = "1.2.0"
+CURRENT_VERSION = "1.3.0"
 
 # Update check cache TTL (hours)
 UPDATE_CACHE_HOURS = 24
@@ -239,32 +247,45 @@ class FileWalker:
         self.root = Path(root_path)
         self.scanned_files = []
         self.skipped_files = []
+        self._visited = set()
     
     def walk(self):
         """Generator: yields (relative_path, absolute_path) tuples."""
-        for path in self.root.rglob('*'):
-            if not path.is_file():
-                continue
-            
-            rel = path.relative_to(self.root)
-            name_lower = path.name.lower()
-            suffix_lower = path.suffix.lower()
-            
-            parts = set(rel.parts)
-            if parts & FORBIDDEN_DIRS:
-                self.skipped_files.append((str(rel), 'forbidden_dir'))
-                continue
-            
-            if name_lower in FORBIDDEN_FILES:
-                self.skipped_files.append((str(rel), 'forbidden_file'))
-                continue
-            
-            if suffix_lower in FORBIDDEN_EXTENSIONS:
-                self.skipped_files.append((str(rel), 'forbidden_ext'))
-                continue
-            
-            self.scanned_files.append(str(rel))
-            yield rel, path
+        try:
+            for path in self.root.rglob('*'):
+                if not path.is_file():
+                    continue
+                
+                # Prevent infinite loops from symlinks
+                try:
+                    real_path = path.resolve()
+                    if real_path in self._visited:
+                        continue
+                    self._visited.add(real_path)
+                except (OSError, ValueError):
+                    pass
+                
+                rel = path.relative_to(self.root)
+                name_lower = path.name.lower()
+                suffix_lower = path.suffix.lower()
+                
+                parts = set(rel.parts)
+                if parts & FORBIDDEN_DIRS:
+                    self.skipped_files.append((str(rel), 'forbidden_dir'))
+                    continue
+                
+                if name_lower in FORBIDDEN_FILES:
+                    self.skipped_files.append((str(rel), 'forbidden_file'))
+                    continue
+                
+                if suffix_lower in FORBIDDEN_EXTENSIONS:
+                    self.skipped_files.append((str(rel), 'forbidden_ext'))
+                    continue
+                
+                self.scanned_files.append(str(rel))
+                yield rel, path
+        except PermissionError as e:
+            pass
     
     def get_text_files(self):
         """Only return text files (for content scanning)."""
@@ -289,11 +310,11 @@ class ScanResult:
     def __init__(self, category, severity, file, line, message, pattern, suggestion):
         self.category = category
         self.severity = severity
-        self.file = file
-        self.line = line
-        self.message = message
-        self.pattern = pattern
-        self.suggestion = suggestion
+        self.file = str(file)
+        self.line = int(line)
+        self.message = str(message)
+        self.pattern = str(pattern) if pattern else ''
+        self.suggestion = str(suggestion) if suggestion else ''
     
     def to_dict(self):
         return {
@@ -319,6 +340,7 @@ class SecurityAuditor:
         self.skill_md_path = None
         self.frontmatter = {}
         self._load_skill_md()
+        self._load_changelog()
     
     def _load_skill_md(self):
         """Load and parse SKILL.md."""
@@ -328,8 +350,11 @@ class SecurityAuditor:
                 self.skill_md_path = p
                 try:
                     self.skill_md_content = p.read_text(encoding='utf-8-sig')
-                except Exception:
-                    self.skill_md_content = p.read_text(encoding='latin-1')
+                except UnicodeDecodeError:
+                    try:
+                        self.skill_md_content = p.read_text(encoding='latin-1')
+                    except Exception:
+                        self.skill_md_content = None
                 self._parse_frontmatter()
                 break
     
@@ -348,7 +373,16 @@ class SecurityAuditor:
                     if key and val:
                         self.frontmatter[key] = val
     
+    def _load_changelog(self):
+        """Count versions with changelog entries for reporting."""
+        self.changelog_version_count = 0
+        if self.skill_md_content:
+            # Count version rows in changelog table
+            matches = re.findall(r'\|\s*v(\d+\.\d+\.\d+)\s*\|', self.skill_md_content)
+            self.changelog_version_count = len(matches)
+    
     def add_result(self, category, severity, file, line, message, pattern, suggestion):
+        """Add a scan result."""
         result = ScanResult(category, severity, file, line, message, pattern, suggestion)
         self.results.append(result)
         score_map = {'critical': 25, 'high': 15, 'medium': 8, 'low': 3, 'info': 0}
@@ -368,11 +402,15 @@ class SecurityAuditor:
         for rel, path in self.walker.get_text_files():
             try:
                 content = path.read_text(encoding='utf-8-sig')
-            except Exception:
+            except UnicodeDecodeError:
                 try:
                     content = path.read_text(encoding='latin-1')
                 except Exception:
                     continue
+            
+            # Skip if file is too large
+            if len(content) > 1024 * 1024:  # 1MB limit
+                continue
             
             lines = content.split('\n')
             for line_num, line in enumerate(lines, 1):
@@ -380,16 +418,27 @@ class SecurityAuditor:
                     continue
                 for category, patterns, severity in patterns_map:
                     for pat in patterns:
-                        if re.search(pat, line, re.IGNORECASE):
-                            suggestion = self._get_suggestion(category, line)
+                        try:
+                            if re.search(pat, line, re.IGNORECASE):
+                                suggestion = self._get_suggestion(category, line)
+                                self.add_result(
+                                    category=category,
+                                    severity=severity,
+                                    file=str(rel),
+                                    line=line_num,
+                                    message=f"Detected {category} risk: {line.strip()[:80]}",
+                                    pattern=pat,
+                                    suggestion=suggestion,
+                                )
+                        except re.error as e:
                             self.add_result(
-                                category=category,
-                                severity=severity,
+                                category='scan_error',
+                                severity='low',
                                 file=str(rel),
                                 line=line_num,
-                                message=f"Detected {category} risk: {line.strip()[:80]}",
+                                message=f"Regex error in pattern: {e}",
                                 pattern=pat,
-                                suggestion=suggestion,
+                                suggestion='Report this regex bug to developer',
                             )
     
     def _get_suggestion(self, category, line):
@@ -434,9 +483,9 @@ class SecurityAuditor:
         content = path.read_text(encoding='utf-8-sig')
         for line_num, line in enumerate(content.split('\n'), 1):
             line = line.strip()
-            if not line or line.startswith('#'):
+            if not line or line.startswith('#') or line.startswith('-'):
                 continue
-            m = re.match(r'^([a-zA-Z0-9_-]+)\s*([><=!~]+)\s*([0-9.]+)', line)
+            m = re.match(r'^([a-zA-Z0-9_-]+)\s*([><=!~]+)\s*([0-9.a-zA-Z]+)', line)
             if m:
                 pkg, op, ver = m.group(1).lower(), m.group(2), m.group(3)
                 self._check_vuln_dependency(path.name, line_num, pkg, op, ver, line)
@@ -447,8 +496,9 @@ class SecurityAuditor:
             for section in ['dependencies', 'devDependencies', 'peerDependencies']:
                 deps = data.get(section, {})
                 for pkg, ver in deps.items():
-                    ver_clean = re.sub(r'[\^~>=<\s]', '', ver.split('.')[0] + '.' + ver.split('.')[1] if len(ver.split('.')) > 1 else ver)
-                    self._check_vuln_dependency(path.name, 0, pkg.lower(), '<', ver_clean, f"{pkg}@{ver}")
+                    if isinstance(ver, str):
+                        ver_clean = re.sub(r'[\^~>=<\s]', '', ver.split('.')[0] + '.' + ver.split('.')[1] if len(ver.split('.')) > 1 else ver)
+                        self._check_vuln_dependency(path.name, 0, pkg.lower(), '<', ver_clean, f"{pkg}@{ver}")
         except json.JSONDecodeError as e:
             self.add_result('dependency_audit', 'low', path.name, 0, f'JSON parse error: {e}', '', 'Check package.json format')
     
@@ -472,9 +522,15 @@ class SecurityAuditor:
                 if stripped in ('', ')', '],'):
                     in_requires = False
                     continue
-                m = re.search(r'([a-zA-Z0-9_-]+)\s*([><=!~]+)\s*([0-9.]+)', stripped)
+                m = re.search(r"['\"]([a-zA-Z0-9_-]+)['\"]", stripped)
                 if m:
-                    pkg, op, ver = m.group(1).lower(), m.group(2), m.group(3)
+                    pkg = m.group(1).lower()
+                    # Try to extract version
+                    ver_m = re.search(r'([><=!~]+)\s*([0-9.]+)', stripped)
+                    if ver_m:
+                        op, ver = ver_m.group(1), ver_m.group(2)
+                    else:
+                        op, ver = '<', '999.0.0'
                     self._check_vuln_dependency(path.name, line_num, pkg, op, ver, stripped)
     
     def _parse_pyproject_toml(self, path):
@@ -503,10 +559,10 @@ class SecurityAuditor:
     def _version_lt(self, v1, v2):
         """Simplified version comparison."""
         try:
-            parts1 = [int(x) for x in re.sub(r'[^0-9.]', '', v1).split('.') if x]
-            parts2 = [int(x) for x in re.sub(r'[^0-9.]', '', v2).split('.') if x]
+            parts1 = [int(x) for x in re.sub(r'[^0-9.]', '', str(v1)).split('.') if x]
+            parts2 = [int(x) for x in re.sub(r'[^0-9.]', '', str(v2)).split('.') if x]
             return parts1 < parts2
-        except Exception:
+        except (ValueError, TypeError):
             return False
     
     def scan_permissions(self):
@@ -623,7 +679,7 @@ class SecurityAuditor:
                 )
         
         version = self.frontmatter.get('version', '')
-        if version and not re.match(r'^\d+\.\d+\.\d+', version):
+        if version and not re.match(r'^\d+\.\d+\.\d+', str(version)):
             self.add_result(
                 category='quality_check',
                 severity='low',
@@ -631,7 +687,7 @@ class SecurityAuditor:
                 line=0,
                 message=f'version format invalid: {version}',
                 pattern=f'version: {version}',
-                suggestion='Use semantic versioning, e.g., "1.0.0"',
+                suggestion='Use semantic versioning (e.g., "1.0.0")',
             )
         
         if self.skill_md_content:
@@ -668,7 +724,7 @@ class SecurityAuditor:
             file_count += 1
             try:
                 total_size += path.stat().st_size
-            except Exception:
+            except (OSError, ValueError):
                 pass
         
         if file_count > 200:
@@ -710,6 +766,7 @@ class SecurityAuditor:
         cache_file = Path.home() / '.skill-security-checker-update-cache.json'
         now = datetime.now()
         
+        # Check cache first
         try:
             if cache_file.exists():
                 cache = json.loads(cache_file.read_text(encoding='utf-8'))
@@ -728,12 +785,13 @@ class SecurityAuditor:
                                 suggestion=f'Run: skillhub update skill-security-checker',
                             )
                     return
-        except Exception:
+        except (json.JSONDecodeError, ValueError, KeyError, TypeError):
             pass
         
+        # Only fetch if cache expired
         try:
             import urllib.request
-            req = urllib.request.Request(UPDATE_CHECK_URL, headers={'User-Agent': 'skill-security-checker/1.2.0'})
+            req = urllib.request.Request(UPDATE_CHECK_URL, headers={'User-Agent': f'skill-security-checker/{CURRENT_VERSION}'})
             with urllib.request.urlopen(req, timeout=3) as resp:
                 data = json.loads(resp.read().decode())
                 latest = data.get('tag_name', '').lstrip('v')
@@ -824,6 +882,7 @@ class SecurityAuditor:
             'statistics': stats,
             'results': [r.to_dict() for r in sorted_results],
             'summary': self._generate_summary(stats),
+            'changelog_version_count': getattr(self, 'changelog_version_count', 0),
         }
     
     def _get_grade(self):
@@ -935,7 +994,7 @@ code {{ background:#f1f3f5; padding:2px 6px; border-radius:3px; font-size:12px; 
 <body>
 <div class="container">
     <div class="header">
-        <h1>🔒 Skill Security Audit Report</h1>
+        <h1>Skill Security Audit Report</h1>
         <div class="meta">
             Skill: <strong>{report['meta']['skill_name']}</strong> |
             Version: {report['meta']['version']} |
@@ -973,7 +1032,7 @@ code {{ background:#f1f3f5; padding:2px 6px; border-radius:3px; font-size:12px; 
     </div>
     
     <div class="results">
-        <h2>📋 Detailed Results</h2>
+        <h2>Detailed Results</h2>
         <table>
             <thead>
                 <tr>
@@ -986,7 +1045,7 @@ code {{ background:#f1f3f5; padding:2px 6px; border-radius:3px; font-size:12px; 
                 </tr>
             </thead>
             <tbody>
-                {results_html if results_html else '<tr><td colspan="6" style="text-align:center;color:#999;">No issues found 🎉</td></tr>'}
+                {results_html if results_html else '<tr><td colspan="6" style="text-align:center;color:#999;">No issues found</td></tr>'}
             </tbody>
         </table>
     </div>
@@ -1045,39 +1104,40 @@ Examples:
             print(f"HTML report generated ({len(output)} chars)")
     else:
         print(f"\n{'='*60}")
-        print(f"  🔒 Skill Security Audit Report")
+        print(f"  Skill Security Audit Report")
         print(f"{'='*60}")
         print(f"  Skill: {report['meta']['skill_name']}")
         print(f"  Path: {report['meta']['skill_path']}")
         print(f"  Time: {report['meta']['scan_time']}")
         print(f"  Files: {report['meta']['total_files_scanned']} scanned, {report['meta']['total_files_skipped']} skipped")
         print(f"{'='*60}")
-        print(f"\n  📊 Score: {report['score']}/100 (Grade: {report['grade']})")
-        print(f"  📝 {report['summary']}\n")
+        print(f"\n  Score: {report['score']}/100 (Grade: {report['grade']})")
+        print(f"  {report['summary']}\n")
         
         if report['results']:
             print(f"  {'─'*56}")
-            print(f"  {'Severity':<10} {'Category':<20} {'File':<15} {'Description'}")
-            print(f"  {'─'*56}")
-            severity_labels = {'critical': '🔴', 'high': '🟠', 'medium': '🟡', 'low': '🔵', 'info': '⚪'}
+            severity_labels = {'critical': '[CRIT]', 'high': '[HIGH]', 'medium': '[MED]', 'low': '[LOW]', 'info': '[INFO]'}
             for r in report['results']:
                 sev = severity_labels.get(r['severity'], r['severity'])
-                file_display = r['file'][:13] + '..' if len(r['file']) > 15 else r['file']
-                msg_display = r['message'][:30] + '..' if len(r['message']) > 30 else r['message']
-                print(f"  {sev} {r['severity']:<7} {r['category']:<18} {file_display:<15} {msg_display}")
+                file_display = r['file'][:15] + '..' if len(r['file']) > 17 else r['file']
+                msg_display = r['message'][:35] + '..' if len(r['message']) > 37 else r['message']
+                print(f"  {sev:<7} {r['category']:<18} {file_display:<17} {msg_display}")
             print(f"  {'─'*56}")
         
-        print(f"\n  💡 Fix suggestions:")
-        for r in report['results']:
-            if r['severity'] in ('critical', 'high'):
-                print(f"    • [{r['category']}] {r['suggestion']}")
+        print(f"\n  Fix suggestions:")
+        critical_high = [r for r in report['results'] if r['severity'] in ('critical', 'high')]
+        if critical_high:
+            for r in critical_high[:5]:  # Show top 5
+                print(f"    [{r['category']}] {r['suggestion']}")
+        else:
+            print("    No critical or high severity issues to fix!")
         
         if args.output:
             with open(args.output, 'w', encoding='utf-8') as f:
                 f.write(json.dumps(report, ensure_ascii=False, indent=2))
-            print(f"\n  📄 Report saved: {args.output}")
+            print(f"\n  Report saved: {args.output}")
         
-        print(f"\n  📧 Feedback: njskills@agent.qq.com")
+        print(f"\n  Feedback: njskills@agent.qq.com")
         print(f"{'='*60}\n")
     
     if report['statistics']['critical'] > 0 or report['statistics']['high'] > 0:
