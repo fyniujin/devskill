@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-DAG 验证器 - 多Agent协作编排引擎 v2.0
+DAG 验证器 - 多Agent协作编排引擎 v3.0
 
 功能：
   1. 验证 JSON Schema 结构完整性
   2. 检测循环依赖（Kahn 算法拓扑排序）
   3. 检测孤立节点（无上游也无下游的节点）
   4. 输出拓扑排序执行顺序
+  5. 支持人工审批节点（type: approval）
 
 零第三方依赖，仅使用 Python 标准库
 
@@ -189,6 +190,10 @@ def validate_schema(pipeline):
         # fallback 验证
         if 'fallback' in agent and agent['fallback'] not in ('retry', 'skip', 'default', 'abort'):
             warnings.append(f"{prefix} [fallback] 建议为 skip/default/abort 之一（当前值：{agent['fallback']}）")
+
+        # type 验证（task 或 approval）
+        if 'type' in agent and agent['type'] not in ('task', 'approval'):
+            warnings.append(f"{prefix} [type] 建议为 task 或 approval 之一（当前值：{agent['type']}）")
 
     return errors, warnings
 
