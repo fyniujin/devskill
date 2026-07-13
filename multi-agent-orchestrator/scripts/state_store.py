@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-状态持久化管理器 - 多Agent协作编排引擎 v2.0
+状态持久化管理器 - 多Agent协作编排引擎 v3.0
 
 功能：pipeline_state.json 的创建、读取、更新、查询 + 断点续传支持
+新增：执行历史追踪（.execution_history.json）
 零第三方依赖，仅使用 Python 标准库
 
 ★★★ 安全说明 ★★★
@@ -148,6 +149,7 @@ def init_state(pipeline, state_path=None):
         state['nodes'][aid] = {
             "name": agent.get('name', aid),
             "role": agent.get('role', ''),
+            "type": agent.get('type', 'task'),  # task 或 approval
             "status": "pending",       # pending → running → completed / failed / skipped
             "depends_on": agent.get('depends_on', []),
             "retry_count": 0,
@@ -191,6 +193,8 @@ def complete_node(state_path, node_id, output_json=None):
         sys.exit(1)
 
     node = state['nodes'][node_id]
+    if not node.get('started_at'):
+        node['started_at'] = get_timestamp()
     node['status'] = 'completed'
     node['completed_at'] = get_timestamp()
 
@@ -204,7 +208,7 @@ def complete_node(state_path, node_id, output_json=None):
     else:
         node['output_data'] = {"result": "completed"}
 
-    all_done = all(n['status'] == 'completed' for n in state['nodes'].values())
+    all_done = all(n['status'] in ('completed', 'skipped') for n in state['nodes'].values())
     if all_done:
         state['status'] = 'completed'
     else:
@@ -219,6 +223,11 @@ def complete_node(state_path, node_id, output_json=None):
     if all_done:
         print(f"\n🎉 流水线 [{state['pipeline_name']}] 全部节点已完成！")
         print(f"  查看完整报告：python orchestrator.py report {state_path}")
+        # 保存执行历史
+        try:
+            save_execution_history(state_path, state)
+        except Exception as e:
+            print(f"  [调试] 保存历史失败：{e}")
     return state
 
 
@@ -473,9 +482,207 @@ def resume_pipeline(state_path, force=False):
     print("=" * 60)
 
 
+# 执行历史管理
+HISTORY_FILENAME = '.execution_history.json'
+MAX_HISTORY = 10
+
+
+def save_execution_history(state_path, state):
+    """保存执行摘要到历史文件（保留最近10次）"""
+    state_path = validate_path(state_path)
+    history_path = os.path.join(os.path.dirname(state_path), HISTORY_FILENAME)
+
+    # 计算耗时
+    nodes = state.get('nodes', {})
+    times = [(n.get('started_at'), n.get('completed_at')) for n in nodes.values()
+             if n.get('started_at') and n.get('completed_at')]
+    total_duration = "-"
+    if times:
+        all_times = [t for pair in times for t in pair]
+        total_duration = calc_duration(min(all_times), max(all_times))
+
+    # 构建摘要
+    summary = {
+        'pipeline_id': state.get('pipeline_id', 'unknown'),
+        'pipeline_name': state.get('pipeline_name', 'unnamed'),
+        'timestamp': get_timestamp(),
+        'status': state.get('status', 'unknown'),
+        'total_duration': total_duration,
+        'node_count': len(nodes),
+        'completed_count': sum(1 for n in nodes.values() if n['status'] == 'completed'),
+        'failed_count': sum(1 for n in nodes.values() if n['status'] == 'failed'),
+        'skipped_count': sum(1 for n in nodes.values() if n['status'] == 'skipped'),
+        'total_retries': sum(n.get('retry_count', 0) for n in nodes.values()),
+    }
+
+    # 读取现有历史
+    history = []
+    if os.path.exists(history_path):
+        try:
+            with open(history_path, 'r', encoding='utf-8') as f:
+                history = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            history = []
+
+    history.insert(0, summary)
+    history = history[:MAX_HISTORY]
+
+    with open(history_path, 'w', encoding='utf-8') as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
+
+
+def calc_duration(start, end):
+    """计算时长（供内部使用）"""
+    if not start or not end:
+        return "-"
+    try:
+        s = datetime.strptime(start, '%Y-%m-%dT%H:%M:%S')
+        e = datetime.strptime(end, '%Y-%m-%dT%H:%M:%S')
+        delta = e - s
+        seconds = int(delta.total_seconds())
+        if seconds < 60:
+            return f"{seconds}秒"
+        elif seconds < 3600:
+            mins = seconds // 60
+            secs = seconds % 60
+            return f"{mins}分{secs:02d}秒"
+        else:
+            hours = seconds // 3600
+            mins = (seconds % 3600) // 60
+            return f"{hours}时{mins:02d}分"
+    except (ValueError, TypeError):
+        return "-"
+
+
+def show_history(state_path):
+    """显示执行历史"""
+    state_path = validate_path(state_path, must_exist=True)
+    history_path = os.path.join(os.path.dirname(state_path), HISTORY_FILENAME)
+
+    if not os.path.exists(history_path):
+        print("没有执行历史记录。")
+        return []
+
+    try:
+        with open(history_path, 'r', encoding='utf-8') as f:
+            history = json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        print(f"读取历史失败：{e}")
+        return []
+
+    if not history:
+        print("没有执行历史记录。")
+        return []
+
+    print("=" * 60)
+    print("  执行历史记录")
+    print("=" * 60)
+    for i, h in enumerate(history, 1):
+        print(f"\n  [{i}] {h.get('pipeline_name', 'unnamed')}")
+        print(f"      ID: {h.get('pipeline_id', '-')}")
+        print(f"      时间: {h.get('timestamp', '-')}")
+        print(f"      状态: {h.get('status', '-')}")
+        print(f"      耗时: {h.get('total_duration', '-')}")
+        print(f"      节点: {h.get('completed_count', 0)}/{h.get('node_count', 0)} 成功，{h.get('failed_count', 0)}/{h.get('node_count', 0)} 失败")
+    print("\n" + "=" * 60)
+    return history
+
+
+def compare_history(state_path):
+    """对比最近5次执行"""
+    state_path = validate_path(state_path, must_exist=True)
+    history_path = os.path.join(os.path.dirname(state_path), HISTORY_FILENAME)
+
+    if not os.path.exists(history_path):
+        print("没有执行历史记录，无法对比。")
+        return
+
+    try:
+        with open(history_path, 'r', encoding='utf-8') as f:
+            history = json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        print(f"读取历史失败：{e}")
+        return
+
+    if len(history) < 2:
+        print("历史记录不足2次，需要至少2次才能对比。")
+        print(f"  当前记录数：{len(history)}")
+        return
+
+    recent = history[:5]
+    current = recent[0]
+    previous = recent[1]
+
+    def parse_duration(d):
+        """将耗时字符串转换为秒"""
+        if not d or d == "-":
+            return 0
+        total = 0
+        import re
+        m = re.search(r'(\d+)时', d)
+        if m:
+            total += int(m.group(1)) * 3600
+        m = re.search(r'(\d+)分', d)
+        if m:
+            total += int(m.group(1)) * 60
+        m = re.search(r'(\d+)秒', d)
+        if m:
+            total += int(m.group(1))
+        return total
+
+    def format_seconds(s):
+        """秒数转可读字符串"""
+        if s < 60:
+            return f"{s}秒"
+        elif s < 3600:
+            return f"{s // 60}分{s % 60:02d}秒"
+        else:
+            return f"{s // 3600}时{(s % 3600) // 60:02d}分"
+
+    cur_sec = parse_duration(current.get('total_duration', '-'))
+    prev_sec = parse_duration(previous.get('total_duration', '-'))
+
+    print("=" * 60)
+    print("  执行对比（本次 vs 上次）")
+    print("=" * 60)
+    print(f"\n  流水线：{current.get('pipeline_name', '-')}")
+    print(f"  本次 ID：{current.get('pipeline_id', '-')}")
+    print(f"  上次 ID：{previous.get('pipeline_id', '-')}")
+
+    # 耗时对比
+    if prev_sec > 0 and cur_sec > 0:
+        diff = cur_sec - prev_sec
+        pct = (diff / prev_sec) * 100
+        if diff > 0:
+            print(f"\n  ⏱️ 耗时对比：本次比上次慢 {abs(pct):.1f}%（多 {format_seconds(abs(diff))}）")
+        elif diff < 0:
+            print(f"\n  ⏱️ 耗时对比：本次比上次快 {abs(pct):.1f}%")
+        else:
+            print(f"\n  ⏱️ 耗时对比：两次执行耗时相同")
+
+    print(f"\n  本次耗时：{current.get('total_duration', '-')}")
+    print(f"  上次耗时：{previous.get('total_duration', '-')}")
+
+    # 成功/失败对比
+    cur_completed = current.get('completed_count', 0)
+    prev_completed = previous.get('completed_count', 0)
+    cur_failed = current.get('failed_count', 0)
+    prev_failed = previous.get('failed_count', 0)
+    print(f"\n  本次完成：{cur_completed} 个节点成功，{cur_failed} 个失败")
+    print(f"  上次完成：{prev_completed} 个节点成功，{prev_failed} 个失败")
+
+    # 重试对比
+    cur_retries = current.get('total_retries', 0)
+    prev_retries = previous.get('total_retries', 0)
+    print(f"\n  本次重试：{cur_retries} 次")
+    print(f"  上次重试：{prev_retries} 次")
+
+    print("\n" + "=" * 60)
+
+
 if __name__ == '__main__':
     if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
-        print("状态持久化管理器 - 多Agent协作编排引擎 v2.0")
+        print("状态持久化管理器 - 多Agent协作编排引擎 v3.0")
         print("=" * 50)
         print("命令列表：")
         print("  python state_store.py init <pipeline.json> [state_path]")
@@ -495,6 +702,12 @@ if __name__ == '__main__':
         print("")
         print("  python state_store.py resume <state.json> [--force]")
         print("      → 断点续传（重置所有失败节点为pending）")
+        print("")
+        print("  python state_store.py history <state.json>")
+        print("      → 查看执行历史记录")
+        print("")
+        print("  python state_store.py compare <state.json>")
+        print("      → 对比最近5次执行（耗时/成功率/重试次数）")
         print("")
         print("★★★ 重要：错误处理流程 ★★★")
         print("  1. 执行失败时，先运行 fail 标记失败")
@@ -567,6 +780,20 @@ if __name__ == '__main__':
             sys.exit(1)
         force = '--force' in sys.argv
         resume_pipeline(sys.argv[2], force=force)
+
+    elif cmd == 'history':
+        if len(sys.argv) < 3:
+            print("错误：缺少[state.json路径]")
+            print("用法：python state_store.py history <state.json>")
+            sys.exit(1)
+        show_history(sys.argv[2])
+
+    elif cmd == 'compare':
+        if len(sys.argv) < 3:
+            print("错误：缺少[state.json路径]")
+            print("用法：python state_store.py compare <state.json>")
+            sys.exit(1)
+        compare_history(sys.argv[2])
 
     else:
         print(f"错误：未知命令 [{cmd}]")
