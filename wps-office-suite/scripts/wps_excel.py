@@ -1,5 +1,5 @@
 """
-WPS Excel CLI v3.1 - 完整命令集
+WPS Excel CLI v4.0 - 完整命令集
 """
 import subprocess
 import json
@@ -104,6 +104,15 @@ def main():
 
     p = sub.add_parser("check-update", help="检查更新")
 
+    p = sub.add_parser("nl-analyze", help="自然语言数据分析（如：按月份统计销售额并画趋势图）")
+    p.add_argument("--file", required=True, help="Excel 文件路径")
+    p.add_argument("--query", required=True, help="自然语言查询")
+    p.add_argument("--sheet", default="Sheet1")
+
+    p = sub.add_parser("invoice", help="发票 OCR 入账（PDF/图片 → Excel）")
+    p.add_argument("--input", required=True, help="发票文件路径（PDF/图片）")
+    p.add_argument("--output", default="", help="输出 Excel 路径")
+
     args = parser.parse_args()
 
     if args.command == "create":
@@ -150,6 +159,15 @@ def main():
         r = call_worker("engine_info", {})
     elif args.command == "check-update":
         r = call_worker("check_update", {})
+    elif args.command == "nl-analyze":
+        query_str = args.query
+        if args.file:
+            query_str = args.query.replace("{file}", args.file)
+        r = call_worker("nl_analyze", {
+            "file": args.file, "query": args.query, "sheet": args.sheet
+        })
+    elif args.command == "invoice":
+        r = call_worker("invoice_ocr", {"input": args.input, "output": args.output})
     else:
         r = {"ok": False, "error": "未知命令"}
 
