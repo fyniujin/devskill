@@ -97,7 +97,7 @@ approval:
 ```
 
 申请步骤：
-1. 登录 https://open.duxiaoman.com
+1. 登录 https://open-dev.dingtalk.com
 2. 创建企业内部应用
 3. 开通审批权限
 4. 获取AppKey和AppSecret
