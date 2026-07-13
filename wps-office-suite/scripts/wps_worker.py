@@ -1,19 +1,23 @@
 """
-WPS Worker v3.1.0 - 智能引擎切换 v3.1
+WPS Worker v4.0.0 - 智能引擎切换 v4.0
 引擎优先级: WPS > MS Office > LibreOffice > 纯Python
+
+v4.0.0 变更:
+  - 🎯 Word→PPT 一键生成（chapter splitting + 模板匹配）
+  - 🎯 Excel 自然语言数据分析（NL2SQL+透视分析+图表）
+  - 🎯 Word 合同条款自动审查标注（规则引擎+红线标注）
+  - 🎯 Excel 发票 OCR 入账（PDF/图片→Excel，本地OCR）
 
 v3.1.0 变更:
   - 模板安全修复：删除二进制模板，改为纯Python代码生成
   - 避坑指南：20+ 条高频/中频/低频错误排查
   - FAQ 扩展至 15 个（含文件大小、并发数、批量限制）
-  - 新增文件限制速查表
 
 v3.0.0 变更:
   - 自动重试机制（max_retry_count=3，指数退避）
   - 性能优化：硬件自适应（CPU/内存检测，动态线程分配）
   - 子进程超时保护（60s/120s 分级超时）
   - Update checker（7天检查一次）
-  - 崩溃诊断日志
 """
 import sys
 import json
@@ -709,6 +713,43 @@ def cmd_check_update(args):
 
 # ==================== 命令路由表 ====================
 
+# ==================== 新模块路由命令 ====================
+
+def cmd_docx_to_ppt(args):
+    """Word → PPT 一键生成"""
+    from wps_docx_to_ppt import docx_to_ppt
+    return docx_to_ppt(
+        input_path=args.get("input"),
+        output_path=args.get("output", ""),
+        title=args.get("title", ""),
+        theme=args.get("theme", "business")
+    )
+
+def cmd_nl_analyze(args):
+    """Excel 自然语言数据分析"""
+    from wps_nl_analysis import nl_analyze
+    return nl_analyze(
+        filepath=args.get("file"),
+        query=args.get("query"),
+        sheet=args.get("sheet", "Sheet1")
+    )
+
+def cmd_contract_review(args):
+    """Word 合同审查"""
+    from wps_contract_review import review_docx_contract
+    return review_docx_contract(
+        filepath=args.get("file"),
+        output_path=args.get("output", "")
+    )
+
+def cmd_invoice_ocr(args):
+    """发票 OCR 入账"""
+    from wps_invoice_ocr import invoice_to_accounting
+    return invoice_to_accounting(
+        input_path=args.get("input"),
+        output_path=args.get("output", "")
+    )
+
 COMMANDS = {
     "create_word": cmd_create_word,
     "edit_word": cmd_edit_word,
@@ -734,6 +775,10 @@ COMMANDS = {
     "engine_info": cmd_engine_info,
     "hardware_info": cmd_hardware_info,
     "check_update": cmd_check_update,
+    "docx_to_ppt": cmd_docx_to_ppt,
+    "nl_analyze": cmd_nl_analyze,
+    "contract_review": cmd_contract_review,
+    "invoice_ocr": cmd_invoice_ocr,
     "exit": None,
 }
 
