@@ -1,5 +1,5 @@
 """
-WPS PPT CLI v3.1 - 四引擎自动调用
+WPS PPT CLI v4.0 - 四引擎自动调用
 """
 import subprocess
 import json
@@ -61,6 +61,12 @@ def main():
 
     p = sub.add_parser("engine-info")
 
+    p = sub.add_parser("docx-to-ppt", help="Word → PPT 一键生成")
+    p.add_argument("--input", required=True, help="输入 .docx 文件路径")
+    p.add_argument("--output", default="", help="输出 .pptx 文件路径")
+    p.add_argument("--title", default="", help="PPT 标题")
+    p.add_argument("--theme", choices=["business", "tech", "minimal"], default="business")
+
     args = parser.parse_args()
 
     if args.command == "create":
@@ -84,6 +90,11 @@ def main():
         r = call_worker("info_ppt", {"filepath": args.file})
     elif args.command == "engine-info":
         r = call_worker("engine_info", {})
+    elif args.command == "docx-to-ppt":
+        r = call_worker("docx_to_ppt", {
+            "input": args.input, "output": args.output,
+            "title": args.title, "theme": args.theme
+        })
     else:
         r = {"ok": False, "error": "未知命令"}
 
