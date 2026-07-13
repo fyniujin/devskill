@@ -11,7 +11,6 @@
 | gov-procurement-analyst | `gov-procurement-analyst/SKILL.md` | v4.0.0 | 政府采购全流程智能分析助手。覆盖商机发现、投标决策、文件编制、供应商背调、合规审计、 中标跟踪、资质管理、政策咨询、保证金管理、质疑投诉、合同分析、验收辅助、 采购需求编制、电子卖场比价、中小企业优惠计算15大模块。 零配置开箱即用，无需任何API Keys，纯本地+公开数据采集。 新增智能洞察引擎：战略判断/利润预警/趋势预判/雷区扫描/竞对关联/前瞻推荐。 |
 | kingdoc | `kingdoc/SKILL.md` | v3.0.0 | 金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理 （智能文档/文字/电子表格/演示文稿/多维表格/收集表/思维导图/流程图/附件）， 深度直连金山文档（WPS）开放平台原生 API，覆盖腾讯文档全部能力 + 金山独有 10 项增强 （回收站、版本历史、格式转换、纯文本提取、本地 Tesseract OCR、通知推送、Webhook、 批量任务、政企合规、硬件自适应性能）。文字/演示/思维导图/流程图采用"本地生成→上传覆盖"， 电子表格/多维表格采用 API 精细编辑。本地生成、OCR、硬件画像等能力零密钥可用。 |
 | multi-agent-orchestrator | `multi-agent-orchestrator/SKILL.md` | v3.0.0 | 支持多Agent流水线编排（采集→分析→报告），基于DAG调度实现跨技能状态共享、错误重试、断点续传、执行报告生成、HTML甘特图可视化、人工审批节点、历史执行对比、硬件自适应参数和版本更新提醒。AI即编排器，脚本提供基础设施。 |
-| tax-receipt-compliance | `tax-receipt-compliance/SKILL.md` | v3.0.0 | 财税合规全链路助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。 |
 | winskill | `winskill/SKILL.md` | v1.7.0 | Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控、事件日志诊断、已安装程序管理、用户会话监控、计划任务审计、文件共享审计、DNS网卡诊断、SSL证书过期检测、防火墙规则审计、服务崩溃恢复状态、系统文件修复、存储池管理、备份状态检查。只读分析+安全确认，绝不误删文件，完全免费离线运行。 |
 | wps-office-suite | `wps-office-suite/SKILL.md` | v4.0.0 | WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、反模式FAQ、避坑指南、自动重试、硬件自适应、环境自检、错误速查手册、Skill更新提醒；v4.0新增：Word→PPT一键生成、Excel自然语言数据分析、Word合同条款审查、Excel发票OCR入账 |
 | zwjh-skill | `zwjh-skill/SKILL.md` | v2.0.0 | 统一记忆底座：长期记忆 + 知识图谱 + 自动沉淀 + 检索。让 AI「记得你」，跨会话持久记忆、实体/关系图谱、语义与时间线检索、记忆健康度审计、本地备份（可接百度网盘）。纯本地、零密钥、按硬件自适应，不拖累电脑。并保留 v1.7 的根因分析/预测性维护/进化报告。 |
@@ -128,7 +127,7 @@ git push → GitHub Actions 触发
 </details>
 
 <details>
-<summary>tax-receipt-compliance - 点击展开</summary>
+<summary>receipt-compliance - 点击展开</summary>
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
