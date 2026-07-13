@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-编排引擎入口 - 多Agent协作编排引擎 v2.0
+编排引擎入口 - 多Agent协作编排引擎 v3.0
 
 功能：统一入口，整合 DAG 验证、状态管理、执行调度、错误恢复、报告生成
+支持人工审批节点、HTML 甘特图、历史执行对比、硬件自适应
 零第三方依赖，仅使用 Python 标准库
 
 ★★★ 安全说明 ★★★
@@ -187,6 +188,7 @@ def cmd_step(args):
     安全说明：
     - 只有依赖全部完成（completed/skipped）的节点才会被获取
     - running 状态的过期节点会自动重置为 pending（防止死锁）
+    - 遇到人工审批节点（type: approval）会暂停等待用户确认
     """
     if not args:
         print("错误：缺少[state.json路径]")
@@ -200,6 +202,56 @@ def cmd_step(args):
     if node_id:
         state = state_store.load_state(state_path)
         node = state['nodes'][node_id]
+        node_type = node.get('type', 'task')
+
+        # 人工审批节点
+        if node_type == 'approval':
+            print(f"\n{'=' * 60}")
+            print(f"  🔐 人工审批节点")
+            print(f"{'=' * 60}")
+            print(f"节点 ID：{node_id}")
+            print(f"节点名称：{node.get('name', node_id)}")
+            print(f"角色描述：{node.get('role', '未指定')}")
+
+            # 注入上游输出
+            deps = node.get('depends_on', [])
+            if deps:
+                print(f"\n📥 上游输出（供审批参考）：")
+                for dep in deps:
+                    dep_data = state['nodes'].get(dep, {}).get('output_data', {})
+                    preview = json.dumps(dep_data, ensure_ascii=False)[:300]
+                    print(f"  [{dep}] → {preview}")
+
+            print(f"\n请确认是否继续执行后续节点？")
+            print(f"  [Y] 同意 - 继续执行")
+            print(f"  [N] 拒绝 - 中止流水线")
+            print(f"{'=' * 60}")
+
+            try:
+                choice = input("  请输入 (Y/N): ").strip().upper()
+            except (EOFError, KeyboardInterrupt):
+                print("\n  已取消。")
+                sys.exit(0)
+
+            if choice == 'Y':
+                node['status'] = 'completed'
+                node['output_data'] = {'approved': True, 'approved_at': state_store.get_timestamp()}
+                node['completed_at'] = state_store.get_timestamp()
+                state_store.safe_write(state, state_path)
+                print(f"\n  ✅ 已批准，继续执行")
+                print(f"  运行下一步：python orchestrator.py step {state_path}")
+            else:
+                node['status'] = 'completed'
+                node['output_data'] = {'approved': False, 'rejected_at': state_store.get_timestamp()}
+                node['completed_at'] = state_store.get_timestamp()
+                state_store.safe_write(state, state_path)
+                state['status'] = 'aborted'
+                state_store.safe_write(state, state_path)
+                print(f"\n  ❌ 已拒绝，流水线已中止")
+                print(f"  查看报告：python orchestrator.py report {state_path}")
+                print(f"  断点续传：python orchestrator.py resume {state_path} --force")
+            return
+
         print(f"\n{'=' * 60}")
         print(f"  🎯 请 AI 执行此节点的任务")
         print(f"{'=' * 60}")
@@ -299,20 +351,25 @@ def cmd_impact(args):
 
 
 USAGE = """
-编排引擎 - 多Agent协作编排引擎 v2.0
+编排引擎 - 多Agent协作编排引擎 v3.0
 ================================
 
 用法：python orchestrator.py <command> [args]
 
 命令列表（按使用频率排序）：
-  run <pipeline.json> [state]         ★★★ 首次使用 ★★★ 初始化并开始执行
-  step <state.json>                    ★☆☆ 逐步执行（获取下一个待执行节点）
-  status <state.json>                  ★★☆ 查看流水线状态（只读）
-  resume <state.json> [--force]        ★★☆ 断点续传（重置失败节点）
-  report <state.json> [output]         ★★☆ 生成 Markdown 执行报告
-  validate <pipeline.json>             ★☆  验证 DAG 结构（只读，不修改文件）
-  plan <pipeline.json>                 ★☆  查看执行计划（只读，不修改文件）
-  impact <state.json> <node_id>        ☆☆  分析下游影响（只读）
+  run <pipeline.json> [state]                 ★★★ 首次使用 ★★★ 初始化并开始执行
+  step <state.json>                            ★☆☆ 逐步执行（获取下一个待执行节点）
+  status <state.json>                          ★★☆ 查看流水线状态（只读）
+  resume <state.json> [--force]                ★★☆ 断点续传（重置失败节点）
+  report <state.json> [output]                 ★★☆ 生成 Markdown 执行报告
+  gantt <state.json> [output.html]              ★★☆ 生成 HTML 甘特图（可视化时间轴）
+  validate <pipeline.json>                     ★☆  验证 DAG 结构（只读，不修改文件）
+  plan <pipeline.json>                         ★☆  查看执行计划（只读，不修改文件）
+  history <state.json>                         ★☆☆ 查看执行历史记录
+  compare <state.json>                         ★☆☆ 对比最近5次执行（耗时/成功率/重试）
+  hardware                                     ★☆☆ 硬件检测与参数推荐
+  check-update                                 ☆☆  检查是否有新版本
+  impact <state.json> <node_id>                ☆☆  分析下游影响（只读）
 
 典型工作流：
   1. python orchestrator.py plan pipeline.json         # 查看执行计划
@@ -321,7 +378,15 @@ USAGE = """
   4. AI 执行任务...
   5. python state_store.py complete state.json node '...'
   6. 重复 3-5，直到流水线完成
-  7. python orchestrator.py report state.json           # 生成报告
+  7. python orchestrator.py gantt state.json            # 生成 HTML 甘特图
+  8. python orchestrator.py report state.json           # 生成 Markdown 报告
+
+★★★ 新功能 v3.0 ★★★
+  - 人工审批节点：在 DAG 中设置 type: approval 暂停等用户确认
+  - HTML 甘特图：可视化每个节点的开始/结束/成功/失败（颜色编码）
+  - 历史执行对比：自动对比最近5次执行，输出"本次比上次慢X%"
+  - 硬件自适应：自动检测 CPU/内存，推荐最优并发数和文件大小限制
+  - 更新提醒：启动时检查 GitHub 是否有新版本
 
 ★★★ 安全说明 ★★★
   - 节点 id 仅允许 [a-zA-Z0-9_.-]，防止注入
@@ -329,12 +394,48 @@ USAGE = """
   - 状态文件最大 50MB
   - pipeline.json 最大 10MB
   - 不自动脱敏，敏感数据需用户自行处理
-
-★★★ 三句话总结 ★★★
-  1. run  创建流水线
-  2. step 获取下一个节点 → AI 执行 → complete/fail
-  3. report 生成报告
 """
+
+
+def cmd_gantt(args):
+    """生成 HTML 甘特图"""
+    if not args:
+        print("错误：缺少[state.json路径]")
+        print("用法：python orchestrator.py gantt <state.json> [output.html]")
+        print("示例：python orchestrator.py gantt pipeline_state.json gantt.html")
+        sys.exit(1)
+    output = args[1] if len(args) > 1 else None
+    pipeline_reporter.generate_html_gantt(args[0], output)
+
+
+def cmd_history(args):
+    """查看执行历史"""
+    if not args:
+        print("错误：缺少[state.json路径]")
+        print("用法：python orchestrator.py history <state.json>")
+        sys.exit(1)
+    state_store.show_history(args[0])
+
+
+def cmd_compare(args):
+    """对比最近执行"""
+    if not args:
+        print("错误：缺少[state.json路径]")
+        print("用法：python orchestrator.py compare <state.json>")
+        sys.exit(1)
+    state_store.compare_history(args[0])
+
+
+def cmd_hardware(args):
+    """硬件检测"""
+    import hardware_detector
+    hardware_detector.detect()
+
+
+def cmd_check_update(args):
+    """检查更新"""
+    import update_checker
+    update_checker.check_update()
 
 
 if __name__ == '__main__':
@@ -353,6 +454,11 @@ if __name__ == '__main__':
         'status': cmd_status,
         'resume': cmd_resume,
         'report': cmd_report,
+        'gantt': cmd_gantt,
+        'history': cmd_history,
+        'compare': cmd_compare,
+        'hardware': cmd_hardware,
+        'check-update': cmd_check_update,
         'impact': cmd_impact,
     }
 
