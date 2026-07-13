@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Pipeline State Schema",
-  "description": "多Agent协作编排引擎 - 状态文件格式规范",
+  "description": "多Agent协作编排引擎 - 状态文件格式规范 v3.0",
   "type": "object",
   "required": ["pipeline_id", "pipeline_name", "status", "nodes", "created_at", "updated_at"],
   "properties": {
@@ -16,7 +16,7 @@
     "version": {
       "type": "string",
       "description": "DAG 定义版本号",
-      "default": "1.0"
+      "default": "3.0"
     },
     "created_at": {
       "type": "string",
@@ -40,6 +40,12 @@
         "properties": {
           "name": {"type": "string"},
           "role": {"type": "string"},
+          "type": {
+            "type": "string",
+            "enum": ["task", "approval"],
+            "description": "节点类型：task=普通任务节点，approval=人工审批节点",
+            "default": "task"
+          },
           "status": {
             "type": "string",
             "enum": ["pending", "running", "completed", "failed", "skipped"]
