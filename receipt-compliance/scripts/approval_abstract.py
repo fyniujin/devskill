@@ -60,7 +60,7 @@ class DingTalkEngine(ApprovalEngine):
                 'engine': self.get_engine_name(),
                 'status': 'credentials_required',
                 'message': '请提供钉钉应用的AppKey和AppSecret',
-                'apply_url': 'https://open.duxiaoman.com',
+                'apply_url': 'https://open-dev.dingtalk.com',
             }
 
         return {
@@ -72,7 +72,7 @@ class DingTalkEngine(ApprovalEngine):
                 'process_code': self.process_code,
                 'expense_file': expense_file,
             },
-            'reference_url': 'https://open.duxiaoman.com/document',
+            'reference_url': 'https://open-dev.dingtalk.com/document',
             'submit_time': datetime.now().isoformat(),
         }
 
