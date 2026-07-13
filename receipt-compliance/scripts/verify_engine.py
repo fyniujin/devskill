@@ -161,7 +161,7 @@ class TaxBureauVerifier:
                 if not browser_opened:
                     # 尝试用系统命令打开
                     if sys.platform == 'win32':
-                        subprocess.Popen(['start', short_url], shell=True)
+                        subprocess.Popen(['cmd', '/c', 'start', short_url])
                     elif sys.platform == 'darwin':
                         subprocess.Popen(['open', short_url])
                     else:
