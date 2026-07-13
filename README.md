@@ -13,7 +13,7 @@
 | multi-agent-orchestrator | `multi-agent-orchestrator/SKILL.md` | v2.0.1 | 支持多Agent流水线编排（采集→分析→报告），基于DAG调度实现跨技能状态共享、错误重试、断点续传和执行报告生成。AI即编排器，脚本提供基础设施。 |
 | tax-receipt-compliance | `tax-receipt-compliance/SKILL.md` | v3.0.0 | 财税合规全链路助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。 |
 | winskill | `winskill/SKILL.md` | v1.7.0 | Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控、事件日志诊断、已安装程序管理、用户会话监控、计划任务审计、文件共享审计、DNS网卡诊断、SSL证书过期检测、防火墙规则审计、服务崩溃恢复状态、系统文件修复、存储池管理、备份状态检查。只读分析+安全确认，绝不误删文件，完全免费离线运行。 |
-| wps-office-suite | `wps-office-suite/SKILL.md` | v3.1.0 | WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板、最佳实践案例、反模式FAQ、环境自检、错误 |
+| wps-office-suite | `wps-office-suite/SKILL.md` | v4.0.0 | WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、反模式FAQ、避坑指南、自动重试、硬件自适应、环境自检、错误速查手册、Skill更新提醒；v4.0新增：Word→PPT一键生成、Excel自然语言数据分析、Word合同条款审查、Excel发票OCR入账 |
 | zwjh-skill | `zwjh-skill/SKILL.md` | v2.0.0 | 统一记忆底座：长期记忆 + 知识图谱 + 自动沉淀 + 检索。让 AI「记得你」，跨会话持久记忆、实体/关系图谱、语义与时间线检索、记忆健康度审计、本地备份（可接百度网盘）。纯本地、零密钥、按硬件自适应，不拖累电脑。并保留 v1.7 的根因分析/预测性维护/进化报告。 |
 | video-analyzer | `video-analyzer/SKILL.md` | v2.2.0 | 视频分析处理 — 本地视频反编译分析工具。将视频拆解为时间轴剧本、语音转文字、场景分析、跨模态关联和精华摘要。 |
 | wecom-voice-agent | `wecom-voice-agent/SKILL.md` | v1.3.0 | 企业微信语音消息 AI Agent 技能，自动处理语音消息的意图识别、多轮对话与任务执行。 当用户向企业微信机器人发送语音消息时触发。核心价值：零 API Key 依赖、硬件自适应、轻量本地处理。 v1.3.0 起支持真正的天气查询（wttr.in 免费 API）和当前时间查询（本地计算），无需任何额外配置。 |
@@ -60,6 +60,7 @@ git push → GitHub Actions 触发
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v4.0.0 | 2026-07-13 | v4.0.0 更新发布 |
 | v3.1.0 | 2026-07-07 | 🔧 模板安全修复（删除二进制文件，改为纯Python代码生成）；🆕 新增20+避坑指南；📋 FAQ扩展到15个；📊 新增文件限制速查表 |
 | v3.0.0 | 2026-07-07 | 增加: WPS全家桶纯Python模式完整支持(排序/筛选/图表/公式/统计)，文档模板，最佳实践，反模式FAQ |
 | v2.5.0 | 2026-07-03 | 纯Python模式增强：排序/筛选/图表/公式/统计；新增文档模板目录；新增10个最佳实践案例；新增反模式FAQ |
