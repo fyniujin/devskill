@@ -685,11 +685,12 @@ python templates/generate_templates.py --dir ./output  # 生成模板
 
 ---
 
-## 📝 版本记录
+## 更新日志
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
-| **v4.0.0** | 2026-07-13 | 🎯 Word→PPT一键生成；🎯 Excel自然语言数据分析；🎯 Word合同条款审查标注；🎯 Excel发票OCR入账；📈 新增4个专用脚本（wps_docx_to_ppt/wps_nl_analysis/wps_contract_review/wps_invoice_ocr）；🔗 Worker路由扩展至28个命令 |
+| v4.0.0 | 2026-07-13 | 🎯 Word→PPT一键生成；🎯 Excel自然语言数据分析；🎯 Word合同条款审查标注；🎯 Excel发票OCR入账；📈 新增4个专用脚本（wps_docx_to_ppt/wps_nl_analysis/wps_contract_review/wps_invoice_ocr）；🔗 Worker路由扩展至28个命令 |
+| v3.1.0 | 2026-07-17 |🔧 模板安全修复（删除二进制文件，改为纯Python代码生成）；🆕 新增20+避坑指南；📋 FAQ扩展到15个；📊 新增文件限制速查表 |
 | v3.0.0 | 2026-07-07 | 🔄 自动重试机制（3次指数退避）；⚡ 硬件自适应（CPU/内存动态调整）；📬 Skill 更新检查（7天提醒）；📋 常见问题 FAQ（8个 Q&A）；🛠 完善 CLI 参数说明 + 返回结果示例；📧 反馈邮箱 njskills@agent.qq.com；🚫 反模式 FAQ（8个常见错误）；🏆 最佳实践（10个案例）；🔧 wps_performance.py 性能管理 |
 | v2.5.0 | 2026-07-03 | ✨ 纯Python模式增强：排序/筛选/图表/公式/统计；📂 新增文档模板目录；🏆 新增10个最佳实践案例；🚫 新增反模式FAQ |
 | v2.2.0 | 2026-06-30 | 🏗️ 四引擎智能识别；🆕 LibreOffice Headless 跨平台兜底；✨ 纯Python格式设置/表格/图片插入 |
