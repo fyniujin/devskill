@@ -1,5 +1,5 @@
 """
-WPS Word CLI v3.1 - 四引擎自动调用
+WPS Word CLI v4.0 - 四引擎自动调用
 """
 import subprocess
 import json
@@ -61,6 +61,10 @@ def main():
 
     p = sub.add_parser("engine-info", help="引擎信息")
 
+    p = sub.add_parser("review", help="合同条款审查")
+    p.add_argument("--file", required=True, help="合同 .docx 文件路径")
+    p.add_argument("--output", default="", help="输出审查版 .docx 路径")
+
     args = parser.parse_args()
 
     if args.command == "create":
@@ -75,6 +79,8 @@ def main():
         r = call_worker("info_word", {"filepath": args.file})
     elif args.command == "engine-info":
         r = call_worker("engine_info", {})
+    elif args.command == "review":
+        r = call_worker("contract_review", {"file": args.file, "output": args.output})
     else:
         r = {"ok": False, "error": "未知命令"}
 
