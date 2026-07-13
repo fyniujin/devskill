@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-合同审查主入口 v2.0
-串联完整的工作流程：文本提取 → 结构解析 → 风险审查 → 报告生成
-新增：首次使用向导、Ollama 一键安装、更友好的错误提示
+合同审查主入口 v3.0
+完整工作流：文本提取 → 结构解析 → 风险审查 → 报告生成
+新增：硬件自适应调度、历史版本对比、Word 报告生成、更新检测、危险文件拦截
 """
 
 import json
@@ -10,6 +10,7 @@ import os
 import sys
 import time
 import subprocess
+import hashlib
 from pathlib import Path
 from typing import Optional
 import argparse
@@ -51,6 +52,13 @@ def print_progress(step: str, detail: str = "", done: bool = False):
         print(f"  ⏳ {step} {detail}...", flush=True)
 
 
+def print_banner(version: str = "3.0"):
+    """打印工具横幅"""
+    print("\n" + "=" * 50, flush=True)
+    print(f"📋 合同智能审查 v{version}", flush=True)
+    print("=" * 50, flush=True)
+
+
 def check_ollama_installed() -> bool:
     """检查 Ollama 是否已安装"""
     try:
@@ -71,8 +79,6 @@ def install_ollama():
     
     if check_ollama_installed():
         print("✅ Ollama 已安装！")
-        
-        # 检查模型
         try:
             result = subprocess.run(['ollama', 'list'], capture_output=True, text=True, timeout=10)
             if 'qwen' in result.stdout.lower() or 'llama' in result.stdout.lower():
@@ -92,7 +98,6 @@ def install_ollama():
                     return True
         except Exception:
             pass
-        
         return True
     
     print("Ollama 未安装。请选择安装方式：")
@@ -163,17 +168,65 @@ def first_time_setup():
     return True
 
 
+def show_history(contract_text: Optional[str] = None):
+    """显示历史审查记录"""
+    from history_manager import HistoryManager
+    
+    manager = HistoryManager()
+    
+    if contract_text:
+        # 显示特定合同的历史
+        history = manager.get_history(contract_text)
+        if not history or not history.get('versions'):
+            print("📋 该合同暂无历史审查记录")
+            return
+        
+        versions = history['versions']
+        contract_hash = history.get('contract_hash', 'unknown')
+        print(f"\n{'=' * 60}")
+        print(f"📋 合同审查历史 (ID: {contract_hash})")
+        print(f"{'=' * 60}")
+        
+        for v in versions:
+            ts = v.get('timestamp', '')
+            score = v.get('score', 0)
+            summary = v.get('summary', {})
+            print(f"\n  📅 {ts} | ⭐ 评分: {score}/100")
+            print(f"     风险: 严重{summary.get('critical',0)} 中等{summary.get('medium',0)} "
+                  f"一般{summary.get('low',0)} 提示{summary.get('info',0)}")
+    else:
+        # 列出所有合同
+        contracts = manager.list_all_contracts()
+        if not contracts:
+            print("📋 暂无历史审查记录")
+            return
+        
+        print(f"\n{'=' * 60}")
+        print(f"📋 所有审查记录 ({len(contracts)} 份合同)")
+        print(f"{'=' * 60}")
+        for c in contracts:
+            print(f"\n  📄 {c['title']}")
+            print(f"     类型: {c['contract_type']}")
+            print(f"     审查次数: {c['total_versions']}")
+            print(f"     最近审查: {c['last_reviewed']}")
+
+
 def main():
     """主函数"""
     parser = argparse.ArgumentParser(
-        description='合同智能审查工具 v2.0',
+        description='合同智能审查工具 v3.0',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 使用示例:
-  python scripts/main.py 合同.pdf                    # 基础审查
-  python scripts/main.py 合同.pdf --role 甲方        # 从甲方视角审查
-  python scripts/main.py 合同.pdf --install-ollama   # 安装本地模型
-  python scripts/main.py 合同.pdf --first-time       # 首次使用向导
+  python scripts/main.py 合同.pdf                      # 基础审查
+  python scripts/main.py 合同.pdf --role 甲方          # 从甲方视角审查
+  python scripts/main.py 合同.pdf --format docx        # 输出 Word 报告
+  python scripts/main.py 合同.pdf --diff old.json      # 版本对比审查
+  python scripts/main.py --history                     # 查看历史记录
+  python scripts/main.py --history --text "合同内容"    # 查看该合同历史
+  python scripts/main.py 合同.pdf --install-ollama     # 安装本地模型
+  python scripts/main.py 合同.pdf --first-time         # 首次使用向导
+  python scripts/main.py --check-update                # 检查更新
         """
     )
     parser.add_argument('file', nargs='?', help='合同文件路径（PDF/Word/图片/纯文本）')
@@ -181,8 +234,9 @@ def main():
     parser.add_argument('--role', '-r', default='双方', choices=['甲方', '乙方', '双方'],
                         help='审查视角（默认：双方）')
     parser.add_argument('--output', '-o', default='', help='输出文件路径（默认：report.md）')
-    parser.add_argument('--format', '-f', default='markdown', choices=['markdown', 'json'],
-                        help='输出格式（默认：markdown）')
+    parser.add_argument('--format', '-f', default='markdown',
+                        choices=['markdown', 'json', 'docx'],
+                        help='输出格式（默认：markdown，v3.0 新增 docx）')
     parser.add_argument('--scope', default='全面审查', choices=['全面审查', '重点审查', '快速审查'],
                         help='审查范围（默认：全面审查）')
     parser.add_argument('--no-llm', action='store_true',
@@ -193,10 +247,53 @@ def main():
     parser.add_argument('--first-time', action='store_true',
                         help='首次使用向导')
     parser.add_argument('--verbose', '-v', action='store_true', help='显示详细日志')
-    
+    parser.add_argument('--history', action='store_true',
+                        help='查看历史审查记录（v3.0）')
+    parser.add_argument('--diff', default='',
+                        help='对比指定历史报告 JSON 路径（v3.0），只高亮新增风险')
+    parser.add_argument('--show-hardware', action='store_true',
+                        help='显示硬件信息和性能配置（v3.0）')
+    parser.add_argument('--check-update', action='store_true',
+                        help='检查 Skill 更新（v3.0）')
+
     args = parser.parse_args()
     
     start_time = time.time()
+    
+    # ===== v3.0 特殊命令处理 =====
+    
+    if args.check_update:
+        from updater import UpdateChecker
+        checker = UpdateChecker()
+        update_info = checker.check(force=True)
+        if update_info:
+            print(checker.get_update_message(update_info))
+        else:
+            print("✅ 当前已是最新版本")
+        return
+    
+    if args.show_hardware:
+        from hardware_detector import HardwareDetector
+        detector = HardwareDetector()
+        info = detector.detect(force_refresh=True)
+        config = detector.get_optimal_config(info)
+        print(f"\n{'=' * 50}")
+        print("🖥️  硬件信息")
+        print(f"{'=' * 50}")
+        print(f"  CPU: {info.get('cpu_cores', '?')} 核 @ {info.get('cpu_freq_mhz', 0):.0f} MHz")
+        print(f"  内存: {info.get('memory_total_gb', 0):.1f} GB (可用 {info.get('memory_available_gb', 0):.1f} GB)")
+        gpu = info.get('gpu_name', '无独立 GPU') if info.get('has_gpu') else '无独立 GPU'
+        print(f"  GPU: {gpu}")
+        print(f"\n📊 性能配置")
+        print(f"  等级: {config['hardware_tier']}")
+        print(f"  OCR 并行: {config['ocr_batch_size']} 页/批")
+        print(f"  LLM 超时: {config['llm_timeout']}s")
+        print(f"  并发审查: {config['max_concurrent_reviews']}")
+        return
+    
+    if args.history:
+        show_history(args.text if args.text else None)
+        return
     
     # 特殊命令
     if args.first_time:
@@ -209,11 +306,25 @@ def main():
         if not args.file:
             return
     
+    # ===== v3.0 硬件检测与性能调度 =====
+    print_banner("3.0")
+    
+    from hardware_detector import HardwareDetector
+    hw_detector = HardwareDetector()
+    hw_config = hw_detector.get_optimal_config()
+    hw_summary = hw_detector.format_hardware_summary()
+    print(f"🖥️  {hw_summary} | 等级: {hw_config['hardware_tier']}", flush=True)
+    
+    # ===== v3.0 异步更新检测（不阻塞） =====
+    update_info = None
     try:
-        print("\n" + "=" * 50, flush=True)
-        print("📋 合同智能审查 v2.0", flush=True)
-        print("=" * 50, flush=True)
-        
+        from updater import UpdateChecker
+        update_checker = UpdateChecker()
+        update_info = update_checker.check()
+    except Exception:
+        pass  # 更新检测失败不影响审查
+    
+    try:
         total_steps = 5
         
         # Step 1: 获取合同文件
@@ -223,6 +334,7 @@ def main():
             contract_text = args.text
             file_type = "txt"
             metadata = {}
+            contract_hash = hashlib.sha256(''.join(contract_text.split()).encode('utf-8')).hexdigest()[:16]
             print_success(f"收到文本输入（{len(contract_text)} 字符）")
         elif args.file:
             from extract_text import TextExtractor
@@ -232,6 +344,7 @@ def main():
             file_type = result['file_type']
             metadata = result.get('metadata', {})
             warnings = result.get('warnings', [])
+            contract_hash = hashlib.sha256(''.join(contract_text.split()).encode('utf-8')).hexdigest()[:16]
             
             print_success(
                 f"文件类型={file_type}, "
@@ -253,6 +366,8 @@ def main():
             print("  --file <路径>    上传合同文件")
             print("  --text \"内容\"    直接审查文本")
             print("  --first-time     首次使用向导")
+            print("  --history        查看历史记录")
+            print("  --check-update   检查更新")
             sys.exit(1)
         
         # Step 2: 结构解析
@@ -282,7 +397,7 @@ def main():
         print_success(f"完成 {len(rule_risks)} 项硬规则检查")
         
         # Step 4: LLM 审查（可选）
-        print_step(4, total_steps, "AI 语义审查")
+        print_step(4, total_steps, "AI 审查")
         
         llm_risks = []
         missing_clauses = []
@@ -314,7 +429,7 @@ def main():
         else:
             print("  ⏭️  跳过 LLM 审查（--no-llm）")
         
-        # Step 5: 生成报告
+        # Step 5: 生成审查报告
         print_step(5, total_steps, "生成审查报告")
         
         all_risks = []
@@ -359,18 +474,58 @@ def main():
         }
         
         generator = ReportGenerator()
-        report = generator.generate(unique_risks, contract_info, args.format)
         
-        print_success("报告生成完成")
+        # ===== v3.0 版本对比 =====
+        diff_result = None
+        if args.diff:
+            try:
+                import json
+                from history_manager import HistoryManager
+                with open(args.diff, 'r', encoding='utf-8') as f:
+                    old_report = json.load(f)
+                old_risks = old_report.get('risks', [])
+                new_risks = unique_risks
+                
+                manager = HistoryManager()
+                diff_result = manager.diff_reviews(
+                    {'risks': old_risks},
+                    {'risks': new_risks}
+                )
+                if diff_result['new_risks']:
+                    print_success(f"版本对比：发现 {len(diff_result['new_risks'])} 个新增风险点")
+                if diff_result['resolved_risks']:
+                    print_success(f"版本对比：{len(diff_result['resolved_risks'])} 个风险已解决")
+            except Exception as e:
+                print_warning(f"版本对比失败: {e}")
         
-        # 输出
-        output_path = args.output or 'report.md'
-        if output_path:
-            output_path = Path(output_path)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, 'w', encoding='utf-8') as f:
-                f.write(report)
-            print_success(f"报告已保存至: {output_path}")
+        # 根据格式生成报告
+        if args.format == 'docx':
+            # v3.0 Word 报告生成
+            try:
+                from docx_generator import DocxGenerator
+                docx_generator = DocxGenerator()
+                output_path = args.output or 'report.docx'
+                docx_generator.generate(unique_risks, contract_info, output_path)
+                print_success(f"Word 报告已生成: {output_path}")
+                report = f"Word 报告已保存至 {output_path}"
+            except ImportError as e:
+                print_error(f"Word 生成依赖缺失: {e}")
+                print("  回退到 Markdown 格式")
+                report = generator.generate(unique_risks, contract_info, 'markdown')
+                args.format = 'markdown'
+                output_path = args.output or 'report.md'
+        else:
+            report = generator.generate(unique_risks, contract_info, args.format)
+        
+        # 标准输出
+        if args.format != 'docx':
+            output_path = args.output or f'report.{args.format}'
+            if output_path and args.format != 'docx':
+                output_path = Path(output_path)
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(report)
+                print_success(f"报告已保存至: {output_path}")
         
         elapsed = time.time() - start_time
         
@@ -379,7 +534,77 @@ def main():
         print("=" * 50, flush=True)
         print(flush=True)
         
-        print(report)
+        # ===== v3.0 保存到历史记录 =====
+        try:
+            from history_manager import HistoryManager
+            import json
+            from datetime import datetime
+            
+            review_result_for_history = {
+                'score': generator._calculate_score(unique_risks),
+                'contract_info': contract_info,
+                'risks': unique_risks,
+                'report_summary': f"审查完成，发现 {len(unique_risks)} 个风险点",
+            }
+            
+            manager = HistoryManager()
+            record_id = manager.save_review(contract_text, review_result_for_history)
+            
+            # 保存完整 report JSON（用于未来 --diff 对比）
+            report_json_path = Path.home() / '.contract-review' / 'history' / f"{contract_hash}_last.json"
+            with open(report_json_path, 'w', encoding='utf-8') as f:
+                json.dump({
+                    'report_id': record_id,
+                    'generated_at': datetime.now().isoformat(),
+                    'contract_info': contract_info,
+                    'risks': unique_risks,
+                    'diff_result': diff_result,
+                }, f, ensure_ascii=False, indent=2)
+            
+            print(f"\n💾 审查记录已保存 (ID: {record_id})", flush=True)
+            print(f"   使用 --diff {report_json_path} 可进行版本对比", flush=True)
+            
+            # 显示 diff 结果
+            if diff_result:
+                print(f"\n{'=' * 50}")
+                print(f"📊 版本对比结果")
+                print(f"{'=' * 50}")
+                print(diff_result['summary'])
+                if diff_result['new_risks']:
+                    print(f"\n🆕 新增风险点:")
+                    for r in diff_result['new_risks']:
+                        print(f"  - [{r.get('severity', '?')}] {r.get('title', '')}")
+                if diff_result['resolved_risks']:
+                    print(f"\n✅ 已解决风险点:")
+                    for r in diff_result['resolved_risks']:
+                        print(f"  - {r.get('title', '')}")
+                if diff_result['changed_risks']:
+                    print(f"\n⚠️ 等级变化:")
+                    for r in diff_result['changed_risks']:
+                        print(f"  - {r['title']}: {r['old_severity']} → {r['new_severity']}")
+        except Exception as e:
+            logger.debug(f"保存历史记录失败: {e}")
+        
+        # 打印报告（非 docx 格式）
+        if args.format != 'docx':
+            print(report)
+        
+        # ===== v3.0 更新提醒 =====
+        if update_info and update_info.get('should_notify'):
+            print("\n" + "=" * 50, flush=True)
+            print(f"📢 发现新版本", flush=True)
+            print(f"{'=' * 50}", flush=True)
+            local_v = update_info.get('local_version', '?')
+            remote_v = update_info.get('remote_version', '?')
+            print(f"📢 发现新版本 v{remote_v} (当前 v{local_v})", flush=True)
+            print(f"更新内容：新增 Word 报告生成、历史版本对比、硬件自适应、安全风险拦截等功能。", flush=True)
+            print(f"更新方法：运行 skillhub install contract-review", flush=True)
+            print(f"{'=' * 50}", flush=True)
+            try:
+                from updater import UpdateChecker
+                UpdateChecker().record_notified(remote_v)
+            except Exception:
+                pass
         
     except FileNotFoundError as e:
         print_error(f"文件不存在: {e}")
@@ -387,6 +612,9 @@ def main():
     except ImportError as e:
         print_error(f"依赖缺失: {e}")
         print("请运行: pip install -r requirements.txt")
+        sys.exit(1)
+    except PermissionError as e:
+        print_error(f"安全拦截: {e}")
         sys.exit(1)
     except Exception as e:
         print_error(f"审查失败: {e}")
