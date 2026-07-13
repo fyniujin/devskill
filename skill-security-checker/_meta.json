@@ -1,7 +1,7 @@
 {
   "name": "skill-security-checker",
-  "version": "1.2.0",
-  "description": "Skill Security — 对 WorkBuddy/ClawHub/SkillHub 技能进行安全合规扫描",
+  "version": "1.3.0",
+  "description": "Skill Security — 安全审计扫描器",
   "author": "njskills",
   "license": "MIT",
   "schema_version": "1.0",
