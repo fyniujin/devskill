@@ -36,7 +36,7 @@
 
 ### 2.1 钉钉审批
 
-- **网址**: https://open.duxiaoman.com
+- **网址**: https://open-dev.dingtalk.com
 - **审批API**: 钉钉开放平台 → 审批 → 流程引擎
 - **认证方式**: AppKey + AppSecret → OAuth2.0 Token
 - **接入步骤**:
