@@ -18,7 +18,6 @@
 | wecom-voice-agent | `wecom-voice-agent/SKILL.md` | v1.3.0 | 企业微信语音消息 AI Agent 技能，自动处理语音消息的意图识别、多轮对话与任务执行。 当用户向企业微信机器人发送语音消息时触发。核心价值：零 API Key 依赖、硬件自适应、轻量本地处理。 v1.3.0 起支持真正的天气查询（wttr.in 免费 API）和当前时间查询（本地计算），无需任何额外配置。 |
 | cn-llm-router | `cn-llm-router/SKILL.md` | v1.2.0 | 国产大模型统一路由。把 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、字节豆包、百度文心、讯飞星火等 8 家国产大模型收敛成一个命令入口；按任务类型（代码/推理/长文/翻译/摘要/抽取）自动或手动选择最合适、最省钱的模型；自动统计跨厂商 token 成本、硬件自适应限流（不拖累电脑）、本地语义缓存省 token、技能更新提醒。当用户需要「调用国产大模型」「多模型比价/降本」「统一管理多个模型 Key」「本地跑大模型路由」「不想被某一家厂商绑定」时使用。 |
 | receipt-compliance | `receipt-compliance/SKILL.md` | v3.4.0 | 会计助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。 |
-| skill-security-scanner | `skill-security-scanner/SKILL.md` | v1.2.0 | Skill Security — 对 WorkBuddy/ClawHub/SkillHub 技能进行安全合规扫描。静态扫描（提示注入/命令注入/SSRF/凭证外泄/路径遍历/危险函数）、依赖漏洞审计、权限过度授权检测、质量评分（SKILL.md 完整性/反模式/硬编码路径）、一键加固建议、JSON/HTML 报告生成。支持硬件感知并行扫描，自动检测 CPU/内存调整并发数。触发词：安全审计、skill 扫描、代码审计、安全检测、检查 skill、skill 安全、发布前检查。 |
 
 ---
 
@@ -241,7 +240,7 @@ git push → GitHub Actions 触发
 </details>
 
 <details>
-<summary>skill-security-scanner - 点击展开</summary>
+<summary>skill-security-checker - 点击展开</summary>
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
