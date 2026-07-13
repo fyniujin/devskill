@@ -2,8 +2,8 @@
 name: wps-office-suite
 displayName: WPS Office 全家桶
 slug: wps-office-suite
-description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、反模式FAQ、避坑指南、自动重试、硬件自适应、环境自检、错误速查手册、Skill更新提醒
-version: 3.1.0
+description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、反模式FAQ、避坑指南、自动重试、硬件自适应、环境自检、错误速查手册、Skill更新提醒；v4.0新增：Word→PPT一键生成、Excel自然语言数据分析、Word合同条款审查、Excel发票OCR入账
+version: 4.0.0
 category: 办公协作与生产力工具
 platforms:
   - windows
@@ -42,7 +42,7 @@ tags:
   建议反馈邮箱: njskills@agent.qq.com
 ---
 
-# WPS Office 全家桶 v3.1.0 ✅
+# WPS Office 全家桶 v4.0.0 ✅
 
 > 🏗️ **四引擎智能识别**：自动检测用户电脑已安装的软件，按 WPS → MS Office → LibreOffice → 纯Python 顺序选择最合适的引擎
 > ✨ **纯Python模式增强**：排序、筛选、图表、公式、统计 — 跨平台全部支持
@@ -593,6 +593,7 @@ python scripts/wps_word.py create --title "report" --body "正文内容"
 python scripts/wps_word.py edit --file "report.docx" --text "新增内容"
 python scripts/wps_word.py format --file "report.docx" --font "微软雅黑" --size 14 --align center --bold --first-indent 0.74
 python scripts/wps_word.py export --file "report.docx" --format pdf
+python scripts/wps_word.py review --file "合同.docx" --output "合同_审查版.docx"
 python scripts/wps_word.py info --file "report.docx"
 python scripts/wps_word.py engine-info
 ```
@@ -607,6 +608,8 @@ python scripts/wps_excel.py chart --file "Sales.xlsx" --sheet "Q1" --type bar --
 python scripts/wps_excel.py sort --file "Sales.xlsx" --sheet "Q1" --sorts '[{"column":"Price","ascending":false}]'
 python scripts/wps_excel.py filter --file "Sales.xlsx" --sheet "Q1" --conditions '[{"column":"Price","op":">","value":"50"}]' --logic AND
 python scripts/wps_excel.py add-sheet --file "Sales.xlsx" --sheet "Q4" --headers '["Product","Price"]' --data '[["X",300]]'
+python scripts/wps_excel.py nl-analyze --file "Sales.xlsx" --query "按月份统计销售额并画出趋势图"
+python scripts/wps_excel.py invoice --input "发票.pdf" --output "进账台账.xlsx"
 python scripts/wps_excel.py stats --file "Sales.xlsx" --sheet "Q1" --column "B" --type SUM
 python scripts/wps_excel.py info --file "Sales.xlsx"
 python scripts/wps_excel.py engine-info
@@ -621,9 +624,19 @@ python scripts/wps_ppt.py add-slide --file "Pitch.pptx" --title "Intro"
 python scripts/wps_ppt.py insert --file "Pitch.pptx" --slide 2 --content "Key points"
 python scripts/wps_ppt.py theme --file "Pitch.pptx" --name business_blue
 python scripts/wps_ppt.py export --file "Pitch.pptx" --format pdf
+python scripts/wps_ppt.py docx-to-ppt --input 报告.docx --output 演示.pptx --title "项目汇报" --theme business
 python scripts/wps_ppt.py info --file "Pitch.pptx"
 python scripts/wps_ppt.py engine-info
 ```
+
+### 🆕 v4.0 新命令（详见下方各组件）
+
+| 功能 | 命令 |
+|------|------|
+| Word→PPT | `python scripts/wps_ppt.py docx-to-ppt --input report.docx --output ppt.pptx` |
+| NL分析 | `python scripts/wps_excel.py nl-analyze --file data.xlsx --query "按月份统计销售额画趋势图"` |
+| 合同审查 | `python scripts/wps_word.py review --file contract.docx --output 审查版.docx` |
+| 发票OCR | `python scripts/wps_excel.py invoice --input 发票.pdf --output 入账台账.xlsx` |
 
 ### 其他工具
 
@@ -676,7 +689,7 @@ python templates/generate_templates.py --dir ./output  # 生成模板
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
-| **v3.1.0** | 2026-07-07 | 🔧 模板安全修复：删除所有二进制模板文件，改为纯 Python 代码生成（generate_templates.py）；🆕 新增 20+ 条避坑指南（高频/中频/低频分类）；📋 FAQ 从 8 个扩展到 15 个；📊 新增文件大小/批量数/并发数限制速查表；📗 复杂操作（排序/筛选/图表/模板）增加详细示例 |
+| **v4.0.0** | 2026-07-13 | 🎯 Word→PPT一键生成；🎯 Excel自然语言数据分析；🎯 Word合同条款审查标注；🎯 Excel发票OCR入账；📈 新增4个专用脚本（wps_docx_to_ppt/wps_nl_analysis/wps_contract_review/wps_invoice_ocr）；🔗 Worker路由扩展至28个命令 |
 | v3.0.0 | 2026-07-07 | 🔄 自动重试机制（3次指数退避）；⚡ 硬件自适应（CPU/内存动态调整）；📬 Skill 更新检查（7天提醒）；📋 常见问题 FAQ（8个 Q&A）；🛠 完善 CLI 参数说明 + 返回结果示例；📧 反馈邮箱 njskills@agent.qq.com；🚫 反模式 FAQ（8个常见错误）；🏆 最佳实践（10个案例）；🔧 wps_performance.py 性能管理 |
 | v2.5.0 | 2026-07-03 | ✨ 纯Python模式增强：排序/筛选/图表/公式/统计；📂 新增文档模板目录；🏆 新增10个最佳实践案例；🚫 新增反模式FAQ |
 | v2.2.0 | 2026-06-30 | 🏗️ 四引擎智能识别；🆕 LibreOffice Headless 跨平台兜底；✨ 纯Python格式设置/表格/图片插入 |
