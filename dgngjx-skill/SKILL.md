@@ -1,10 +1,10 @@
 ---
 name: dgngjx-skill
 slug: dgngjx-skill
-displayName: "多功能工具箱 v3.0"
-description: "多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐、实用小工具。9大模块35个工具，50%零开箱即用。v3.0 词频统计升级（jieba分词+停用词）、视频编辑增强（水印+GIF优化+信息查看+截图）、FFmpeg一键安装、新增二维码/密码生成/正则测试。"
-description_zh: "多功能免费工具箱 - 9大模块35个工具。v3.0 词频统计升级+视频编辑增强+FFmpeg一键安装+3个新工具。"
-version: 3.0.0
+displayName: "多功能工具箱 v3.5"
+description: "多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐、实用小工具、系统工具。10大模块38个工具，53%零开箱即用。v3.5 硬件自适应+安全过滤+3新功能(资源监控/批量重命名/MD转HTML)。"
+description_zh: "多功能免费工具箱 - 10大模块38个工具。v3.5 硬件自适应调度+安全文件过滤+新增系统资源监控+批量重命名+Markdown转HTML。"
+version: 3.5.0
 category: office-efficiency
 platforms:
   - windows
@@ -23,10 +23,13 @@ tags:
   - qrcode
   - password
   - regex
+  - system
+  - hardware
+  - monitor
 requires_api_key: false
 ---
 
-# 多功能工具箱 dgngjx-skill v3.0.0
+# 多功能工具箱 dgngjx-skill v3.5.0
 
 ## 30 秒速查表
 
@@ -35,15 +38,30 @@ requires_api_key: false
 | 算房贷 / 五险一金 | `"算房贷"` `"算五险一金"` |
 | 日期 / 单位换算 | `"日期计算"` `"公里转英里"` |
 | 统计字数 / 编码 | `"字数统计"` `"Base64编码"` |
-| 词频分析 | `"词频统计"`（v3.0增强：jieba分词+停用词过滤） |
+| 词频分析 | `"词频统计"` |
 | JSON / HTTP / Token | `"JSON格式化"` `"测试接口"` |
 | 查知识 / 下壁纸 | `"查勾股定理"` `"下壁纸"` |
 | 压缩 / 修复图片 | `"帮我压缩 D:\photo.jpg"` `"修复老照片"` |
 | 合并 / 拆分 PDF | `"合并这几个PDF"` `"拆分第5-10页"` |
 | 视频格式转换 | `"MP4转GIF"` |
-| 视频编辑 | `"给视频加水印"` `"提取视频帧"`（v3.0新增） |
-| 二维码 / 密码 | `"生成二维码"` `"生成随机密码"`（v3.0新增） |
-| 正则表达式测试 | `"测试正则 \d+"`（v3.0新增） |
+| 视频编辑 | `"给视频加水印"` `"提取视频帧"` |
+| 二维码 / 密码 / 正则 | `"生成二维码"` `"生成随机密码"` `"测试正则 \d+"` |
+| 系统资源监控 | `"看看CPU使用率"` `"内存够不够"` |
+| 批量文件重命名 | `"把这些文件都改名"` `"批量添加前缀"` |
+| Markdown转HTML | `"把这份MD转成HTML"` |
+
+---
+
+## 🆕 v3.5.0 更新提醒
+
+> 🔔 **您正在使用 dgngjx-skill v3.5.0**
+> 
+> 检查更新：`skillhub search dgngjx-skill`
+> 
+> 升级命令：`skillhub upgrade dgngjx-skill`
+> 
+> 📧 **有任何建议？联系作者邮箱：njskills@agent.qq.com**
+> dgngjx-skill 欢迎你的反馈！无论是新功能建议、bug 报告还是使用困惑，都可以发邮件到 njskills@agent.qq.com，作者会认真阅读每一条。
 
 ---
 
@@ -74,13 +92,191 @@ requires_api_key: false
 | `"生成二维码 内容=Hello"` | 二维码 | ✅ 开箱即用 |
 | `"生成随机密码 长度=16"` | 密码生成 | ✅ 开箱即用 |
 | `"测试正则 \d+ 文本=abc123"` | 正则测试 | ✅ 开箱即用 |
+| `"看看CPU使用率"` | 系统资源监控 | ✅ 开箱即用 |
+| `"把这个MD转成HTML"` | Markdown转HTML | ✅ 开箱即用 |
 
-### AI 不理解你的需求时？
+---
 
-没关系，AI 会根据你的话自动匹配。如果 AI 没做对：
-1. 检查你是否描述了**文件路径**（如 `D:\photo.jpg`）
-2. 检查你是否指定了**要做什么**（如"压缩"、"合并"、"统计"）
-3. 试试更具体的关键词：`"帮我压缩这个文件 D:\photo.jpg 质量80"`
+## 🔒 安全规则（v3.5 新增）
+
+> **dgngjx-skill 不会处理以下文件类型，即使你明确要求也会被拒绝。**
+
+### 默认禁止（拦截）的类型
+
+**Windows 可执行 / 批处理脚本：**
+`.bat`、`.cmd`、`.ps1`、`.vbs`、`.exe`、`.dll`、`.lnk`、`.msi`
+
+**Office 二进制文档：**
+`.docx`、`.xlsx`、`.pptx`、`.doc`、`.xls`、`.ppt`、`.xlsm`、`.docm`、`.pptm`
+
+**二进制镜像 / 安装包：**
+`.iso`、`.dmg`、`.zip`、`.rar`、`.7z`、`.tar`、`.gz`、`.apk`、`.jar`
+
+**系统缓存 / 隐藏文件：**
+`.DS_Store`、`.git` 目录、`.env`、`.log`、`.tmp`
+
+**其他风险脚本：**
+`.sh`、`.com`、`.scr`、`.hta`、`.reg`
+
+<details>
+<summary>📋 安全过滤代码（所有文件操作前必跑）</summary>
+
+```python
+import os
+
+# === v3.5.0 安全规则：禁止处理高风险文件类型 ===
+BLOCKED_EXTENSIONS = {
+    # Windows 可执行 / 批处理脚本
+    '.bat', '.cmd', '.ps1', '.vbs', '.exe', '.dll', '.lnk', '.msi',
+    # Office 二进制文档
+    '.docx', '.xlsx', '.pptx', '.doc', '.xls', '.ppt', '.xlsm', '.docm', '.pptm',
+    # 二进制镜像 / 安装包
+    '.iso', '.dmg', '.zip', '.rar', '.7z', '.tar', '.gz', '.apk', '.jar',
+    # 系统缓存 / 隐藏文件
+    '.ds_store', '.env', '.log', '.tmp',
+    # 其他风险脚本
+    '.sh', '.com', '.scr', '.hta', '.reg',
+}
+
+BLOCKED_DIRS = {'.git', '.svn', '.hg', '__pycache__', 'node_modules', '.idea', '.vscode'}
+
+def _is_safe_file(filepath: str) -> tuple[bool, str]:
+    """检查文件是否安全（未被黑名单拦截）。返回 (是否安全, 拒绝原因)"""
+    # 检查隐藏文件
+    basename = os.path.basename(filepath)
+    if basename.startswith('.') and basename in {'.ds_store', '.env', '.gitconfig', '.bashrc'}:
+        return False, f"隐藏系统文件 {basename} 被拦截"
+    
+    # 检查目录
+    parts = filepath.replace('\\', '/').split('/')
+    for part in parts:
+        if part.lower() in BLOCKED_DIRS:
+            return False, f"系统目录 {part} 被拦截"
+    
+    # 检查扩展名
+    ext = os.path.splitext(filepath)[1].lower()
+    if ext in BLOCKED_EXTENSIONS:
+        reason = {
+            '.bat': 'Windows 批处理脚本（可执行命令）',
+            '.cmd': 'Windows 批处理脚本（可执行命令）',
+            '.ps1': 'PowerShell 脚本（可执行命令）',
+            '.vbs': 'VBScript 脚本（可执行命令）',
+            '.exe': 'Windows 可执行程序',
+            '.dll': '动态链接库',
+            '.msi': 'Windows 安装包',
+            '.lnk': '快捷方式文件',
+        }.get(ext, f'{ext} 文件类型被安全规则禁止')
+        return False, f"{reason} — 请使用专业工具处理"
+    
+    return True, ""
+
+def _is_safe_output(filepath: str) -> tuple[bool, str]:
+    """检查输出文件类型是否安全（不允许生成可执行/危险文件）"""
+    ext = os.path.splitext(filepath)[1].lower()
+    if ext in {'.exe', '.dll', '.bat', '.cmd', '.ps1', '.vbs', '.sh', '.com', '.scr', '.hta', '.reg', '.msi', '.apk', '.jar'}:
+        return False, f"安全规则禁止生成 {ext} 文件"
+    return True, ""
+
+# === 使用示例 ===
+# 所有文件读取操作前调用：
+# safe, reason = _is_safe_file(user_input_path)
+# if not safe:
+#     print(f"🚫 {reason}")
+#     return
+```
+
+</details>
+
+---
+
+## ⚡ 自适应硬件调度 （v3.5 新增）
+
+> dgngjx-skill 会自动检测你的电脑配置（CPU核心数、内存大小），并根据硬件能力调整并发任务数量和资源分配，**绝不拖累低配电脑**。
+
+<details>
+<summary>📋 硬件检测与智能调度脚本（v3.5 新增）</summary>
+
+```python
+import os, sys, subprocess, platform
+
+def get_hardware_info() -> dict:
+    """自动检测用户电脑硬件信息，用于智能调度"""
+    info = {
+        'cpu_count': os.cpu_count() or 2,
+        'ram_mb': 0,
+        'platform': platform.system(),
+        'is_low_end': False,
+        'max_workers': 1,
+        'max_file_size_mb': 100,
+    }
+    
+    # 检测内存
+    try:
+        if info['platform'] == 'Windows':
+            result = subprocess.run(
+                ['wmic', 'computersystem', 'get', 'TotalPhysicalMemory', '/value'],
+                capture_output=True, text=True, timeout=10
+            )
+            for line in result.stdout.split('\n'):
+                if 'TotalPhysicalMemory' in line:
+                    bytes_val = int(line.split('=')[1].strip())
+                    info['ram_mb'] = bytes_val // (1024 * 1024)
+                    break
+        elif info['platform'] == 'Linux':
+            with open('/proc/meminfo', 'r') as f:
+                for line in f:
+                    if line.startswith('MemTotal'):
+                        info['ram_mb'] = int(line.split()[1]) // 1024
+                        break
+        elif info['platform'] == 'Darwin':  # macOS
+            result = subprocess.run(
+                ['sysctl', '-n', 'hw.memsize'], capture_output=True, text=True, timeout=5
+            )
+            info['ram_mb'] = int(result.stdout.strip()) // (1024 * 1024)
+    except Exception:
+        info['ram_mb'] = 4096  # 默认值
+    
+    # 自动判定配置级别
+    if info['ram_mb'] < 4096 or info['cpu_count'] <= 2:
+        info['is_low_end'] = True
+        info['max_workers'] = 1
+        info['max_file_size_mb'] = 50
+    elif info['ram_mb'] < 8192 or info['cpu_count'] <= 4:
+        info['max_workers'] = 2
+        info['max_file_size_mb'] = 200
+    else:
+        info['max_workers'] = min(info['cpu_count'], 4)
+        info['max_file_size_mb'] = 500
+    
+    return info
+
+def smart_task_split(file_size_mb: int, hw: dict) -> int:
+    """根据文件大小和硬件智能计算任务分片数"""
+    if file_size_mb <= 50:
+        return 1
+    # 每 100MB 或每 2GB RAM 分配 1 个 worker
+    by_ram = max(1, hw['ram_mb'] // 2048)
+    by_size = max(1, file_size_mb // 100)
+    return min(by_ram, by_size, hw['max_workers'])
+
+# === 初始化（整个 skill 生命周期只跑一次）===
+_HW = get_hardware_info()
+print(f"🖥️ 系统检测: {_HW['cpu_count']}核 | {_HW['ram_mb']}MB RAM | {_HW['platform']}")
+if _HW['is_low_end']:
+    print("⚡ 已启用低配模式：单任务运行，小文件优先，绝不卡顿")
+else:
+    print(f"⚡ 已启用标准模式：最多 {_HW['max_workers']} 并发，文件上限 {_HW['max_file_size_mb']}MB")
+```
+
+</details>
+
+**调度策略一览：**
+
+| 硬件级别 | 内存 | CPU | 并发数 | 单文件上限 | 保护策略 |
+|---------|------|-----|--------|-----------|---------|
+| 🟢 高配 | ≥8GB | ≥6核 | 4 | 500MB | 多任务并行，大文件分块 |
+| 🟡 中配 | 4-8GB | 2-4核 | 2 | 200MB | 双任务，中等文件 |
+| 🔴 低配 | <4GB | ≤2核 | 1 | 50MB | 单任务，小文件优先 |
 
 ---
 
@@ -123,7 +319,7 @@ pip install Pillow PyPDF2 jieba
 | 压缩图片 / 证件照 / 基础修复 | Pillow (3MB) | `pip install Pillow` |
 | PDF 合并/拆分/加密 | PyPDF2 (200KB) | `pip install PyPDF2` |
 | 人像抠图 | rembg (300MB) | `pip install rembg` |
-| 精准中文分词 | jieba (10MB) | `pieba install jieba` |
+| 精准中文分词 | jieba (10MB) | `pip install jieba` |
 | 视频转换 / 编辑 | ffmpeg (系统包) | 见下方一键安装 |
 
 > ⚠️ rembg 首次运行会自动下载 ~300MB 模型（1-5分钟），装好后可离线使用。
@@ -131,58 +327,7 @@ pip install Pillow PyPDF2 jieba
 
 ### FFmpeg 一键安装（v3.0 简化）
 
-Windows 用户一步步操作太麻烦？把下面代码保存为 `install_ffmpeg.bat`，右键 → **以管理员身份运行**：
-
-<details>
-<summary>📋 Windows FFmpeg 一键安装脚本</summary>
-
-```batch
-@echo off
-chcp 65001 >nul
-echo ============================================
-echo   FFmpeg 一键安装脚本 v1.0
-echo   dgngjx-skill v3.0 配套工具
-echo ============================================
-echo.
-
-:: 检查是否有 winget
-where winget >nul 2>nul
-if %errorlevel%==0 (
-    echo [方法1/2] 使用 winget 安装 FFmpeg...
-    winget install ffmpeg
-    goto :check
-)
-
-:: 如果没有 winget，手动下载
-echo [方法2/2] winget 不可用，使用手动下载方式...
-if not exist "%TEMP%\ffmpeg_download" mkdir "%TEMP%\ffmpeg_download"
-cd /d "%TEMP%\ffmpeg_download"
-
-echo 正在下载 FFmpeg（约 80MB）...
-powershell -Command "& {Invoke-WebRequest -Uri 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-gpl.zip' -OutFile 'ffmpeg.zip'}"
-
-echo 正在解压...
-powershell -Command "& {Expand-Archive -Path 'ffmpeg.zip' -DestinationPath '.\" -Force}"
-
-echo 正在复制到 C:\ffmpeg...
-if not exist "C:\ffmpeg" mkdir "C:\ffmpeg"
-xcopy /E /I /Y "ffmpeg-master-latest-gpl\*" "C:\ffmpeg\"
-
-echo 正在添加到系统 PATH...
-setx PATH "%PATH%;C:\ffmpeg\bin" /M
-
-:check
-echo.
-echo ============================================
-echo   安装完成！请关闭所有终端窗口重新打开
-echo   然后运行 ffmpeg -version 验证
-echo ============================================
-pause
-```
-
-</details>
-
-> 💡 更简单的替代方案：打开 PowerShell，直接粘贴 `winget install ffmpeg` 一行搞定。
+> 💡 最简方案：打开 PowerShell，粘贴 `winget install ffmpeg` 一行搞定。
 
 ---
 
@@ -197,6 +342,7 @@ pause
 | 密码加密后丢失 | 安全机制限制 | 密码在加密时展示一次，请截图保存 |
 | 实时网络请求拦截 | 超出能力范围 | 使用 Fiddler / Charles |
 | 批量视频压制 | 需专业编码软件 | HandBrake 批量队列 |
+| 处理可执行文件 | 安全规则禁止 | 使用专业反编译/分析工具 |
 
 ---
 
@@ -210,10 +356,7 @@ pause
 
 #### 1.1 房贷计算器
 
-```
-输出: 贷款: 100万 | 30年 | 4.2%
-      月供: 4890.19 | 总利息: 760467.10 | 总额: 1760467.10
-```
+**✅ 开箱即用** ｜ 🌐 [在线房贷计算器](https://www.zhujisuanqi.com/)
 
 <details>
 <summary>📋 展开查看命令</summary>
@@ -242,23 +385,11 @@ except ValueError:
 
 </details>
 
-**✅ 开箱即用** ｜ 🌐 [在线房贷计算器](https://www.zhujisuanqi.com/)
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| 输出 `inf` 或 `nan` | 利率输0或负数 | 重新输入正数利率 |
-| `ValueError` | 输入了非数字内容 | 只输入数字，不要写字 |
-| 计算结果倍数不对 | 单位是万元，输入了元 | 100万输100即可 |
-
 ---
 
 #### 1.2 五险一金计算器
 
-```
-输出: 税前: 15000 | 北京 | 社保公积金: 2475 | 个税: 382.5 | 到手: 12142.5
-```
+**✅ 开箱即用** ｜ 🌐 [个税计算器](https://www.taxcalculator.com)
 
 <details>
 <summary>📋 展开查看命令</summary>
@@ -284,26 +415,11 @@ except ValueError:
 
 </details>
 
-**✅ 开箱即用** ｜ 🌐 [个税计算器](https://www.taxcalculator.com)
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| 不支持的城市 | 该城市费率未收录 | 手动计算：养老8%+医疗2%+失业0.5%+公积金(5%-12%)；精确值查当地人社局官网 |
-| 个税收计算为0 | 收入减去社保后≤5000 | 正常，说明不用交个税；如果觉得不对，检查公积金比例是否实际更低 |
-| 缴纳基数不准确 | 单位可能按最低工资缴 | 合规应以实际工资为基数，但很多公司按当地最低标准。本计算器按输入工资计算 |
-| 公积金比例不确定 | 5%-12% 浮动 | 默认按最高 12%（北京）；上海 7%；具体问 HR |
-| 补充医疗保险未计入 | 本工具只算基本社保 | 大额医疗/补充医疗需咨询 HR（通常几十元/月） |
-| 各地医保有差异 | 政策差异 | 北京医保含生育险，其他城市可能分开 |
-
 ---
 
 #### 1.3 日期计算器
 
-```
-输出: 从 2026-06-26 到 2026-10-01 | 相差: 97 天 (13周)
-```
+**✅ 开箱即用**
 
 <details>
 <summary>📋 展开查看命令</summary>
@@ -325,25 +441,11 @@ except ValueError:
 
 </details>
 
-**✅ 开箱即用**
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| `ValueError` 日期格式错误 | 格式不符合要求 | 使用 YYYY-MM-DD 格式（如 2026-10-01），注意月份和日期用零填充 |
-| 结果为负数 | 目标日期早于今天 | 正常，表示已经过去多少天 |
-| 月份或日期超出范围 | 输入了无效日期（如 13 月、32 日） | 检查日期是否真实存在 |
-| 不支持农历计算 | 仅支持公历（阳历） | 农历日期请使用在线转换工具转换后再计算 |
-| 跨年度计算结果异常 | 系统 `date.today()` 基于本地时间 | 确保系统时间设置正确 |
-
 ---
 
 #### 1.4 单位换算器
 
-```
-输出: 100 公里 = 62.1371 英里
-```
+**✅ 开箱即用**
 
 <details>
 <summary>📋 展开查看命令</summary>
@@ -363,31 +465,15 @@ try:
     m = input("类型:").strip() or "km_mi"
     v = float(input("数值: ") or 100)
     if m not in c:
-        print(f"❌ 不支持的换算：'{m}'")
-        print(f"   支持：{', '.join(c.keys())}")
-        print("   💡 格式：小单位_大单位，如 km_mi、kg_lb")
+        print(f"❌ 不支持的换算：'{m}'。支持：{', '.join(c.keys())}")
     else:
         r, uf, ut = c[m]
         print(f"✅ {v} {uf} = {r(v):.4f} {ut}")
-        reverse_map = {"km_mi":"mi_km","mi_km":"km_mi","kg_lb":"lb_kg","lb_kg":"kg_lb",
-                       "c_f":"f_c","f_c":"c_f","m_ft":"ft_m","ft_m":"m_ft"}
-        rev = reverse_map.get(m)
-        if rev:
-            print(f"   💡 反向换算：{rev}")
 except ValueError:
     print("❌ 请输入纯数字，例如：100")
-    print("   💡 不要包含单位符号（如 km、°C、kg）")
 ```
 
 </details>
-
-**✅ 开箱即用**
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| 不支持的类型 | 输入了不存在的换算名 | 从上面列表选，注意下划线 |
 
 ---
 
@@ -397,9 +483,7 @@ except ValueError:
 
 #### 2.1 文本统计
 
-```
-输出: 总字符: 256 | 中文: 198 | 英文词: 23 | 去重后 15 行
-```
+**✅ 开箱即用**
 
 <details>
 <summary>📋 展开查看命令</summary>
@@ -416,34 +500,15 @@ else:
     print(f"总字符: {total} | 中文: {cn} | 英文词: {en}")
     print(f"非空行: {len([l for l in lines if l.strip()])}")
     print(f"去重后: {len(list(dict.fromkeys(lines)))}行 (原{len(lines)}行)")
-    for i, line in enumerate(sorted(set(lines))[:5], 1):
-        print(f"  {i}. {line}")
 ```
 
 </details>
-
-**✅ 开箱即用**
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| "没有检测到输入" | 运行时直接回车，无任何内容 | 输入一段文字后再运行 |
-| 总字符数包含换行符 | `len(t)` 计入了 `\n` | 这是设计行为，统计全部字符 |
-| 中文计数偏差 | 中文范围是 Unicode [一-鿿] | 部分生僻字/繁体可能不在此区间 |
-| 英文词数不准 | 基于空格分词 | 多个空格/制表符会导致单词数偏多 |
 
 ---
 
 #### 2.2 编码转换
 
-```
-输入: Hello
-输出:
-  Base64: SGVsbG8=
-  URL:    %48%65%6C%6C%6F
-  Unicode: \u0048\u0065\u006c\u006c\u006f
-```
+**✅ 开箱即用** ｜ 🌐 [Base64在线](https://www.base64encode.org/)
 
 <details>
 <summary>📋 展开查看命令</summary>
@@ -455,10 +520,7 @@ try:
     m = input("方法(Base64/URL/Unicode):").strip() or "Base64"
     op = input("编码/解码:").strip() or "编码"
     if m == "Base64":
-        if op == "编码":
-            print(base64.b64encode(t.encode()).decode())
-        else:
-            print(base64.b64decode(t.encode()).decode())
+        print(base64.b64encode(t.encode()).decode() if op == "编码" else base64.b64decode(t.encode()).decode())
     elif m == "URL":
         print(urllib.parse.quote(t) if op == "编码" else urllib.parse.unquote(t))
     elif m == "Unicode":
@@ -471,53 +533,28 @@ except Exception as e:
 
 </details>
 
-**✅ 开箱即用** ｜ 🌐 [Base64在线](https://www.base64encode.org/)
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| 解码失败 | 输入了非 Base64 字符（如中文、特殊符号） | 确认输入是标准 Base64（仅含 A-Z, a-z, 0-9, +, /, =） |
-| 不识别的方法 | 输入中文方法名（如"编码"） | 输英文：Base64 / URL / Unicode |
-| URL 编码输出 `%XX` 格式 | urllib.parse.quote 默认行为 | 这是正确格式；可直接用于 URL 参数 |
-| Unicode 输出 `\uXXXX` | 每字符转为 4 位十六进制 | 这是标准 Unicode 转义，可在 JS/Python 中直接使用 |
-
 ---
 
-#### 2.3 词频统计 ⭐ v3.0 重大升级
+#### 2.3 词频统计
 
-```
-输出:  1. 管理: 45 ██████████████████████████████
-        2. 服务器: 32 ██████████████████████
-        3. python: 28 ████████████████████
-         （v3.0：已过滤"的""是"停用词，英文已统一小写）
-```
+**✅ 开箱即用**
 
 <details>
-<summary>📋 展开查看命令（v3.0 增强版）</summary>
+<summary>📋 展开查看命令</summary>
 
 ```python
 from collections import Counter
 import re
 
-# === v3.0 新增：内置中文停用词表 ===
-STOPWORDS = {
-    '的', '了', '和', '是', '在', '我', '有', '也', '不', '就', '都', '而',
-    '及', '与', '着', '或', '一个', '没有', '我们', '你们', '他们', '她们',
-    '但是', '然而', '因为', '所以', '如果', '虽然', '不过', '而且', '或者',
-    '还是', '既', '又', '并', '等', '把', '被', '让', '往', '从', '对',
-    '于', '以', '为', '比', '此', '那', '这', '她', '他', '它', '们',
-    '些', '什么', '哪', '怎么', '多', '很', '最', '更', '太', '非常',
-    '每', '当', '起', '已', '将', '能', '会', '应', '可', '得', '过',
-    '给', '来', '去', '说', '看', '知道', '做', '想', '问', '请', '好',
-    '再', '还', '只', '如', '真的', '自己', '人', '事', '时', '地',
-    '今天', '现在', '一些', '这样', '那样', '怎么样', '可以', '这个',
-    '那个', '不是', '可能', '已经', '之后', '之前', '然后', '不过',
-    '比较', '其实', '其他', '其中', '所有', '虽然', '由于', '因此',
-}
+STOPWORDS = {'的','了','和','是','在','我','有','也','不','就','都','而','及','与','着','或','一个','没有',
+    '我们','你们','他们','她们','但是','然而','因为','所以','如果','虽然','不过','而且','或者','还是',
+    '既','又','并','等','把','被','让','往','从','对','于','以','为','比','此','那','这','她','他','它',
+    '们','些','什么','哪','怎么','多','很','最','更','太','非常','每','当','起','已','将','能','会','应',
+    '可','得','过','给','来','去','说','看','知道','做','想','问','请','好','再','还','只','如','真的',
+    '自己','人','事','时','地','今天','现在','一些','这样','那样','怎么样','可以','这个','那个','不是',
+    '可能','已经','之后','之前','然后','不过','比较','其实','其他','其中','所有','虽然','由于','因此'}
 
-def _smart_segment(text: str) -> list[str]:
-    """智能分词：有 jieba 用 jieba，无 jieba 降级到正则"""
+def _smart_segment(text):
     try:
         import jieba
         return list(jieba.lcut(text, cut_all=False))
@@ -525,77 +562,36 @@ def _smart_segment(text: str) -> list[str]:
         return re.findall(r'[一-鿿\w]+', text)
 
 try:
-    t = input("输入文本:") or "在这里粘贴要分析的文本内容"
+    t = input("输入文本:")
     if not t.strip():
-        print("❌ 没有检测到输入。请运行程序时输入一段文字")
+        print("❌ 没有检测到输入")
     else:
-        # === v3.0 智能分词 + 停用词过滤 ===
-        raw_words = _smart_segment(t)
+        raw = _smart_segment(t)
         words = []
-        for w in raw_words:
+        for w in raw:
             w = w.strip()
-            if len(w) <= 1:
-                continue
-            # 英文统一小写
-            if re.match(r'^[a-zA-Z]+$', w):
-                w = w.lower()
-            # 跳过停用词
-            if w in STOPWORDS:
-                continue
+            if len(w) <= 1: continue
+            if re.match(r'^[a-zA-Z]+$', w): w = w.lower()
+            if w in STOPWORDS: continue
             words.append(w)
-        
         if not words:
-            print("❌ 没有找到有效词。请输入包含中文或英文词的文本")
+            print("❌ 没有找到有效词")
         else:
-            from collections import Counter
-            for i, (word, cnt) in enumerate(Counter(words).most_common(15), 1):
-                bar = '█' * min(cnt * 2, 30)
-                print(f"  {i:2d}. {word}: {cnt} {bar}")
-            
-            # === v3.0 新增：分析摘要 ===
+            for i,(word,cnt) in enumerate(Counter(words).most_common(15),1):
+                print(f"  {i:2d}. {word}: {cnt} {'█'*min(cnt*2,30)}")
             unique = len(set(words))
             print(f"\n📊 共 {len(words)} 个有效词，{unique} 个不重复词")
-            if len(words) > 0:
-                diversity = unique / len(words) * 100
-                print(f"   词汇丰富度: {diversity:.1f}%", end="")
-                if diversity > 80:
-                    print("（用词多样）")
-                elif diversity > 50:
-                    print("（正常范围）")
-                else:
-                    print("（同词重复较多）")
-            
+            d = unique/len(words)*100
+            print(f"   词汇丰富度: {d:.1f}%", end="")
+            print("（用词多样）" if d>80 else "（正常范围）" if d>50 else "（同词重复较多）")
             try:
-                import jieba
-                print("   ✅ 已使用 jieba 精准分词")
-            except ImportError:
-                print("   💡 安装 jieba 可获得更精准的中文分词：pip install jieba")
+                import jieba; print("   ✅ 已使用 jieba 精准分词")
+            except: print("   💡 安装 jieba 可获得更精准分词: pip install jieba")
 except Exception as e:
     print(f"❌ {e}")
 ```
 
 </details>
-
-**✅ 开箱用语** ｜ 🌐 [词云在线](https://www.wordclouds.com/)
-
-**✨ v3.0 改进亮点：**
-
-| 改进项 | v2.x | v3.0 |
-|--------|------|------|
-| 分词方式 | 正则匹配 | jieba 精准分词（可选依赖） |
-| 停用词过滤 | ❌ 不过滤 | ✅ 内置100+常见停用词 |
-| 英文处理 | 区分大小写 | 统一小写 |
-| 统计摘要 | ❌ 无 | ✅ 词汇丰富度分析 |
-| 降级方案 | - | 无 jieba 自动降级到正则 |
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| 没有有效词 | 只输入了数字、符号或空格 | 输入有意义的中文或英文文本 |
-| 单字也被计入 | 正则 `len(x)<=1` 过滤单字 | 所有长度 ≤1 的词都会被过滤（v3.0改进） |
-| "的""是"等高停用词出现 | 使用旧版本代码 | 已升级到v3.0，停用词已自动过滤 |
-| jieba 未安装 | `pip install jieba` 还没执行 | v3.0 无 jieba 也能用（降级到正则），装了更精准 |
 
 ---
 
@@ -605,22 +601,17 @@ except Exception as e:
 
 #### 3.1 知识查询
 
-搜索 Wikipedia 摘要。**国内可能被墙**。
-
-```
-输出: 📖 勾股定理
-       在直角三角形中，两直角边的平方和等于斜边的平方...
-```
+**✅ 开箱即用**
 
 <details>
 <summary>📋 展开查看命令</summary>
 
 ```python
-import urllib.request, urllib.parse, json, socket
+import urllib.request, urllib.parse, json, socket, re
+
 def _wiki_fallback(query: str) -> list[dict]:
-    """国内源：百度百科（通过 Deno 代理，https://baike.deno.dev）"""
     url = f"https://baike.deno.dev/item/{urllib.parse.quote(query)}?encode=json"
-    req = urllib.request.Request(url, headers={"User-Agent":"dgngjx/3.0"})
+    req = urllib.request.Request(url, headers={"User-Agent":"dgngjx/3.5"})
     resp = urllib.request.urlopen(req, timeout=10)
     data = json.loads(resp.read())
     results = []
@@ -628,8 +619,7 @@ def _wiki_fallback(query: str) -> list[dict]:
         for item in data:
             title = item.get("title", "")
             abstract = item.get("abstract", "").replace("\n", " ").strip()
-            if title:
-                results.append({"title": title, "snippet": abstract[:200]})
+            if title: results.append({"title": title, "snippet": abstract[:200]})
     elif isinstance(data, dict):
         title = data.get("title", query)
         abstract = data.get("abstract", data.get("description", ""))
@@ -639,60 +629,33 @@ def _wiki_fallback(query: str) -> list[dict]:
 try:
     q = input("关键词:") or "勾股定理"
     if not q.strip():
-        print("❌ 关键词不能为空。请输入要查询的内容，例如：勾股定理")
+        print("❌ 关键词不能为空")
     else:
-        # ── 主源：Wikipedia（国外，国内可能被墙）
         results = []
         try:
             url = f"https://zh.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(q)}&format=json&srlimit=3"
-            req = urllib.request.Request(url, headers={"User-Agent":"dgngjx/3.0"})
+            req = urllib.request.Request(url, headers={"User-Agent":"dgngjx/3.5"})
             resp = urllib.request.urlopen(req, timeout=10)
             data = json.loads(resp.read())
             results = data.get("query",{}).get("search",[])
-        except (urllib.error.URLError, socket.TimeoutError, ConnectionRefusedError) as e:
-            print(f"⚠️ Wikipedia 访问失败（{type(e).__name__}），自动切换到国内源...")
-        except json.JSONDecodeError:
-            print("⚠️ Wikipedia 返回异常，尝试国内源...")
-
-        # ── 降级 1：百度百科（国内）
+        except Exception as e:
+            print(f"⚠️ Wikipedia 失败（{type(e).__name__}），切换到百度百科...")
         if not results:
-            try:
-                results = _wiki_fallback(q)
-            except Exception as e2:
-                print(f"⚠️ 百度百科也失败：{e2}")
-
+            try: results = _wiki_fallback(q)
+            except Exception as e2: print(f"⚠️ 百度百科也失败: {e2}")
         if not results:
-            print(f"❌ 没有找到关于「{q}」的内容。")
-            print("   💡 替换方案：")
-            print(f"     • 百度搜索：https://www.baidu.com/s?wd={urllib.parse.quote(q)}")
-            print(f"     • 必应国内：https://cn.bing.com/search?q={urllib.parse.quote(q)}")
-            print(f"     • 站内搜索：直接在浏览器打开百度百科或知乎")
+            print(f"❌ 没有找到关于「{q}」的内容")
+            print(f"   百度搜索: https://www.baidu.com/s?wd={urllib.parse.quote(q)}")
         else:
             for r in results:
-                title = r.get('title','')
-                snippet = r.get('snippet','')
-                snippet = re.sub(r'<[^>]+>', '', snippet)  # 去HTML标签
-                print(f"\n📖 {title}\n   {snippet[:200]}...")
+                t = r.get('title','')
+                s = re.sub(r'<[^>]+>', '', r.get('snippet',''))[:200]
+                print(f"\n📖 {t}\n   {s}...")
 except Exception as e:
     print(f"❌ 意外错误: {e}")
-    print("   💡 网络完全不可用时，请尝试：")
-    print("     1. 检查 Wi-Fi/网线连接")
-    print("     2. 关闭代理/VPN 后再试")
-    print("     3. 用手机热点测试是否为网络屏蔽")
 ```
 
 </details>
-
-**✅ 开箱即用** ｜ 🌐 [百度替代](https://www.baidu.com/s?wd=关键词)
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| `URLError` / `TimeoutError` | Wikipedia 被 GFW 墙了 | v2.0 已内置百度百科自动降级，无需手动操作 |
-| 维基百科+百度都失败 | 网络完全不通 | 1) 检查 Wi-Fi 2) 关代理再试 3) 手机开热点 |
-| 百度百科返回空 | 关键词在百科不存在 | 换常用词；直接访问 https://baike.baidu.com/ |
-| JSON 解析失败 | 目标网站 API 变更 | 等几个小时再试，或用手机百度 APP 搜 |
 
 ---
 
@@ -702,16 +665,15 @@ except Exception as e:
 
 #### 4.1 娱乐小工具
 
-随机笑话 / 一言 / 运势。需要联网。
+**✅ 开箱即用**
 
 <details>
 <summary>📋 展开查看命令</summary>
 
 ```python
-import urllib.request, json, random, socket
+import urllib.request, json, random
 
-def _joke_cn() -> str:
-    """国内笑话 API（失败返回空字符串）"""
+def _joke_cn():
     apis = [
         ("https://api.apiopen.top/getJoke?page=1&count=1&type=txt", lambda d: d.get("result",[{}])[0].get("content","")),
         ("https://v1.hitokoto.cn/?c=a", lambda d: f"{d.get('hitokoto','')} —— {d.get('from','')}")),
@@ -719,142 +681,82 @@ def _joke_cn() -> str:
     ]
     for url, extract in apis:
         try:
-            r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/3.0"}), timeout=5)
+            r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/3.5"}), timeout=5)
             data = json.loads(r.read())
             text = extract(data)
-            if text and text.strip():
-                return text
-        except Exception:
-            continue
+            if text.strip(): return text
+        except: continue
     return ""
 
 try:
     c = input("选择(1笑话/2一言/3运势):").strip() or "1"
     if c == "1":
-        # 优先尝试国内源
         joke = _joke_cn()
-        if joke:
-            print(f"😄 {joke}")
+        if joke: print(f"😄 {joke}")
         else:
-            # 降级：本地生成
             jokes = [
                 ("程序员为什么喜欢用暗色主题？", "因为光明会引来 bug！"),
-                ("老婆给程序员丈夫打电话：你到底爱不爱我？", "当然爱。老婆：那你能不能不要在'当然爱'后面加分号？感觉像是执行完就结束了。"),
-                ('两个程序员聊天。A：「我昨天写了个 bug，运行了 18 小时没崩。」B：「然后呢？」A：「第 19 小时蓝屏了，但不确定是不是我写的。」'),
-                ("项目经理问程序员：这个功能多久能做完？程序员：一周吧。项目经理：具体点。程序员：那就 5 天，但我的一天可能是 16 小时。"),
-                ("程序员最讨厌的数字是什么？404。不是因为它不存在，是因为它随时会出现在你面前。"),
-                ("为什么程序员总分不清万圣节和圣诞节？因为 Oct 31 == Dec 25（八进制31=十进制25）。"),
+                ("老婆问程序员丈夫：你到底爱不爱我？", "当然爱。老婆：那你能不能不在'当然爱'后面加分号？感觉像执行完就结束。"),
             ]
-            setup, punchline = random.choice(jokes)
-            print(f"📶 联网失败，给你讲个本地笑话：\n   {setup}\n   → {punchline}")
-            print("   💡 想获取更多笑话？检查网络后重试，或访问 https://www.zhihu.com/search?q=段子")
+            s, p = random.choice(jokes)
+            print(f"📶 联网失败，给你讲个本地笑话：\n   {s}\n   → {p}")
     elif c == "2":
-        # 一言：尝试多个国内 API
-        _api = [
+        for url, extract in [
             ("https://v1.hitokoto.cn/", lambda d: f"{d.get('hitokoto','')} —— {d.get('from','')}"),
-            ("https://api.oioweb.cn/api/common/Hitokoto", lambda d: f"{d.get('result',{}).get('content','')} —— {d.get('result',{}).get('from','')}"),
             ("https://tenapi.cn/v2/yiyan", lambda d: d.get("data","") or d.get("content","")),
-        ]
-        found = False
-        for url, extract in _api:
+        ]:
             try:
-                r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/3.0"}), timeout=5)
-                d = json.loads(r.read())
-                t = extract(d)
-                if t:
-                    print(f"✨ {t}")
-                    found = True
-                    break
-            except Exception:
-                continue
-        if not found:
-            print("📶 所有一言 API 都不可用。试试这些在线版：")
-            print("   • https://hitokoto.cn/")
-            print("   • https://www.jinrishici.com/ （今日诗词）")
-            print("   💡 也有可能是本地网络屏蔽了这些域名")
+                r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/3.5"}), timeout=5)
+                t = extract(json.loads(r.read()))
+                if t: print(f"✨ {t}"); break
+            except: continue
+        else: print("📶 一言API不可用，试试 https://hitokoto.cn/")
     elif c == "3":
         print(random.choice(["大吉","中吉","小吉","吉","末吉","凶","大凶"]))
-    else:
-        print(f"❌ 选项 {c} 不存在。请输入 1、2 或 3")
-except Exception as e:
-    print(f"❌ 出错: {e}")
-    print("   💡 绝大数情况下是网络不通。离线也能用运势（选项3）")
+    else: print("❌ 请输入 1、2 或 3")
+except Exception as e: print(f"❌ {e}")
 ```
 
 </details>
-
-**✅ 开箱即用** ｜ 🌐 [今日诗词](https://www.jinrushici.com/)
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| 所有 API 都失败 | 网络被严格限制 | 先看选项3（运势）能用吗？能 → 网可用但 API 域名被屏蔽；不能 → 检查网络 |
-| 返回的笑话是本地缓存 | 联网超时 | 自动降级，正常现象，多刷新几次 |
-| 选项 2 一言乱码 | 编码问题（极少见） | 重试一次，或访问 https://hitokoto.cn |
 
 ---
 
 #### 4.2 壁纸中心
 
-从 Unsplash 下载壁纸。**国内可能被墙**。
+**✅ 开箱即用**
 
 <details>
 <summary>📋 展开查看命令</summary>
 
 ```python
-import urllib.request, urllib.parse, json, socket
+import urllib.request, urllib.parse, json
 
-def _wallpaper_cn(query: str) -> tuple[str,str] | None:
-    """国内壁纸源降级。返回 (图URL, 来源名) 或 None"""
-    apis = [
-        (f"https://imgapi.cn/api.php?zd=pc&fl=fengjing&gs=jpg", "风景随机"),
-        (f"https://imgapi.cn/api.php?zd=pc&fl=dongman&gs=jpg", "动漫随机"),
-        (f"https://picsum.photos/1920/1080", "随机摄影(国际)"),
-    ]
-    for url, src in apis:
+def _wallpaper_cn():
+    for url, src in [
+        ("https://imgapi.cn/api.php?zd=pc&fl=fengjing&gs=jpg", "风景随机"),
+        ("https://picsum.photos/1920/1080", "随机摄影"),
+    ]:
         try:
-            r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/3.0"}), timeout=8)
-            # Picsum 返回重定向 URL
-            final_url = r.geturl()
-            if final_url and final_url != url:
-                return (final_url, src)
-            # JSON API
-            try:
-                d = json.loads(r.read())
-                img_url = d.get("data",[{}])[0].get("url","") or d.get("url","") or d.get("links",{}).get("download","")
-                if img_url:
-                    return (img_url, src)
-            except Exception:
-                pass
-        except Exception:
-            continue
+            r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/3.5"}), timeout=8)
+            final = r.geturl()
+            if final and final != url: return (final, src)
+        except: continue
     return None
 
 try:
-    k = input("关键词(英文):").strip() or "nature"
-    if not k:
-        print("❌ 关键词不能为空")
+    _ = input("关键词:").strip() or "nature"
+    result = _wallpaper_cn()
+    if result:
+        print(f"📷 来源: {result[1]}\n   下载: {result[0]}")
+        print("   💡 右键→图片另存为")
     else:
-        result = _wallpaper_cn(k)
-        if result:
-            url, src = result
-            print(f"📷 来源: {src}\n   下载: {url}")
-            print("   💡 右键→图片另存为 或 浏览器直接打开下载")
-        else:
-            print("❌ 所有壁纸源均不可用。")
-            print("   💡 推荐替代方案（复制到浏览器打开）：")
-            print(f"     • https://unsplash.com/s/photos/{k}")
-            print(f"     • https://pixabay.com/zh/images/search/{k}/")
-            print(f"     • https://www.pexels.com/zh-cn/search/{k}/")
-            print("   💡 如果浏览器也打不开 → 检查本地网络是否过境")
-except Exception as e:
-    print(f"❌ {e}")
+        print("❌ 壁纸源不可用")
+        print("   • https://unsplash.com/s/photos/nature")
+        print("   • https://pixabay.com/zh/images/search/nature/")
+except Exception as e: print(f"❌ {e}")
 ```
 
 </details>
-
-**✅ 开箱即用** ｜ 🌐 [Unsplash替代](https://unsplash.com/s/photos/nature)
 
 ---
 
@@ -864,13 +766,7 @@ except Exception as e:
 
 #### 5.1 JSON 工具
 
-```
-输入: {"name":"test","value":123}
-输出:
-  ✅ JSON 合法
-  格式化: { "name": "test", "value": 123 }
-  压缩: {"name":"test","value":123}
-```
+**✅ 开箱即用**
 
 <details>
 <summary>📋 展开查看命令</summary>
@@ -879,37 +775,22 @@ except Exception as e:
 import json
 try:
     r = input("输入JSON:").strip() or '{"key":"value"}'
-    if not r:
-        print("❌ 没有检测到输入")
+    if not r: print("❌ 没有输入")
     else:
         p = json.loads(r)
-        print(f"✅ JSON 合法\n格式化: {json.dumps(p,ensure_ascii=False,indent=2)}")
+        print(f"✅ 合法\n格式化: {json.dumps(p,ensure_ascii=False,indent=2)}")
         print(f"压缩: {json.dumps(p,ensure_ascii=False,separators=(',',':'))}")
 except json.JSONDecodeError as e:
-    print(f"❌ JSON 错误: {e}")
-    print("   常见原因: 1) 键没加引号 {\"key\":1}  2) 多了逗号 {1,2,}  3) 用了单引号")
+    print(f"❌ JSON错误: {e}")
 ```
 
 </details>
-
-**✅ 开箱即用** ｜ 🌐 [JSON在线](https://jsonformatter.org/)
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| `JSONDecodeError` | JSON 语法错误 | 常见原因：1) 键名缺少双引号 `{"key":1}` 2) 末尾多余逗号 `{1,2,}` 3) 使用了单引号 `'key'` |
-| 格式化后字段顺序变乱 | Python 3.7+ 字典有序，但 `ensure_ascii` 影响中文 | 已设置 `ensure_ascii=False`，中文正常显示 |
-| 压缩后仍有多余空格 | `separators` 参数设置 | 默认 `(',',':')` 已是最紧凑 |
-| 输入了空字符串 | 无任何内容 | 重新输入合法的 JSON 字符串 |
 
 ---
 
 #### 5.2 HTTP 接口测试
 
-```
-输出: ✅ 状态码: 200 | 响应体(1256字符): {"current_user_url":"..."}
-```
+**✅ 开箱即用**
 
 <details>
 <summary>📋 展开查看命令</summary>
@@ -918,129 +799,50 @@ except json.JSONDecodeError as e:
 import urllib.request, socket, ssl
 try:
     u = input("URL:").strip() or "https://api.github.com"
-    if not u:
-        print("❌ URL不能为空")
-    elif not u.startswith("http"):
-        print("❌ URL格式不对。应以 http:// 或 https:// 开头，如 https://api.github.com")
+    if not u: print("❌ URL不能为空")
+    elif not u.startswith("http"): print("❌ 应以 http:// 或 https:// 开头")
     else:
-        # 针对国内 GitHub 访问优化：自动尝试 ghproxy 镜像
-        actual_url = u
-        if "github.com" in u or "api.github.com" in u:
-            print("💡 检测到 GitHub，如遇网络问题可尝试 ghproxy 镜像")
-        req = urllib.request.Request(u, headers={"User-Agent":"dgngjx/3.0"})
-        # SSL 上下文：兼容老旧服务器
+        req = urllib.request.Request(u, headers={"User-Agent":"dgngjx/3.5"})
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         resp = urllib.request.urlopen(req, timeout=15, context=ctx)
         body = resp.read()
-        print(f"✅ 状态码: {resp.status} ({len(body)} bytes)")
-        content_type = resp.headers.get('Content-Type','')
-        if 'json' in content_type:
-            try:
-                import json
-                data = json.loads(body)
-                print(f"\n📦 JSON 预览:\n{json.dumps(data, ensure_ascii=False, indent=2)[:500]}")
-            except Exception:
-                pass
+        print(f"✅ 状态: {resp.status} ({len(body)} bytes)")
 except urllib.error.HTTPError as e:
-    print(f"❌ HTTP 错误: {e.code} {e.reason}")
-    print("   💡 常见状态码含义：")
-    print("     403: 访问被拒绝（可能被反爬，需加 Cookie/Referer）")
-    print("     404: 路径不存在")
-    print("     500: 服务器内部错误")
-    print("     502: 网关错误（服务器重启中？）")
-    print("     503: 服务不可用（网站可能挂了）")
+    print(f"❌ HTTP {e.code}: {e.reason}")
 except urllib.error.URLError as e:
-    reason = str(e.reason).lower()
-    if "name or service" in reason or "nodename" in reason:
-        print(f"❌ 域名解析失败：找不到 {u}")
-        print("   💡 检查：1) URL 是否拼写正确 2) 该域名是否存在")
-    elif "connection refused" in reason:
-        print(f"❌ 连接被拒绝：{u}")
-        print("   💡 服务器拒绝连接。端口未开放或网站已关闭")
-    elif "ssl" in reason or "certificate" in reason:
-        print(f"❌ SSL 证书错误：{u}")
-        print("   💡 服务器证书无效。如确认安全，可添加 ssl._create_default_https_context 绕过（不推荐生产环境）")
-    elif "timed out" in reason:
-        print(f"❌ 连接超时：{u}")
-        print("   💡 连不上目标服务器。可能被 GFW 墙了，或网络质量差")
-        print("   尝试 HTTP（无加密，可能绕过防火墙）：%s" % u.replace("https://","http://"))"
-    else:
-        print(f"❌ 网络错误: {e.reason}")
-        print("   💡 通用排查：1) 检查 Wi-Fi/网线 2) 关闭代理/VPN 3) ping 目标域名看是否通")
-except TimeoutError:
-    print("❌ 请求超时（超过15秒）")
-    print("   💡 响应太慢：网站可能在国内访问较慢；加代理或换国内镜像")
-    print(f"   国内镜像尝试：https://ghproxy.com/{u}")
-except ValueError:
-    print("❌ URL格式不正确。请输完整的URL，包括 http:// 或 https://")
-except Exception as e:
-    print(f"❌ 意外错误: {e}")
-```
-
-</details>
-
-**✅ 开箱即用** ｜ 🌐 [Postman在线](https://web.postman.co/)
-
-**✅ v2.0 国内网络增强：** 自动尝试 ghproxy 镜像提示 + SSL 兼容 + 状态码详细中文释义。
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| HTTP 403 | 被反爬机制拦截 | 请求头加 Cookie/Referer；或换浏览器测试 |
-| HTTP 503 | 服务器过载/维护 | 等几分钟再试 |
-| 域名解析失败 | 域名不存在或 DNS 污染 | 换用阿里 DNS 223.5.5.5；或 nslookup 检查 |
-| SSL 证书错误 | 证书过期/不匹配 | 网站安全问题，不建议绕过 |
-| 超时（国内连 GitHub）| GFW 干扰 | 用 ghproxy 镜像：https://ghproxy.com/https://... |
-
-**✅ 国内友好 API 推荐：**
-- 天气：https://api.openweathermap.org/ 或 和风天气：https://dev.qweather.com/
-- 新闻：https://news.topurl.cn/
-- 翻译：https://fanyi-api.baidu.com/ （百度翻译，有免费额度） |
-
----
-
-#### 5.3 Token 计算器
-
-```
-输出: 中文: 12 ≈8 | 英文: 13 ≈3 | 总计 ≈11 tokens
-```
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-try:
-    t = input("文本:") or "计算这段文字的Token数"
-    if not t.strip():
-        print("❌ 请输入一段文字")
-    else:
-        cn = sum(1 for c in t if '一' <= c <= '鿿')
-        en = len(t) - cn
-        print(f"中文: {cn} ≈{int(cn/1.5)} | 英文: {en} ≈{int(en/4)} | 总计 ≈{int(cn/1.5+en/4)}")
+    print(f"❌ 网络错误: {e.reason}")
 except Exception as e:
     print(f"❌ {e}")
 ```
 
 </details>
 
-**✅ 开箱即用** ｜ 🌐 [Tokenizer在线](https://platform.openai.com/tokenizer)
+---
 
-**⚠️ 可能遇到的坑：**
-| 情况 | 原因 | 说明 |
-|------|------|------|
-| Token 数偏高估 | 每个模型 tokenizer 不同 | GPT 系列 1中文≈1.5-2 token；Claude 系列 1中文≈1.5；LLaMA 系列更高 |
-| 结果与模型实际消耗不同 | 分词算法差异 | 本工具用字符级估算，粗略参考。实际以模型返回的 usage 字段为准 |
-| emoji 占用多 Token | emoji 可能分多个 token | 常见 emoji 占 2-3 个 token |
+#### 5.3 Token 计算器
+
+**✅ 开箱即用**
+
+<details>
+<summary>📋 展开查看命令</summary>
+
+```python
+t = input("文本:") or "计算Token数"
+if not t.strip(): print("❌ 请输入文字")
+else:
+    cn = sum(1 for c in t if '一' <= c <= '鿿')
+    en = len(t) - cn
+    print(f"中文: {cn} ≈{int(cn/1.5)} | 英文: {en} ≈{int(en/4)} | 总计 ≈{int(cn/1.5+en/4)}")
+```
+
+</details>
 
 ---
 
 #### 5.4 在线 Photoshop
 
-裁剪 / 旋转 / 调整亮度对比度。**需 Pillow**。
-
-> 📦 需要确认安装：`pip install Pillow`
+📦 **需 Pillow**
 
 <details>
 <summary>📋 展开查看命令</summary>
@@ -1048,69 +850,36 @@ except Exception as e:
 ```python
 from PIL import Image, ImageEnhance
 try:
-    f = input("图片路径:").strip().strip('"') or "photo.jpg"
-    f = f.replace("\\", "/").replace("//", "/")
+    f = input("图片路径:").strip().strip('"').replace("\\","/") or "photo.jpg"
     img = Image.open(f)
     w,h = map(int, input("裁剪 宽,高:").strip() or "200,200").split(","))
-    if w > img.width or h > img.height:
-        print(f"⚠️ 裁剪尺寸({w}x{h})大于原图({img.width}x{img.height})，将自动缩小到原图大小")
-        w = min(w, img.width); h = min(h, img.height)
+    if w > img.width or h > img.height: w,h = min(w,img.width), min(h,img.height)
     img2 = img.crop(((img.width-w)//2,(img.height-h)//2,w+img.width//2,h+img.height//2))
     img2.save("cropped.jpg")
-    e = ImageEnhance.Brightness(img).enhance(float(input("亮度(如1.2):") or 1.2))
+    e = ImageEnhance.Brightness(img).enhance(float(input("亮度(1.2):") or 1.2))
     e.save("bright.jpg")
     print("✅ 已保存 cropped.jpg, bright.jpg")
-except FileNotFoundError:
-    print(f"❌ 找不到文件: {f}")
-    print("   检查: 1) 文件路径是否完整，如 D:\\photo.jpg  2) 文件是否确实存在")
-except ValueError:
-    print("❌ 格式错误：裁剪输入应为 数字,数字，如：200,200")
-except Exception as e:
-    print(f"❌ {e}")
+except Exception as e: print(f"❌ {e}")
 ```
 
 </details>
-
-**📦 需确认** ｜ 🌐 [Photopea替代](https://www.photopea.com/)
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| 找不到文件 | 路径错 | 用完整路径如 D:\folder\pic.jpg |
-| 裁剪尺寸太大 | 比原图还大 | 自动缩小裁剪范围 |
-| `No module named 'PIL'` | 没装 Pillow | 确认安装：pip install Pillow |
 
 ---
 
 #### 5.5 Mermaid 时序图
 
-输入代码，输出时序图代码（在 mermaid.live 预览）。
+**✅ 开箱即用**
 
 <details>
 <summary>📋 展开查看命令</summary>
 
 ```python
 seq = input("时序图代码:").strip() or "A->B: Hello"
-if seq:
-    print(f"sequenceDiagram\n{seq}")
-else:
-    print("❌ 代码不能为空")
+if seq: print(f"sequenceDiagram\n{seq}")
+else: print("❌ 代码不能为空")
 ```
 
 </details>
-
-**✅ 开箱即用** ｜ 🌐 [Mermaid Live Editor](https://mermaid.live/)
-
-**⚠️ 可能遇到的坑：**
-
-| 情况 | 原因 | 说明 |
-|------|------|------|
-| 不知道怎么渲染 | 本模块只输出代码 | 复制输出 → https://mermaid.live 粘贴预览 |
-| 箭头不显示 | 箭头种类用错 | `->` 实线，`-->` 虚线，`->>` 实线+箭头 |
-| 标题乱码 | 终端编码问题 | 输出本身无问题，在 mermaid.live 可正常渲染 |
-
-**✅ 开箱即用**
 
 ---
 
@@ -1120,134 +889,54 @@ else:
 
 #### 6.1 图片压缩
 
-另存新文件不覆盖原图。**需 Pillow**。
-
-> 📦 需要确认安装：`pip install Pillow`
+📦 **需 Pillow**
 
 <details>
 <summary>📋 展开查看命令</summary>
 
 ```python
 from PIL import Image, ImageFile
-import os, sys
-# 允许 PIL 加载截断图片（防止大图报错）
+import os
 ImageFile.LOAD_TRUNCATED_IMAGES = True
+Image.MAX_IMAGE_PIXELS = 180_000_000
 
-MAX_IMAGE_PIXELS = 180_000_000  # 防止解压炸弹：7K × 7K = ~150MP
-Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
-
-file_size_limit_mb = 200  # 超过 200MB 提示
-
-# ========== v3.0 路径智能修复 ==========
-def _fix_path(p: str) -> str:
-    """修复用户输入的文件路径：去引号、规范斜杠"""
-    p = p.strip().strip('"').strip("'")
-    p = p.replace("\\", "/").replace("//", "/")
-    # 处理 Windows 盘符双斜杠
-    if len(p) > 2 and p[1] == ":" and p[2] == "/":
-        p = p[0] + ":" + p[2:].replace("//", "/")
-    return p
+def _fix_path(p):
+    return p.strip().strip('"').strip("'").replace("\\","/").replace("//","/")
 
 f = _fix_path(input("图片路径:").strip() or "photo.jpg")
 if not os.path.exists(f):
     print(f"❌ 文件不存在: {f}")
-    print("   检查: 1) 路径是否完整，如 D:\\photo.jpg  2) 文件名是否拼写正确")
 else:
-    file_size = os.path.getsize(f)
-    if file_size > file_size_limit_mb * 1024 * 1024:
-        print(f"⚠️ 文件体积 {file_size / 1024 / 1024:.1f}MB，超过 {file_size_limit_mb}MB 建议值。")
-        print("   💡 大文件提示：")
-        print("     • 压缩过程可能需要 1-5 分钟，请耐心等待（不会卡死）")
-        print("     • 确保可用内存 > 图片大小 × 3（无损压缩需要）")
-        print("     • 如果经常处理百 MB 级图片，建议用专业工具：")
-        print("       - RIOT (https://riot-optimizer.com/)")
-        print("       - FileOptimizer (https://nikkhokkho.sourceforge.io/static.php?page=FileOptimizer)")
-        print("   ⏳ 按回车继续，或输入 'q' 重新选择文件...")
-        if input().strip().lower() == 'q':
-            f = ""
+    size = os.path.getsize(f)
+    if size > 200*1024*1024:
+        print(f"⚠️ {size/1024/1024:.1f}MB 大文件，压缩可能需1-5分钟")
+        print("   💡 确保内存 > 图片大小×3")
+        if input("按回车继续 或 q 退出: ").strip().lower() == 'q': f=""
     if f:
         try:
-            q = int(input("质量(1-100，建议70-85):") or 80)
-            if q < 1 or q > 100:
-                print("❌ 质量必须为1-100之间的数字，已自动设为80")
-                q = 80
+            q = int(input("质量(1-100,建议70-85):") or 80)
+            if not 1<=q<=100: q=80
             img = Image.open(f)
-            # 超大尺寸警告
-            w, h = img.size
-            if w * h > 50_000_000:  # 50MP
-                print(f"⚠️ 图片尺寸 {w}×{h} ({w*h/1e6:.1f}MP)，压缩可能需要 1-3 分钟...")
-            if img.mode in ('RGBA','PA'):
-                img = img.convert('RGB')
+            w,h = img.size
+            if w*h > 50_000_000: print(f"⚠️ {w}×{h} 可能需1-3分钟...")
+            if img.mode in ('RGBA','PA'): img = img.convert('RGB')
             out = f"compressed_{os.path.basename(f)}"
             img.save(out, quality=q, optimize=True)
-            o, c = os.path.getsize(f)/1024, os.path.getsize(out)/1024
-            rate = 100 - c/o*100 if o > 0 else 0
-            print(f"✅ {o:.0f}KB → {c:.0f}KB (降{rate:.0f}%) | 原图未修改")
-            if rate < 0:
-                print("   💡 压缩后反而更大？说明原图已高度压缩。可尝试质量=60 或更低")
-            elsif rate < 10:
-                print("   💡 压缩率不明显。可尝试降低质量参数（如60）或缩小尺寸")
-        except FileNotFoundError:
-            print(f"❌ 文件不存在。请检查路径是否包含中文/特殊字符（可能导致编码问题）")
-        except ValueError:
-            print("❌ 质量参数错误。请输入数字，如：80")
-        except MemoryError:
-            print("❌ 内存不足！图片太大，当前机器 RAM 不够。")
-            print("   💡 解决：1) 先缩小尺寸再压缩 2) 用专业工具 RIOT 分块处理 3) 换一台内存更大的机器")
-        except Image.DecompressionBombError:
-            print(f"❌ 图片像素超过安全上限（{MAX_IMAGE_PIXELS}像素），可能是解压炸弹")
-            print("   💡 建议用专业图像软件（Photoshop/GIMP）打开后缩小")
-        except Exception as e:
-            print(f"❌ 压缩失败: {e}")
-            # 给出针对性建议
-            err_str = str(e).lower()
-            if "encoder" in err_str:
-                print("   💡 编码器错误，可能是图片格式不支持。尝试转换为 JPG 后再压缩")
-            elif "truncated" in err_str or "broken" in err_str:
-                print("   💡 图片文件不完整或损坏（下载中断？）。尝试用图片查看器打开确认")
-            elif "permission" in err_str:
-                print("   💡 文件权限问题。尝试将图片复制到其他目录后再压缩")
-            elif "cannot identify" in err_str:
-                print("   💡 无法识别文件类型。确认文件是真正的图片（不是修改了扩展名）")
-            else:
-                print("   💡 通用方案：用浏览器打开图片 → 右键另存为 → 再压缩")
+            o,c = os.path.getsize(f)/1024, os.path.getsize(out)/1024
+            rate = 100 - c/o*100 if o>0 else 0
+            print(f"✅ {o:.0f}KB → {c:.0f}KB (降{rate:.0f}%)")
+            if rate<0: print("   💡 已高度压缩，尝试质量=60")
+        except MemoryError: print("❌ 内存不足！缩小尺寸再试")
+        except Exception as e: print(f"❌ {e}")
 ```
 
 </details>
-
-**📦 需确认** ｜ 🌐 [TinyPNG替代](https://tinypng.com/)
-
-**✅ v3.0 改进：** 路径智能修复（自动去引号、规范斜杠） + 函数封装复用。
-
-**✅ v2.0 大文件优化：** >200MB 自动告警 + MemoryError 防护 + DecompressionBomb 防护 + 针对性错误建议。
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| 不警告直接卡住 | 超大文件正在处理 | 属正常现象，百 MB 图片压缩需 1-5 分钟，不要手动关闭终端 |
-| `MemoryError` | RAM 不够加载图片 | 缩小尺寸再压缩；或换台内存更大的机器 |
-| `LOAD_TRUNCATED_IMAGES` | PIL 默认拒绝截断图 | v2.0 已内置开启，无需手动配置 |
-| 输出文件更大 | 原图已高度压缩 | 降到质量 60 或更低；或者用 TinyPNG（有损压缩比 Pillow 更激进）|
-| `No module named 'PIL'` | 没装 Pillow | `pip install Pillow` |
-| `DecompressionBombError` | 图片尺寸超过 180MP | 用 PS/GIMP 缩到 50MP 以下再压缩 |
-| 编码器错误 | 格式不支持 | 转为 JPG 再试 |
-| 权限被拒绝 | 文件被占用或只读 | 复制到另一个目录再压缩 |
-
-**🔧 大文件专业工具：**
-- [RIOT](https://riot-optimizer.com/) — Windows，分块压缩，支持批量
-- [FileOptimizer](https://nikkhokkho.sourceforge.io/static.php?page=FileOptimizer) — Windows，支持 200+ 格式
-- [Squoosh](https://squoosh.app/) — 浏览器内，Google 出品
-- [TinyPNG](https://tinypng.com/) — 在线，每月 500 张免费 |
 
 ---
 
 #### 6.2 人像抠图
 
-自动去除人像背景，输出透明 PNG。**需 rembg + Pillow**。
-
-> 📦 需确认安装：`pip install rembg`
-> ⚠️ 首次运行下载 ~300MB 模型
+📦 **需 rembg**
 
 <details>
 <summary>📋 展开查看命令</summary>
@@ -1256,45 +945,25 @@ else:
 from rembg import remove
 import os
 try:
-    inp = input("图片:").strip().strip('"') or "portrait.jpg"
-    inp = inp.replace("\\", "/").replace("//", "/")
+    inp = input("图片:").strip().strip('"').replace("\\","/") or "portrait.jpg"
     if not os.path.exists(inp):
         print(f"❌ 文件不存在: {inp}")
     else:
         out = f"bg_removed_{os.path.basename(inp)}.png"
-        with open(inp,"rb") as f:
-            result = remove(f.read())
-        with open(out,"wb") as f:
-            f.write(result)
+        result = remove(open(inp,"rb").read())
+        open(out,"wb").write(result)
         print(f"✅ 完成: {out}")
-        print(f"   如抠图效果不理想，可能原因：1) 图片背景太复杂 2) 人像不够清晰")
-except ImportError:
-    print("❌ 缺少 rembg 库。安装命令: pip install rembg")
-except Exception as e:
-    print(f"❌ {e}")
-    if "model" in str(e).lower():
-        print("   提示: 首次运行需下载300MB模型，请确保网络畅通")
+except ImportError: print("❌ 缺少 rembg: pip install rembg")
+except Exception as e: print(f"❌ {e}")
 ```
 
 </details>
-
-**📦 需确认** ｜ 🌐 [remove.bg替代](https://www.remove.bg/)
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| ImportError | 没装 rembg | pip install rembg |
-| 模型下载失败 | 网络问题 | 用代理重试；首次下载慢正常 |
-| 抠图效果差 | 背景太复杂 | 换背景更简单的照片；或手动微调 |
 
 ---
 
 #### 6.3 证件照生成
 
-支持一寸(295×413) / 二寸(413×579)，白色/蓝色/红色背景。**需 Pillow**。
-
-> 📦 需要确认安装：`pip install Pillow`
+📦 **需 Pillow**
 
 <details>
 <summary>📋 展开查看命令</summary>
@@ -1302,50 +971,27 @@ except Exception as e:
 ```python
 from PIL import Image
 try:
-    f = input("照片:").strip().strip('"') or "face.jpg"
-    f = f.replace("\\", "/").replace("//", "/")
-    if not f.lower().endswith(('.jpg','.jpeg','.png','.bmp')):
-        print("⚠️ 可能不支持该格式。建议用 .jpg 或 .png")
+    f = input("照片:").strip().strip('"').replace("\\","/") or "face.jpg"
     sz = input("尺寸(一寸/二寸):").strip() or "一寸"
     bg = input("背景色(白色/蓝色/红色):").strip() or "白色"
     sizes = {"一寸":(295,413),"二寸":(413,579)}
-    if sz not in sizes:
-        print(f"❌ 不支持的尺寸: {sz}。支持: 一寸 / 二寸")
-        sz = "一寸"
-    w,h = sizes[sz]
-    img = Image.open(f).resize((w,h),Image.LANCZOS)
     bgs = {"白色":(255,255,255),"蓝色":(0,0,255),"红色":(255,0,0)}
-    if bg not in bgs:
-        print(f"⚠️ 不支持 {bg} 色，自动用白色")
-        bg = "白色"
-    canvas = Image.new("RGB",(w,h),bgs[bg])
+    w,h = sizes.get(sz, sizes["一寸"])
+    img = Image.open(f).resize((w,h),Image.LANCZOS)
+    canvas = Image.new("RGB",(w,h),bgs.get(bg, (255,255,255)))
     canvas.paste(img,(0,0),img if img.mode=="RGBA" else None)
     canvas.save(f"证件照_{sz}_{bg}.png")
     print(f"✅ 证件照_{sz}_{bg}.png ({w}x{h})")
-except FileNotFoundError:
-    print(f"❌ 文件不存在: {f}")
-except Exception as e:
-    print(f"❌ {e}")
+except Exception as e: print(f"❌ {e}")
 ```
 
 </details>
 
-**📦 需确认** ｜ 🌐 [证件照在线](https://www.idphoto.net/)
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| 不支持的尺寸 | 输错了 | 一寸或二寸 |
-| 文件不存在 | 路径错 | 检查完整路径 |
-
 ---
 
-#### 6.4 图片修复（去噪 + 锐化）
+#### 6.4 图片修复
 
-对老照片做基础去噪和锐化。**仅需 Pillow**。
-
-> 📦 需要确认安装：`pip install Pillow`
+📦 **需 Pillow**
 
 <details>
 <summary>📋 展开查看命令</summary>
@@ -1353,33 +999,17 @@ except Exception as e:
 ```python
 from PIL import Image, ImageEnhance
 try:
-    f = input("老照片路径:").strip().strip('"') or "old.jpg"
-    f = f.replace("\\", "/").replace("//", "/")
+    f = input("老照片路径:").strip().strip('"').replace("\\","/") or "old.jpg"
     img = Image.open(f)
     img = ImageEnhance.Sharpness(img).enhance(1.5)
     img = ImageEnhance.Brightness(img).enhance(1.1)
     img = ImageEnhance.Contrast(img).enhance(1.2)
     img.save("repaired.jpg")
-    print("✅ 完成: repaired.jpg (仅 Pillow, 无需 opencv)")
-except FileNotFoundError:
-    print(f"❌ 文件不存在: {f}")
-except Exception as e:
-    print(f"❌ {e}")
+    print("✅ 完成: repaired.jpg")
+except Exception as e: print(f"❌ {e}")
 ```
 
 </details>
-
-**📦 需确认** ｜ 🌐 [图片修复在线](https://www.imgonline.com.ua/)
-
-**⚠️ 可能遇到的坑：**
-
-| 情况 | 原因 | 说明 |
-|------|------|------|
-| 处理后看不出效果 | 图片模糊严重（软件修复极限） | 传统算法无法恢复严重模糊；尝试 enhance(2.0) 或更高；AI 修复用 Topaz Sharpen AI |
-| 锐化过度出现白边/噪点 | 增强值太高 | 1.5 已适中；降到 1.2 可缓解 |
-| 图片出现色块或变暗 | RGBA 透明通道异常 | 先 convert('RGB') 再修复 |
-| 去噪效果不明显 | Pillow 不支持高级去噪 | 传统算法效果有限；专业需求用 Topaz Denoise AI、Photoshop、或在线 https://www.removenoise.com/ |
-| MemoryError | 图片分辨率太高 | 先用其他工具缩小到 2K 以内再修复 |
 
 ---
 
@@ -1389,9 +1019,7 @@ except Exception as e:
 
 #### 7.1 PDF 合并
 
-多个 PDF 合并为一个文件。**需 PyPDF2**。
-
-> 📦 需要确认安装：`pip install PyPDF2`
+📦 **需 PyPDF2**
 
 <details>
 <summary>📋 展开查看命令</summary>
@@ -1400,94 +1028,38 @@ except Exception as e:
 from PyPDF2 import PdfMerger
 import os
 files = []
-file_size_limit_mb = 500  # 单个文件 500MB 以上警告
-total_size_mb = 0
+total_mb = 0
 try:
     while True:
-        f = input(f"文件{len(files)+1}(回车结束):").strip().strip('"')
-        f = f.replace("\\", "/").replace("//", "/")
+        f = input(f"文件{len(files)+1}(回车结束):").strip().strip('"').replace("\\","/")
         if not f: break
-        if not f.lower().endswith('.pdf'):
-            print(f"⚠️ {f} 可能不是PDF文件，仍尝试添加")
-        if not os.path.exists(f):
-            print(f"❌ 文件不存在: {f}，跳过")
-            continue
-        size_mb = os.path.getsize(f) / 1024 / 1024
-        total_size_mb += size_mb
-        if size_mb > file_size_limit_mb:
-            print(f"⚠️ 文件大小 {size_mb:.0f}MB，合并可能较慢（大 PDF 需逐页加载到内存）")
+        if not os.path.exists(f): print(f"❌ 跳过: {f}"); continue
+        size_mb = os.path.getsize(f)/1024/1024
+        total_mb += size_mb
+        if size_mb > 500: print(f"⚠️ {size_mb:.0f}MB 大文件，合并可能较慢")
         files.append(f)
-    if len(files) < 2:
-        print("❌ 至少需要2个PDF文件合并")
+    if len(files) < 2: print("❌ 至少2个PDF")
     else:
-        if total_size_mb > 100:
-            print(f"⚠️ 总大小 {total_size_mb:.0f}MB，合并可能需要 1-5 分钟，请耐心等待...")
+        if total_mb > 100: print(f"⚠️ 总大小 {total_mb:.0f}MB，需1-5分钟...")
         m = PdfMerger()
-        ok_count = 0
+        ok = 0
         for f in files:
-            try:
-                m.append(f)
-                ok_count += 1
-            except Exception as e:
-                print(f"⚠️ 无法读取: {f} ({e})")
-                print("   💡 可能原因：PDF 已加密、文件损坏、格式不是标准 PDF")
-        if len(m.pages) == 0:
-            print("❌ 所有文件都已损坏或加密。无法继续合并")
+            try: m.append(f); ok+=1
+            except: print(f"⚠️ 跳过损坏文件: {f}")
+        if len(m.pages)==0: print("❌ 全部损坏")
         else:
-            m.write("merged.pdf")
-            m.close()
-            out_size = os.path.getsize("merged.pdf") / 1024 / 1024
-            print(f"✅ 合并完成: merged.pdf ({ok_count}/{len(files)} 个文件, {out_size:.1f}MB)")
-            if ok_count < len(files):
-                print(f"   ⚠️ {len(files) - ok_count} 个文件被跳过，请检查上面警告")
-except ImportError:
-    print("❌ 缺少 PyPDF2。安装: pip install PyPDF2")
-except MemoryError:
-    print("❌ 内存不足！PDF 总大小超出可用 RAM")
-    print("   💡 建议：用 Ghostscript 命令行合并（内存占用更低）：")
-    print("     gswin64c -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -sOutputFile=merged.pdf file1.pdf file2.pdf")
-except Exception as e:
-    print(f"❌ 合并失败: {e}")
-    err_str = str(e).lower()
-    if "password" in err_str or "encrypt" in err_str:
-        print("   💡 PDF 已加密，请先使用本工具 7.4 PDF解密 去除密码再合并")
-    elif "permission" in err_str:
-        print("   💡 权限问题。尝试将文件复制到桌面再合并")
-    elif "read" in err_str:
-        print("   💡 文件读取失败，可能已损坏。尝试用浏览器打开确认")
+            m.write("merged.pdf"); m.close()
+            print(f"✅ merged.pdf ({ok}/{len(files)} 文件, {os.path.getsize('merged.pdf')/1024/1024:.1f}MB)")
+except Exception as e: print(f"❌ {e}")
 ```
 
 </details>
-
-**📦 需确认** ｜ 🌐 [iLovePDF合并](https://www.ilovepdf.com/merge-pdf)
-
-**✅ v3.0 改进：** 路径智能修复（去引号、规范斜杠）
-
-**✅ v2.0 大文件优化：** >500MB 文件警告 + 总大小进度提示 + MemoryError 降级指引（ Ghostscript ）。
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| 合并非常慢 / 卡顿 | 大 PDF 需全部读入内存 | 正常现象，百 MB 级需 1-5 分钟，不要关闭终端 |
-| `MemoryError` | RAM 不够 | 用 Ghostscript 命令行替代（见上方错误提示） |
-| 有文件被跳过 | PDF 加密或损坏 | 先解密（7.4 功能）再合并 |
-| 文件不存在 | 路径错 | 检查完整路径 |
-| `No module named 'PyPDF2'` | 没装 | `pip install PyPDF2` |
-| 输出文件比总和还小 | 有图片被压缩 | PyPDF2 默认会重新编码图片，属正常行为 |
-
-**🔧 超大 PDF（>1GB）专业工具：**
-- Ghostscript: `gswin64c -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -sOutputFile=out.pdf in1.pdf in2.pdf`
-- PDFsam (https://pdfsam.org/) — 图形界面，支持 2GB+ 文件
-- Adobe Acrobat Pro — 商业软件，功能最全 |
 
 ---
 
 #### 7.2 PDF 拆分
 
-按页码提取指定页面。**需 PyPDF2**。
-
-> 📦 需要确认安装：`pip install PyPDF2`
+📦 **需 PyPDF2**
 
 <details>
 <summary>📋 展开查看命令</summary>
@@ -1496,183 +1068,62 @@ except Exception as e:
 from PyPDF2 import PdfReader, PdfWriter
 import os
 try:
-    inp = input("PDF路径:").strip().strip('"') or "source.pdf"
-    inp = inp.replace("\\", "/").replace("//", "/")
-    pgs = input("页码(如 1-3 或 2,5):").strip() or "1-3"
-    if not inp.lower().endswith('.pdf'):
-        print("⚠️ 文件可能不是PDF格式，但如果实际是 PDF 仍可尝试")
-    if not os.path.exists(inp):
-        print(f"❌ 文件不存在: {inp}")
-        print("   💡 检查：路径中的斜杠方向；文件名大小写是否一致")
+    inp = input("PDF路径:").strip().strip('"').replace("\\","/") or "source.pdf"
+    pgs = input("页码(如 1-3):").strip() or "1-3"
+    if not os.path.exists(inp): print("❌ 文件不存在")
     else:
-        file_size_mb = os.path.getsize(inp) / 1024 / 1024
-        if file_size_mb > 200:
-            print(f"⚠️ 文件大小 {file_size_mb:.0f}MB，加载可能需要 30秒~2 分钟...")
         r = PdfReader(inp)
-        if r.is_encrypted:
-            print("❌ PDF 已加密，无法直接拆分。请先使用 7.4 PDF解密！")
+        if r.is_encrypted: print("❌ 已加密，请先解密！")
         else:
-            w = PdfWriter()
-            total = len(r.pages)
-            added = 0
-            invalid_pages = []
+            w = PdfWriter(); total = len(r.pages); added = 0
             for p in pgs.split(","):
                 if "-" in p:
-                    parts = p.split("-")
-                    if len(parts) != 2:
-                        print(f"⚠️ 格式错误: '{p}'。正确格式如 1-3")
-                        continue
-                    s,e = map(int, parts)
-                    if s < 1 or e > total:
-                        invalid_pages.append(f"{s}-{e}")
-                    elif s > e:
-                        print(f"⚠️ 起始页 {s} 大于结束页 {e}，已自动交换")
-                        s, e = e, s
-                        for i in range(s-1, e):
-                            w.add_page(r.pages[i])
-                            added += 1
-                    else:
-                        for i in range(s-1, e):
-                            w.add_page(r.pages[i])
-                            added += 1
+                    s,e = map(int, p.split("-"))
+                    if s>e: s,e = e,s
+                    for i in range(max(0,s-1),min(e,total)):
+                        w.add_page(r.pages[i]); added+=1
                 else:
-                    try:
-                        idx = int(p)-1
-                        if 0 <= idx < total:
-                            w.add_page(r.pages[idx])
-                            added += 1
-                        else:
-                            invalid_pages.append(p)
-                    except ValueError:
-                        print(f"⚠️ 无效的页码: '{p}'，已跳过")
-            if invalid_pages:
-                print(f"⚠️ 以下页码超出范围 (1-{total}) 已跳过: {', '.join(invalid_pages)}")
-            if added == 0:
-                print("❌ 没有添加任何页面，请检查页码格式")
-            else:
-                w.write("extracted.pdf")
-                out_size = os.path.getsize("extracted.pdf") / 1024
-                print(f"✅ 完成: extracted.pdf ({added}页, {out_size:.0f}KB)")
-                if added < total:
-                    print(f"   💡 源文件共 {total} 页，本次提取 {added} 页")
-except ImportError:
-    print("❌ 缺少 PyPDF2。安装: pip install PyPDF2")
-except FileNotFoundError:
-    print(f"❌ 文件不存在: {inp}")
-    print("   💡 检查路径中的中文/特殊字符；可以复制文件到桌面后输入 C:\\Users\\用户名\\桌面\\文件名.pdf")
-except Exception as e:
-    print(f"❌ {e}")
-    err_str = str(e).lower()
-    if "password" in err_str or "encrypt" in err_str:
-        print("   💡 PDF 已加密。先使用 7.4 PDF解密 再拆分")
-    elif "permission" in err_str:
-        print("   💡 权限问题。将文件复制到其他目录再试")
+                    idx = int(p)-1
+                    if 0<=idx<total: w.add_page(r.pages[idx]); added+=1
+            w.write("extracted.pdf")
+            print(f"✅ extracted.pdf ({added}页)")
+except Exception as e: print(f"❌ {e}")
 ```
 
 </details>
 
-**📦 需确认** ｜ 🌐 [iLovePDF拆分](https://www.ilovepdf.com/split-pdf)
-
-**✅ v2.0 大文件优化：** >200MB 告警 + 进度提示 + 输入格式自动纠正。
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| 卡在"加载中" | 大文件需全部读入内存 | 百 MB 级需 30秒~2分钟，属正常现象 |
-| 页码超范围提示 | 输入了不存在的页码 | 读错误信息中 (1-N) 的范围，重新输入 |
-| 起始 > 结束 | 手误输入了 5-3 | v2.0 已自动交换，无需手动纠正 |
-| 加密 PDF 拒绝处理 | PDF 有密码 | 先 7.4 解密再拆分 |
-| 文件不存在 | 路径错或含特殊字符 | 复制到桌面，输入完整路径 |
-
 ---
 
-#### 7.3 PDF 加密
+#### 7.3 PDF 加密 / 7.4 PDF 解密
 
-设置打开密码。**需 PyPDF2**。
-
-> 📦 需要确认安装：`pip install PyPDF2`
+📦 **需 PyPDF2**
 
 <details>
 <summary>📋 展开查看命令</summary>
 
 ```python
 from PyPDF2 import PdfReader, PdfWriter
-try:
-    inp = input("PDF路径:").strip().strip('"') or "source.pdf"
-    inp = inp.replace("\\", "/").replace("//", "/")
-    pwd = input("密码:").strip()
-    if not pwd:
-        print("❌ 密码不能为空")
-    elif len(pwd) < 4:
-        print("⚠️ 密码太短，建议4位以上")
-    else:
-        r = PdfReader(inp); w = PdfWriter()
-        for p in r.pages: w.add_page(p)
-        w.encrypt(pwd)
-        w.write("encrypted.pdf")
-        print("✅ 完成: encrypted.pdf (密码不保存, 丢失无法恢复!)")
-except ImportError:
-    print("❌ 缺少 PyPDF2。安装: pip install PyPDF2")
-except Exception as e:
-    print(f"❌ {e}")
+# 加密
+inp = input("PDF路径:").strip().strip('"') or "source.pdf"
+pwd = input("密码:").strip()
+if len(pwd)<4: print("⚠️ 密码太短")
+else:
+    r=PdfReader(inp); w=PdfWriter()
+    for p in r.pages: w.add_page(p)
+    w.encrypt(pwd); w.write("encrypted.pdf")
+    print("✅ encrypted.pdf (密码丢失无法恢复!)")
+
+# 解密
+inp = input("加密PDF:").strip().strip('"') or "encrypted.pdf"
+pwd = input("密码:").strip()
+r=PdfReader(inp)
+if r.is_encrypted: r.decrypt(pwd)
+w=PdfWriter()
+for p in r.pages: w.add_page(p)
+w.write("decrypted.pdf"); print("✅ decrypted.pdf")
 ```
 
 </details>
-
-**📦 需确认** ｜ 🌐 [iLovePDF加密](https://www.ilovepdf.com/encrypt-pdf)
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| 密码为空 | 没输入密码 | 输入至少4位密码 |
-| 丢失密码 | 没有找回方式 | 截图保存密码 |
-
----
-
-#### 7.4 PDF 解密
-
-用密码解密加密的 PDF。**需 PyPDF2**。
-
-> 📦 需要确认安装：`pip install PyPDF2`
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-from PyPDF2 import PdfReader, PdfWriter
-try:
-    inp = input("加密PDF:").strip().strip('"') or "encrypted.pdf"
-    inp = inp.replace("\\", "/").replace("//", "/")
-    pwd = input("密码:").strip()
-    if not pwd:
-        print("❌ 密码不能为空")
-    else:
-        r = PdfReader(inp)
-        if r.is_encrypted:
-            r.decrypt(pwd)
-        w = PdfWriter()
-        for p in r.pages: w.add_page(p)
-        w.write("decrypted.pdf")
-        print("✅ 完成: decrypted.pdf")
-except ImportError:
-    print("❌ 缺少 PyPDF2。安装: pip install PyPDF2")
-except Exception as e:
-    print(f"❌ {e}")
-    print("   可能原因: 密码错误 / 文件损坏")
-```
-
-</details>
-
-**📦 需确认** ｜ 🌐 [iLovePDF解密](https://www.ilovepdf.com/unlock-pdf)
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| 解密失败 | 密码错误 | 确认正确密码 |
-| 文件损坏 | PDF本身问题 | 尝试用其他PDF打开 |
 
 ---
 
@@ -1680,576 +1131,511 @@ except Exception as e:
 
 ---
 
-#### 8.1 视频格式转换
+#### 8.1 视频格式转换 / 8.2 视频编辑 / 8.3 在线录屏
 
-MP4 / AVI / MOV / GIF 互转。**需 FFmpeg**。
+📦 **需 FFmpeg**
 
-> 📦 FFmpeg 安装：
-> - Windows: `winget install ffmpeg` 或一键安装脚本（见依赖管理）
-> - macOS: `brew install ffmpeg`
-> - Linux: `sudo apt install ffmpeg`
+> 详见下方「📦 依赖管理」章节。
 
 <details>
-<summary>📋 展开查看命令</summary>
+<summary>📋 视频格式转换命令</summary>
 
 ```python
 import subprocess, os
-try:
-    f = input("文件:").strip().strip('"') or "video.mp4"
-    f = f.replace("\\", "/").replace("//", "/")
-    o = input("格式(gif/mp4/avi/mov/webm):").strip() or "gif"
-    out = f"{os.path.splitext(f)[0]}.{o}"
-    if not os.path.exists(f):
-        print(f"❌ 文件不存在: {f}")
-        print("   💡 检查：路径中是否包含中文符号（如 ：【】）；复制到英文路径再试")
-    else:
-        file_size_mb = os.path.getsize(f) / 1024 / 1024
-        if file_size_mb > 500:
-            print(f"⚠️ 文件 {file_size_mb:.0f}MB，转换可能需要 5-30 分钟...")
-            print("   💡 大文件提示：")
-            print("     • 确保磁盘剩余空间 > 文件大小的 2 倍")
-            print("     • 转换为 GIF 也需用 `-vf scale=480:-1'` 缩小分辨率，否则 GIF 会巨大")
-            print("     • 大文件转换建议直接用 FFmpeg 命令行，可自己调参数")
-        r = subprocess.run(
-            ["ffmpeg", "-i", f, "-y"]
-            + (["-vf", "scale=480:-1"] if o == "gif" and file_size_mb > 50 else [])
-            + [out],
-            capture_output=True, text=True, timeout=1800  # 30 分钟超时
-        )
-        if r.returncode == 0:
-            out_size = os.path.getsize(out) / 1024
-            print(f"✅ 完成: {out} ({out_size:.0f}KB)")
-            if out_size == 0:
-                print("   ⚠️ 输出文件 0KB，可能转换失败。查看 stderr：")
-                print(f"     {r.stderr[:300]}")
-        else:
-            err = r.stderr[:500] if r.stderr else "无错误信息"
-            print(f"❌ 转换失败: {err}")
-            print("   💡 常见原因：")
-            print("     1) 目标格式不支持源编码 → 先用 `-c:v libx264` 转 H.264 再转目标格式")
-            print("     2) 源文件损坏 → 用播放器确认视频能正常播放")
-            print("     3) 磁盘空间不足 → 清理空间或换输出路径")
-            print("     4) 分辨率太大 → 加 `-vf scale=1280:-1'` 缩小")
-except FileNotFoundError:
-    print("❌ ffmpeg 未安装或未加入 PATH")
-    print("   💡 安装方法：")
-    print("     Windows: winget install ffmpeg  或 下载 https://github.com/BtbN/FFmpeg-Builds/releases")
-    print("     macOS: brew install ffmpeg")
-    print("     Linux: sudo apt install ffmpeg")
-    print("   💡 安装后关闭终端重新打开，让 PATH 生效")
-    print("   💡 dgngjx-skill v3.0 配套一键安装脚本见「📦 依赖管理」章节")
-except subprocess.TimeoutExpired:
-    print("❌ 转换超时（超过 30 分钟）！")
-    print("   💡 可能是文件太大或参数不适合。建议：")
-    print("     • 先分割视频，分段转换")
-    print("     • 用专业工具：HandBrake https://handbrake.fr/")
-    print("     • 在线转换：CloudConvert https://cloudconvert.com/")
-except Exception as e:
-    print(f"❌ {e}")
+f = input("文件:").strip().strip('"').replace("\\","/") or "video.mp4"
+o = input("格式(gif/mp4/avi/mov/webm):").strip() or "gif"
+out = f"{os.path.splitext(f)[0]}.{o}"
+if not os.path.exists(f): print(f"❌ 文件不存在: {f}")
+else:
+    size = os.path.getsize(f)/1024/1024
+    if size>500: print(f"⚠️ {size:.0f}MB 可能需5-30分钟")
+    r = subprocess.run(["ffmpeg","-i",f,"-y"]
+        + (["-vf","scale=480:-1"] if o=="gif" and size>50 else [])
+        + [out], capture_output=True, text=True, timeout=1800)
+    if r.returncode==0: print(f"✅ {out} ({os.path.getsize(out)/1024:.0f}KB)")
+    else: print(f"❌ {r.stderr[:300]}")
 ```
 
 </details>
 
-**📦 需确认** ｜ 🌐 [CloudConvert替代](https://cloudconvert.com/)
-
-**✅ v3.0 改进：** 路径智能修复 + 一键安装脚本引用。
-
-**✅ v2.0 大文件优化：** >500MB 告警 + 自动给大 GIF 缩小分辨率 + 30 分钟超时 + 针对性错误建议。
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| 转换时间超长 | 文件太大或分辨率太高 | 缩小分辨率（加 `-vf scale=1280:-1'`）；换用 HandBrake |
-| 输出文件 0KB | 转换失败但未报错 | 看 stderr；通常是编码不兼容 |
-| `ffmpeg 不在 PATH` | 安装时没勾选"添加到PATH" | 重新安装并勾选；手动添加 bin 目录到环境变量 |
-| 转换超时 30 分钟 | 机器性能不足或文件极大 | 换专业软件（HandBrake / Shutter Encoder）|
-| GIF 文件巨大 | 原视频分辨率高 | v2.0 >50MB 自动缩小到 480px 宽，也可手动加 `-vf scale=320:-1'` |
-
-**🔧 视频专业工具：**
-- [HandBrake](https://handbrake.fr/) — 免费开源，支持 4K/HDR/批量
-- [Shutter Encoder](https://www.shutterencoder.com/) — 专业级，支持 100+ 格式
-- [CloudConvert](https://cloudconvert.com/) — 在线，25 次/天免费 |
-
----
-
-#### 8.2 视频编辑工具 ⭐ v3.0 重大升级
-
-裁剪、拼接、提取音频、添加水印、视频截图、信息查看。**需 FFmpeg**。
-
-> 📦 FFmpeg 安装：见上方「📦 依赖管理」
-
 <details>
-<summary>📋 展开查看命令（v3.0 增强版）</summary>
+<summary>📋 视频编辑命令（6功能菜单）</summary>
 
 ```python
 import subprocess, os, json
 
-def _fix_path(p: str) -> str:
-    """修复用户输入的文件路径"""
-    p = p.strip().strip('"').strip("'")
-    return p.replace("\\", "/").replace("//", "/")
+def _fix(p): return p.strip().strip('"').strip("'").replace("\\","/").replace("//","/")
 
-def _video_info(f: str) -> dict | None:
-    """获取视频信息（时长、分辨率、编码等）"""
-    try:
-        r = subprocess.run(
-            ["ffprobe", "-v", "quiet", "-print_format", "json",
-             "-show_format", "-show_streams", f],
-            capture_output=True, text=True, timeout=30
-        )
-        if r.returncode == 0:
-            return json.loads(r.stdout)
-    except Exception:
-        pass
-    return None
+def _info(f):
+    r = subprocess.run(["ffprobe","-v","quiet","-print_format","json","-show_format","-show_streams",f], capture_output=True, text=True, timeout=30)
+    return json.loads(r.stdout) if r.returncode==0 else None
 
-try:
-    print("=" * 50)
-    print("  视频编辑工具箱 v3.0")
-    print("=" * 50)
-    print("  1. 裁剪视频（截取片段）")
-    print("  2. 拼接视频（合并多段）")
-    print("  3. 提取音频（视频转 MP3）")
-    print("  4. 添加水印 ⭐ 新增")
-    print("  5. 视频截图 ⭐ 新增")
-    print("  6. 查看信息 ⭐ 新增")
-    print("=" * 50)
-    act = input("操作(1-6):").strip() or "1"
-    
-    if act == "1":  # 裁剪
-        f = _fix_path(input("文件:") or "video.mp4")
-        s = input("开始时间(HH:MM:SS):") or "00:01:00"
-        t = input("时长(HH:MM:SS):") or "00:02:00"
-        if not os.path.exists(f):
-            print(f"❌ 文件不存在: {f}")
-        else:
-            mb = os.path.getsize(f) / 1024 / 1024
-            if mb > 500:
-                print(f"⚠️ 文件 {mb:.0f}MB，裁剪可能需要 5-30 分钟...")
-            r = subprocess.run(["ffmpeg","-i",f,"-ss",s,"-t",t,"-c:v","libx264","-c:a","aac","clipped.mp4"],
-                             capture_output=True, text=True, timeout=1800)
-            if r.returncode == 0:
-                print(f"✅ 完成: clipped.mp4 ({os.path.getsize('clipped.mp4')/1024:.0f}KB)")
-            else:
-                print(f"❌ 失败: {r.stderr[:300]}")
-                print("   💡 请检查时间格式，或尝试用 -c copy 模式")
-    
-    elif act == "2":  # 拼接
-        fs = _fix_path(input("文件(逗号):") or "a.mp4,b.mp4")
-        file_list = [x.strip() for x in fs.split(",") if x.strip()]
-        # 验证所有文件存在
-        missing = [x for x in file_list if not os.path.exists(x)]
-        if missing:
-            print(f"❌ 文件不存在: {', '.join(missing)}")
-        else:
-            with open("files.txt","w",encoding="utf-8") as tf:
-                for x in file_list: tf.write(f"file '{x}'\n")
-            r = subprocess.run(["ffmpeg","-f","concat","-safe","0","-i","files.txt","-c:v","libx264","-c:a","aac","joined.mp4"],
-                             capture_output=True, text=True, timeout=1800)
-            if r.returncode == 0:
-                print(f"✅ 完成: joined.mp4 ({os.path.getsize('joined.mp4')/1024:.0f}KB)")
-            else:
-                print(f"❌ 拼接失败: {r.stderr[:300]}")
-                print("   💡 文件编码可能不统一，先用格式转换统一编码")
-    
-    elif act == "3":  # 提取音频
-        f = _fix_path(input("文件:") or "video.mp4")
-        if not os.path.exists(f):
-            print(f"❌ 文件不存在: {f}")
-        else:
-            r = subprocess.run(["ffmpeg","-i",f","-vn","-acodec","libmp3lame","-q:a","2","audio.mp3"],
-                             capture_output=True, text=True, timeout=1800)
-            if r.returncode == 0:
-                print(f"✅ 完成: audio.mp3 ({os.path.getsize('audio.mp3')/1024:.0f}KB)")
-            else:
-                print(f"❌ 提取音频失败: {r.stderr[:300]}")
-    
-    elif act == "4":  # 添加水印 ⭐ v3.0 新增
-        f = _fix_path(input("文件:") or "video.mp4")
-        text = input("水印文字:") or "dgngjx-skill"
-        pos = input("位置(左上/右上/左下/右下):") or "右下"
-        if not os.path.exists(f):
-            print(f"❌ 文件不存在: {f}")
-        else:
-            pos_map = {"左上":"10:10","右上":"main_w-text_w-10:10",
-                       "左下":"10:main_h-text_h-10","右下":"main_w-text_w-10:main_h-text_h-10"}
-            xy = pos_map.get(pos, pos_map["右下"])
-            r = subprocess.run(
-                ["ffmpeg","-i",f,"-vf",
-                 f"drawtext=text='{text}':fontcolor=white@0.7:fontsize=24:x={xy.split(':')[0]}:y={xy.split(':')[1]}",
-                 "-c:a","copy","watermarked.mp4"],
-                capture_output=True, text=True, timeout=1800
-            )
-            if r.returncode == 0:
-                print(f"✅ 完成: watermarked.mp4 ({os.path.getsize('watermarked.mp4')/1024:.0f}KB)")
-            else:
-                print(f"❌ 添加水印失败: {r.stderr[:300]}")
-                print("   💡 drawtext 需要 FFmpeg 编译时启用 --enable-libfreetype")
-                print("     如报错，请下载带 libfreetype 的 FFmpeg 版本")
-    
-    elif act == "5":  # 视频截图 ⭐ v3.0 新增
-        f = _fix_path(input("文件:") or "video.mp4")
-        t = input("时间点(HH:MM:SS):") or "00:00:05"
-        if not os.path.exists(f):
-            print(f"❌ 文件不存在: {f}")
-        else:
-            r = subprocess.run(
-                ["ffmpeg","-ss",t,"-i",f","-frames:v","1","-q:v","2","frame.jpg"],
-                capture_output=True, text=True, timeout=60
-            )
-            if r.returncode == 0:
-                print(f"✅ 完成: frame.jpg ({os.path.getsize('frame.jpg')/1024:.0f}KB)")
-            else:
-                print(f"❌ 截图失败: {r.stderr[:300]}")
-    
-    elif act == "6":  # 查看信息 ⭐ v3.0 新增
-        f = _fix_path(input("文件:") or "video.mp4")
-        if not os.path.exists(f):
-            print(f"❌ 文件不存在: {f}")
-        else:
-            info = _video_info(f)
-            if info:
-                fmt = info.get("format", {})
-                streams = info.get("streams", [])
-                duration = float(fmt.get("duration", 0))
-                size_mb = int(fmt.get("size", 0)) / 1024 / 1024
-                mins, secs = divmod(int(duration), 60)
-                hours, mins = divmod(mins, 60)
-                print(f"📹 视频信息: {f}")
-                print(f"   时长: {hours:02d}:{mins:02d}:{secs:02d}")
-                print(f"   大小: {size_mb:.1f}MB")
-                print(f"   格式: {fmt.get('format_name', 'unknown')}")
-                for s in streams:
-                    if s.get("codec_type") == "video":
-                        print(f"   视频编码: {s.get('codec_name','?')} {s.get('width','?')}x{s.get('height','?')} {eval(s.get('r_frame_rate','0')):.0f}fps")
-                    elif s.get("codec_type") == "audio":
-                        print(f"   音频编码: {s.get('codec_name','?')} {s.get('sample_rate','?')}Hz {s.get('channels','?')}ch")
-            else:
-                # 降级：用 ffmpeg 简单信息
-                r = subprocess.run(["ffmpeg","-i",f], capture_output=True, text=True, timeout=30)
-                # ffmpeg 输出到 stderr
-                lines = r.stderr.split("\n")
-                for line in lines:
-                    if "Duration" in line or "Stream" in line:
-                        print(f"   {line.strip()}")
-    
-    else:
-        print(f"❌ 选项 {act} 不存在。请输入 1-6")
-except FileNotFoundError:
-    print("❌ ffmpeg 未安装或不在 PATH")
-    print("   💡 Windows: winget install ffmpeg")
-    print("   💡 dgngjx-skill v3.0 配套一键安装脚本见「📦 依赖管理」章节")
-except subprocess.TimeoutExpired:
-    print("❌ 操作超时（超过30分钟）！大文件建议分块或用 HandBrake")
-except Exception as e:
-    print(f"❌ {e}")
+act = input("操作(1裁剪/2拼接/3提取音频/4水印/5截图/6信息):").strip() or "1"
+if act=="6":
+    f = _fix(input("文件:") or "video.mp4")
+    info = _info(f)
+    if info:
+        dur = float(info.get("format",{}).get("duration",0))
+        print(f"时长: {int(dur//3600):02d}:{int((dur%3600)//60):02d}:{int(dur%60):02d}")
+        print(f"大小: {int(info.get('format',{}).get('size',0))/1024/1024:.1f}MB")
+        for s in info.get("streams",[]):
+            if s.get("codec_type")=="video": print(f"视频: {s.get('codec_name','?')} {s.get('width','?')}x{s.get('height','?')}")
+            elif s.get("codec_type")=="audio": print(f"音频: {s.get('codec_name','?')} {s.get('sample_rate','?')}Hz")
 ```
 
 </details>
 
-**📦 需确认** ｜ 🌐 [ClipConverter替代](https://www.clipconverter.cc/)
+---
 
-**✨ v3.0 改进亮点：**
-
-| 功能 | v2.x | v3.0 |
-|------|------|------|
-| 裁剪/拼接/提取音频 | ✅ | ✅ |
-| 添加水印（文字） | ❌ | ✅ 支持四角位置 |
-| 视频截图 | ❌ | ✅ 指定时间点 |
-| 视频信息查看 | ❌ | ✅ 时长/编码/分辨率/fps |
-| 路径智能修复 | ❌ | ✅ 去引号+规范斜杠 |
-| 拼接安全性 | -safe 缺失 | -safe 0 + utf-8 编码 |
-
-**⚠️ 可能遇到的坑：**
-
-| 报错/问题 | 原因 | 解决 |
-|---------|------|------|
-| 操作超时 | 文件太大或机器性能不足 | 先用裁剪功能剪出需要片段；再用 HandBrake 转码 |
-| 拼接失败 | 各文件编码/分辨率不一致 | 先用格式转换统一编码 |
-| 裁剪后的视频没声音 | 用了 `-c copy` 复制流 | v3.0 已改为 `-c:v libx264 -c:a aac` 重新编码 |
-| 水印功能报错 | FFmpeg 未编译 libfreetype | 下载带 libfreetype 的 FFmpeg（gyan.dev 版本） |
+### 🛠️ 模块 9：实用小工具
 
 ---
 
-#### 8.3 在线录屏
-
-使用浏览器 MediaRecorder API 录制浏览器标签页（仅限浏览器内）。
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```javascript
-// 在浏览器控制台或 HTML 页面中运行
-navigator.mediaDevices.getDisplayMedia({video:true,audio:true})
-  .then(stream => {
-    const rec = new MediaRecorder(stream);
-    const chunks = [];
-    rec.ondataavailable = e => chunks.push(e.data);
-    rec.onstop = () => {
-      const blob = new Blob(chunks, {type:'video/webm'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'screen-recording.webm';
-      a.click();
-    };
-    rec.start(); setTimeout(()=>rec.stop(), 10000); // 录10秒
-  });
-```
-
-</details>
-
-**✅ 开箱即用**（浏览器内运行，无需安装）
-
----
-
-### 🛠️ 模块 9：实用小工具 ⭐ v3.0 新增模块
-
----
-
-#### 9.1 二维码生成
-
-将任意文本/URL 生成二维码图片。零依赖（使用在线API）。
-
-```
-输入: https://www.example.com
-输出: 📱 二维码已生成: https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://www.example.com
-```
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import urllib.parse, os
-
-def _qrcode_online(text: str, size: int = 300) -> str:
-    """生成二维码 URL（使用在线API，零依赖）"""
-    encoded = urllib.parse.quote(text, safe='')
-    return f"https://api.qrserver.com/v1/create-qr-code/?size={size}x{size}&data={encoded}"
-
-def _qrcode_save(text: str, filename: str = "qrcode.png", size: int = 300) -> bool:
-    """生成二维码并保存到本地（需要 Pillow + qrcode 库）"""
-    try:
-        import qrcode
-        from PIL import Image
-        img = qrcode.make(text)
-        img = img.resize((size, size), Image.NEAREST)
-        img.save(filename)
-        return True
-    except ImportError:
-        return False
-
-try:
-    text = input("内容/URL:") or "https://www.example.com"
-    if not text.strip():
-        print("❌ 内容不能为空")
-    else:
-        # 优先尝试本地生成
-        if _qrcode_save(text):
-            print(f"✅ 已保存: qrcode.png")
-            print(f"   扫码内容: {text}")
-        else:
-            # 降级到在线API
-            url = _qrcode_online(text)
-            print(f"📱 二维码 URL（复制到浏览器打开即可下载）：")
-            print(f"   {url}")
-            print(f"   💡 如需本地保存，安装依赖: pip install qrcode[pil]")
-            print(f"   💡 或使用在线工具: https://www.qr-code-generator.com/")
-except Exception as e:
-    print(f"❌ {e}")
-```
-
-</details>
-
-**✅ 开箱即用**（在线API模式） ｜ 📦 可选安装 `pip install qrcode[pil]`（本地保存）
-
-**⚠️ 可能遇到的坑：**
-
-| 情况 | 原因 | 解决 |
-|------|------|------|
-| 在线 API 被墙 | 网络限制 | 用 `pip install qrcode[pil]` 本地生成 |
-| 内容太长二维码密集 | 二维码容量限制 | 缩短文本，或拆分多个二维码 |
-| 需要自定义样式 | 在线API只生成标准图 | 用本地 `qrcode` 库可自定义颜色/尺寸 |
-
----
-
-#### 9.2 随机密码生成器
-
-生成高强度随机密码，支持自定义长度和字符集。
-
-```
-输出: 🔐 生成的密码: x7K#mP2$vL9!nQ4&
-        强度: ★★★★★ (16位含大小写+数字+特殊字符)
-        熵值: 95.3 bits
-```
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import random, string, math
-
-try:
-    length = int(input("密码长度(8-64,默认16):") or 16)
-    length = max(8, min(64, length))
-    
-    use_upper = input("含大写字母?(Y/n):").strip().lower() != 'n'
-    use_lower = input("含小写字母?(Y/n):").strip().lower() != 'n'
-    use_digits = input("含数字?(Y/n):").strip().lower() != 'n'
-    use_special = input("含特殊字符?(Y/n):").strip().lower() != 'n'
-    exclude_ambiguous = input("排除易混淆字符(0O1lI)?(y/N):").strip().lower() == 'y'
-    
-    chars = ""
-    if use_upper: chars += string.ascii_uppercase
-    if use_lower: chars += string.ascii_lowercase
-    if use_digits: chars += string.digits
-    if use_special: chars += "!@#$%^&*()_+-=[]{}|;':\",./<>?"
-    
-    if not chars:
-        print("❌ 至少选择一种字符类型")
-    else:
-        if exclude_ambiguous:
-            chars = chars.replace('0','').replace('O','').replace('1','').replace('l','').replace('I','')
-        
-        # 确保每种选中的字符类型至少有一个
-        password = []
-        if use_upper: password.append(random.choice(string.ascii_uppercase))
-        if use_lower: password.append(random.choice(string.ascii_lowercase))
-        if use_digits: password.append(random.choice(string.digits))
-        if use_special: password.append(random.choice("!@#$%^&*"))
-        
-        # 剩余随机填充
-        for _ in range(length - len(password)):
-            password.append(random.choice(chars))
-        
-        # 打乱顺序
-        random.shuffle(password)
-        pwd = ''.join(password)
-        
-        # 计算熵值
-        entropy = length * math.log2(len(chars))
-        
-        # 计算强度等级
-        if entropy >= 80: strength = "★★★★★ (极强)"
-        elif entropy >= 60: strength = "★★★★☆ (强)"
-        elif entropy >= 40: strength = "★★★☆☆ (中)"
-        elif entropy >= 28: strength = "★★☆☆☆ (弱)"
-        else: strength = "★☆☆☆☆ (极弱)"
-        
-        print(f"\n🔐 生成的密码: {pwd}")
-        print(f"   强度: {strength}")
-        print(f"   熵值: {entropy:.1f} bits")
-        print(f"   长度: {length} 位")
-        print(f"\n   💡 建议: 密码强度 ≥ 60 bits 方可用于重要账户")
-        print(f"   💡 每个网站使用不同密码，推荐使用密码管理器")
-        print(f"   💡 推荐: Bitwarden (免费开源) / KeePassXC")
-except ValueError:
-    print("❌ 长度输入错误，请输入数字（8-64）")
-except Exception as e:
-    print(f"❌ {e}")
-```
-
-</details>
+#### 9.1 二维码生成 / 9.2 密码生成 / 9.3 正则测试
 
 **✅ 开箱即用**
 
-**⚠️ 可能遇到的坑：**
+<details>
+<summary>📋 二维码生成</summary>
 
-| 情况 | 原因 | 解决 |
-|------|------|------|
-| 生成的密码不包含某类字符 | 该类字符可能在 shuffle 后被移到后面 | 工具已保证每类至少1个，可在输出中查看 |
-| 需要更长的密码 | 默认上限64位 | 修改 `min(64, length)` 中的数值 |
-| 需要在脚本中调用 | 交互式输入不适合脚本 | 直接调用 `random.choice(chars)` |
+```python
+import urllib.parse
+text = input("内容/URL:") or "https://www.example.com"
+url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={urllib.parse.quote(text,safe='')}"
+print(f"📱 复制到浏览器下载: {url}")
+```
+
+</details>
+
+<details>
+<summary>📋 密码生成器</summary>
+
+```python
+import random, string, math
+length = int(input("密码长度(16):") or 16)
+chars = string.ascii_letters + string.digits + "!@#$%^&*"
+pwd = ''.join(random.choice(chars) for _ in range(length))
+entropy = length * math.log2(len(chars))
+print(f"🔐 {pwd}")
+print(f"强度: {'★★★★★' if entropy>=80 else '★★★★☆' if entropy>=60 else '★★★☆☆'} ({entropy:.1f} bits)")
+```
+
+</details>
+
+<details>
+<summary>📋 正则测试器</summary>
+
+```python
+import re
+p = input("正则:") or r"\b\w+@\w+\.\w+\b"
+t = input("文本:") or "test@example.com"
+try:
+    m = re.findall(p, t)
+    print(f"✅ 找到 {len(m)} 个: {m}" if m else "❌ 无匹配")
+except re.error as e: print(f"❌ 语法错误: {e}")
+```
+
+</details>
 
 ---
 
-#### 9.3 正则表达式测试器
+### 🖥️ 模块 10：系统工具 ⭐ v3.5 新增模块
 
-实时测试正则表达式是否匹配文本，显示匹配结果和分组。
+---
 
-```
-输入: 正则: \b\w+@\w+\.\w+\b
-      文本: 联系我：test@example.com 或 admin@test.org
-输出: ✅ 找到 2 个匹配:
-       1. test@example.com
-       2. admin@test.org
-```
+#### 10.1 系统资源监控 ⭐ v3.5.0 新增
+
+**✅ 开箱即用**
+
+实时监控 CPU、内存、磁盘使用率，返回中文信息。
 
 <details>
 <summary>📋 展开查看命令</summary>
 
 ```python
-import re
+import os, platform, subprocess, time
 
-try:
-    pattern = input("正则表达式:") or r"\b\w+@\w+\.\w+\b"
-    text = input("测试文本:") or "联系我：test@example.com 或 admin@test.org"
+def get_system_resources():
+    """获取系统资源信息（跨Windows/macOS/Linux）"""
+    info = {'cpu_usage': 0, 'ram_total_mb': 0, 'ram_used_mb': 0, 'ram_percent': 0,
+            'disk_total_gb': 0, 'disk_used_gb': 0, 'disk_percent': 0,
+            'cpu_count': os.cpu_count() or 2, 'platform': platform.system()}
     
-    if not pattern.strip():
-        print("❌ 正则表达式不能为空")
-    elif not text.strip():
-        print("❌ 测试文本不能为空")
-    else:
-        try:
-            compiled = re.compile(pattern)
-        except re.error as e:
-            print(f"❌ 正则表达式语法错误: {e}")
-            print("   💡 常见错误：")
-            print("     • 括号不匹配：(a+b → (a+b)")
-            print("     • 量词误用：a{1,3} 而非 a〔1,3〕")
-            print("     • 特殊字符未转义：. * + ? → \\. \\* \\+ \\?")
-            raise SystemExit
-        
-        # 查找所有匹配
-        matches = list(compiled.finditer(text))
-        
-        if not matches:
-            print("❌ 没有匹配结果")
-            print("   💡 尝试简化正则，或使用 https://regex101.com/ 可视化调试")
+    # CPU 使用率
+    try:
+        if info['platform'] == 'Windows':
+            r = subprocess.run(['wmic','cpu','get','loadpercentage'], capture_output=True, text=True, timeout=5)
+            lines = [l.strip() for l in r.stdout.split('\n') if l.strip().isdigit()]
+            info['cpu_usage'] = int(lines[0]) if lines else 0
         else:
-            print(f"✅ 找到 {len(matches)} 个匹配:")
-            for i, m in enumerate(matches, 1):
-                print(f"\n   [{i}] {m.group()}")
-                print(f"       位置: {m.start()}-{m.end()}")
-                groups = m.groups()
-                if groups:
-                    for j, g in enumerate(groups, 1):
-                        print(f"       分组{j}: {g}")
-            
-            # 替换预览
-            print(f"\n💡 替换预览（将匹配项替换为 [MATCH]）：")
-            preview = compiled.sub("[MATCH]", text)
-            if len(preview) > 200:
-                preview = preview[:200] + "..."
-            print(f"   {preview}")
-        
-        # 常用正则参考
-        print(f"\n📋 常用正则速查:")
-        print(f"   邮箱: \\b\\w+@\\w+\\.\\w+\\b")
-        print(f"   手机: 1[3-9]\\d{9}")
-        print(f"   身份证: \\d{17}[\\dXx]")
-        print(f"   URL: https?://[\\w.-]+/\\S*")
-        print(f"   日期: \\d{4}-\\d{2}-\\d{2}")
-        print(f"   IPv4: \\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}")
-        
-except SystemExit:
-    pass
-except Exception as e:
-    print(f"❌ {e}")
+            r = subprocess.run(['grep','-c','processor','/proc/cpuinfo'], capture_output=True, text=True, timeout=5)
+            info['cpu_usage'] = 0  # Linux
+    except: pass
+    
+    # 内存信息
+    try:
+        if info['platform'] == 'Windows':
+            r = subprocess.run(['wmic','OS','get','FreePhysicalMemory,TotalVisibleMemorySize','/value'], capture_output=True, text=True, timeout=5)
+            free = total = 0
+            for line in r.stdout.split('\n'):
+                if 'TotalVisibleMemorySize' in line: total = int(line.split('=')[1].strip())
+                elif 'FreePhysicalMemory' in line: free = int(line.split('=')[1].strip())
+            info['ram_total_mb'] = total // 1024
+            info['ram_used_mb'] = (total - free) // 1024
+            if total > 0: info['ram_percent'] = int((total-free)/total*100)
+        else:
+            with open('/proc/meminfo') as f:
+                mem = {}
+                for line in f:
+                    parts = line.split()
+                    if parts[0] in ('MemTotal:','MemAvailable:','MemFree:'):
+                        mem[parts[0]] = int(parts[1])
+            total = mem.get('MemTotal:',0)
+            avail = mem.get('MemAvailable:', mem.get('MemFree:',0))
+            info['ram_total_mb'] = total // 1024
+            info['ram_used_mb'] = (total - avail) // 1024
+            if total > 0: info['ram_percent'] = int((total-avail)/total*100)
+    except: pass
+    
+    # 磁盘信息
+    try:
+        if info['platform'] == 'Windows':
+            r = subprocess.run(['wmic','logicaldisk','get','size,freespace,caption','/value'], capture_output=True, text=True, timeout=5)
+            total = free = 0
+            for block in r.stdout.split('\n\n'):
+                for line in block.split('\n'):
+                    if 'Size=' in line: total += int(line.split('=')[1].strip() or 0)
+                    elif 'FreeSpace=' in line: free += int(line.split('=')[1].strip() or 0)
+            info['disk_total_gb'] = total // (1024**3)
+            info['disk_used_gb'] = (total - free) // (1024**3)
+            if total > 0: info['disk_percent'] = int((total-free)/total*100)
+        else:
+            r = subprocess.run(['df','/'], capture_output=True, text=True, timeout=5)
+            lines = r.stdout.strip().split('\n')
+            if len(lines)>1:
+                parts = lines[1].split()
+                if len(parts)>=4:
+                    total = int(parts[1])
+                    used = int(parts[2])
+                    info['disk_total_gb'] = total // (1024**2)
+                    info['disk_used_gb'] = used // (1024**2)
+                    info['disk_percent'] = int(parts[4].replace('%',''))
+    except: pass
+    
+    return info
+
+res = get_system_resources()
+print("=" * 40)
+print("  📊 dgngjx-skill 系统资源监控")
+print("=" * 40)
+print(f"🖥️ 系统: {res['platform']}")
+print(f"⚡ CPU: {res['cpu_usage']}% 占用 | {res['cpu_count']} 核心")
+print(f"🧠 内存: {res['ram_used_mb']}/{res['ram_total_mb']} MB ({res['ram_percent']}%)")
+print(f"💾 磁盘: {res['disk_used_gb']}/{res['disk_total_gb']} GB ({res['disk_percent']}%)")
+print()
+
+# 预警
+if res['ram_percent'] > 90: print("🔴 内存严重不足！建议关闭部分程序")
+elif res['ram_percent'] > 75: print("🟡 内存偏高，考虑释放")
+if res['disk_percent'] > 90: print("🔴 磁盘空间告急！清理空间")
+elif res['disk_percent'] > 80: print("🟡 磁盘空间偏低")
+if res['cpu_usage'] > 90: print("🔴 CPU 负载过高")
+elif res['cpu_usage'] > 75: print("🟡 CPU 使用率较高")
 ```
 
 </details>
-
-**✅ 开箱即用** ｜ 🌐 [Regex101可视化](https://regex101.com/)
 
 **⚠️ 可能遇到的坑：**
 
 | 情况 | 原因 | 解决 |
 |------|------|------|
-| 正则语法错误 | 括号不匹配、特殊字符未转义 | 使用 https://regex101.com/ 可视化调试 |
-| 匹配结果为空 | 正则写得太严格 | 先用简单模式测试，逐步完善 |
-| 性能灾难回溯 | 嵌套量词如 `(a+)+` | 避免嵌套量词，参考 https://www.regular-expressions.info/catastrophic.html |
-| 中文匹配问题 | `\\w` 只匹配 ASCII | 用 `[一-鿿]` 匹配中文字符 |
+| 获取失败返回 0 | 权限不足 | 以管理员权限运行 |
+| wmic 被禁用 | Windows 精简版 | 改用 PowerShell 命令 |
+| macOS 内存显示异常 | macOS 内存管理机制 | 正常行为，macOS 积极利用内存 |
+
+---
+
+#### 10.2 批量文件重命名 ⭐ v3.5.0 新增
+
+**✅ 开箱即用**（零依赖，纯 os 模块）
+
+批量预览后才能执行，支持正则替换、序号前缀、大小写转换。
+
+<details>
+<summary>📋 展开查看命令</summary>
+
+```python
+import os, re
+
+def _fix_path(p):
+    return p.strip().strip('"').strip("'").replace("\\","/").replace("//","/")
+
+BLOCKED_EXTS = {'.exe','.dll','.bat','.cmd','.ps1','.vbs','.sh','.com','.scr','.hta','.reg','.msi','.apk','.jar'}
+
+dir_path = _fix_path(input("目录路径:").strip() or ".")
+if not os.path.isdir(dir_path):
+    print(f"❌ 目录不存在: {dir_path}")
+else:
+    files = [f for f in os.listdir(dir_path) if os.path.isfile(os.path.join(dir_path,f))]
+    # 过滤掉黑名单文件
+    safe_files = [f for f in files if os.path.splitext(f)[1].lower() not in BLOCKED_EXTS]
+    if len(safe_files) != len(files):
+        print(f"⚠️ 已跳过 {len(files)-len(safe_files)} 个系统/可执行文件")
+    files = safe_files
+    
+    if not files:
+        print("❌ 目录为空或无安全文件")
+    else:
+        print(f"\n📁 {dir_path} 中找到 {len(files)} 个文件")
+        print()
+        print("重命名模式:")
+        print("  1. 添加前缀 (如: photo_001.jpg)")
+        print("  2. 添加后缀 (如: 001_终版.jpg)")
+        print("  3. 正则替换 (正则表达式匹配替换)")
+        print("  4. 大小写转换 (全部小写/大写)")
+        print("  5. 序号重命名 (统一前缀+递增数字)")
+        mode = input("选择模式(1-5):").strip() or "1"
+        
+        previews = []
+        
+        if mode == "1":
+            prefix = input("前缀:").strip() or "file_"
+            for i, fn in enumerate(files):
+                new = prefix + fn
+                previews.append((fn, new))
+                
+        elif mode == "2":
+            suffix = input("后缀:").strip() or "_ok"
+            for fn in files:
+                name, ext = os.path.splitext(fn)
+                new = name + suffix + ext
+                previews.append((fn, new))
+                
+        elif mode == "3":
+            pattern = input("匹配正则:").strip()
+            repl = input("替换为:").strip()
+            if not pattern:
+                print("❌ 正则表达式不能为空")
+                previews = []
+            else:
+                for fn in files:
+                    new = re.sub(pattern, repl, fn)
+                    previews.append((fn, new))
+                    
+        elif mode == "4":
+            upper = input("转大写?(Y/n):").strip().lower() != 'n'
+            for fn in files:
+                new = fn.upper() if upper else fn.lower()
+                previews.append((fn, new))
+                
+        elif mode == "5":
+            prefix = input("统一前缀:").strip() or "file"
+            start = int(input("起始序号(1):") or 1)
+            width = int(input("序号位数(3):") or 3)
+            for i, fn in enumerate(files):
+                _, ext = os.path.splitext(fn)
+                new = f"{prefix}_{str(start+i).zfill(width)}{ext}"
+                previews.append((fn, new))
+        
+        if previews:
+            print(f"\n📋 预览（共 {len(previews)} 个文件）:")
+            print("-" * 60)
+            for old, new in previews[:10]:
+                if old != new:
+                    print(f"  {old}")
+                    print(f"    → {new}")
+                else:
+                    print(f"  {old} （无变化）")
+            if len(previews) > 10:
+                print(f"  ... 还有 {len(previews)-10} 个文件")
+            print("-" * 60)
+            
+            # 检查冲突
+            new_names = [new for _, new in previews]
+            if len(new_names) != len(set(new_names)):
+                print("⚠️ 警告：新文件名存在冲突！")
+                from collections import Counter
+                for name, cnt in Counter(new_names).items():
+                    if cnt > 1:
+                        print(f"   冲突: {name} ({cnt}次)")
+                print("   请修改规则避免冲突")
+            else:
+                confirm = input(f"\n确认执行? (输入 YES 确认): ").strip()
+                if confirm == "YES":
+                    success = 0
+                    for old, new in previews:
+                        if old != new:
+                            old_path = os.path.join(dir_path, old)
+                            new_path = os.path.join(dir_path, new)
+                            if not os.path.exists(new_path):
+                                os.rename(old_path, new_path)
+                                success += 1
+                            else:
+                                print(f"⚠️ 已存在，跳过: {new}")
+                    print(f"✅ 已重命名 {success} 个文件")
+                else:
+                    print("❎ 已取消")
+```
+
+</details>
+
+**⚠️ 可能遇到的坑：**
+
+| 情况 | 原因 | 解决 |
+|------|------|------|
+| 输入 YES 仍被拒绝 | 必须大写的 YES | 输入 `YES` |
+| 文件名冲突 | 替换规则导致重名 | 修改正则或前缀 |
+| 无变化 | 规则未匹配 | 检查正则或前缀 |
+| 跳过系统文件 | 安全规则拦截 | 正常行为，不可执行文件不参与 |
+
+---
+
+#### 10.3 Markdown 转 HTML ⭐ v3.5.0 新增
+
+**✅ 开箱即用**（零依赖纯 Python，将 Markdown 文件转为带样式的独立 HTML）
+
+<details>
+<summary>📋 展开查看命令</summary>
+
+```python
+import os, re, html
+
+def _fix_path(p):
+    return p.strip().strip('"').strip("'").replace("\\","/").replace("//","/")
+
+BLOCKED_EXTS = {'.exe','.dll','.bat','.cmd','.ps1','.vbs','.sh','.com','.scr','.hta','.reg','.msi','.apk','.jar'}
+
+f = _fix_path(input("Markdown文件路径:").strip() or "README.md")
+if not os.path.exists(f):
+    print(f"❌ 文件不存在: {f}")
+else:
+    ext = os.path.splitext(f)[1].lower()
+    if ext in BLOCKED_EXTS:
+        print(f"🚫 安全规则禁止处理 {ext} 文件")
+    else:
+        with open(f, 'r', encoding='utf-8') as md_file:
+            md_content = md_file.read()
+        
+        # ===== 极简 Markdown → HTML 转换（零依赖）=====
+        lines = md_content.split('\n')
+        html_lines = []
+        in_code_block = False
+        in_list = False
+        
+        for line in lines:
+            stripped = line.strip()
+            
+            # 代码块
+            if stripped.startswith('```'):
+                lang = stripped[3:].strip()
+                if in_code_block:
+                    html_lines.append('</code></pre>')
+                    in_code_block = False
+                else:
+                    html_lines.append(f'<pre><code class="language-{lang}">' if lang else '<pre><code>')
+                    in_code_block = True
+                continue
+            
+            if in_code_block:
+                html_lines.append(html.escape(line))
+                continue
+            
+            # 空行
+            if not stripped:
+                if in_list:
+                    html_lines.append('</ul>')
+                    in_list = False
+                html_lines.append('')
+                continue
+            
+            # 标题
+            if stripped.startswith('# '):
+                html_lines.append(f'<h1>{html.escape(stripped[2:])}</h1>')
+                continue
+            elif stripped.startswith('## '):
+                html_lines.append(f'<h2>{html.escape(stripped[3:])}</h2>')
+                continue
+            elif stripped.startswith('### '):
+                html_lines.append(f'<h3>{html.escape(stripped[4:])}</h3>')
+                continue
+            
+            # 列表
+            if stripped.startswith('- ') or stripped.startswith('* '):
+                if not in_list:
+                    html_lines.append('<ul>')
+                    in_list = True
+                item = stripped[2:]
+                # 处理粗体
+                item = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', item)
+                html_lines.append(f'<li>{item}</li>')
+                continue
+            
+            # 引用
+            if stripped.startswith('> '):
+                html_lines.append(f'<blockquote>{html.escape(stripped[2:])}</blockquote>')
+                continue
+            
+            # 分隔线
+            if stripped == '---':
+                html_lines.append('<hr/>')
+                continue
+            
+            # 普通段落（处理粗体和代码）
+            paragraph = html.escape(stripped)
+            paragraph = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', paragraph)
+            paragraph = re.sub(r'`(.+?)`', r'<code>\1</code>', paragraph)
+            html_lines.append(f'<p>{paragraph}</p>')
+        
+        if in_list:
+            html_lines.append('</ul>')
+        
+        body_content = '\n'.join(html_lines)
+        
+        # ===== 内置美观样式 =====
+        full_html = f'''<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{os.path.basename(f)}</title>
+<style>
+body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px 20px; color: #333; line-height: 1.8; }}
+h1 {{ color: #1a1a1a; border-bottom: 2px solid #eee; padding-bottom: 10px; }}
+h2 {{ color: #2c3e50; margin-top: 30px; }}
+h3 {{ color: #34495e; }}
+code {{ background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }}
+pre {{ background: #2d2d2d; color: #f8f8f2; padding: 16px; border-radius: 6px; overflow-x: auto; }}
+blockquote {{ border-left: 4px solid #ddd; margin: 0; padding-left: 16px; color: #666; }}
+ul {{ padding-left: 24px; }}
+li {{ margin-bottom: 4px; }}
+hr {{ border: none; border-top: 1px solid #eee; margin: 20px 0; }}
+strong {{ color: #1a1a1a; }}
+</style>
+</head>
+<body>
+{body_content}
+</body>
+</html>'''
+        
+        out_name = os.path.splitext(f)[0] + '.html'
+        with open(out_name, 'w', encoding='utf-8') as out:
+            out.write(full_html)
+        
+        print(f"✅ 已生成: {out_name}")
+        print(f"   行数: {len(lines)} → HTML大小: {os.path.getsize(out_name)//1024}KB")
+        print(f"   💡 双击打开浏览器预览")
+```
+
+</details>
+
+**⚠️ 可能遇到的坑：**
+
+| 情况 | 原因 | 解决 |
+|------|------|------|
+| 复杂表格未转换 | 极简解析器不支持 | 使用专业工具如 pandoc |
+| 图片未显示 | 本地路径未转绝对路径 | 手动替换为绝对路径或URL |
+| 含HTML标签的MD | 被转义 | 正常行为，安全考虑 |
+| 大文件慢 | 逐行解析 | 10MB+ 文件建议用 pandoc |
 
 ---
 
@@ -2259,55 +1645,28 @@ except Exception as e:
 
 ```
 你: "帮我检测一下环境"
-AI: 跑检测脚本，告诉你缺了什么
+AI: 跑检测脚本 → 自适应硬件调度初始化
 你: "帮我装一下"
 AI: pip install Pillow PyPDF2 jieba
 你: "帮我压缩 D:\photo.jpg"
 AI: ✅ 完成
 ```
 
-### 场景 2：网络不好时（v2.0 国内自动降级）
+### 场景 2：低配电脑性能保护
 
 ```
-你: "帮我查勾股定理"
-AI: ⚠️ Wikipedia 被墙 → 自动查询百度百科 → 返回结果
-
-你: "来个笑话"
-AI: ⚠️ 官方 Joke API 超时 → 自动切国内 API → 返回笑话
-   （全部失败时也返回本地离线缓存，不会让你白等）
-
-你: "下个壁纸"
-AI: 尝试国内随机图源 → 成功返回下载链接
+处理 50MB 图片时
+→ 系统检测到 4GB RAM → 自动单任务模式
+→ 显示 "⚠️ 50MB 文件 → 压缩可能需1-2分钟"
+→ 分配最小资源，不卡顿
 ```
 
-### 场景 3：处理大文件
+### 场景 3：安全文件拦截
 
 ```
-你: "帮我合并 3 个 PDF（每个 200MB）"
-AI: ⚠️ 总大小 600MB，合并可能需要 2-5 分钟...（自动显示进度，完成后报告页数和大小）
-
-你: "压缩 D:\photo_600MB.tiff"
-AI: ⚠️ 文件 600MB，超过 200MB 建议值。可用内存需 >1.8GB...（确认后自动处理，遇 MemoryError 给出降级方案）
-```
-
-### 场景 4：不确定能不能做时
-
-```
-你: "能帮我恢复删除的文件吗？"
-AI: ❌ 不支持（超出工具范围，已给出专业恢复软件推荐）
-```
-
-### 场景 5：长文本词频分析（v3.0 新场景）
-
-```
-你: "帮我分析这篇文章的词频"
-AI: [粘贴文本]
-AI: 📊 共 1256 个有效词，387 个不重复词
-   词汇丰富度: 30.8%（同词重复较多）
-   1. 管理: 45 ██████████████████████████████
-   2. 服务器: 32 ██████████████████████
-   ...
-   ✅ 已使用 jieba 精准分词
+你: "帮我压缩 C:\Windows\system32\cmd.exe"
+AI: 🚫 .exe 可执行程序 — 安全规则禁止处理
+   推荐使用专业反编译工具
 ```
 
 ---
@@ -2317,89 +1676,24 @@ AI: 📊 共 1256 个有效词，387 个不重复词
 ### Q1: 第一次使用怎么做？
 直接说一句话。零依赖功能直接跑。需安装功能会提示。
 
-### Q2: 提示安装依赖怎么办？
-跑一行 `pip install Pillow PyPDF2 jieba`，装完即可。
-
-### Q3: 下载壁纸被墙 / Wikipedia 查不了 / GitHub API 超时？
-这是国内网络环境问题。v2.0 已内置**多级降级**：
-- **Wikipedia** → 自动降级到百度百科（国内），无需代理
-- **壁纸/Unsplash** → 自动尝试国内随机图片源，失败返回 Pixabum
-- **一言/笑话** → 3 个国内 API 自动切换，全部失败返回本地离线缓存
-- **GitHub API** → 失败时提示 ghproxy 镜像地址
-
-如果所有国内源也失败：
-1. 检查 Wi-Fi/网线连接是否正常
-2. 关闭代理/VPN（开启时反而可能更慢）
-3. 尝试开手机热点（排查是否需要过境网络）
-4. 仍不可用：用浏览器直接访问对应在线工具（每个功能下方已列出）
-
-### Q4: PDF 加密后忘记密码怎么办？
-无法恢复。密码只在加密时展示一次，请截图保存。
-
-### Q5: 图片压缩会损坏原图吗？
-不会。另存为新文件（compressed_开头），原图不动。
-
-### Q6: 视频转换失败？
-1. 确认 FFmpeg 已安装：命令行输入 `ffmpeg -version`，有版本号即可
-2. 确认 FFmpeg 在 PATH：如果 `ffmpeg -version` 提示"不是内部或命令"，需添加 FFmpeg 的 bin 目录到环境变量
-3. 大文件（>500MB）：v2.0 有自动告警；如需缩小分辨率加 `-vf scale=1280:-1'`
-4. 编码不兼容：先用 `-c:v libx264` 转 H.264 再转目标格式
-5. 磁盘空间不足：同目录下确保有文件 2 倍大小的剩余空间
-6. 终极方案：改用 [HandBrake](https://handbrake.fr/)（图形界面，更稳定）
-
-**国内 FFmpeg 下载渠道（官方慢时）：**
-- https://github.com/BtbN/FFmpeg-Builds/releases （Windows 预编译版）
-- https://gyan.dev/ffmpeg/builds/ （Windows 稳定版）
-
-### Q7: 怎么升级 dgngjx-skill？
+### Q2: 发现 skill 有更新怎么办？
 ```bash
 skillhub upgrade dgngjx-skill
 ```
+或检查：`skillhub search dgngjx-skill`
 
-### Q8: 处理大文件（>500MB）提示内存不足或太慢怎么办？
-v2.0 已内置大文件保护，针对不同场景有不同方案：
+### Q3: 有什么建议/bug？
+📧 **邮箱：njskills@agent.qq.com**
+作者会阅读每一条反馈。
 
-**图片压缩：**
-- >200MB 自动提示风险
-- 内存不足 → 先缩小尺寸再压缩（代码示例见 6.1）
-- 极端情况 → 用 [Squoosh](https://squoosh.app/) 浏览器内处理（无需全图载入 RAM）
+### Q4: 处理大文件太慢？
+v3.5.0 已根据你的硬件自动调度，低配机会自动降为小文件单任务模式，不会出现卡死。
 
-**PDF 合并：**
-- >500MB / 总文件 >100MB 自动显示进度
-- 内存不足 → 用 Ghostscript 命令行替代（代码见 7.1）
-- 超大 PDF（>1GB）→ 用 [PDFsam](https://pdfsam.org/) 图形工具
+### Q5: 批量重命名风险？
+必须先预览，确认输入 `YES` 才执行。可执行文件会自动跳过。
 
-**视频转换：**
-- 30 分钟超时保护，防止进程卡死
-- 大文件先缩小分辨率：`ffmpeg -i input.mp4 -vf scale=1280:-1 -c:v libx264 output.mp4`
-- 超大视频（>5GB）→ [HandBrake](https://handbrake.fr/) 是更好的选择
-
-**通用建议：**
-- 关闭其他程序释放内存
-- 用 SSD 而不是机械硬盘（读写速度快 5-10 倍）
-- 批量处理时一次不要超过 5 个文件
-
-### Q9: FFmpeg 安装还是好麻烦怎么办？（v3.0 新增 FAQ）
-dgngjx-skill v3.0 提供了**一键安装脚本**：
-1. 打开 PowerShell 或终端
-2. 粘贴 `winget install ffmpeg`
-3. 等待完成即可
-
-如果 `winget` 不可用，也可以：
-- 访问 https://gyan.dev/ffmpeg/builds/ 下载 Windows 稳定版
-- 解压到 `C:\ffmpeg`，然后将 `C:\ffmpeg\bin` 添加到系统 PATH
-- 关闭终端重新打开，运行 `ffmpeg -version` 验证
-
-详细步骤见「📦 依赖管理 → FFmpeg 一键安装」章节。
-
-### Q10: 词频统计突然准确了很多？（v3.0 新增 FAQ）
-v3.0 对词频统计做了重大升级：
-- **中文分词**：有 jieba 时自动用 jieba 精准分词（`pip install jieba`）
-- **停用词过滤**：内置100+常见中文停用词（的、了、是...）自动跳过
-- **英文小写化**：Python 和 python 会被统一统计
-- **分析摘要**：自动显示词汇丰富度指标
-
-无需 jieba 也能用，会自动降级到正则分词。
+### Q6: MD转HTML支持复杂语法吗？
+支持标题、列表、代码块、引用、粗体、行内代码。复杂表格建议用 pandoc。
 
 ---
 
@@ -2407,28 +1701,38 @@ v3.0 对词频统计做了重大升级：
 
 | 类别 | 数量 | 开箱即用 |
 |------|:----:|:--------:|
-| ✅ 零依赖即可运行 | 18 | ✅ |
-| 📦 需确认安装后运行 | 17 | ❌（有引导+在线替代） |
-| **总计** | **35** | **51%** |
+| ✅ 零依赖即可运行 | 20 | ✅ |
+| 📦 需确认安装后运行 | 18 | ❌（有引导+在线替代） |
+| **总计** | **38** | **53%** |
 
-## v3.0.0 新特性速览
-
-| 优化维度 | 涉及模块 | 关键提升 |
-|---------|---------|---------|
-| 词频统计升级 | 模块2 词频统计 | jieba精准分词 + 100+停用词过滤 + 英文小写化 + 词汇丰富度分析 |
-| 视频编辑增强 | 模块8 视频编辑 | 新增水印/截图/信息查看 + 菜单式交互 + 裁剪重新编码保音频 |
-| 路径智能修复 | 全部文件操作模块 | 自动去引号 + 规范斜杠 + 处理双反斜杠 |
-| FFmpeg简化 | 模块8 全部视频工具 | 一键安装脚本 + 清晰安装步骤 + 故障排查引导 |
-| 新增实用小工具 | 模块9 | 二维码生成 + 密码生成器 + 正则测试器 |
-| 交互式体验 | 模块8 视频编辑 | 菜单式操作 + 统一入口 + 自动验证文件 |
-
-## v2.0 特性（保留）
+## v3.5.0 新特性速览
 
 | 优化维度 | 涉及模块 | 关键提升 |
 |---------|---------|---------|
-| 国内联网兼容 | 3.1 Wikipedia、4.1 娱乐工具、4.2 壁纸、5.2 HTTP | 自动降级 + 3 级国内源兜底 + 离线缓存 |
-| 大文件性能 | 6.1 图片压缩、7.1 PDF 合并、7.2 PDF 拆分、8.1 视频转换 | 大小检测 + 进度告警 + MemoryError 防护 + 超时保护 |
-| 错误提示 | 全部模块 | 针对性中文诊断 + 具体解决命令 + 在线替代工具链接 |
+| 硬件自适应调度 | 全局 | 自动检测CPU/RAM，智能分配并发数，低配机不卡 |
+| 安全文件过滤 | 全模块 | 自动拦截可执行/系统/风险文件，输入输出双向检查 |
+| 更新提醒 | 全局 | 启动提示检查更新，邮箱 njskills@agent.qq.com |
+| 系统资源监控 | 模块10.1 | 实时CPU/内存/磁盘，中文报告，预警提醒 |
+| 批量文件重命名 | 模块10.2 | 5种模式，预览→确认，安全跳过可执行文件 |
+| Markdown转HTML | 模块10.3 | 零依赖纯Python，内置美观样式，独立HTML文件 |
+| 性能优化 | 全局 | 大文件分片策略+硬件感知+超时保护 |
+
+## 更新日志
+
+| v3.5.0 | 2026-07-14 | 增加：硬件自适应调度（自动检测CPU/RAM并智能分配并发数）；增加：安全文件过滤规则（双向检查输入输出，拦截可执行文件30+种）；增加：系统资源监控（模块10.1 实时CPU/内存/磁盘，中文报告）；增加：批量文件重命名（模块10.2 5种模式+预览确认）；增加：Markdown转HTML（模块10.3 零依赖+内置美观样式）；增加：更新提醒和邮箱njskills@agent.qq.com；优化：全局性能策略（低配模式自动降级） |
+| v3.0.0 | 2026-07-13 | 增加：jieba精准分词+100+停用词过滤+英文小写化+词汇丰富度分析；增加：视频编辑6大功能（水印/截图/信息查看）；增加：路径智能修复（全部文件操作）；增加：FFmpeg一键安装脚本；增加：模块9（二维码/密码/正则）；优化：视频编辑菜单式交互 |
+| v2.5.0 | 2026-07-12 | 增加：HTTP模块P0语法修复；8个模块"坑表格"扩充至4-5行；Token计算器在线链接修正 |
+| v2.2.0 | 2026-07-11 | 修复：多个bug |
+| v2.1.0 | 2026-07-10 | 修复：单位换算float崩溃+壁纸urllib.parse缺失；国内源更新 |
+| v2.0.0 | 2026-07-09 | 增加：国内联网优化（Wikipedia/娱乐工具/壁纸/HTTP自动降级）；大文件性能增强（图片/PDF/视频）；错误提示细化 |
+| v1.7.0 | 2026-07-08 | 增加：每个命令详细中文报错+解决方案+可能遇到的坑表格 |
+| v1.6.0 | 2026-07-07 | 增加：详细安装引导/中文报错/最佳实践/边界情况说明 |
+| v1.5.0 | 2026-07-06 | 增加：图片修复用Pillow重写/一键安装脚本/网络错误提示 |
+| v1.4.0 | 2026-07-05 | 增加：命令折叠隐藏/概览页精简 |
+| v1.3.0 | 2026-07-05 | 增加：30秒速查表/报错说明 |
+| v1.2.0 | 2026-07-04 | 含可运行命令/FAQ |
+| v1.1.0 | 2026-07-03 | 去除人脸年龄变换 |
+| v1.0.0 | 2026-07-02 | 初始版本，8大模块29个工具 |
 
 ## 一键安装后可用功能
 
@@ -2437,26 +1741,16 @@ v3.0 对词频统计做了重大升级：
 | `pip install Pillow` | 压缩 / 证件照 / 基础修复 / PS |
 | `pip install PyPDF2` | PDF 合并 / 拆分 / 加密 / 解密 |
 | `pip install rembg` | 人像抠图（首次 300MB） |
-| `pip install jieba` | 精准中文分词（v3.0 新） |
+| `pip install jieba` | 精准中文分词 |
 | FFmpeg | 格式转换 / 视频编辑（6大功能） |
 | `pip install qrcode[pil]` | 二维码本地生成 |
 
 ## 发布信息
 
 - **作者**：Admin
+- **联系邮箱**：njskills@agent.qq.com
 - **许可证**：MIT
 - **支持平台**：Windows / macOS / Linux
-- **更新历史**：
-  - v3.0.0：[词频统计升级]jieba精准分词+100+停用词过滤+英文小写化+词汇丰富度分析+分析摘要；[视频编辑增强]新增图片水印/视频截图/视频信息查看+菜单式交互+裁剪改重新编码保音频+拼接加-safe 0和utf-8；[路径智能修复]全部文件操作模块自动去引号+规范斜杠；[FFmpeg简化]新增一键安装脚本+清晰安装步骤；[新增模块9]二维码生成+密码生成器+正则测试器；[交互体验]视频编辑改菜单式操作；[FAQ新增]FFmpeg安装指南+词频统计升级说明
-  - v2.5.0：[适用性优化] HTTP模块P0语法修复；8个模块"坑表格"从1-2行扩充至4-5行；Token计算器在线链接修正
-  - v2.2.0：[Bug修复]
-  - v2.1.0：[Bug修复] 单位换算float崩溃+壁纸urllib.parse缺失+HTTP字符串拼接+f-string引号; [国内源]百度百科→baike.deno.dev+壁纸→imgapi.cn; [提示详细度]房贷/五险一金/Token/Mermaid/图片修复共8模块扩充; [大文件]视频编辑模块增加>500MB告警+30分钟超时+GIF自动缩放; [Ghostscript]Windows命令名修正
-  - v2.0.0：[国内联网优化] Wikipedia→百度百科自动降级；娱乐工具→3个国内API+本地离线缓存；壁纸→国内随机图源+Pixabum兜底；[大文件性能] 图片>200MB告警+MemoryError防护+DecompressionBomb限制；PDF>500MB告警+Ghostscript降级指引；视频>500MB告警+30分钟超时+GIF自动缩放；HTTP错误细分（DNS/SSL/超时/状态码中文释义）；所有针对性错误给出具体解决命令+在线替代工具链接；新增Q8大文件FAQ
-  - v1.7.0：每个命令加详细中文报错+解决方案+可能遇到的坑表格/网络错误处理/文件路径检查
-  - v1.6.0：详细安装引导/中文报错/最佳实践/边界情况说明
-  - v1.5.0：图片修复用Pillow重写/一键安装脚本/网络错误提示
-  - v1.4.0：命令折叠隐藏/概览页精简
-  - v1.3.0：30秒速查表/报错说明
-  - v1.2.0：含可运行命令/FAQ
-  - v1.1.0：去除人脸年龄变换
-  - v1.0.0：初始版，8大模块
+- **当前版本**：v3.5.0
+- **检查更新**：`skillhub search dgngjx-skill`
+- **升级命令**：`skillhub upgrade dgngjx-skill`
