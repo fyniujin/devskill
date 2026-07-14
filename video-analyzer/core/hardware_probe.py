@@ -1,13 +1,159 @@
-"""硬件探测模块 — 自动检测用户电脑硬件并计算最佳任务分配"""
+"""硬件探测模块 — 自动检测用户电脑硬件并计算最佳任务分配 + 运行时监控"""
 
 import os
 import platform
 import subprocess
+import threading
+import time
 from typing import Any, Dict, Optional
 
 from .logger import get_logger
 
 logger = get_logger(__name__)
+
+
+class ResourceMonitor:
+    """实时系统资源监控器 — 运行时动态调整参数"""
+    
+    def __init__(self, max_memory_gb: float, check_interval: float = 5.0):
+        self.max_memory_gb = max_memory_gb
+        self.check_interval = check_interval
+        self._monitoring = False
+        self._thread = None
+        self._peak_memory_gb = 0
+        self._current_memory_usage = 0
+        self._current_cpu_percent = 0
+        self._pause_requested = False  # 资源紧张时请求暂停
+        self._callbacks = []
+    
+    def start(self):
+        """启动后台监控线程"""
+        if self._monitoring:
+            return
+        self._monitoring = True
+        self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
+        self._thread.start()
+        logger.debug("资源监控线程已启动")
+    
+    def stop(self):
+        """停止监控"""
+        self._monitoring = False
+        if self._thread:
+            self._thread.join(timeout=10)
+        logger.debug("资源监控线程已停止")
+    
+    def register_callback(self, callback):
+        """注册资源告警回调(callback(is_critical: bool))"""
+        self._callbacks.append(callback)
+    
+    def _monitor_loop(self):
+        """后台监控循环"""
+        while self._monitoring:
+            try:
+                self._sample_resources()
+                
+                # 检查是否超出限制
+                memory_ratio = self._current_memory_usage / self.max_memory_gb if self.max_memory_gb > 0 else 0
+                
+                if memory_ratio > 0.9:
+                    # 严重：内存接近上限
+                    self._pause_requested = True
+                    logger.warning(f"⚠️ 内存使用接近上限 ({self._current_memory_gb:.1f}GB/{self.max_memory_gb:.1f}GB)，建议暂停新任务")
+                    for cb in self._callbacks:
+                        cb(True)
+                elif memory_ratio > 0.75:
+                    # 警告
+                    logger.debug(f"内存使用较高: {self._current_memory_gb:.1f}GB/{self.max_memory_gb:.1f}GB")
+                    for cb in self._callbacks:
+                        cb(False)
+                else:
+                    self._pause_requested = False
+                    
+            except Exception:
+                pass
+            time.sleep(self.check_interval)
+    
+    def _sample_resources(self):
+        """采样当前系统资源"""
+        try:
+            import psutil
+            mem = psutil.virtual_memory()
+            self._current_memory_usage = mem.used / (1024**3)
+            self._current_cpu_percent = psutil.cpu_percent(interval=0.5)
+            self._peak_memory_gb = max(self._peak_memory_gb, self._current_memory_gb)
+        except ImportError:
+            # 无 psutil 时使用各平台原生命令
+            if platform.system() == "Windows":
+                self._sample_windows()
+            elif platform.system() == "Linux":
+                self._sample_linux()
+    
+    def _sample_windows(self):
+        """Windows 原生采样"""
+        try:
+            result = subprocess.run(
+                ["wmic", "os", "get", "FreePhysicalMemory,TotalVisibleMemorySize"],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                lines = result.stdout.strip().split("\n")
+                if len(lines) >= 2:
+                    parts = lines[1].split()
+                    if len(parts) >= 2:
+                        total_kb = int(parts[1])
+                        free_kb = int(parts[0])
+                        total_gb = total_kb / (1024 * 1024)
+                        free_gb = free_kb / (1024 * 1024)
+                        self._current_memory_usage = total_gb - free_gb
+                        self._peak_memory_gb = max(self._peak_memory_gb, self._current_memory_usage)
+        except Exception:
+            pass
+    
+    def _sample_linux(self):
+        """Linux 原生采样"""
+        try:
+            with open("/proc/meminfo", "r") as f:
+                meminfo = f.read()
+            mem_total = 0
+            mem_available = 0
+            for line in meminfo.split("\n"):
+                if line.startswith("MemTotal"):
+                    mem_total = int(line.split()[1])
+                elif line.startswith("MemAvailable"):
+                    mem_available = int(line.split()[1])
+            if mem_total > 0:
+                total_gb = mem_total / (1024 * 1024)
+                available_gb = mem_available / (1024 * 1024)
+                self._current_memory_usage = total_gb - available_gb
+                self._peak_memory_gb = max(self._peak_memory_gb, self._current_memory_usage)
+        except Exception:
+            pass
+    
+    @property
+    def current_memory_gb(self):
+        return self._current_memory_usage
+    
+    @property
+    def current_cpu_percent(self):
+        return self._current_cpu_percent
+    
+    @property
+    def peak_memory_gb(self):
+        return self._peak_memory_gb
+    
+    @property
+    def pause_requested(self):
+        return self._pause_requested
+    
+    def get_status(self) -> Dict:
+        """获取当前状态快照"""
+        return {
+            "current_memory_gb": round(self._current_memory_gb, 2),
+            "peak_memory_gb": round(self._peak_memory_gb, 2),
+            "cpu_percent": self._current_cpu_percent,
+            "max_memory_gb": self.max_memory_gb,
+            "pause_requested": self._pause_requested,
+        }
 
 
 class HardwareProbe:
@@ -350,3 +496,60 @@ class HardwareProbe:
                     f"设备={'cuda' if rec['use_gpu'] else 'cpu'}")
         
         return config
+    
+    def estimate_processing_time(self, video_duration: float, media_info: Dict = None) -> Dict[str, Any]:
+        """
+        预估处理时间（基于硬件配置）。
+        
+        Args:
+            video_duration: 视频时长（秒）
+            media_info: 视频元数据
+            
+        Returns:
+            预估结果
+        """
+        info = self.detect()
+        rec = info["recommended"]
+        
+        # 基础处理倍数（相对于视频时长）
+        # whisper 模型速度（tiny=4x, base=3x, small=2x, medium=1x, large=0.5x）
+        model_speed = {
+            "tiny": 4,
+            "base": 3,
+            "small": 2,
+            "medium": 1,
+            "large-v3": 0.5,
+        }.get(rec["whisper_model"], 1)
+        
+        # 视觉分析开销
+        visual_overhead = {
+            "high": 0.5,
+            "medium": 0.3,
+            "low": 0.1,
+        }.get(rec["visual_quality"], 0.3)
+        
+        # 总预估时间 = 视频时长 * (1/模型加速) * (1 + 视觉开销) / 并行因子
+        parallel_factor = max(rec["workers"], 1) * 1.5  # CPU/GPU 并行
+        
+        estimated_seconds = video_duration / (model_speed * parallel_factor) * (1 + visual_overhead)
+        
+        return {
+            "estimated_seconds": round(estimated_seconds, 1),
+            "estimated_formatted": self._format_duration(estimated_seconds),
+            "model_speed": model_speed,
+            "parallel_workers": rec["workers"],
+            "visual_overhead": visual_overhead,
+        }
+    
+    @staticmethod
+    def _format_duration(seconds: float) -> str:
+        """格式化时长"""
+        if seconds < 60:
+            return f"{seconds:.0f}秒"
+        elif seconds < 3600:
+            m = int(seconds // 60)
+            s = int(seconds % 60)
+            return f"{m}分{s}秒"
+        h = int(seconds // 3600)
+        m = int((seconds % 3600) // 60)
+        return f"{h}小时{m}分"
