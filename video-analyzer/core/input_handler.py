@@ -1,4 +1,4 @@
-"""输入处理模块 — 支持本地文件、URL、在线视频链接"""
+"""输入处理模块 — 支持本地文件、URL、在线视频链接 + 禁止文件类型拦截"""
 
 import os
 import time
@@ -14,6 +14,45 @@ logger = get_logger(__name__)
 # 最大重试次数
 MAX_RETRIES = 3
 RETRY_DELAY = 2  # 秒
+
+# ==================== 禁止的文件类型（死规则） ====================
+# Windows 可执行 / 批处理脚本
+FORBIDDEN_EXEC_EXTENSIONS = {
+    ".bat", ".cmd", ".ps1", ".vbs", ".exe", ".dll", ".lnk", ".msi",
+}
+# Office 二进制文档
+FORBIDDEN_OFFICE_EXTENSIONS = {
+    ".docx", ".xlsx", ".pptx", ".doc", ".xls", ".ppt",
+    ".xlsm", ".docm", ".pptm",
+}
+# 二进制镜像 / 安装包
+FORBIDDEN_ARCHIVE_EXTENSIONS = {
+    ".iso", ".dmg", ".zip", ".rar", ".7z", ".tar", ".gz",
+    ".apk", ".jar",
+}
+# 系统缓存 / 隐藏文件
+FORBIDDEN_SYSTEM_EXTENSIONS = {
+    ".ds_store", ".env", ".log", ".tmp",
+}
+# 其他风险脚本
+FORBIDDEN_SCRIPT_EXTENSIONS = {
+    ".sh", ".com", ".scr", ".hta", ".reg",
+}
+
+# 合并所有禁止的扩展名
+FORBIDDEN_EXTENSIONS = (
+    FORBIDDEN_EXEC_EXTENSIONS
+    | FORBIDDEN_OFFICE_EXTENSIONS
+    | FORBIDDEN_ARCHIVE_EXTENSIONS
+    | FORBIDDEN_SYSTEM_EXTENSIONS
+    | FORBIDDEN_SCRIPT_EXTENSIONS
+)
+
+# 禁止的文件名（部分系统缓存文件无扩展名或用点开头）
+FORBIDDEN_FILENAMES = {".ds_store", "thumbs.db", "desktop.ini"}
+
+# 禁止的目录名
+FORBIDDEN_DIR_NAMES = {".git", ".svn", ".hg"}
 
 
 class InputHandler:
@@ -48,6 +87,51 @@ class InputHandler:
                 return os.path.abspath(source)
             raise ValueError(f"无法识别的输入: {input_source}")
     
+    def _validate_not_forbidden(self, path: Path) -> None:
+        """
+        验证文件类型是否被禁止，禁止则抛出异常。
+        
+        Args:
+            path: 要验证的文件路径
+            
+        Raises:
+            ValueError: 文件类型被禁止时抛出
+        """
+        filename = path.name.lower()
+        suffix = path.suffix.lower() if path.suffix else ""
+        
+        # 检查文件名（如 .ds_store）
+        if filename in FORBIDDEN_FILENAMES:
+            raise ValueError(
+                f"🚫 禁止的文件类型: {path.name}\n"
+                f"   系统缓存/隐藏文件不在支持范围内。\n"
+                f"   请提供视频文件（如 .mp4, .mkv, .avi, .mov 等）。"
+            )
+        
+        # 检查扩展名
+        if suffix in FORBIDDEN_EXTENSIONS:
+            # 分类说明
+            if suffix in FORBIDDEN_EXEC_EXTENSIONS:
+                category = "Windows 可执行/脚本文件"
+            elif suffix in FORBIDDEN_OFFICE_EXTENSIONS:
+                category = "Office 二进制文档"
+            elif suffix in FORBIDDEN_ARCHIVE_EXTENSIONS:
+                category = "压缩包/镜像文件"
+            elif suffix in FORBIDDEN_SYSTEM_EXTENSIONS:
+                category = "系统缓存/配置文件"
+            elif suffix in FORBIDDEN_SCRIPT_EXTENSIONS:
+                category = "风险脚本文件"
+            else:
+                category = "不支持的文件类型"
+            
+            raise ValueError(
+                f"🚫 禁止的文件类型: {suffix}\n"
+                f"   类别: {category}\n"
+                f"   文件: {path.name}\n"
+                f"   本工具仅支持视频文件分析，不支持压缩包、可执行程序、"
+                f"Office 文档等其他格式。"
+            )
+    
     def _is_local_path(self, source: str) -> bool:
         """判断是否为本地路径"""
         return (
@@ -63,16 +147,19 @@ class InputHandler:
     def _handle_local(self, source: str) -> str:
         """处理本地文件路径"""
         path = Path(source).resolve()
-        
+
         if not path.exists():
             raise FileNotFoundError(
                 f"文件不存在: {source}\n"
                 f"请确认文件路径是否正确，并确保有读取权限。"
             )
-        
+
         if not path.is_file():
             raise ValueError(f"不是有效文件: {source}")
-        
+
+        # ==================== 禁止文件类型拦截 ====================
+        self._validate_not_forbidden(path)
+
         # 验证是否为视频文件
         valid_extensions = {
             ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm",
