@@ -27,7 +27,11 @@ from core.highlight_extractor import HighlightExtractor
 from core.report_generator import ReportGenerator
 from core.config import load_config
 from core.logger import get_logger
-from core.hardware_probe import HardwareProbe
+from core.hardware_probe import HardwareProbe, ResourceMonitor
+from core.chapter_slicer import ChapterSlicer
+from core.speaker_diarization import SpeakerDiarization
+from core.timestamped_summary import TimestampedSummary
+from core.update_notifier import UpdateNotifier
 
 logger = get_logger(__name__)
 
@@ -78,6 +82,12 @@ def parse_args():
                         help="最大内存使用 (GB)")
     parser.add_argument("--nice", type=int, default=None,
                         help="进程优先级 (0-19, 越大优先级越低)")
+    parser.add_argument("--no-update-check", action="store_true",
+                        help="跳过启动时的版本更新检查")
+    parser.add_argument("--diarize", action="store_true",
+                        help="启用说话人分离（多人对话场景）")
+    parser.add_argument("--slice-chapters", action="store_true",
+                        help="按章节切片视频片段 + 生成SRT字幕")
     
     return parser.parse_args()
 
@@ -86,7 +96,7 @@ def print_banner():
     """打印启动横幅"""
     banner = """
 ╔══════════════════════════════════════════════════╗
-║          🎬 video-analyzer v2.1.0               ║
+║          🎬 video-analyzer v3.0.0               ║
 ║        视频分析处理 — 本地视频反编译工具         ║
 ╚══════════════════════════════════════════════════╝
     """
@@ -163,6 +173,16 @@ def main():
         # 应用硬件推荐的进程优先级
         nice_level = config.get("processing", {}).get("nice_level", 5)
         apply_process_priority(nice_level)
+        
+        # 启动实时资源监控
+        resource_monitor = ResourceMonitor(
+            max_memory_gb=config.get("processing", {}).get("max_memory_gb", 4),
+            check_interval=5,
+        )
+        resource_monitor.start()
+        logger.info("🖥️  实时资源监控已启动")
+    else:
+        resource_monitor = None
     
     # 命令行参数覆盖配置 (优先级最高)
     if args.model:
@@ -190,6 +210,17 @@ def main():
     media = None
     
     try:
+        # ========== 版本更新检查（非阻塞） ==========
+        if not args.no_update_check:
+            try:
+                notifier = UpdateNotifier(config, current_version="3.0.0")
+                update_result = notifier.check_for_updates()
+                update_msg = notifier.format_update_message(update_result)
+                if update_msg:
+                    print(update_msg)
+            except Exception:
+                pass  # 更新检查失败不影响主流程
+        
         # ========== 阶段 1: 输入处理 ==========
         logger.info("📥 [1/7] 处理输入...")
         input_handler = InputHandler(config)
@@ -203,6 +234,12 @@ def main():
         logger.info(f"   分辨率: {media_info['width']}x{media_info['height']}")
         logger.info(f"   时长: {media_info['duration']:.1f}s")
         logger.info(f"   帧率: {media_info['fps']:.1f}")
+        
+        # 预估处理时间
+        if not args.no_adaptive:
+            probe = HardwareProbe(config)
+            time_est = probe.estimate_processing_time(media_info['duration'], media_info)
+            logger.info(f"   ⏱️  预估处理时间: {time_est['estimated_formatted']}")
         
         # 提取音频
         audio_path = media.extract_audio(video_path)
@@ -218,6 +255,14 @@ def main():
         transcript = transcriber.transcribe(audio_path)
         logger.info(f"   识别完成: {len(transcript['segments'])} 个语音段")
         logger.info(f"   语言: {transcript.get('language', 'unknown')}")
+        
+        # ========== 说话人分离（可选） ==========
+        diarize_result = None
+        if args.diarize:
+            logger.info("🗣️  说话人分离...")
+            diarizer = SpeakerDiarization(config)
+            diarize_result = diarizer.diarize(audio_path, transcript.get("segments", []))
+            logger.info(f"   分离完成: {diarize_result['n_speakers']} 人")
         
         # ========== 阶段 4: 场景检测 ==========
         logger.info("🎬 [4/7] 场景检测...")
@@ -276,6 +321,30 @@ def main():
             output_dir=args.output
         )
         
+        # ========== 章节切片（可选） ==========
+        if args.slice_chapters:
+            logger.info("✂️  章节切片...")
+            chapters_dir = os.path.join(args.output, "chapters")
+            slicer = ChapterSlicer(config)
+            chapters_result = slicer.slice_chapters(video_path, scenes, transcript, chapters_dir)
+            logger.info(f"   切片完成: {chapters_result['total_chapters']} 个章节")
+            output_paths["chapters"] = chapters_dir
+        
+        # ========== 说话人字幕（可选） ==========
+        if diarize_result:
+            logger.info("📝 生成说话人字幕...")
+            speaker_srt_path = os.path.join(args.output, "speakers.srt")
+            diarizer = SpeakerDiarization(config)
+            diarizer.generate_srt_with_speakers(diarize_result, speaker_srt_path)
+            output_paths["speaker_srt"] = speaker_srt_path
+        
+        # ========== 时间戳摘要 ==========
+        logger.info("📋 生成时间戳摘要...")
+        summary_dir = os.path.join(args.output, "summary")
+        summary_gen = TimestampedSummary(config)
+        summary_result = summary_gen.generate(highlights, fused_data, summary_dir)
+        output_paths["timestamped_summary"] = summary_result.get("markdown_path")
+        
         # 清理缓存
         max_cache = config.get("processing", {}).get("max_memory_gb", 4)
         limit_cache_size(config.get("processing", {}).get("cache_dir", ".cache"), max_cache)
@@ -288,6 +357,12 @@ def main():
             logger.info(f"   [{fmt}] {path}")
         logger.info(f"{'='*50}")
         
+        # 停止资源监控
+        if resource_monitor:
+            resource_monitor.stop()
+            status = resource_monitor.get_status()
+            logger.info(f"📊 峰值内存: {status['peak_memory_gb']:.1f}GB")
+        
     except KeyboardInterrupt:
         logger.warning("\n⚠️  用户中断")
         sys.exit(1)
@@ -298,6 +373,9 @@ def main():
             traceback.print_exc()
         sys.exit(1)
     finally:
+        # 停止资源监控
+        if resource_monitor:
+            resource_monitor.stop()
         # 清理子进程，确保不残留
         if media and hasattr(media, '_subprocesses'):
             for proc in media._subprocesses:
