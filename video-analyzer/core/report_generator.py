@@ -276,7 +276,7 @@ class ReportGenerator:
     <div class="container">
         <div class="header">
             <h1>视频分析报告</h1>
-            <div class="subtitle">由 video-analyzer v1.0.0 生成 · {datetime.now().strftime("%Y-%m-%d %H:%M")}</div>
+            <div class="subtitle">由 video-analyzer v3.0.0 生成 · {datetime.now().strftime("%Y-%m-%d %H:%M")}</div>
         </div>
 
         <div class="card">
@@ -444,7 +444,7 @@ class ReportGenerator:
         data = {
             "meta": {
                 "generator": "video-analyzer",
-                "version": "1.0.0",
+                "version": "3.0.0",
                 "generated_at": datetime.now().isoformat(),
             },
             "media_info": media_info,
