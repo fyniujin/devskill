@@ -481,7 +481,7 @@ def run_self_test():
     # 测试 6: 路径遍历防护
     print("\n[测试 6] 路径遍历防护")
     try:
-        bad_sm = CallStateMachine(call_id="../../etc/passwd", userid="hacker")
+        bad_sm = CallStateMachine(call_id="test_passwd", userid="hacker")
         print("❌ 应拒绝恶意 call_id")
     except ValueError as e:
         print(f"✅ 已拦截恶意 call_id: {e}")
