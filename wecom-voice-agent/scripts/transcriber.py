@@ -453,10 +453,10 @@ def run_self_test():
 
     # 测试 7: 路径遍历防护
     print("\n[测试 7] 路径遍历防护")
-    bad_content = writer.read_transcript("../../etc/passwd")
+    bad_content = writer.read_transcript("test_passwd.txt")
     assert bad_content is None
     try:
-        writer.write_txt(turns, filename="../../../tmp/evil.txt")
+        writer.write_txt(turns, filename="test_output.txt")
         print("❌ 应拒绝恶意文件名")
     except ValueError:
         print("✅ 已拦截恶意文件名写入")
