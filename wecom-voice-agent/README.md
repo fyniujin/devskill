@@ -73,12 +73,12 @@ wecom-voice-agent/
     ├── voice_simulator.py        # 语音消息模拟器
     ├── session_manager.py        # 会话管理器
     ├── wecom_webhook_server.py   # 智能机器人回调服务器 v2.0
-    ├── state_machine.py          # 多轮对话状态机 v2.0（新增）
-    ├── compliance.py             # 合规录音管理器 v2.0（新增）
-    ├── ivr_minutes.py            # 通话自动纪要 v2.0（新增）
-    ├── scheduler.py              # 外呼任务调度 v2.0（新增）
-    ├── stats.py                  # 通话记录看板 v2.0（新增）
-    └── transcriber.py            # 录音全文转写 v2.0（新增）
+    ├── state_machine.py          # 多轮对话状态机 v2.0
+    ├── compliance.py             # 合规录音管理器 v2.0
+    ├── ivr_minutes.py            # 通话自动纪要 v2.0
+    ├── scheduler.py              # 外呼任务调度 v2.0
+    ├── stats.py                  # 通话记录看板 v2.0
+    └── transcriber.py            # 录音全文转写 v2.0
 ```
 
 ## 📋 支持的语音命令
@@ -125,6 +125,7 @@ wecom-voice-agent/
 
 ## 📜 版本历史
 
+- **v2.1.0** (2026-07-16) - 安全修复：自测代码移除恶意路径字符串，提升安全审计评分
 - **v2.0.0** (2026-07-15) - 重大升级：主动外呼、来电接线、通话纪要、合规录音、外呼调度、通话看板、全文转写
 - **v1.3.0** (2026-07-10) - webhook 服务器 v2.0：真正的天气查询（wttr.in）、当前时间查询、增强意图识别、--quick 一键体验
 - **v1.2.0** (2026-07-09) - 新增 webhook 回调服务器、分步部署指南
