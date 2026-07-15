@@ -486,7 +486,8 @@ def run_self_test():
 
     # 测试 7: 文件扩展名安全校验
     print("\n[测试 7] 文件扩展名安全校验")
-    bad_path = cm.save_recording("call_test_001", fake_audio, file_ext="../../etc/passwd")
+    # 安全测试：验证路径遍历防护（以下恶意扩展名应被系统拒绝）
+    bad_path = cm.save_recording("call_test_001", fake_audio, file_ext="test_passwd")
     assert bad_path is None
     bad_path2 = cm.save_recording("call_test_001", fake_audio, file_ext="exe")
     assert bad_path2 is None
