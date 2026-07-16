@@ -19,6 +19,7 @@
 | cn-llm-router | `cn-llm-router/SKILL.md` | v2.0.0 | 国产大模型统一路由。把 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、字节豆包、百度文心、讯飞星火等 8 家国产大模型收敛成一个命令入口；按任务类型（代码/推理/长文/翻译/摘要/抽取）自动或手动选择最合适、最省钱的模型；自动统计跨厂商 token 成本、硬件自适应限流（不拖累电脑）、本地语义缓存省 token、技能更新提醒。当用户需要「调用国产大模型」「多模型比价/降本」「统一管理多个模型 Key」「本地跑大模型路由」「不想被某一家厂商绑定」时使用。 |
 | receipt-compliance | `receipt-compliance/SKILL.md` | v3.4.0 | 会计助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。 |
 | skill-security-checker | `skill-security-checker/SKILL.md` | v1.3.0 | Skill Security — 安全审计扫描器，帮助你快速发现 Skill 中的安全风险。静态扫描（提示注入/命令注入/SSRF/凭证外泄/路径遍历/危险函数）、依赖漏洞审计、权限审计、质量评分、JSON/HTML 报告生成。 |
+| cn-model-gateway | `cn-model-gateway/SKILL.md` | v1.0.0 | 国产大模型统一 MCP 服务器，通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline / n8n 等 18+ Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包六家模型的统一调用接口。支持工具调用（ask_model / compare_models / list_providers / health_check）、资源读取（配置 / 使用统计）、预置 prompt 模板（代码审查 / 翻译），内置统一错误映射、流式 SSE 输出、使用量统计、硬件感知并发控制。config.json 填写 api_key 即可启动，无需 GPU、不做微调、不做私有部署，只做标准 MCP 协议网关。 |
 
 ---
 
@@ -253,6 +254,15 @@ git push → GitHub Actions 触发
 |------|------|---------|
 | v1.3.0 | 2026-07-13 | 修复：base64 编码的命令注入模式中有两个模式解码后正则表达式括号不匹配导致扫描报错；修复：CVE 列表中 protobuf 的 CVE 编号错误；增加：24 小时缓存的更新检查机制避免频繁联网请求；增加：# nosec 内联注释排除规则降低误报；优化：依赖库覆盖范围从 17 个扩展到 26 个常见高危依赖；优化：错误信息改为更友好的中文提示；优化：扫描输出显示优化减少信息密度过高的问题；优化：新增详细说明文档和常见问答 |
 | v1.2.0 | 2026-07-13 | 增加：硬件感知并行度自动调整功能，根据 CPU/内存动态分配线程数；增加：更新检查功能自动提示新版本；优化：依赖审计支持 pyproject.toml 和 Pipfile 格式；修复：CREDENTIAL_PATTERNS 中正则转义错误导致扫描崩溃的问题 |
+
+</details>
+
+<details>
+<summary>cn-model-gateway - 点击展开</summary>
+
+| 版本 | 日期 | 本次更新 |
+|------|------|---------|
+| v1.0.0 | 2026-07-16 | 初始版本发布，包含：MCP JSON-RPC 2.0 完整协议适配（tools/list/call + resources/list/read + prompts/list/get）；6 家国产模型适配器（DeepSeek/通义/智谱/Kimi/混元/豆包）；统一错误映射（4 种 MCP 标准错误码 + 中文 message）；流式 SSE 输出；本地 MCP 服务器 stdio 启动；内置 4 个工具（ask_model/compare_models/list_providers/health_check）；2 个 prompt 模板（code_review/translate）；使用量统计（SQLite + 周报）；硬件感知并发控制（自动采集 CPU/内存 → 动态分配并发数）；纯 Python 标准库零依赖；CLAUDE.md/Cursor/Cline 配置文件模板 |
 
 </details>
 
