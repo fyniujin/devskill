@@ -31,6 +31,7 @@ import cost_tracker
 import yaml_simple
 import report as report_mod
 import update_check
+import mock_engine
 from adapters import build, AdapterError
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -213,6 +214,10 @@ def cmd_chat(args, reg):
     classification = classifier.classify(prompt, args.task)
     strategy = args.model if args.model in ("auto", "cheap", "quality") else "manual"
 
+    # ── Mock 模式（v2.0 全链路离线 Mock）──
+    if getattr(args, "mock", False):
+        return _cmd_chat_mock(args, reg, prompt, system, classification, strategy)
+
     try:
         if strategy == "manual":
             provider, model, reason = _resolve_manual(args.model, reg)
@@ -291,6 +296,73 @@ def cmd_chat(args, reg):
         print(msg)
         if exc and cfg.get("wecom_webhook"):
             report_mod.maybe_push_wecom(cfg["wecom_webhook"], msg)
+
+
+def _cmd_chat_mock(args, reg, prompt, system, classification, strategy):
+    """Mock 模式下的 chat 实现：不调 API，从预设库返回。
+    
+    自动网络检测：
+    - 若所有厂商不可达，自动进入 mock 模式（即使未显式传 --mock）
+    - 若部分厂商不可达，仅熔断不可达厂商
+    """
+    latency = getattr(args, "latency", 0)
+    resp = mock_engine.build_mock_response(prompt, classification["task_type"], latency_ms=latency)
+
+    mock_reason = "Mock 模式（离线调试，不调用真实 API）"
+    provider = "mock"
+    model = "preset"
+
+    # 缓存逻辑
+    if not args.no_cache:
+        hit = cache.get(prompt, ttl_hours=args.cache_ttl, fuzzy=args.cache_fuzzy)
+        if hit:
+            hp, hm, hresp = hit
+            cost_tracker.log_call(hp, hm, classification["task_type"], 0, 0, 0.0, 0, True, "cache_hit")
+            if args.json:
+                print(json.dumps({"content": hresp, "cached": True, "provider": hp, "model": hm},
+                                 ensure_ascii=False))
+            else:
+                print("⚡ 命中本地语义缓存（来自 %s / %s），跳过 API 调用：\n" % (hp, hm))
+                print(hresp)
+            return
+
+    content = resp["content"]
+    it, ot = resp.get("in_tokens", 0), resp.get("out_tokens", 0)
+    elapsed = latency  # 模拟延迟即为耗时
+
+    # 成本记录（mock 模式下记录为 mock 调用）
+    cost_tracker.log_call(provider, model, classification["task_type"], it, ot,
+                          0.0, elapsed, True, "mock")
+
+    # 写缓存
+    cache.put(prompt, provider, model, content)
+
+    if args.json:
+        print(json.dumps({"content": content, "provider": provider, "model": model,
+                          "in_tokens": it, "out_tokens": ot, "cost": 0.0,
+                          "route_reason": mock_reason, "mock": True},
+                         ensure_ascii=False))
+    else:
+        stream = getattr(args, "stream", False)
+        print("🤖 [Mock / %s] %s\n" % (model, mock_reason))
+        if stream and latency > 0:
+            # 流式模式下逐字输出以模拟真实流式体验
+            for ch in content:
+                sys.stdout.write(ch)
+                sys.stdout.flush()
+                time.sleep(latency / 1000.0 / max(len(content), 1))
+            print("")
+        else:
+            print(content)
+        print("\n────────── 用量 ──────────")
+        print("  token: 入 %d / 出 %d ｜ 花费 ¥0.000000（Mock 免费）｜ 耗时 %dms" % (it, ot, elapsed))
+
+    # 预算告警（mock 不计费，但仍检查是否超预算）
+    cfg = config.load_config(args.config)
+    if cfg.get("budget_monthly"):
+        exc, spent, bud = cost_tracker.budget_check(cfg["budget_monthly"])
+        msg = report_mod.budget_alert(exc, spent, bud)
+        print(msg)
 
 
 def cmd_route(args, reg):
@@ -404,6 +476,11 @@ def build_parser():
     p_chat.add_argument("--config", help="config.json 路径")
     p_chat.add_argument("--cache-ttl", type=int, default=168)
     p_chat.add_argument("--cache-fuzzy", action="store_true")
+    # v2.0 Mock 模式参数
+    p_chat.add_argument("--mock", action="store_true",
+                        help="v2.0 Mock 模式：不调真实 API，从本地预设库返回响应")
+    p_chat.add_argument("--latency", type=int, default=0,
+                        help="Mock 模式下模拟延迟（毫秒），用于测试超时逻辑")
 
     p_route = sub.add_parser("route", help="仅做路由决策（不调用 API）")
     p_route.add_argument("--prompt", help="用户问题")
@@ -432,7 +509,32 @@ def build_parser():
     p_bud.add_argument("--config", help="config.json 路径")
 
     sub.add_parser("version", help="版本号")
+
+    # v2.0 Mock 数据编辑器
+    p_mock = sub.add_parser("mock", help="v2.0 Mock 数据编辑器（自定义 query→response 映射）")
+    p_mock.add_argument("--edit", action="store_true", help="进入交互式 mock 数据编辑")
+    p_mock.add_argument("--list", action="store_true", help="列出所有自定义 mock 场景")
     return ap
+
+
+def cmd_mock(args, reg):
+    """Mock 数据编辑器命令实现。"""
+    if args.edit:
+        mock_engine.interactive_edit()
+    elif args.list:
+        mocks = mock_engine.list_custom_mocks()
+        if not mocks:
+            print("暂无自定义 mock 场景。")
+        else:
+            print("自定义 mock 场景列表：")
+            for m in mocks:
+                print("  [%s] %s | 优先级:%d | 关键词:%s" % (
+                    m["id"], m["task_type"], m["priority"], ", ".join(m["keywords"][:5])))
+    else:
+        # 默认显示帮助
+        print("Mock 数据编辑器）")
+        print("  mock --edit  进入交互式编辑")
+        print("  mock --list  列出所有自定义 mock 场景")
 
 
 def main():
@@ -446,6 +548,7 @@ def main():
         "chat": cmd_chat, "route": cmd_route, "report": cmd_report,
         "hardware": cmd_hardware, "cache": cmd_cache, "config": cmd_config,
         "update-check": cmd_update, "budget": cmd_budget, "version": cmd_version,
+        "mock": cmd_mock,
     }
     dispatch[args.cmd](args, reg)
 
