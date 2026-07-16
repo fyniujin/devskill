@@ -1,0 +1,20 @@
+{
+  "deepseek": {
+    "api_key": "sk-your-deepseek-api-key-here"
+  },
+  "tongyi": {
+    "api_key": "sk-your-dashscope-api-key-here"
+  },
+  "zhipu": {
+    "api_key": "your-zhipu-api-key-here"
+  },
+  "kimi": {
+    "api_key": "your-kimi-api-key-here"
+  },
+  "hunyuan": {
+    "api_key": "YOUR_SECRET_ID:YOUR_SECRET_KEY"
+  },
+  "doubao": {
+    "api_key": "your-volcengine-api-key-here"
+  }
+}
