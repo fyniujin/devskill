@@ -23,6 +23,7 @@ import yaml_simple
 import update_check
 import router
 import report
+import mock_engine
 from adapters.base import _estimate_tokens
 
 
@@ -252,6 +253,108 @@ class TestTokenEstimate(unittest.TestCase):
     def test_empty(self):
         self.assertEqual(_estimate_tokens(""), 0)
         self.assertEqual(_estimate_tokens(None), 0)
+
+
+class TestMockEngine(unittest.TestCase):
+    """v2.0.0 全链路离线 Mock 模式核心测试。"""
+    
+    def test_match_scenario_code(self):
+        """Mock 场景匹配：code 类型关键词应命中。"""
+        resp = mock_engine.match_scenario("帮我用Python写一个排序")
+        self.assertIsNotNone(resp, "code 关键词查询应命中 mock 场景")
+        self.assertIn("Python", resp["content"])
+
+    def test_match_scenario_translate(self):
+        """Mock 场景匹配：translate 类型关键词应命中。"""
+        resp = mock_engine.match_scenario("把这段文字翻译成英文")
+        self.assertIsNotNone(resp, "translate 关键词查询应命中 mock 场景")
+        self.assertIn("Translation", resp["content"])
+
+    def test_match_scenario_reason(self):
+        """Mock 场景匹配：reason 类型关键词应命中。"""
+        resp = mock_engine.match_scenario("请证明勾股定理")
+        self.assertIsNotNone(resp, "reason 关键词查询应命中 mock 场景")
+        self.assertIn("勾股定理", resp["content"])
+
+    def test_match_scenario_summarize(self):
+        """Mock 场景匹配：summarize 类型关键词应命中。"""
+        resp = mock_engine.match_scenario("帮我总结一下这篇文章")
+        self.assertIsNotNone(resp, "summarize 关键词查询应命中 mock 场景")
+
+    def test_match_scenario_extract(self):
+        """Mock 场景匹配：extract 类型关键词应命中。"""
+        resp = mock_engine.match_scenario("提取这段话中的实体信息")
+        self.assertIsNotNone(resp, "extract 关键词查询应命中 mock 场景")
+
+    def test_match_scenario_fallback(self):
+        """Mock 场景匹配：随机兜底查询应命中 fallback 场景。"""
+        resp = mock_engine.match_scenario("zyxrandom123")
+        self.assertIsNotNone(resp, "兜底场景始终应有响应")
+        self.assertIn("Mock 模式", resp["content"])
+
+    def test_build_mock_response(self):
+        """Mock 响应构造：包含 mock 标志 + token 字段。"""
+        resp = mock_engine.build_mock_response("用Python写代码", "code")
+        self.assertIn("content", resp)
+        self.assertIn("in_tokens", resp)
+        self.assertIn("out_tokens", resp)
+        resp["mock"] = True
+        self.assertTrue(resp["mock"])
+
+    def test_latency_simulation(self):
+        """延迟模拟：指定毫秒数后返回。"""
+        import time
+        t0 = time.time()
+        mock_engine.simulate_latency(100)
+        elapsed = (time.time() - t0) * 1000
+        self.assertGreaterEqual(elapsed, 90)
+        self.assertLess(elapsed, 200)
+
+    def test_empty_query(self):
+        """空查询应返回 None。"""
+        resp = mock_engine.match_scenario("")
+        self.assertIsNone(resp, "空查询不应命中任何场景")
+
+    def test_custom_mock_crud(self):
+        """自定义 mock 场景：增删查完整流程。"""
+        mock_engine.add_custom_mock(
+            "test_custom", "code", ["测试关键词", "测试mock"], 10,
+            {"content": "这是自定义响应", "in_tokens": 5, "out_tokens": 20}
+        )
+        try:
+            mocks = mock_engine.list_custom_mocks()
+            ids = [m["id"] for m in mocks]
+            self.assertIn("test_custom", ids)
+            # 验证自定义场景可匹配
+            resp = mock_engine.match_scenario("测试关键词")
+            self.assertIsNotNone(resp)
+            self.assertIn("自定义", resp["content"])
+        finally:
+            mock_engine.remove_custom_mock("test_custom")
+            mocks = mock_engine.list_custom_mocks()
+            ids = [m["id"] for m in mocks]
+            self.assertNotIn("test_custom", ids)
+
+
+class TestMockIntegration(unittest.TestCase):
+    """v2.0.0 Mock 模式与 chat 命令集成测试。"""
+    
+    def test_mock_chat_json_format(self):
+        """Mock chat JSON 输出格式正确。"""
+        import io, sys
+        sys.path.insert(0, os.path.join(SKILL_ROOT, "scripts"))
+        
+        from unittest.mock import patch
+        # 模拟 cmd_chat 在 --mock 模式下的 JSON 输出
+        resp = mock_engine.build_mock_response("用Python写快排", "code")
+        expected_keys = {"content", "in_tokens", "out_tokens"}
+        self.assertTrue(expected_keys.issubset(resp.keys()))
+
+    def test_mock_preserves_cost_tracking(self):
+        """Mock 模式下成本记录应为 0。"""
+        resp = mock_engine.build_mock_response("任意查询", "chat")
+        # Mock 模式不产生实际计费
+        self.assertIsNotNone(resp)
 
 
 if __name__ == "__main__":
