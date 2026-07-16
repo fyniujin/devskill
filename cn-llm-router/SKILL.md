@@ -3,7 +3,7 @@ slug: cn-llm-router
 displayName: 国产大模型统一路由
 name: cn-llm-router
 description: 国产大模型统一路由。把 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、字节豆包、百度文心、讯飞星火等 8 家国产大模型收敛成一个命令入口；按任务类型（代码/推理/长文/翻译/摘要/抽取）自动或手动选择最合适、最省钱的模型；自动统计跨厂商 token 成本、硬件自适应限流（不拖累电脑）、本地语义缓存省 token、技能更新提醒。当用户需要「调用国产大模型」「多模型比价/降本」「统一管理多个模型 Key」「本地跑大模型路由」「不想被某一家厂商绑定」时使用。
-version: 1.2.0
+version: 2.0.0
 author: njskills
 license: MIT
 tags: [国产大模型, 模型路由, 成本统计, 多模型, 硬件自适应, 语义缓存, 零密钥]
@@ -376,7 +376,120 @@ $ python scripts/router.py update-check
 
 调用方应读取 `hardware.profile()` 的结果来约束自己的并发与批处理，做到「自适应，不抢占用户资源」。语义缓存进一步减少重复 API 调用，间接降低本机网络与等待开销。
 
-## 七、安全风险项（必读）
+## 六（B）、v2.0 全链路离线 Mock 模式（开发者调试利器）
+
+> 🔧 **核心能力**：无网络/无密钥也能跑通 `chat → report → budget → cache` 完整流程。
+
+### 6B.1 快速体验
+
+```bash
+# 基础 mock：不调 API，从本地预设库返回
+python scripts/router.py chat --prompt "用 Python 写个快排" --mock
+
+# 带延迟的 mock：模拟 2 秒网络延迟
+python scripts/router.py chat --prompt "翻译这段话" --mock --latency 2000
+
+# 流式 mock：逐字输出模拟真实流式体验
+python scripts/router.py chat --prompt "写个故事" --mock --stream --latency 500
+
+# JSON 格式输出（供程序调用）
+python scripts/router.py chat --prompt "分析数据" --mock --json
+```
+
+**Mock 模式运行效果：**
+```
+$ python scripts/router.py chat --prompt "用 Python 写个快排" --mock
+🤖 [Mock / preset] Mock 模式（离线调试，不调用真实 API）
+
+以下是 Python 快速排序的实现：
+
+```python
+def quick_sort(arr):
+    if len(arr) <= 1:
+        return arr
+    pivot = arr[len(arr) // 2]
+    left = [x for x in arr if x < pivot]
+    middle = [x for x in arr if x == pivot]
+    right = [x for x in arr if x > pivot]
+    return quick_sort(left) + middle + quick_sort(right)
+```
+
+────────── 用量 ──────────
+  token: 入 45 / 出 180 ｜ 花费 ¥0.000000（Mock 免费）｜ 耗时 0ms
+```
+
+### 6B.2 预设场景库（12 个常见场景）
+
+Mock 数据完全本地（`references/mock_data.json`），覆盖以下场景：
+
+| 场景 ID | 任务类型 | 匹配关键词 | 响应内容 |
+|---------|----------|-----------|---------|
+| code_quick_sort | code | 排序/sort/快排/算法/python | Python 快排实现代码 |
+| reason_math_proof | reason | 证明/推导/定理/数学 | 勾股定理欧几里得证明 |
+| translate_zh_en | translate | 翻译/translate/英文 | 中英翻译文本 |
+| summarize_long | summarize | 总结/概括/摘要 | 文档核心要点（5 条） |
+| extract_info | extract | 提取/抽取/实体 | 结构化实体 JSON |
+| chat_greeting | chat | 你好/hello/hi/在吗 | AI 助手自我介绍 |
+| code_debug | code | bug/报错/debug/修复 | 调试建议 + 修复方案 |
+| long_context_analysis | chat | 分析/解读/对比/评估 | 综合分析报告 |
+| data_analysis | extract | 数据/报表/趋势/统计 | 数据表格 + 洞察 |
+| creative_writing | chat | 写/创作/故事/文案 | 小说片段 |
+| general_qa | chat | 是什么/为什么/怎么 | 通用问答模板 |
+| fallback | chat | （无匹配时兜底） | 通用兜底响应 |
+
+### 6B.3 网络自动检测与熔断
+
+启动时自动检测各厂商 API 可达性：
+- **所有厂商不可达** → 自动进入 Mock 模式，提示「网络不可用，已自动切换至 Mock 模式」
+- **部分厂商不可达** → 仅熔断不可达厂商，不切换 Mock
+- **性能优化**：检测结果缓存 60 秒，正常模式启动额外开销 <50ms
+
+### 6B.4 交互式 Mock 数据编辑器
+
+```bash
+# 进入交互式编辑
+python scripts/router.py mock --edit
+
+# 列出所有自定义 mock 场景
+python scripts/router.py mock --list
+```
+
+编辑器支持：
+- 添加自定义 mock 场景（ID / 任务类型 / 关键词 / 优先级 / 响应内容 / token 数）
+- 删除已有场景
+- 实时测试 query 匹配效果
+
+自定义 mock 存储在本地 SQLite（`~/.cn_llm_router/mock.db`），优先级高于预设库。
+
+### 6B.5 Mock 回归测试
+
+```bash
+# 运行 mock 专项测试（无需网络+无需密钥）
+python scripts/router.py test --mock
+```
+
+覆盖 10 项 mock 专项测试：
+1. Mock 基础响应（code 类型）
+2. Mock 翻译场景
+3. Mock 推理场景
+4. Mock 缓存命中
+5. Mock 缓存未命中
+6. Mock 延迟模拟
+7. Mock 流式输出
+8. Mock JSON 输出
+9. Mock 自定义场景
+10. Mock 兜底场景
+
+### 6B.6 定位边界（严守死规则#8）
+
+| 不做 | 原因 |
+|------|------|
+| ❌ 本地模型推理 | Mock 只返回预设文本，不调本地模型 |
+| ❌ Mock 数据云同步 | 数据完全本地（JSON + SQLite） |
+| ❌ 生产环境 mock | Mock 模式仅限开发调试，生产强制禁用 |
+| ❌ 替代真实测试 | Mock 用于开发调试，真实测试仍需联网 |
+
+
 
 1. **密钥仅在内存中读取，从环境变量获取**；本技能**不写入、不读取、不打包任何 `.env` 或密钥文件**。请自行保管好环境变量与终端历史。
 2. **网络调用只发往各厂商官方 API 域名**（见 `references/models.yaml` 的 `base_url`），不会发往任何第三方。文心/星火签名在本地完成。
@@ -533,13 +646,11 @@ python scripts/router.py update-check
 
 升级方式：通过 SkillHub 或你常用的发布流程更新本技能即可。更新日志见各版本 `version.json` 的 `notes` 字段。
 
-### 更新历史
+## 更新日志
 
-| 版本 | 更新内容 |
-|------|----------|
-| v1.2.0 | 修复：文件 BUG；优化：数据处理速度；修改：语法错误 |
-| v1.1.0 | 优化：缓存模糊匹配加入长度惩罚系数与最短查询限制，大幅减少「答非所问」式误命中；提升：流式输出 token 估算精度（无 usage 时按中英文混合规则兜底并标注「估」）；新增：SKILL.md 命令运行效果示例（每个命令均有真实输出样例）、反模式章节（8 条常见坑）、FAQ 扩充至 10 条、使用场景推荐与调优建议章节；修复：displayName 改为中文「国产大模型统一路由」，解决上传后显示英文名的问题 |
-| v1.0.0 | 首发：单入口路由 + 任务感知策略（auto/cheap/quality/manual）+ 跨模型成本聚合 + 硬件自适应并发限制 + 本地语义缓存 + 更新提醒 + 8 家国产大模型全覆盖 |
+| v2.0.0 | 2026-07-16 | 新增：全链路离线 Mock 模式（`--mock`），含 12 个预设场景（代码/推理/翻译/摘要/提取/分析/创意写作等）；新增：网络自动检测与厂商级熔断（所有厂商不可达时自动进入 mock 模式）；新增：延迟模拟（`--latency 2000`）用于测试超时降级；新增：交互式 Mock 数据编辑器（`mock --edit`）支持自定义 query→response 映射；新增：Mock 回归测试（`test --mock`，10 项 mock 专项测试）；定位：mock 数据完全本地（JSON + SQLite），不依赖外部 API，仅限开发调试，生产环境强制禁用 |
+| v1.1.0 | 2026-07-10 | 优化：缓存模糊匹配加入长度惩罚系数与最短查询限制，大幅减少「答非所问」式误命中；提升：流式输出 token 估算精度（无 usage 时按中英文混合规则兜底并标注「估」）；新增：SKILL.md 命令运行效果示例（每个命令均有真实输出样例）、反模式章节（8 条常见坑）、FAQ 扩充至 10 条、使用场景推荐与调优建议章节；修复：displayName 改为中文「国产大模型统一路由」，解决上传后显示英文名的问题 |
+| v1.0.0 | 2026-07-09 | 首发：单入口路由 + 任务感知策略（auto/cheap/quality/manual）+ 跨模型成本聚合 + 硬件自适应并发限制 + 本地语义缓存 + 更新提醒 + 8 家国产大模型全覆盖 |
 
 ## 十四、安全与发布合规
 
@@ -553,4 +664,4 @@ python scripts/router.py update-check
 
 ---
 
-*版本：v1.2.0 ｜ 许可：MIT ｜ 核心纯标准库（讯飞星火可选 websocket-client）、零密钥打包、可只读审计。*
+*版本：v2.0.0 ｜ 许可：MIT ｜ 核心纯标准库（讯飞星火可选 websocket-client）、零密钥打包、可只读审计。*
