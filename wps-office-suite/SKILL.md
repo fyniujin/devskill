@@ -3,7 +3,7 @@ name: wps-office-suite
 displayName: WPS Office 全家桶
 slug: wps-office-suite
 description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、反模式FAQ、避坑指南、自动重试、硬件自适应、环境自检、错误速查手册、Skill更新提醒；v4.0新增：Word→PPT一键生成、Excel自然语言数据分析、Word合同条款审查、Excel发票OCR入账
-version: 4.0.0
+version: 4.1.0
 category: 办公协作与生产力工具
 platforms:
   - windows
@@ -42,7 +42,7 @@ tags:
   建议反馈邮箱: njskills@agent.qq.com
 ---
 
-# WPS Office 全家桶 v4.0.0 ✅
+# WPS Office 全家桶 v4.1.0 ✅
 
 > 🏗️ **四引擎智能识别**：自动检测用户电脑已安装的软件，按 WPS → MS Office → LibreOffice → 纯Python 顺序选择最合适的引擎
 > ✨ **纯Python模式增强**：排序、筛选、图表、公式、统计 — 跨平台全部支持
@@ -689,10 +689,11 @@ python templates/generate_templates.py --dir ./output  # 生成模板
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
-| v4.0.0 | 2026-07-13 | 🎯 Word→PPT一键生成；🎯 Excel自然语言数据分析；🎯 Word合同条款审查标注；🎯 Excel发票OCR入账；📈 新增4个专用脚本（wps_docx_to_ppt/wps_nl_analysis/wps_contract_review/wps_invoice_ocr）；🔗 Worker路由扩展至28个命令 |
-| v3.1.0 | 2026-07-17 |🔧 模板安全修复（删除二进制文件，改为纯Python代码生成）；🆕 新增20+避坑指南；📋 FAQ扩展到15个；📊 新增文件限制速查表 |
-| v3.0.0 | 2026-07-07 | 🔄 自动重试机制（3次指数退避）；⚡ 硬件自适应（CPU/内存动态调整）；📬 Skill 更新检查（7天提醒）；📋 常见问题 FAQ（8个 Q&A）；🛠 完善 CLI 参数说明 + 返回结果示例；📧 反馈邮箱 njskills@agent.qq.com；🚫 反模式 FAQ（8个常见错误）；🏆 最佳实践（10个案例）；🔧 wps_performance.py 性能管理 |
-| v2.5.0 | 2026-07-03 | ✨ 纯Python模式增强：排序/筛选/图表/公式/统计；📂 新增文档模板目录；🏆 新增10个最佳实践案例；🚫 新增反模式FAQ |
-| v2.2.0 | 2026-06-30 | 🏗️ 四引擎智能识别；🆕 LibreOffice Headless 跨平台兜底；✨ 纯Python格式设置/表格/图片插入 |
-| v2.1.0 | 2026-06-28 | 🆕 目录生成；🆕 环境自检；🆕 反馈入口；📚 错误速查手册 |
+| v4.1.0 | 2026-07-17 | 增加：PPT智能生成深度增强模块 ppt_generator.py（多源输入/演讲者备注/动画建议/配色适配/图表推荐/排练辅助）；增加：4 大工具 CLI 子命令扩展（docx-to-ppt/generate/nl-analyze/invoice/review）；增加：配色方案自动生成引擎；增加：演讲者备注双模式（模板引擎 + 外部 LLM 可选）；优化：PPT 生成流程重构为分层架构 |
+| v4.0.0 | 2026-07-13 | 增加：Word→PPT一键生成；增加：Excel自然语言数据分析；增加：Word合同条款审查标注；增加：Excel发票OCR入账；增加：4 个专用脚本（wps_docx_to_ppt/wps_nl_analysis/wps_contract_review/wps_invoice_ocr）；增加：Worker 路由扩展至 28 个命令 |
+| v3.1.0 | 2026-07-07 | 修复：模板安全问题（删除二进制文件，改为纯Python代码生成）；增加：20+避坑指南；增加：FAQ扩展到15个；增加：文件限制速查表 |
+| v3.0.0 | 2026-07-07 | 增加：自动重试机制（3次指数退避）；增加：硬件自适应（CPU/内存动态调整）；增加：Skill更新检查（7天提醒）；增加：常见问题FAQ（8个Q&A）；增加：CLI参数说明+返回结果示例；增加：反馈邮箱；增加：反模式FAQ（8个常见错误）；增加：最佳实践（10个案例）；增加：wps_performance.py 性能管理 |
+| v2.5.0 | 2026-07-03 | 增加：纯Python模式增强（排序/筛选/图表/公式/统计）；增加：文档模板目录；增加：10个最佳实践案例；增加：反模式FAQ |
+| v2.2.0 | 2026-06-30 | 增加：四引擎智能识别；增加：LibreOffice Headless 跨平台兜底；增加：纯Python格式设置/表格/图片插入 |
+| v2.1.0 | 2026-06-28 | 增加：目录生成；增加：环境自检；增加：反馈入口；增加：错误速查手册 |
 | v1.0.0 | 2026-06-28 | 初始版本，三大组件 + 格式转换 |
