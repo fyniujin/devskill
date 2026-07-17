@@ -16,5 +16,17 @@
   },
   "doubao": {
     "api_key": "your-volcengine-api-key-here"
+  },
+  "minimax": {
+    "api_key": "your-minimax-api-key-here"
+  },
+  "lingyi": {
+    "api_key": "your-lingyi-api-key-here"
+  },
+  "baichuan": {
+    "api_key": "your-baichuan-api-key-here"
+  },
+  "stepfun": {
+    "api_key": "your-stepfun-api-key-here"
   }
 }
