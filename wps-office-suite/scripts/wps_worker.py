@@ -750,6 +750,22 @@ def cmd_invoice_ocr(args):
         output_path=args.get("output", "")
     )
 
+def cmd_ppt_generate(args):
+    """PPT 智能生成（多源输入 + 增强）"""
+    from ppt_generator import generate_ppt
+    return generate_ppt(
+        input_path=args.get("input"),
+        output_path=args.get("output", ""),
+        input_type=args.get("type", "auto"),
+        title=args.get("title", ""),
+        theme=args.get("theme", "business"),
+        brand_color=args.get("brand_color", ""),
+        scheme_type=args.get("scheme_type", "complementary"),
+        enable_notes=not args.get("no_notes", False),
+        enable_animations=not args.get("no_animations", False),
+        enable_rehearsal=not args.get("no_rehearsal", False)
+    )
+
 COMMANDS = {
     "create_word": cmd_create_word,
     "edit_word": cmd_edit_word,
@@ -779,6 +795,7 @@ COMMANDS = {
     "nl_analyze": cmd_nl_analyze,
     "contract_review": cmd_contract_review,
     "invoice_ocr": cmd_invoice_ocr,
+    "ppt_generate": cmd_ppt_generate,
     "exit": None,
 }
 
