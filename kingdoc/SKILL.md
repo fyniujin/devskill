@@ -2,15 +2,15 @@
 name: kingdoc
 displayName: 金山文档 KingDoc
 slug: kingdoc
-version: 3.0.0
+version: 3.2.0
 description: >
   金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理
   （智能文档/文字/电子表格/演示文稿/多维表格/收集表/思维导图/流程图/附件），
   深度直连金山文档（WPS）开放平台原生 API，覆盖腾讯文档全部能力 + 金山独有 10 项增强
   （回收站、版本历史、格式转换、纯文本提取、本地 Tesseract OCR、通知推送、Webhook、
-  批量任务、政企合规、硬件自适应性能）。文字/演示/思维导图/流程图采用"本地生成→上传覆盖"，
-  电子表格/多维表格采用 API 精细编辑。本地生成、OCR、硬件画像等能力零密钥可用。
-description_zh: "金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理（深度直连 WPS 开放平台）"
+  批量任务、政企合规、硬件自适应性能、WPS AI 能力）。文字/演示/思维导图/流程图采用"本地生成→上传覆盖"，
+  电子表格/多维表格采用 API 精细编辑。本地生成、OCR、硬件画像、WPS AI 等能力零密钥可用。
+description_zh: "金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理（深度直连 WPS 开放平台 + WPS AI 能力）"
 category: 办公效率
 platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
 tags: [文档处理, 表格处理, PPT生成, 多维表格, 表单收集, 思维导图, 流程图, OCR, 政企合规]
@@ -252,6 +252,21 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 | `kdoc.local.ocr.extract` | 本地 OCR 提取图片文字 |
 | `kdoc.local.hardware.profile` | 采集本机硬件 + 推荐并发数 |
 
+### 7️⃣ WPS AI 能力（v3.2.0 新增，本地降级优先）
+
+> WPS AI 目前无公开开发者 API，本模块采用**本地降级 + 自研逻辑**实现，零密钥可用。
+> 未来如 WPS AI 开放 API，只需新增后端即可升级，无需改动上层。
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.wps_ai.write` | AI 写作辅助 | polish(润色) / expand(扩写) / shorten(缩写) / continue_write(续写) / rewrite(改写) |
+| `kdoc.wps_ai.analyze` | AI 数据分析 | 自然语言提问 → 基础统计 + 公式建议 |
+| `kdoc.wps_ai.ppt` | AI PPT 生成 | Markdown 大纲 → 自动生成 PPT |
+| `kdoc.wps_ai.read` | AI 阅读助手 | summarize(总结) / qa(问答) / mindmap(思维导图) |
+| `kdoc.wps_ai.detect_intent` | 意图检测 | 识别用户输入匹配的 WPS AI 能力 |
+
+**后端策略**：本地降级优先 → 未来可扩展 WPS Open API / COM 自动化 / Web API
+
 ---
 
 ## 11. 完整场景案例（v3.0.0 新增）
@@ -442,45 +457,14 @@ python -m engine.update_check --version 3.0.0 --reminder
 
 ---
 
-## 21. 📋 更新历史
+## 更新日志
 
-### v3.0.0 — 2026-07-12（深度优化）
-**安全强化**
-- 🔧 新增「危险操作强制确认」铁律与确认清单（删除/彻底删除/覆盖/批量/权限/清空回收站/版本回滚/Webhook）
-- 🔧 禁止文件类型扩展至完整 35 类（执行脚本/Office 二进制/归档镜像/系统文件/风险脚本），并区分「用户上传拦截」与「技能内部生成豁免」
-
-**性能优化（不拖累电脑）**
-- ✅ 新增 `engine/hardware.py`：自动采集 CPU/内存，自动分配并发子进程数与批量分块
-- ✅ 批量写表、脑图/流程图渲染并发受 `workers` 上限约束
-
-**免密钥能力**
-- ✅ 新增本地 OCR 模块 `engine/local/ocr.py`：优先本地 Tesseract（免费无 key），降级云端，给安装指引
-- ✅ 明确「本地生成/OCR/硬件画像零配置可用」，降低开箱即用门槛
-
-**文档与体验（针对评测降分项）**
-- ✅ 新增「能力边界与失败场景」专章（大文件/冲突/失败/不支持项）
-- ✅ 新增「自然语言触发示例」专章（高级功能怎么说）
-- ✅ 新增「完整场景案例」专章（5 个端到端场景）
-- ✅ 新增 FAQ 专章（安全/错误集中可查）
-- ✅ 补齐缺失参考文档：`et_references.md` / `office_references.md` / `rate_limit.md`
-- ✅ 生成技能图标 `assets/icon.png`；补齐 `engine/__init__.py`、`engine/api/mcp_server.py`（真实 MCP Server）
-
-**架构**
-- 🔧 深度直连金山文档（WPS）开放平台原生 API，四大 MCP 服务稳定运行
-- 🔧 新增每日更新提醒 + 反馈邮箱 `njskills@agent.qq.com`
-
----
-
-### v2.3.0 — 2026-07-05
-- ✅ 新增智能文档/思维导图/流程图 3 品类，品类总数 6→9
-- ✅ 新增本地 Tesseract OCR、网页剪藏、HTML 一键上云
-- 🔧 MCP 服务拆分 1→4，独立限流/降级
-
-### v2.1.0 — 2026-07-02
-- 新增每日自动更新检查、纯文本提取、多维表 Webhook、批量异步任务
-
-### v2.0.0 — 2026-07-02
-- 初始版本：6 品类 + 40+ MCP 工具 + 5 层安全防御
+| v3.2.0 | 2026-07-17 | 增加：WPS AI 能力适配层（写作辅助/数据分析/PPT 生成/阅读助手），本地降级优先、自研逻辑实现、零密钥可用；增加：WPS AI 适配器 `engine/wps_ai/adapter.py`；增加：本地降级后端 `engine/wps_ai/backends/local_fallback.py`；增加：能力定义与意图映射 `engine/wps_ai/capabilities.py`；增加：WPS AI API 调研记录 `engine/wps_ai/research_notes.md`；优化：MCP Server 注册 5 个 WPS AI 工具；优化：版本号 3.0.0→3.2.0 |
+| v3.1.0 | 2026-07-15 | 增加：wps-office-suite 互通方案调研（已废弃，因平台合规不允许双 skill 互通） |
+| v3.0.0 | 2026-07-12 | 增加：危险操作强制确认铁律与确认清单（删除/彻底删除/覆盖/批量/权限/清空回收站/版本回滚/Webhook）；增加：禁止文件类型扩展至完整 35 类（执行脚本/Office 二进制/归档镜像/系统文件/风险脚本）；增加：用户上传拦截与技能内部生成豁免白名单；增加：`engine/hardware.py` 硬件自适应性能调度（自动采集 CPU/内存，自动分配并发子进程数与批量分块）；增加：本地 OCR 模块 `engine/local/ocr.py`（优先本地 Tesseract，降级云端，给安装指引）；增加：能力边界与失败场景专章；增加：自然语言触发示例专章；增加：完整场景案例专章（5 个端到端场景）；增加：FAQ 专章（8 个高频问题）；补齐：缺失参考文档 `et_references.md`/`office_references.md`/`rate_limit.md`；补齐：技能图标 `assets/icon.png`；补齐：`engine/__init__.py` 与 `engine/api/mcp_server.py`（真实 MCP Server 入口）；优化：MCP Server 深度直连金山文档开放平台原生 API；优化：每日更新提醒 + 反馈邮箱 `njskills@agent.qq.com` |
+| v2.3.0 | 2026-07-05 | 增加：智能文档/思维导图/流程图 3 品类，品类总数 6→9；增加：本地 Tesseract OCR；增加：网页剪藏；增加：HTML 一键上云；优化：MCP 服务拆分 1→4，独立限流/降级 |
+| v2.1.0 | 2026-07-02 | 增加：每日自动更新检查；增加：纯文本提取 API；增加：多维表 Webhook 事件监听；增加：批量异步任务；增加：SKILL.md 首次使用必读引导 |
+| v2.0.0 | 2026-07-02 | 初始版本发布：6 品类 + 40+ MCP 工具 + 5 层安全防御 |
 
 ---
 
