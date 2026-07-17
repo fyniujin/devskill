@@ -36,7 +36,7 @@ from engine.hardware import get_recommended_settings
 from engine.update_check import build_reminder, FEEDBACK_EMAIL
 from engine.exceptions import KingDocError
 
-APP_VERSION = "3.0.0"
+APP_VERSION = "3.2.0"
 
 # 配置路径：环境变量优先，其次 skill 根目录 config.json
 CONFIG_PATH = os.environ.get("KINGDOC_CONFIG", str(SKILL_ROOT / "config.json"))
@@ -451,6 +451,79 @@ async def kdoc_skill_feedback(message: str) -> str:
     return (f"感谢反馈！我们会认真评估。\n"
             f"您的建议已记录：{message}\n"
             f"也可直接邮件联系作者：{FEEDBACK_EMAIL}")
+
+
+# ===========================================================================
+# 十、WPS AI 能力（本地降级优先，自研逻辑实现）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_wps_ai_write(text: str, action: str = "polish") -> str:
+    """【免密钥】AI 写作辅助：润色/扩写/缩写/续写/改写。
+
+    action: polish(润色) / expand(扩写) / shorten(缩写) /
+           continue_write(续写) / rewrite(改写)
+    本地降级处理，效果有限但零配置可用。"""
+    try:
+        from engine.wps_ai.adapter import get_adapter
+        result = get_adapter().write(text, action)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 写作辅助失败：{e}"
+
+@mcp.tool()
+async def kdoc_wps_ai_analyze(data: str, question: str) -> str:
+    """【免密钥】AI 数据分析：自然语言提问，生成公式建议与基础统计。
+
+    data: CSV 文本或表格数据（每行数值用逗号/空格分隔）
+    question: 自然语言问题（如"分析趋势"、"计算平均"）
+    本地基础统计分析，零配置可用。"""
+    try:
+        from engine.wps_ai.adapter import get_adapter
+        result = get_adapter().analyze(data, question)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 数据分析失败：{e}"
+
+@mcp.tool()
+async def kdoc_wps_ai_ppt(outline: str, output_path: str = "") -> str:
+    """【免密钥】AI PPT 生成：根据大纲自动生成本地 PPT。
+
+    outline: Markdown 大纲（# 标题 → ## 子标题 → - 要点）
+    output_path: 输出路径（默认 output/wps_ai_ppt.pptx）
+    本地 python-pptx 生成，零配置可用。"""
+    try:
+        from engine.wps_ai.adapter import get_adapter
+        out = output_path or str(SKILL_ROOT / "output" / "wps_ai_ppt.pptx")
+        result = get_adapter().ppt(outline, output_path=out)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] PPT 生成失败：{e}"
+
+@mcp.tool()
+async def kdoc_wps_ai_read(content: str, action: str = "summarize",
+                           question: str = "") -> str:
+    """【免密钥】AI 阅读助手：总结/问答/思维导图。
+
+    action: summarize(总结) / qa(问答，需传 question) / mindmap(思维导图)
+    content: 文档全文
+    本地 TextRank 摘要 + 关键词提取，零配置可用。"""
+    try:
+        from engine.wps_ai.adapter import get_adapter
+        result = get_adapter().read(content, action, question=question)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 阅读助手失败：{e}"
+
+@mcp.tool()
+async def kdoc_wps_ai_detect_intent(user_input: str) -> str:
+    """检测用户输入意图，返回匹配的 WPS AI 能力。"""
+    try:
+        from engine.wps_ai.adapter import get_adapter
+        intent = get_adapter().detect_intent(user_input)
+        caps = get_adapter().get_capabilities()
+        return _to_text({"intent": intent, "capabilities": caps})
+    except Exception as e:
+        return f"[ERR] 意图检测失败：{e}"
 
 
 def main():
