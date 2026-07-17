@@ -14,7 +14,7 @@ API_URL = "https://api.deepseek.com/v1/chat/completions"
 
 class DeepSeekAdapter(BaseAdapter):
     provider_name = "deepseek"
-    default_model = "deepseek-chat"
+    default_model = "deepseek-chat"  # 支持 V3: deepseek-chat, deepseek-reasoner
 
     def _build_headers(self) -> Dict[str, str]:
         return {
