@@ -47,6 +47,26 @@ ERROR_MAP: Dict[str, Dict[str, Any]] = {
         "RateLimitError": {"code": ERROR_RATE_LIMITED, "message": "豆包 请求频率超限"},
         "BadRequestError": {"code": ERROR_PARAM_INVALID, "message": "豆包 请求参数错误"},
     },
+    "minimax": {
+        "api_key_invalid": {"code": ERROR_PARAM_INVALID, "message": "MiniMax API key 无效"},
+        "insufficient_balance": {"code": ERROR_RATE_LIMITED, "message": "MiniMax 余额不足"},
+        "rate_limit": {"code": ERROR_RATE_LIMITED, "message": "MiniMax 请求频率超限"},
+    },
+    "lingyi": {
+        "invalid_token": {"code": ERROR_PARAM_INVALID, "message": "零一万物 API key 无效"},
+        "rate_limit_exceeded": {"code": ERROR_RATE_LIMITED, "message": "零一万物 请求频率超限"},
+        "content_filter": {"code": ERROR_PARAM_INVALID, "message": "零一万物 内容审核未通过"},
+    },
+    "baichuan": {
+        "invalid_apikey": {"code": ERROR_PARAM_INVALID, "message": "百川智能 API key 无效"},
+        "quota_exceeded": {"code": ERROR_RATE_LIMITED, "message": "百川智能 额度不足"},
+        "rate_limit": {"code": ERROR_RATE_LIMITED, "message": "百川智能 请求频率超限"},
+    },
+    "stepfun": {
+        "auth_failed": {"code": ERROR_PARAM_INVALID, "message": "阶跃星辰 API key 无效"},
+        "rate_limit": {"code": ERROR_RATE_LIMITED, "message": "阶跃星辰 请求频率超限"},
+        "invalid_param": {"code": ERROR_PARAM_INVALID, "message": "阶跃星辰 请求参数错误"},
+    },
 }
 
 
@@ -66,6 +86,7 @@ class ModelRouter:
         from .adapters import (
             DeepSeekAdapter, TongYiAdapter, ZhiPuAdapter,
             KimiAdapter, HunYuanAdapter, DouBaoAdapter,
+            MiniMaxAdapter, LingYiAdapter, BaichuanAdapter, StepFunAdapter,
         )
         mapping: Dict[str, Type[BaseAdapter]] = {
             "deepseek": DeepSeekAdapter,
@@ -74,6 +95,10 @@ class ModelRouter:
             "kimi": KimiAdapter,
             "hunyuan": HunYuanAdapter,
             "doubao": DouBaoAdapter,
+            "minimax": MiniMaxAdapter,
+            "lingyi": LingYiAdapter,
+            "baichuan": BaichuanAdapter,
+            "stepfun": StepFunAdapter,
         }
         availability: Dict[str, bool] = {}
         for provider, cls in mapping.items():
