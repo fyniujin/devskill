@@ -1,11 +1,11 @@
 # CN Model Gateway（国产模型 MCP 服务器）
 
-> 国产大模型统一 MCP 服务器，通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline / n8n 等 Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包六家模型的统一调用接口。
+> 国产大模型统一 MCP 服务器，通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline / n8n 等 Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包、MiniMax、零一万物、百川智能、阶跃星辰十家模型的统一调用接口。
 
 ## 核心特性
 
 - **标准 MCP 协议**：完整实现 JSON-RPC 2.0，tools/list/call + resources/list/read + prompts/list/get
-- **6 家国产模型**：DeepSeek / 通义千问 / 智谱 GLM / Kimi / 腾讯混元 / 火山豆包
+- **10 家国产模型**：DeepSeek / 通义千问 / 智谱 GLM / Kimi / 腾讯混元 / 火山豆包 / MiniMax / 零一万物 / 百川智能 / 阶跃星辰
 - **统一错误映射**：各厂商错误码统一映射为 MCP 标准错误码，全中文提示
 - **流式 SSE 输出**：长对话实时返回，不堵内存
 - **开箱即用**：4 个内置工具 + 2 个资源 + 2 个 prompt 模板
@@ -50,6 +50,10 @@ python main.py stats      # 查看使用统计
 | Kimi (Moonshot) | moonshot-v1-8k | 普通 API key |
 | 混元 | hunyuan-standard | api_key 格式：`secret_id:secret_key` |
 | 豆包 (Volcengine) | ep-xxxxx | 普通 API key |
+| MiniMax | abab6.5s-chat | 普通 API key |
+| 零一万物 (LingYi) | yi-large | 普通 API key |
+| 百川智能 | baichuan2-turbo | 普通 API key |
+| 阶跃星辰 (StepFun) | step-1-200k | 普通 API key |
 
 ## 架构
 
@@ -57,22 +61,26 @@ python main.py stats      # 查看使用统计
 cn-model-gateway/
 ├── main.py                    ← CLI 入口
 ├── src/
-│   ├── adapters/              ← 6 家模型适配器
+│   ├── adapters/              ← 10 家模型适配器
 │   │   ├── base.py            ← 抽象基类
-│   │   ├── deepseek.py
+│   │   ├── deepseek.py        ← 支持 V3: deepseek-chat, deepseek-reasoner
 │   │   ├── tongyi.py
 │   │   ├── zhipu.py
-│   │   ├── kimi.py
+│   │   ├── kimi.py            ← 支持 v1-32k / v1-128k
 │   │   ├── hunyuan.py         ← 特殊签名机制
-│   │   └── doubao.py
-│   ├── router.py              ← 路由 + 统一错误映射
+│   │   ├── doubao.py
+│   │   ├── minimax.py         ← MiniMax abab 系列
+│   │   ├── lingyi.py          ← 零一万物 Yi 系列
+│   │   ├── baichuan.py        ← 百川智能
+│   │   └── stepfun.py         ← 阶跃星辰 Step 系列
+│   ├── router.py              ← 路由 + 统一错误映射（10 家）
 │   ├── mcp_server.py          ← MCP JSON-RPC 2.0 实现
 │   ├── monitor.py             ← 使用量统计 + 硬件感知
 │   └── utils.py               ← 工具函数
 ├── config/
-│   └── config.json.example    ← 配置模板
+│   └── config.json.example    ← 配置模板（含 10 家）
 └── tests/
-    └── test_basic.py          ← 基础测试
+    └── test_basic.py          ← 基础测试（10 家全覆盖）
 ```
 
 ## License
