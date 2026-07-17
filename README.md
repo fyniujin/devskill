@@ -19,7 +19,7 @@
 | cn-llm-router | v2.0.0 | 国产大模型统一路由。把 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、字节豆包、百度文心、讯飞星火等 8 家国产大模型收敛成一个命令入口；按任务类型（代码/推理/长文/翻译/摘要/抽取）自动或手动选择最合适、最省钱的模型；自动统计跨厂商 token 成本、硬件自适应限流（不拖累电脑）、本地语义缓存省 token、技能更新提醒。当用户需要「调用国产大模型」「多模型比价/降本」「统一管理多个模型 Key」「本地跑大模型路由」「不想被某一家厂商绑定」时使用。  |
 | receipt-compliance | v3.4.0 | 会计助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。  |
 | skill-security-checker | v1.3.0 | Skill Security — 安全审计扫描器，帮助你快速发现 Skill 中的安全风险。静态扫描（提示注入/命令注入/SSRF/凭证外泄/路径遍历/危险函数）、依赖漏洞审计、权限审计、质量评分、JSON/HTML 报告生成。  |
-| cn-model-gateway | v1.0.0 | 国产大模型统一 MCP 服务器，通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline / n8n 等 18+ Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包六家模型的统一调用接口。支持工具调用（ask_model / compare_models / list_providers / health_check）、资源读取（配置 / 使用统计）、预置 prompt 模板（代码审查 / 翻译），内置统一错误映射、流式 SSE 输出、使用量统计、硬件感知并发控制。config.json 填写 api_key 即可启动，无需 GPU、不做微调、不做私有部署，只做标准 MCP 协议网关。  |
+| cn-model-gateway | v1.1.0 | 国产大模型统一 MCP 服务器，通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline / n8n 等 18+ Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包、MiniMax、零一万物、百川智能、阶跃星辰十家模型的统一调用接口。支持工具调用（ask_model/compare_models/list_providers/health_check）、资源读取（配置/使用统计）、预置 prompt 模板（代码审查/翻译），内置统一错误映射、流式 SSE 输出、使用量统计、硬件感知并发控制。config.json 填写 api_key 即可启动，无需 GPU、不做微调、不做私有部署，只做标准 MCP 协议网关。 |
 
 ---
 
@@ -267,6 +267,7 @@ git push → GitHub Actions 触发
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v1.1.0 | 2026-07-17 | 新增 4 家模型提供商（MiniMax/零一万物/百川智能/阶跃星辰）；更新 DeepSeek-V3 支持（deepseek-chat, deepseek-reasoner）；更新 Kimi 新版本（moonshot-v1-32k, moonshot-v1-128k）；扩展统一错误映射覆盖 10 家厂商；支持模型表格同步更新 |
 | v1.0.0 | 2026-07-16 | 初始版本发布，包含：MCP JSON-RPC 2.0 完整协议适配（tools/list/call + resources/list/read + prompts/list/get）；6 家国产模型适配器（DeepSeek/通义/智谱/Kimi/混元/豆包）；统一错误映射（4 种 MCP 标准错误码 + 中文 message）；流式 SSE 输出；本地 MCP 服务器 stdio 启动；内置 4 个工具（ask_model/compare_models/list_providers/health_check）；2 个 prompt 模板（code_review/translate）；使用量统计（SQLite + 周报）；硬件感知并发控制（自动采集 CPU/内存 → 动态分配并发数）；纯 Python 标准库零依赖；CLAUDE.md/Cursor/Cline 配置文件模板 |
 
 </details>
