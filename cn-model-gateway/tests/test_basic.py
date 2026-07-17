@@ -36,7 +36,15 @@ class TestRouter(unittest.TestCase):
         # All providers should be False when no config
         self.assertIn("deepseek", result)
         self.assertFalse(result["deepseek"])
-        self.assertEqual(len(result), 6)
+        self.assertEqual(len(result), 10)
+
+    def test_register_all_providers_listed(self):
+        """Ensure all 10 providers are in the registry."""
+        router = ModelRouter()
+        result = router.register_all({})
+        expected = {"deepseek", "tongyi", "zhipu", "kimi", "hunyuan", "doubao",
+                    "minimax", "lingyi", "baichuan", "stepfun"}
+        self.assertEqual(set(result.keys()), expected)
 
     def test_auto_select_no_providers(self):
         router = ModelRouter()
