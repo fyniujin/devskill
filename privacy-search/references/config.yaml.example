@@ -1,0 +1,89 @@
+# 隐私搜索 V1.0 - 配置文件模板
+# 复制为 config.yaml 后修改
+# cp config.yaml.example config.yaml
+
+# ===== 搜索设置 =====
+search:
+  # 默认搜索引擎（可多选）
+  # 可选: baidu, bing, sogou, 360, duckduckgo, searxng
+  default_engines:
+    - baidu
+    - bing
+    - duckduckgo
+    - searxng
+
+  # 每个引擎返回结果数
+  num_results: 10
+
+  # 请求超时（秒）
+  timeout: 10
+
+  # 并发请求数上限
+  max_concurrent: 6
+
+  # 单引擎每日请求上限（防封禁）
+  daily_request_limit: 200
+
+  # 请求间隔随机化范围（秒）
+  request_delay_min: 1.0
+  request_delay_max: 5.0
+
+# ===== 隐私模式 =====
+privacy:
+  # 默认模式: normal | strict
+  default_mode: strict
+
+  # strict 模式配置
+  strict:
+    # strict 模式下允许的引擎
+    allowed_engines:
+      - duckduckgo
+      - searxng
+    # 强制 DNT (Do Not Track)
+    dnt: true
+    # 不发送 Cookie
+    no_cookie: true
+    # 不发送 Referrer
+    no_referrer: true
+    # 自定义 User-Agent
+    user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+# ===== SearXNG 本地实例 =====
+searxng:
+  # 监听地址（强制 127.0.0.1，禁止 0.0.0.0）
+  host: "127.0.0.1"
+  port: 8888
+
+  # 安装方式: docker | pip
+  install_method: docker
+
+  # Docker 配置
+  docker:
+    image: "searxng/searxng:latest"
+    container_name: "privacy-search-searxng"
+    # 不映射到宿主机端口（仅本地回循环接）
+    auto_remove: true
+
+  # pip 配置
+  pip:
+    # 强制使用 venv 虚拟环境
+    use_venv: true
+    venv_path: "~/.workbuddy/output/.privacy-search-venv"
+
+# ===== 版本更新检查（死规则 11） =====
+update_check:
+  # 是否启用更新检查
+  enabled: true
+  # 启动时检查
+  check_on_startup: true
+  # 缓存时间（小时）
+  cache_hours: 24
+  # 检查地址
+  api_url: "https://api.skillhub.cn/api/v1/skills/privacy-search"
+  # 备用检查地址（GitHub）
+  github_url: "https://api.github.com/repos/your-org/privacy-search/releases/latest"
+
+# ===== 日志 =====
+logging:
+  level: INFO
+  file: "~/.workbuddy/output/privacy-search.log"
