@@ -1,12 +1,17 @@
-# 隐私搜索 V1.0 - 配置文件模板
-# 复制为 config.yaml 后修改
-# cp config.yaml.example config.yaml
+# ═══════════════════════════════════════════════════════════
+#  隐私搜索 V1.1 - 配置文件模板
+#  复制为 config.yaml 后修改
+#  cp config.yaml.example config.yaml
+#
+#  🆕 V1.1 新增: Yandex/Startpage/Qwant/Brave 国内备用引擎
+#  🆕 V1.1 新增: 推荐配置项标注 [推荐修改]
+# ═══════════════════════════════════════════════════════════
 
-# ===== 搜索设置 =====
+# ═══════ 搜索设置 ═══════
 search:
   # 默认搜索引擎（可多选）
-  # 可选: baidu, bing, sogou, 360, duckduckgo, searxng
-  default_engines:
+  # 可选: baidu, bing, sogou, 360, duckduckgo, yandex, startpage, qwant, brave, searxng
+  default_engines:        # [推荐修改] 修改你想用的引擎
     - baidu
     - bing
     - duckduckgo
@@ -16,7 +21,7 @@ search:
   num_results: 10
 
   # 请求超时（秒）
-  timeout: 10
+  timeout: 15             # [推荐修改] 网速慢可增大到 20
 
   # 并发请求数上限
   max_concurrent: 6
@@ -28,17 +33,20 @@ search:
   request_delay_min: 1.0
   request_delay_max: 5.0
 
-# ===== 隐私模式 =====
+# ═══════ 隐私模式（V1.1 增强） ═══════
 privacy:
   # 默认模式: normal | strict
-  default_mode: strict
+  default_mode: strict    # [推荐修改] strict 为默认隐私模式
 
   # strict 模式配置
   strict:
-    # strict 模式下允许的引擎
+    # strict 模式下使用的国内可用引擎（按优先级排序）
+    # 默认使用: yandex, startpage, qwant, brave, duckduckgo, searxng
+    # 这些引擎在国内可访问，且隐私保护优于百度/必应
     allowed_engines:
       - duckduckgo
       - searxng
+
     # 强制 DNT (Do Not Track)
     dnt: true
     # 不发送 Cookie
@@ -48,9 +56,10 @@ privacy:
     # 自定义 User-Agent
     user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
-# ===== SearXNG 本地实例 =====
+# ═══════ SearXNG 本地实例 ═══════
 searxng:
   # 监听地址（强制 127.0.0.1，禁止 0.0.0.0）
+  enabled: true
   host: "127.0.0.1"
   port: 8888
 
@@ -61,29 +70,22 @@ searxng:
   docker:
     image: "searxng/searxng:latest"
     container_name: "privacy-search-searxng"
-    # 不映射到宿主机端口（仅本地回循环接）
     auto_remove: true
 
   # pip 配置
   pip:
-    # 强制使用 venv 虚拟环境
     use_venv: true
     venv_path: "~/.workbuddy/output/.privacy-search-venv"
 
-# ===== 版本更新检查（死规则 11） =====
+# ═══════ 版本更新检查（死规则 11） ═══════
 update_check:
-  # 是否启用更新检查
   enabled: true
-  # 启动时检查
   check_on_startup: true
-  # 缓存时间（小时）
   cache_hours: 24
-  # 检查地址
   api_url: "https://api.skillhub.cn/api/v1/skills/privacy-search"
-  # 备用检查地址（GitHub）
   github_url: "https://api.github.com/repos/your-org/privacy-search/releases/latest"
 
-# ===== 日志 =====
+# ═══════ 日志 ═══════
 logging:
   level: INFO
   file: "~/.workbuddy/output/privacy-search.log"
