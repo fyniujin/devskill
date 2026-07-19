@@ -25,7 +25,12 @@ import yaml
 class PrivacyConfig:
     """隐私配置"""
     mode: str = "strict"  # normal | strict
-    strict_allowed_engines: List[str] = field(default_factory=lambda: ["duckduckgo", "searxng"])
+    strict_allowed_engines: List[str] = field(default_factory=lambda: [
+        "yandex", "startpage", "qwant", "brave", "duckduckgo", "searxng"
+    ])
+    strict_fallback_engines: List[str] = field(default_factory=lambda: [
+        "yandex", "startpage", "qwant", "brave"
+    ])
     dnt: bool = True
     no_cookie: bool = True
     no_referrer: bool = True
