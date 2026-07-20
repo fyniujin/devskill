@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-规则引擎模块 v2.0
+规则引擎模块 v3.2
 基于硬规则的确定性检查
 安全特性：YAML 安全加载、输入长度限制、日志脱敏
+v3.2 新增：按合同类型懒加载专用规则文件
 """
 
 import re
-from typing import List, Dict, Any
+import os
+from typing import List, Dict, Any, Optional
+from pathlib import Path
 import yaml
 import logging
 
@@ -15,6 +18,18 @@ logger = logging.getLogger(__name__)
 
 # 最大处理文本长度（防止 ReDoS 和内存溢出）
 MAX_TEXT_LENGTH = 500000
+
+# v3.2 合同类型与专用规则文件映射
+CONTRACT_TYPE_RULE_FILES = {
+    '股权转让合同': 'equity_transfer.yaml',
+    '增资扩股协议': 'capital_increase.yaml',
+    '对赌协议': 'valuation_adjustment.yaml',
+    'NDA保密协议': 'nda.yaml',
+    '知识产权许可协议': 'ip_license.yaml',
+    '建设工程合同': 'construction.yaml',
+    '劳动合同': 'labor_contract_deep.yaml',
+    '采购框架协议': 'procurement_framework.yaml',
+}
 
 
 class RiskItem:
@@ -53,6 +68,8 @@ class RuleEngine:
     def __init__(self, rules_path: str = None):
         """初始化规则引擎"""
         self.rules = []
+        # v3.2 规则缓存（按合同类型）
+        self._rule_cache: Dict[str, List[Dict]] = {}
         if rules_path:
             self._load_rules(rules_path)
     
@@ -89,7 +106,11 @@ class RuleEngine:
         
         risks = []
         
-        for rule in self.rules:
+        # v3.2 优先加载专用规则（如果存在）
+        specific_rules = self._load_contract_specific_rules(contract_type)
+        all_rules = specific_rules + self.rules
+        
+        for rule in all_rules:
             if not rule.get('enabled', True):
                 continue
             
@@ -104,6 +125,37 @@ class RuleEngine:
                 logger.warning(f"规则 {rule.get('id', '?')} 执行失败: {e}")
         
         return risks
+    
+    def _load_contract_specific_rules(self, contract_type: str) -> List[Dict]:
+        """v3.2 按合同类型懒加载专用规则文件"""
+        if not contract_type or contract_type not in CONTRACT_TYPE_RULE_FILES:
+            return []
+        
+        # 检查缓存
+        if contract_type in self._rule_cache:
+            return self._rule_cache[contract_type]
+        
+        # 查找专用规则文件
+        rule_file = CONTRACT_TYPE_RULE_FILES[contract_type]
+        rules_dir = Path(__file__).parent.parent / 'references' / 'contract_types'
+        rule_path = rules_dir / rule_file
+        
+        if not rule_path.exists():
+            logger.debug(f"专用规则文件不存在: {rule_path}")
+            return []
+        
+        try:
+            with open(rule_path, 'r', encoding='utf-8') as f:
+                content = f.read(1024 * 1024)
+                config = yaml.safe_load(content)
+            rules = config.get('rules', [])
+            # 缓存
+            self._rule_cache[contract_type] = rules
+            logger.info(f"加载 {contract_type} 专用规则 {len(rules)} 条")
+            return rules
+        except Exception as e:
+            logger.warning(f"加载专用规则失败: {e}")
+            return []
     
     def _apply_rule(self, rule: Dict, text: str, contract_type: str,
                     structure: Dict) -> Any:
@@ -120,12 +172,16 @@ class RuleEngine:
             return self._check_checklist(rule, text, structure)
         elif check_type == 'list_check':
             return self._check_list(rule, text)
-        elif check_type in ('llm_check', 'api_check', 'prompt_check'):
+        elif check_type in ('llm_check', 'api_check', 'prompt_check', 'semantic_check'):
             # 由 LLM 或外部服务处理
             return None
         else:
             logger.warning(f"未知的检查类型: {check_type}")
             return None
+    
+    def _get_rule_id(self, rule: Dict) -> str:
+        """安全获取规则 ID（兼容 id/name 两种字段）"""
+        return rule.get('id', rule.get('name', 'unknown'))
     
     def _check_regex(self, rule: Dict, text: str) -> RiskItem:
         """正则匹配检查（安全的正则，防止 ReDoS）"""
