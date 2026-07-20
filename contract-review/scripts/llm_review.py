@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-LLM 审查模块
+LLM 审查模块 v3.2
 调用大模型进行语义理解和深度审查
 支持 OpenAI / 本地模型（Ollama）/ 兼容 API
+v3.2 新增：按合同类型加载专用 LLM 提示词模板
 """
 
 import json
 import os
+from pathlib import Path
 import requests
 from typing import Dict, Any, Optional
 import logging
@@ -76,6 +78,17 @@ USER_PROMPT_TEMPLATE = """请审查以下合同：
 {contract_text}
 
 请按 JSON 格式输出审查结果。"""
+
+# v3.2 合同类型与专用提示词文件映射
+CONTRACT_TYPE_PROMPT_FILES = {
+    '股权转让合同': 'equity_transfer.md',
+    '增资扩股协议': 'capital_increase.md',
+    '对赌协议': 'valuation_adjustment.md',
+    'NDA保密协议': 'nda.md',
+    '知识产权许可协议': 'ip_license.md',
+    '建设工程合同': 'construction.md',
+    '采购框架协议': 'procurement_framework.md',
+}
 
 
 class LLMReviewer:
@@ -165,6 +178,9 @@ class LLMReviewer:
                 ]
             }
         
+        # v3.2 加载专用提示词模板
+        system_prompt = self._load_contract_specific_prompt(contract_type)
+        
         # 截断过长文本
         max_length = 15000
         if len(contract_text) > max_length:
@@ -178,9 +194,9 @@ class LLMReviewer:
         
         try:
             if self.backend == "ollama":
-                result = self._call_ollama(self.system_prompt, user_prompt)
+                result = self._call_ollama(system_prompt, user_prompt)
             else:
-                result = self._call_openai(self.system_prompt, user_prompt)
+                result = self._call_openai(system_prompt, user_prompt)
             return self._parse_response(result)
         except Exception as e:
             logger.error(f"LLM 审查失败: {e}")
@@ -189,6 +205,28 @@ class LLMReviewer:
                 'missing_clauses': [],
                 'special_notes': [f'LLM 审查失败: {str(e)}，仅使用规则引擎结果']
             }
+    
+    def _load_contract_specific_prompt(self, contract_type: str) -> str:
+        """v3.2 加载合同类型专用 LLM 提示词模板"""
+        if not contract_type or contract_type not in CONTRACT_TYPE_PROMPT_FILES:
+            return self.system_prompt
+        
+        prompt_file = CONTRACT_TYPE_PROMPT_FILES[contract_type]
+        prompts_dir = Path(__file__).parent.parent / 'references' / 'llm_prompts'
+        prompt_path = prompts_dir / prompt_file
+        
+        if not prompt_path.exists():
+            logger.debug(f"专用提示词文件不存在: {prompt_path}")
+            return self.system_prompt
+        
+        try:
+            with open(prompt_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            logger.info(f"加载 {contract_type} 专用提示词模板")
+            return content
+        except Exception as e:
+            logger.warning(f"加载专用提示词失败: {e}")
+            return self.system_prompt
     
     def _call_openai(self, system_prompt: str, user_prompt: str) -> str:
         """调用 OpenAI 兼容 API"""
