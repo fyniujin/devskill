@@ -2,13 +2,13 @@
 name: kingdoc
 displayName: 金山文档 KingDoc
 slug: kingdoc
-version: 3.2.0
+version: 3.3.0
 description: >
   金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理
   （智能文档/文字/电子表格/演示文稿/多维表格/收集表/思维导图/流程图/附件），
   深度直连金山文档（WPS）开放平台原生 API，覆盖腾讯文档全部能力 + 金山独有 10 项增强
   （回收站、版本历史、格式转换、纯文本提取、本地 Tesseract OCR、通知推送、Webhook、
-  批量任务、政企合规、硬件自适应性能、WPS AI 能力）。文字/演示/思维导图/流程图采用"本地生成→上传覆盖"，
+  批量任务、政企合规、硬件自适应性能、WPS AI 能力、协同冲突解决）。文字/演示/思维导图/流程图采用"本地生成→上传覆盖"，
   电子表格/多维表格采用 API 精细编辑。本地生成、OCR、硬件画像、WPS AI 等能力零密钥可用。
 description_zh: "金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理（深度直连 WPS 开放平台 + WPS AI 能力）"
 category: 办公效率
@@ -269,6 +269,55 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 ---
 
+## 10. 协同编辑冲突解决（v3.3.0 新增，自研 difflib 实现）
+
+> 多人同时编辑同一文档时经常出现冲突（A 修改了第 3 段，B 也修改了第 3 段）。
+> 本模块提供**冲突检测 + 智能合并 + 可视化 diff + 解决模板**，零外部依赖。
+
+### 10.1 冲突检测
+
+| 用户意图 | 直接对 AI 说 |
+|---------|-------------|
+| 检测冲突 | `「检测这两人修改的冲突」` |
+| 查看差异 | `「对比这两个版本的差异」` |
+| 自动合并 | `「帮我合并这两个版本」` |
+| 保留某版本 | `「保留 A 的版本」` / `「保留 B 的版本」` |
+
+### 10.2 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.conflict.detect` | 冲突检测 | 输入基准版+A版+B版 → 返回冲突块列表+统计 |
+| `kdoc.conflict.merge` | 智能合并 | 无冲突段自动合并，冲突段标注 `<<<<<<< VERSION_A` |
+| `kdoc.conflict.diff` | 冲突可视化 | 生成 Git diff 风格结构化数据 + 可选 HTML |
+| `kdoc.conflict.resolve` | 冲突解决 | keep_a / keep_b / manual / auto_merge |
+
+### 10.3 工作流程
+
+```
+① 检测：kdoc.version.list → 取最近 2-3 个版本 → conflict.detect() → 冲突块列表
+② 合并：conflict.merge() → 自动合并无冲突段 + 标注冲突段 → 合并建议
+③ 可视化：conflict.diff() → Git 风格并排 diff（可导出 HTML）
+④ 解决：用户选模板 → conflict.resolve() → ⚠️ 强制确认 → kdoc.file.upload 覆盖回云端
+```
+
+### 10.4 解决模板
+
+| 策略 | 说明 |
+|------|------|
+| `keep_a` | 保留用户 A 的版本 |
+| `keep_b` | 保留用户 B 的版本 |
+| `manual` | 手动编辑合并版本（需传 `manual_text`） |
+| `auto_merge` | 自动合并（仅无冲突段，冲突段保留标记） |
+
+### 10.5 安全约束
+
+- 合并结果覆盖回云端属于「覆盖文件」危险操作，**必须走强制确认铁律**（见第 6 节）
+- 冲突段**绝不自动覆盖**，必须用户明确选择
+- 大文档 diff 自动分块处理，不拖累电脑（硬件自适应）
+
+---
+
 ## 11. 完整场景案例（v3.0.0 新增）
 
 ### 场景 A：月度销售复盘（全链路）
@@ -305,6 +354,16 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 1) kdoc.local.hardware.profile → 取得 workers/batch_chunk
 2) 按 batch_chunk 分块调用 kdoc.batch.create
 3) kdoc.batch.query 轮询直至完成（并发不超过 workers，不卡机）
+```
+
+### 场景 F：多人协作冲突解决（v3.3.0 新增）
+```
+1) kdoc.version.list(file_id) → 获取最近 3 个版本（基准版 + A修改 + B修改）
+2) kdoc.conflict.detect(base, a, b) → 检测冲突块
+3) kdoc.conflict.merge(base, a, b) → 自动合并无冲突段 + 标注冲突段
+4) kdoc.conflict.diff(a, b) → Git 风格可视化
+5) 用户选择保留A/保留B/手动合并 → kdoc.conflict.resolve(strategy="keep_a")
+6) ⚠️ 强制确认 → kdoc.file.upload 覆盖回云端
 ```
 
 ---
@@ -459,6 +518,7 @@ python -m engine.update_check --version 3.0.0 --reminder
 
 ## 更新日志
 
+| v3.3.0 | 2026-07-21 | 增加：协同编辑冲突解决模块 `engine/conflict_resolver.py`（自研 difflib 实现，零第三方依赖）；增加：冲突检测 `kdoc.conflict.detect`、智能合并 `kdoc.conflict.merge`（自动合并无冲突段 + 标注冲突段）、Git diff 可视化 `kdoc.conflict.diff`、解决模板 `kdoc.conflict.resolve`（keep_a/keep_b/manual/auto_merge）；增加：冲突解决 MCP 工具 4 个；增加：大文档 diff 分块硬件自适应处理；增加：多人协作冲突解决场景案例；优化：冲突段强制用户确认，绝不自动覆盖 |
 | v3.2.0 | 2026-07-17 | 增加：WPS AI 能力适配层（写作辅助/数据分析/PPT 生成/阅读助手），本地降级优先、自研逻辑实现、零密钥可用；增加：WPS AI 适配器 `engine/wps_ai/adapter.py`；增加：本地降级后端 `engine/wps_ai/backends/local_fallback.py`；增加：能力定义与意图映射 `engine/wps_ai/capabilities.py`；增加：WPS AI API 调研记录 `engine/wps_ai/research_notes.md`；优化：MCP Server 注册 5 个 WPS AI 工具；优化：版本号 3.0.0→3.2.0 |
 | v3.1.0 | 2026-07-15 | 增加：wps-office-suite 互通方案调研（已废弃，因平台合规不允许双 skill 互通） |
 | v3.0.0 | 2026-07-12 | 增加：危险操作强制确认铁律与确认清单（删除/彻底删除/覆盖/批量/权限/清空回收站/版本回滚/Webhook）；增加：禁止文件类型扩展至完整 35 类（执行脚本/Office 二进制/归档镜像/系统文件/风险脚本）；增加：用户上传拦截与技能内部生成豁免白名单；增加：`engine/hardware.py` 硬件自适应性能调度（自动采集 CPU/内存，自动分配并发子进程数与批量分块）；增加：本地 OCR 模块 `engine/local/ocr.py`（优先本地 Tesseract，降级云端，给安装指引）；增加：能力边界与失败场景专章；增加：自然语言触发示例专章；增加：完整场景案例专章（5 个端到端场景）；增加：FAQ 专章（8 个高频问题）；补齐：缺失参考文档 `et_references.md`/`office_references.md`/`rate_limit.md`；补齐：技能图标 `assets/icon.png`；补齐：`engine/__init__.py` 与 `engine/api/mcp_server.py`（真实 MCP Server 入口）；优化：MCP Server 深度直连金山文档开放平台原生 API；优化：每日更新提醒 + 反馈邮箱 `njskills@agent.qq.com` |
