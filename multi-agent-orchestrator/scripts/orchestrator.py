@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-编排引擎入口 - 多Agent协作编排引擎 v3.0
+编排引擎入口 - 多Agent协作编排引擎 v4.0
 
 功能：统一入口，整合 DAG 验证、状态管理、执行调度、错误恢复、报告生成
 支持人工审批节点、HTML 甘特图、历史执行对比、硬件自适应
+新增动态工作流：if-else 条件分支、switch 多路分支、for-each 动态节点、while-loop 循环
 零第三方依赖，仅使用 Python 标准库
 
 ★★★ 安全说明 ★★★
@@ -38,6 +39,7 @@ import dag_validator
 import state_store
 import error_recovery
 import pipeline_reporter
+import flow_controller
 
 
 def cmd_validate(args):
@@ -189,6 +191,7 @@ def cmd_step(args):
     - 只有依赖全部完成（completed/skipped）的节点才会被获取
     - running 状态的过期节点会自动重置为 pending（防止死锁）
     - 遇到人工审批节点（type: approval）会暂停等待用户确认
+    - 遇到控制流节点（condition/switch/for-each/while-loop）会自动求值并路由
     """
     if not args:
         print("错误：缺少[state.json路径]")
@@ -203,6 +206,19 @@ def cmd_step(args):
         state = state_store.load_state(state_path)
         node = state['nodes'][node_id]
         node_type = node.get('type', 'task')
+
+        # 控制流节点：由引擎自动求值并动态路由（不交给 AI）
+        if flow_controller.is_control_node(node):
+            print(f"\n{'=' * 60}")
+            print(f"  ⚙️  控制流节点（引擎自动处理）")
+            print(f"{'=' * 60}")
+            print(f"节点 ID：{node_id}")
+            print(f"节点类型：{node_type}")
+            print(f"节点名称：{node.get('name', node_id)}")
+            flow_controller.process_control_node(state, node_id, state_path)
+            print(f"\n继续运行下一步：python orchestrator.py step {state_path}")
+            print(f"{'=' * 60}")
+            return
 
         # 人工审批节点
         if node_type == 'approval':
@@ -351,7 +367,7 @@ def cmd_impact(args):
 
 
 USAGE = """
-编排引擎 - 多Agent协作编排引擎 v3.0
+编排引擎 - 多Agent协作编排引擎 v4.0
 ================================
 
 用法：python orchestrator.py <command> [args]
@@ -381,7 +397,15 @@ USAGE = """
   7. python orchestrator.py gantt state.json            # 生成 HTML 甘特图
   8. python orchestrator.py report state.json           # 生成 Markdown 报告
 
-★★★ 新功能 v3.0 ★★★
+★★★ 新功能 v4.0（动态工作流）★★★
+  - if-else 条件分支：type: condition，按条件走 on_true / on_false
+  - switch 多路分支：type: switch，按值命中 cases / default
+  - for-each 动态节点：type: for-each，按列表长度展开子节点并汇合
+  - while-loop 循环重试：type: while-loop，条件为真回环重跑循环体
+  - 条件表达式：nodes.<id>.output_data.<field> 点路径 + 比较/逻辑/成员运算
+    （AST 白名单求值，禁止函数调用，安全无 eval）
+
+★★★ v3.0 功能 ★★★
   - 人工审批节点：在 DAG 中设置 type: approval 暂停等用户确认
   - HTML 甘特图：可视化每个节点的开始/结束/成功/失败（颜色编码）
   - 历史执行对比：自动对比最近5次执行，输出"本次比上次慢X%"
