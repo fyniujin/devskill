@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-DAG 验证器 - 多Agent协作编排引擎 v3.0
+DAG 验证器 - 多Agent协作编排引擎 v4.0
 
 功能：
   1. 验证 JSON Schema 结构完整性
@@ -9,6 +9,7 @@ DAG 验证器 - 多Agent协作编排引擎 v3.0
   3. 检测孤立节点（无上游也无下游的节点）
   4. 输出拓扑排序执行顺序
   5. 支持人工审批节点（type: approval）
+  6. 支持动态控制流节点（condition/switch/for-each/while-loop）字段与引用校验
 
 零第三方依赖，仅使用 Python 标准库
 
@@ -191,11 +192,87 @@ def validate_schema(pipeline):
         if 'fallback' in agent and agent['fallback'] not in ('retry', 'skip', 'default', 'abort'):
             warnings.append(f"{prefix} [fallback] 建议为 skip/default/abort 之一（当前值：{agent['fallback']}）")
 
-        # type 验证（task 或 approval）
-        if 'type' in agent and agent['type'] not in ('task', 'approval'):
-            warnings.append(f"{prefix} [type] 建议为 task 或 approval 之一（当前值：{agent['type']}）")
+        # type 验证（task/approval/控制流四类）
+        valid_types = ('task', 'approval', 'condition', 'switch', 'for-each', 'while-loop')
+        node_type = agent.get('type', 'task')
+        if 'type' in agent and node_type not in valid_types:
+            warnings.append(
+                f"{prefix} [type] 建议为 {'/'.join(valid_types)} 之一（当前值：{agent['type']}）"
+            )
+
+        # 控制流节点专有字段校验
+        if node_type == 'condition':
+            if 'condition' not in agent or not str(agent.get('condition', '')).strip():
+                errors.append(f"{prefix} condition 节点必须提供非空 [condition] 表达式")
+            if 'on_true' not in agent and 'on_false' not in agent:
+                warnings.append(f"{prefix} condition 节点建议至少提供 [on_true] 或 [on_false] 分支")
+            for br in ('on_true', 'on_false'):
+                if br in agent and not isinstance(agent[br], list):
+                    errors.append(f"{prefix} condition 节点的 [{br}] 必须是节点 id 数组")
+
+        elif node_type == 'switch':
+            if 'switch' not in agent or not str(agent.get('switch', '')).strip():
+                errors.append(f"{prefix} switch 节点必须提供非空 [switch] 表达式")
+            if 'cases' not in agent or not isinstance(agent.get('cases'), dict) or not agent['cases']:
+                errors.append(f"{prefix} switch 节点必须提供非空 [cases] 对象（值→节点id数组）")
+            elif not all(isinstance(v, list) for v in agent['cases'].values()):
+                errors.append(f"{prefix} switch 节点 [cases] 的每个分支值必须是节点 id 数组")
+            if 'default' in agent and not isinstance(agent['default'], list):
+                errors.append(f"{prefix} switch 节点的 [default] 必须是节点 id 数组")
+
+        elif node_type == 'for-each':
+            if 'items' not in agent or not str(agent.get('items', '')).strip():
+                errors.append(f"{prefix} for-each 节点必须提供非空 [items] 表达式")
+            if 'template' in agent and not isinstance(agent['template'], dict):
+                errors.append(f"{prefix} for-each 节点的 [template] 必须是对象")
+            if 'join' in agent and not isinstance(agent['join'], list):
+                errors.append(f"{prefix} for-each 节点的 [join] 必须是节点 id 数组")
+
+        elif node_type == 'while-loop':
+            if 'condition' not in agent or not str(agent.get('condition', '')).strip():
+                errors.append(f"{prefix} while-loop 节点必须提供非空 [condition] 表达式")
+            if 'loop_body' not in agent or not isinstance(agent.get('loop_body'), list) or not agent['loop_body']:
+                errors.append(f"{prefix} while-loop 节点必须提供非空 [loop_body] 数组")
+            if 'max_iterations' in agent:
+                mi = agent['max_iterations']
+                if not isinstance(mi, int) or mi <= 0:
+                    warnings.append(f"{prefix} while-loop 节点的 [max_iterations] 建议为正整数")
+
+    # 分支目标引用校验：控制流节点引用的分支节点必须存在
+    branch_ref_errors = _validate_branch_refs(pipeline, agent_ids)
+    errors.extend(branch_ref_errors)
 
     return errors, warnings
+
+
+def _validate_branch_refs(pipeline, agent_ids):
+    """校验控制流节点引用的分支/循环目标节点都存在"""
+    errors = []
+    for i, agent in enumerate(pipeline.get('agents', [])):
+        if not isinstance(agent, dict):
+            continue
+        prefix = f"agents[{i}]([{agent.get('id', '?')}])"
+        node_type = agent.get('type', 'task')
+
+        def _check_ids(field, ids):
+            for tid in ids:
+                if tid not in agent_ids:
+                    errors.append(f"{prefix} 的 [{field}] 引用了不存在的节点 [{tid}]")
+
+        if node_type == 'condition':
+            _check_ids('on_true', agent.get('on_true', []))
+            _check_ids('on_false', agent.get('on_false', []))
+        elif node_type == 'switch':
+            for cv, ids in (agent.get('cases', {}) or {}).items():
+                if isinstance(ids, list):
+                    _check_ids(f"cases.{cv}", ids)
+            _check_ids('default', agent.get('default', []))
+        elif node_type == 'for-each':
+            _check_ids('join', agent.get('join', []))
+        elif node_type == 'while-loop':
+            _check_ids('loop_body', agent.get('loop_body', []))
+
+    return errors
 
 
 def detect_cycles(pipeline):
@@ -315,7 +392,7 @@ def validate(filepath):
     python dag_validator.py --help
     """
     print("=" * 60)
-    print("  DAG 验证器 - 多Agent协作编排引擎 v2.0")
+    print("  DAG 验证器 - 多Agent协作编排引擎 v4.0")
     print("=" * 60)
 
     pipeline = load_pipeline(filepath)
@@ -383,7 +460,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     if sys.argv[1] in ('-h', '--help'):
-        print("DAG 验证器 - 多Agent协作编排引擎 v2.0")
+        print("DAG 验证器 - 多Agent协作编排引擎 v4.0")
         print("=" * 50)
         print("用法：python dag_validator.py <pipeline.json>")
         print("")
