@@ -1,7 +1,7 @@
 {
   "pipeline_name": "多Agent协作流水线模板",
-  "version": "3.0",
-  "description": "v3.0 模板 - 包含人工审批节点、硬件自适应参数和执行历史追踪",
+  "version": "4.0",
+  "description": "v4.0 模板 - 线性流水线 + 人工审批节点（动态控制流示例见 control_flow_template.json）",
   "agents": [
     {
       "id": "collector",
