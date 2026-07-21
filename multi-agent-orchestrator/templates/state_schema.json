@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Pipeline State Schema",
-  "description": "多Agent协作编排引擎 - 状态文件格式规范 v3.0",
+  "description": "多Agent协作编排引擎 - 状态文件格式规范 v4.0",
   "type": "object",
   "required": ["pipeline_id", "pipeline_name", "status", "nodes", "created_at", "updated_at"],
   "properties": {
@@ -16,7 +16,7 @@
     "version": {
       "type": "string",
       "description": "DAG 定义版本号",
-      "default": "3.0"
+      "default": "4.0"
     },
     "created_at": {
       "type": "string",
@@ -42,8 +42,8 @@
           "role": {"type": "string"},
           "type": {
             "type": "string",
-            "enum": ["task", "approval"],
-            "description": "节点类型：task=普通任务节点，approval=人工审批节点",
+            "enum": ["task", "approval", "condition", "switch", "for-each", "while-loop"],
+            "description": "节点类型：task=普通任务，approval=人工审批，condition=if-else 分支，switch=多路分支，for-each=动态节点，while-loop=循环重试",
             "default": "task"
           },
           "status": {
@@ -65,6 +65,20 @@
           "inputs": {"type": "array", "items": {"type": "string"}},
           "outputs": {"type": "array", "items": {"type": "string"}},
           "output_data": {"type": "object"},
+          "condition": {"type": "string", "description": "condition/while-loop 节点的条件表达式"},
+          "on_true": {"type": "array", "items": {"type": "string"}, "description": "condition 节点：条件为真执行的分支节点"},
+          "on_false": {"type": "array", "items": {"type": "string"}, "description": "condition 节点：条件为假执行的分支节点"},
+          "switch": {"type": "string", "description": "switch 节点的取值表达式"},
+          "cases": {"type": "object", "description": "switch 节点：值→节点id数组的映射"},
+          "default": {"type": "array", "items": {"type": "string"}, "description": "switch 节点：无命中时的默认分支"},
+          "items": {"type": "string", "description": "for-each 节点：求值得到列表的表达式"},
+          "template": {"type": "object", "description": "for-each 节点：子节点模板"},
+          "join": {"type": "array", "items": {"type": "string"}, "description": "for-each 节点：汇合节点，改依赖所有子节点"},
+          "loop_body": {"type": "array", "items": {"type": "string"}, "description": "while-loop 节点：需重跑的循环体节点"},
+          "max_iterations": {"type": "integer", "description": "while-loop 节点：最大迭代次数"},
+          "iteration": {"type": "integer", "description": "while-loop 节点：当前迭代轮次"},
+          "item": {"description": "for-each 动态子节点：当前迭代的数据项"},
+          "item_index": {"type": "integer", "description": "for-each 动态子节点：迭代序号"},
           "error": {"type": ["string", "null"]},
           "started_at": {"type": ["string", "null"]},
           "completed_at": {"type": ["string", "null"]}
