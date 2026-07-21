@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-状态持久化管理器 - 多Agent协作编排引擎 v3.0
+状态持久化管理器 - 多Agent协作编排引擎 v4.0
 
 功能：pipeline_state.json 的创建、读取、更新、查询 + 断点续传支持
-新增：执行历史追踪（.execution_history.json）
+新增：执行历史追踪（.execution_history.json）+ 控制流节点专有字段持久化
 零第三方依赖，仅使用 Python 标准库
 
 ★★★ 安全说明 ★★★
@@ -146,10 +146,10 @@ def init_state(pipeline, state_path=None):
             print(f"错误：节点 id [{aid}] 包含非法字符（路径分隔符）")
             print("  修复：使用纯英文/数字/下划线作为节点 id")
             sys.exit(1)
-        state['nodes'][aid] = {
+        node_state = {
             "name": agent.get('name', aid),
             "role": agent.get('role', ''),
-            "type": agent.get('type', 'task'),  # task 或 approval
+            "type": agent.get('type', 'task'),  # task/approval/condition/switch/for-each/while-loop
             "status": "pending",       # pending → running → completed / failed / skipped
             "depends_on": agent.get('depends_on', []),
             "retry_count": 0,
@@ -163,6 +163,17 @@ def init_state(pipeline, state_path=None):
             "started_at": None,
             "completed_at": None
         }
+        # 保留控制流节点的专有字段（否则动态路由时会丢失配置）
+        for ctrl_field in ('condition', 'on_true', 'on_false',
+                           'switch', 'cases', 'default',
+                           'items', 'template', 'join',
+                           'loop_body', 'max_iterations'):
+            if ctrl_field in agent:
+                node_state[ctrl_field] = agent[ctrl_field]
+        # while-loop 迭代计数初始化
+        if agent.get('type') == 'while-loop':
+            node_state['iteration'] = 0
+        state['nodes'][aid] = node_state
 
     safe_write(state, state_path)
     print(f"状态文件已初始化：{state_path}")
@@ -375,6 +386,12 @@ def get_next_node(state_path):
             node['status'] = 'running'
             node['started_at'] = get_timestamp()
             safe_write(state, state_path)
+
+            # 非普通任务节点（审批/控制流）由 orchestrator 自行渲染提示，
+            # 这里静默返回节点 id，避免重复/误导性的"请执行任务"输出
+            node_type = node.get('type', 'task')
+            if node_type != 'task':
+                return aid
 
             # 收集上游输出作为下游输入
             upstream_outputs = {}
