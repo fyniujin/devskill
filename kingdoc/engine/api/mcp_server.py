@@ -36,7 +36,7 @@ from engine.hardware import get_recommended_settings
 from engine.update_check import build_reminder, FEEDBACK_EMAIL
 from engine.exceptions import KingDocError
 
-APP_VERSION = "3.2.0"
+APP_VERSION = "3.3.0"
 
 # 配置路径：环境变量优先，其次 skill 根目录 config.json
 CONFIG_PATH = os.environ.get("KINGDOC_CONFIG", str(SKILL_ROOT / "config.json"))
@@ -524,6 +524,62 @@ async def kdoc_wps_ai_detect_intent(user_input: str) -> str:
         return _to_text({"intent": intent, "capabilities": caps})
     except Exception as e:
         return f"[ERR] 意图检测失败：{e}"
+
+
+# ===========================================================================
+# 十一、协同编辑冲突解决（自研，零外部依赖）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_conflict_detect(base_text: str, version_a: str, version_b: str) -> str:
+    """【免密钥】冲突检测：检测多人并发修改的冲突位置与双方内容。
+
+    返回结构化冲突列表与统计。本地 difflib 算法，零配置可用。"""
+    try:
+        from engine.conflict_resolver import detect_conflicts
+        result = detect_conflicts(base_text, version_a, version_b)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 冲突检测失败：{e}"
+
+@mcp.tool()
+async def kdoc_conflict_merge(base_text: str, version_a: str, version_b: str) -> str:
+    """【免密钥】智能合并：无冲突段自动合并，冲突段标注 VERSION_A/VERSION_B。
+
+    返回合并后文本与冲突统计。本地 difflib 算法，零配置可用。"""
+    try:
+        from engine.conflict_resolver import merge_versions
+        result = merge_versions(base_text, version_a, version_b)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 合并失败：{e}"
+
+@mcp.tool()
+async def kdoc_conflict_diff(version_a: str, version_b: str,
+                             label_a: str = "版本A", label_b: str = "版本B") -> str:
+    """【免密钥】冲突可视化：生成 Git diff 风格的结构化差异数据。
+
+    返回 diff 行列表、统计与可选 HTML。本地 difflib 算法，零配置可用。"""
+    try:
+        from engine.conflict_resolver import diff_versions
+        result = diff_versions(version_a, version_b, label_a, label_b)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] diff 失败：{e}"
+
+@mcp.tool()
+async def kdoc_conflict_resolve(base_text: str, version_a: str, version_b: str,
+                               strategy: str = "keep_a",
+                               manual_text: str = "") -> str:
+    """【免密钥】冲突解决：应用合并策略。
+
+    strategy: keep_a(保留A) / keep_b(保留B) / manual(手动合并，需传 manual_text) / auto_merge(自动合并)
+    本地 difflib 算法，零配置可用。"""
+    try:
+        from engine.conflict_resolver import resolve_conflicts
+        result = resolve_conflicts(base_text, version_a, version_b, strategy, manual_text)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 冲突解决失败：{e}"
 
 
 def main():
