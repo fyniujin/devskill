@@ -1,10 +1,13 @@
-"""视觉分析模块 — 场景分类 + 物体检测 + OCR"""
+"""视觉分析模块 — 场景分类 + 物体检测 + OCR + 中文化增强"""
 
 import os
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 
 from .logger import get_logger
+
+# 导入中文映射
+from .nlp import get_chinese_label, batch_translate_labels, SCENE_LABELS_CHINESE
 
 logger = get_logger(__name__)
 
@@ -81,6 +84,7 @@ class VisualAnalyzer:
             "start_time": scene.get("start_time"),
             "end_time": scene.get("end_time"),
             "scene_types": [],
+            "scene_types_zh": [],  # ✨ 新增中文场景标签
             "objects": [],
             "ocr_text": "",
         }
@@ -91,10 +95,16 @@ class VisualAnalyzer:
         # 场景分类
         if self.enable_classification:
             result["scene_types"] = self._classify_scene(keyframe)
+            # ✨ 中文化场景标签
+            result["scene_types_zh"] = batch_translate_labels(result["scene_types"])
         
         # 物体检测
         if self.enable_detection:
             result["objects"] = self._detect_objects(keyframe)
+            # ✨ 为每个物体添加中文标签
+            for obj in result["objects"]:
+                name = obj.get("name", "")
+                obj["name_zh"] = get_chinese_label(name)
         
         # OCR
         if self.enable_ocr:
@@ -321,7 +331,7 @@ class VisualAnalyzer:
             logger.debug(f"OCR 失败: {e}")
             return ""
     
-    def _preprocess_frame(self, frame, target_size) -> :
+    def _preprocess_frame(self, frame, target_size):
         """预处理帧为模型输入格式"""
         import numpy as np
         import cv2
