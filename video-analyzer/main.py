@@ -18,7 +18,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from core.input_handler import InputHandler
 from core.media_processor import MediaProcessor
-from core.audio_transcriber import AudioTranscriber
+from core.asr import ASRRouter
+from core.ocr import PaddleOCREngine
+from core.nlp import ChineseNLPEnhancement
 from core.scene_detector import SceneDetector
 from core.visual_analyzer import VisualAnalyzer
 from core.alignment_engine import AlignmentEngine
@@ -60,6 +62,14 @@ def parse_args():
                         help="Whisper 模型大小 (默认: 自动根据硬件选择)")
     parser.add_argument("-l", "--lang", default=None,
                         help="语言代码: auto/zh/en/ja 等 (默认: 自动检测)")
+    parser.add_argument("--asr-engine", default=None,
+                        choices=["whisper", "paraformer", "sensevoice", "auto"],
+                        help="ASR 语音识别引擎 (默认: 从配置读取)")
+    parser.add_argument("--ocr-engine", default=None,
+                        choices=["paddleocr", "auto"],
+                        help="OCR 文字识别引擎 (默认: 从配置读取)")
+    parser.add_argument("--no-nlp-enhance", action="store_true",
+                        help="跳过中文 NLP 增强（NER + 标签中文化）")
     parser.add_argument("--no-visual", action="store_true",
                         help="跳过视觉分析（场景分类/物体检测）")
     parser.add_argument("--no-ocr", action="store_true",
@@ -96,7 +106,7 @@ def print_banner():
     """打印启动横幅"""
     banner = """
 ╔══════════════════════════════════════════════════╗
-║          🎬 video-analyzer v3.0.0               ║
+║          🎬 video-analyzer v3.5.0               ║
 ║        视频分析处理 — 本地视频反编译工具         ║
 ╚══════════════════════════════════════════════════╝
     """
@@ -213,7 +223,7 @@ def main():
         # ========== 版本更新检查（非阻塞） ==========
         if not args.no_update_check:
             try:
-                notifier = UpdateNotifier(config, current_version="3.0.0")
+                notifier = UpdateNotifier(config, current_version="3.5.0")
                 update_result = notifier.check_for_updates()
                 update_msg = notifier.format_update_message(update_result)
                 if update_msg:
@@ -251,10 +261,48 @@ def main():
         
         # ========== 阶段 3: 语音识别 ==========
         logger.info("🎙️  [3/7] 语音转文字...")
-        transcriber = AudioTranscriber(config)
-        transcript = transcriber.transcribe(audio_path)
+        
+        # 根据配置/参数选择引擎
+        asr_engine = args.asr_engine if args.asr_engine else config.get("asr", {}).get("engine", "auto")
+        asr_router = ASRRouter(config)
+        asr_result = asr_router.transcribe(
+            audio_path,
+            preferred_engine=asr_engine,
+            language=args.lang if args.lang else config.get("asr", {}).get("language", "auto"),
+        )
+        
+        # 将 ASRResult 转换为原 transcript 格式（兼容下游模块）
+        transcript = {
+            "text": asr_result.text,
+            "language": asr_result.language,
+            "duration": asr_result.duration,
+            "segments": [
+                {
+                    "id": seg.id,
+                    "start": seg.start,
+                    "end": seg.end,
+                    "text": seg.text,
+                    "confidence": seg.confidence,
+                    "words": seg.words,
+                    "speaker": seg.speaker,
+                    "emotion": seg.emotion,
+                }
+                for seg in asr_result.segments
+            ],
+        }
+        
+        asr_active = asr_router.active_engine
+        if asr_active and asr_active.name != "whisper":
+            logger.info(f"   使用引擎: {asr_active.name}")
         logger.info(f"   识别完成: {len(transcript['segments'])} 个语音段")
         logger.info(f"   语言: {transcript.get('language', 'unknown')}")
+        
+        # ========== 中文 NLP 增强（可选） ==========
+        nlp_enhancer = None
+        if not args.no_nlp_enhance:
+            nlp_enhancer = ChineseNLPEnhancement(config)
+            if nlp_enhancer.use_jieba:
+                logger.info("🔤 中文 NLP 增强已启用（NER + 标签中文化）")
         
         # ========== 说话人分离（可选） ==========
         diarize_result = None
@@ -286,6 +334,18 @@ def main():
         visual_data = visual_analyzer.analyze(scenes, video_path)
         logger.info(f"   视觉分析完成")
         
+        # ✨ 中文 NLP 增强：物体标签 + 场景标签中文化
+        if nlp_enhancer:
+            from core.nlp import get_chinese_label
+            for scene_data in visual_data.get("scenes", []):
+                # 物体标签中文化
+                for obj in scene_data.get("objects", []):
+                    name = obj.get("name", "")
+                    obj["name_zh"] = get_chinese_label(name)
+                # 场景标签中文化
+                scene_types = scene_data.get("scene_types", [])
+                scene_data["scene_types_zh"] = nlp_enhancer.translate_scene_labels(scene_types)
+        
         # ========== 阶段 6: 时空对齐与融合 ==========
         logger.info("🔗 [6/7] 时空对齐与语义融合...")
         
@@ -298,6 +358,16 @@ def main():
         fusion = SemanticFusion(config)
         fused_data = fusion.fuse(aligned_data)
         logger.info(f"   融合完成")
+        
+        # ✨ 中文 NLP 增强：融合数据中的人名/地名/术语识别
+        if nlp_enhancer and nlp_enhancer.use_ner:
+            for scene in fused_data.get("scenes", []):
+                dialog = scene.get("content", {}).get("dialog", "")
+                if dialog:
+                    entities = nlp_enhancer.recognize_entities(dialog)
+                    scene["entities"] = entities
+                    terms = nlp_enhancer.detect_terminology(dialog)
+                    scene["terminology"] = terms
         
         # ========== 阶段 7: 精华提取与报告 ==========
         logger.info("✨ [7/7] 精华提取与报告生成...")
