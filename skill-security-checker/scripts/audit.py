@@ -12,9 +12,10 @@ Features:
   6. Report generation (JSON/HTML)
   7. Hardware-aware parallelism (auto-detect CPU/memory for concurrency)
   8. Update check with 24h caching
+  9. Dynamic sandbox execution scanning (Docker / Windows Sandbox, graceful fallback)
 
 Author: njskills@agent.qq.com
-Version: 1.3.0
+Version: 2.0.0
 """
 
 import os
@@ -28,6 +29,14 @@ import multiprocessing
 from pathlib import Path
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# Dynamic sandbox scanning (optional module; degrades gracefully if missing)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from sandbox import run_dynamic_scan, DynamicScanOptions
+    _SANDBOX_AVAILABLE = True
+except Exception:
+    _SANDBOX_AVAILABLE = False
 
 # ============================================================
 # Constants & Rule Definitions
@@ -191,7 +200,7 @@ KNOWN_VULN_DEPS = {
 
 # Update check URL and version info
 UPDATE_CHECK_URL = "https://api.github.com/repos/njskills/skill-security-checker/releases/latest"
-CURRENT_VERSION = "1.3.0"
+CURRENT_VERSION = "2.0.0"
 
 # Update check cache TTL (hours)
 UPDATE_CACHE_HOURS = 24
@@ -331,7 +340,7 @@ class ScanResult:
 class SecurityAuditor:
     """Core security audit engine."""
     
-    def __init__(self, skill_path):
+    def __init__(self, skill_path, dynamic=False, dynamic_options=None):
         self.skill_path = Path(skill_path)
         self.results = []
         self.score = 100
@@ -339,6 +348,9 @@ class SecurityAuditor:
         self.skill_md_content = None
         self.skill_md_path = None
         self.frontmatter = {}
+        self.dynamic = dynamic
+        self.dynamic_options = dynamic_options
+        self.dynamic_report = None
         self._load_skill_md()
         self._load_changelog()
     
@@ -441,6 +453,67 @@ class SecurityAuditor:
                                 suggestion='Report this regex bug to developer',
                             )
     
+    def scan_dynamic(self):
+        """Dynamic sandbox execution scan (optional).
+
+        Runs the skill's scripts inside an isolated backend (Docker / Windows
+        Sandbox) and merges captured runtime anomalies into the results. If no
+        isolation backend is available, records an informational hint and does
+        not fail the audit.
+        """
+        if not self.dynamic:
+            return
+        if not _SANDBOX_AVAILABLE:
+            self.add_result(
+                category='dynamic_scan_skipped', severity='info',
+                file='.', line=0,
+                message='动态沙箱模块不可用，已跳过动态扫描',
+                pattern='', suggestion='建议在沙箱环境中进行动态扫描',
+            )
+            return
+
+        try:
+            opts = self.dynamic_options or DynamicScanOptions.auto()
+            report = run_dynamic_scan(str(self.skill_path), opts)
+        except Exception as e:
+            self.add_result(
+                category='dynamic_scan_error', severity='low',
+                file='.', line=0,
+                message=f'动态扫描执行异常: {e}',
+                pattern='', suggestion='请将该问题反馈给开发者',
+            )
+            return
+
+        self.dynamic_report = report
+
+        if not report.get('available'):
+            self.add_result(
+                category='dynamic_scan_skipped', severity='info',
+                file='.', line=0,
+                message=report.get('hint', '未检测到隔离环境，已跳过动态扫描'),
+                pattern='', suggestion='建议在沙箱环境中进行动态扫描',
+            )
+            return
+
+        for f in report.get('findings', []):
+            self.add_result(
+                category=f.get('category', 'dynamic'),
+                severity=f.get('severity', 'medium'),
+                file=f.get('file', '<runtime>'),
+                line=f.get('line', 0),
+                message=f.get('message', ''),
+                pattern=f.get('pattern', 'dynamic'),
+                suggestion=f.get('suggestion', ''),
+            )
+
+        if report.get('error'):
+            self.add_result(
+                category='dynamic_scan_error', severity='low',
+                file='.', line=0,
+                message=f"动态扫描部分失败: {report['error']}",
+                pattern='', suggestion='请将该问题反馈给开发者',
+            )
+
     def _get_suggestion(self, category, line):
         """Generate fix suggestion based on category."""
         suggestions = {
@@ -853,6 +926,18 @@ class SecurityAuditor:
                         suggestion='Report this issue to the developer',
                     )
         
+        # Dynamic sandbox scan runs after static scans (serial, time-boxed).
+        if self.dynamic:
+            try:
+                self.scan_dynamic()
+            except Exception as e:
+                self.add_result(
+                    category='dynamic_scan_error', severity='low',
+                    file='.', line=0,
+                    message=f'Dynamic scan execution error: {e}',
+                    pattern='', suggestion='请将该问题反馈给开发者',
+                )
+        
         self.score = max(0, self.score)
         
         return self.get_report()
@@ -876,6 +961,7 @@ class SecurityAuditor:
                 'total_files_scanned': len(self.walker.scanned_files),
                 'total_files_skipped': len(self.walker.skipped_files),
                 'workers_used': get_optimal_workers(),
+                'dynamic_scan': self._dynamic_meta(),
             },
             'score': self.score,
             'grade': self._get_grade(),
@@ -883,6 +969,20 @@ class SecurityAuditor:
             'results': [r.to_dict() for r in sorted_results],
             'summary': self._generate_summary(stats),
             'changelog_version_count': getattr(self, 'changelog_version_count', 0),
+        }
+
+    def _dynamic_meta(self):
+        """Summarize the dynamic scan for the report meta block."""
+        if not self.dynamic:
+            return {'enabled': False}
+        rep = self.dynamic_report or {}
+        return {
+            'enabled': True,
+            'available': rep.get('available', False),
+            'backend': rep.get('backend', 'none'),
+            'behaviors_captured': len(rep.get('behaviors', [])),
+            'findings': len(rep.get('findings', [])),
+            'hint': rep.get('hint', ''),
         }
     
     def _get_grade(self):
@@ -1078,12 +1178,20 @@ Examples:
   python audit.py /path/to/skill
   python audit.py /path/to/skill --format html -o report.html
   python audit.py /path/to/skill --skip-update
+  python audit.py /path/to/skill --dynamic
+  python audit.py /path/to/skill --dynamic --allow-domain api.github.com --sandbox-timeout 60
         ''')
     parser.add_argument('skill_path', help='Path to skill directory to audit')
     parser.add_argument('--format', choices=['json', 'html', 'text'], default='text',
                         help='Output format (default: text)')
     parser.add_argument('-o', '--output', help='Output file path')
     parser.add_argument('--skip-update', action='store_true', help='Skip update check')
+    parser.add_argument('--dynamic', action='store_true',
+                        help='Enable dynamic sandbox execution scan (needs Docker/Windows Sandbox)')
+    parser.add_argument('--allow-domain', action='append', default=[],
+                        help='Whitelist a domain for sandbox network (repeatable)')
+    parser.add_argument('--sandbox-timeout', type=int, default=30,
+                        help='Sandbox execution timeout in seconds (default: 30)')
     
     args = parser.parse_args()
     
@@ -1091,7 +1199,15 @@ Examples:
         print(f"Error: Directory does not exist: {args.skill_path}", file=sys.stderr)
         sys.exit(1)
     
-    auditor = SecurityAuditor(args.skill_path)
+    dyn_opts = None
+    if args.dynamic and _SANDBOX_AVAILABLE:
+        dyn_opts = DynamicScanOptions.auto(
+            timeout_sec=args.sandbox_timeout,
+            whitelist_domains=args.allow_domain,
+            network=bool(args.allow_domain),
+        )
+    
+    auditor = SecurityAuditor(args.skill_path, dynamic=args.dynamic, dynamic_options=dyn_opts)
     report = auditor.run(skip_update=args.skip_update)
     
     if args.format == 'json':
@@ -1110,6 +1226,14 @@ Examples:
         print(f"  Path: {report['meta']['skill_path']}")
         print(f"  Time: {report['meta']['scan_time']}")
         print(f"  Files: {report['meta']['total_files_scanned']} scanned, {report['meta']['total_files_skipped']} skipped")
+        dyn = report['meta'].get('dynamic_scan', {})
+        if dyn.get('enabled'):
+            if dyn.get('available'):
+                print(f"  Dynamic: backend={dyn.get('backend')}, "
+                      f"behaviors={dyn.get('behaviors_captured', 0)}, "
+                      f"findings={dyn.get('findings', 0)}")
+            else:
+                print(f"  Dynamic: skipped ({dyn.get('hint', 'no isolation backend')})")
         print(f"{'='*60}")
         print(f"\n  Score: {report['score']}/100 (Grade: {report['grade']})")
         print(f"  {report['summary']}\n")
