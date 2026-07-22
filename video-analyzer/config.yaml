@@ -1,6 +1,58 @@
 # video-analyzer 配置文件
 # 视频分析处理 Skill v2.1.0
 
+# ==================== ASR 语音识别配置 (v3.5 新增) ====================
+asr:
+  # 引擎选择: whisper, paraformer, sensevoice, auto
+  # whisper: OpenAI Whisper（默认，多语言）
+  # paraformer: 阿里达摩院 Paraformer（中文SOTA）
+  # sensevoice: 阿里达摩院 SenseVoice（带情感识别）
+  # auto: 根据语言自动选择最优引擎
+  engine: auto
+  
+  # Paraformer 配置
+  paraformer_model: paraformer-zh
+  paraformer_device: cpu
+  
+  # SenseVoice 配置
+  sensevoice_model: SenseVoiceSmall
+  sensevoice_device: cpu
+  sensevoice_use_itn: true
+  
+  # 热词列表（提升专业术语识别准确率）
+  hotwords: []
+
+# ==================== OCR 配置 (v3.5 新增) ====================
+ocr:
+  # OCR 引擎: paddleocr, auto
+  engine: paddleocr
+  
+  # 语言: ch(中文), en(英文), multilang(多语言)
+  lang: ch
+  
+  # 使用 GPU（需安装 paddlepaddle-gpu）
+  use_gpu: false
+  
+  # 方向检测
+  use_angle_cls: true
+  
+  # 显示日志
+  show_log: false
+
+# ==================== NLP 增强配置 (v3.5 新增) ====================
+nlp:
+  # 使用 jieba 分词
+  use_jieba: true
+  
+  # 使用 NER 命名实体识别
+  use_ner: true
+  
+  # 自定义术语词典路径（JSON 格式 {"缩写": "全称/中文"}）
+  terminology_path: null
+  
+  # 自定义术语（直接写在配置里）
+  custom_terminology: {}
+
 # ==================== Whisper 语音识别配置 ====================
 whisper:
   # 模型名称: tiny, base, small, medium, large-v3
