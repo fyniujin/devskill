@@ -17,7 +17,7 @@
 | video-analyzer | v3.5.0 | 视频分析处理 — 本地视频反编译分析工具。将视频拆解为时间轴剧本、语音转文字、场景分析、跨模态关联和精华摘要，支持多ASR引擎切换（Whisper/Paraformer/SenseVoice）、中文NLP增强、PaddleOCR中文识别。 |
 | wecom-voice-agent | v2.1.0 | 企业微信语音消息 AI Agent 技能，自动处理语音消息的意图识别、多轮对话与任务执行。 支持被动接收语音消息、主动外呼、来电接线、通话纪要、合规录音、外呼调度等完整电话场景。 当用户向企业微信机器人发送语音消息时触发。核心价值：零 API Key 依赖、硬件自适应、轻量本地处理、全流程合规。  |
 | cn-llm-router | v2.0.0 | 国产大模型统一路由。把 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、字节豆包、百度文心、讯飞星火等 8 家国产大模型收敛成一个命令入口；按任务类型（代码/推理/长文/翻译/摘要/抽取）自动或手动选择最合适、最省钱的模型；自动统计跨厂商 token 成本、硬件自适应限流（不拖累电脑）、本地语义缓存省 token、技能更新提醒。当用户需要「调用国产大模型」「多模型比价/降本」「统一管理多个模型 Key」「本地跑大模型路由」「不想被某一家厂商绑定」时使用。  |
-| receipt-compliance | v3.4.0 | 会计助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。  |
+| receipt-compliance | v3.7.0 | 会计助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。 |
 | skill-security-checker | v2.0.0 | Skill Security — 安全审计扫描器，帮助你快速发现 Skill 中的安全风险。静态扫描（提示注入/命令注入/SSRF/凭证外泄/路径遍历/危险函数）、依赖漏洞审计、权限审计、质量评分、动态沙箱执行扫描（Docker/Windows Sandbox）、JSON/HTML 报告生成。 |
 | cn-model-gateway | v1.1.0 | 国产大模型统一 MCP 服务器，通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline / n8n 等 18+ Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包、MiniMax、零一万物、百川智能、阶跃星辰十家模型的统一调用接口。支持工具调用（ask_model/compare_models/list_providers/health_check）、资源读取（配置/使用统计）、预置 prompt 模板（代码审查/翻译），内置统一错误映射、流式 SSE 输出、使用量统计、硬件感知并发控制。config.json 填写 api_key 即可启动，无需 GPU、不做微调、不做私有部署，只做标准 MCP 协议网关。 |
 | privacy-search | v1.1.0 | 隐私优先的多引擎并行搜索 Skill，V1.1 提供十大搜索引擎（百度/必应/搜狗/360/DuckDuckGo/Yandex/Startpage/Qwant/Brave/本地SearXNG）+ SimHash去重排序、SearXNG本地实例自动部署（Docker/pip双路径）、隐私模式（normal/strict一键切换，strict 模式国内可用引擎自动降级）、版本更新检查提醒。错误分类诊断（网络/配置/引擎），不污染系统 Python 环境。 |
@@ -139,6 +139,7 @@ git push → GitHub Actions 触发
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v3.7.0 | 2026-07-22 | 新增：全电发票（数电票）XML 格式解析器 xml_parser.py，支持 20 位全电发票号码、校验码、税务数字账户等特有字段提取；新增：OFD 版式文件解析器 ofd_parser.py；新增：票种自动识别模块 invoice_detector.py，自动路由传统 OCR 或全电解析；新增：统一发票数据结构 unified_invoice.py，兼容新旧发票格式；新增：SKILL.md 全电发票使用章节；新增：版本更新提醒机制；新增：联系信息 njskills@agent.qq.com |
 | v3.4.0 | 2026-07-13 | **修复**：移除 install_tesseract.ps1 中指向个人 Gitee 仓库的下载源，替换为 winget/scoop 官方源和 GitHub 官方 Release；**修复**：移除 check_env.py 中 Gitee 镜像推荐，替换为 GitHub 官方下载地址；**修复**：将 approval_abstract.py、api-endpoints.md、setup-guide.md、example-approval.md 中所有 `open.duxiaoman.com` 错误链接替换为钉钉官方地址 `open-dev.dingtalk.com`；**修复**：ver |
 | v3.3.0 | 2026-07-13 | **更名**：插件文件夹名从 `tax-receipt-compliance` 改为 `receipt-compliance`；**更名**：displayName 从 `财税合规全链路助手` 改为 `会计助手`；**更名**：description 和标题同步更新为"会计助手" |
 | v3.2.0 | 2026-07-04 | **新增**：【5分钟上手指南】含完整流程图，从安装到报销一步到位，解决"使用流程不清晰"问题；**新增**：【避坑指南】14个高频问题+解决方案，覆盖识别/配置/查验/审批全场景；**新增**：【审批功能完整配置指南】钉钉/企微3步配置流程+测试命令，降低对接门槛；**新增**：verify_engine.py 支持 `--open-browser` 参数，一键生成查验链接并自动打开浏览器；**改进**：审批引擎(approval_engine.py)从"框架"升级为"完整可用"，钉钉/企微审批可直接调用API提交；**改进**：功能说明表更新，真伪查验改为"✅ 直接可用"（一键生成链接+自 |
