@@ -3,7 +3,7 @@ name: receipt-compliance
 slug: receipt-compliance
 displayName: 会计助手
 description: 会计助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。
-version: 3.4.0
+version: 3.7.0
 category: 财税管理
 appName: 财税合规
 platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
@@ -981,24 +981,75 @@ logs/
 
 ## 支持与反馈
 
-- 问题反馈：请在SkillHub平台提交Issue
-- 功能建议：欢迎提交Pull Request
+- 问题反馈：请在 SkillHub 平台提交 Issue
+- 功能建议：欢迎提交 Pull Request
 - 邮箱：联系Skill开发者
+- 联系信息：njskills@agent.qq.com
+- 版本更新提醒：检测到新版本发布时，请及时通过 tongyifabu.ps1 更新本 Skill 以获取最新功能和修复
+
+## 全电发票（数电票）
+
+本 Skill 已支持全电发票（全面数字化的电子发票），兼备传统发票 OCR 与全电发票 XML/OFD 解析的双轨模式。
+
+### 支持的文件类型
+
+| 类型 | 扩展名 | 解析方式 |
+|------|--------|---------|
+| 传统纸质发票 | `.png`、`.jpg`、`.jpeg`、`.bmp` | OCR 引擎识别 |
+| 传统电子发票（PDF） | `.pdf` | OCR 引擎识别（需 poppler） |
+| 全电发票（XML） | `.xml` | 专用 XML Schema 解析器，提取结构化数据 |
+| 全电发票（OFD） | `.ofd` | OFD 解析器或转换为 PDF 后 OCR |
+
+### 全电发票特有字段
+
+| 字段 | 说明 | 传统发票字段差异 |
+|------|------|-----------------|
+| 发票号码（20位） | 全电发票唯一标识 | 传统发票 8-20 位 |
+| 税务数字账户 ID | 数电票归集账户标识 | 传统发票无此概念 |
+| 校验码 | 全电票安全校验 | 传统发票为密码区 |
+| 特定业务信息 | 差额计税、建筑服务等标识 | 传统发票无明确标记 |
+
+### 使用方式
+
+**全电发票 XML 文件**：
+```bash
+python scripts/xml_parser.py path/to/invoice.xml
+```
+
+**全电发票 OFD 文件**：
+```bash
+python scripts/ofd_parser.py path/to/invoice.ofd
+```
+
+**自动识别（推荐）**：
+```bash
+python scripts/invoice_detector.py path/to/any_invoice
+```
+
+模块会自动判断文件类型并调用对应解析器。
+
+### 降级方案
+
+当 `ofdparser` Python 库未安装时，OFD 解析器会提示您：
+
+1. **安装 ofdparser**：`pip install ofdparser`（首选）
+2. **转换为 PDF**：使用数科阅读器、福昕 OFD 阅读器导出为 PDF，再用 OCR 识别
+3. **手动阅读**：通过官方 OFD 阅读器手动查看
+
+### 税务数字账户接口说明
+
+全电发票通过税务数字账户归集管理。如需对接税务数字账户接口，可参考：
+
+- 电子税务局官方文档：https://etax.chinatax.gov.cn/
+- 发票查验（国税总局）：https://inv-veri.chinatax.gov.cn/
+
+> ⚠️ **注意**：税务数字账户对接以企业自主配置为原则，本 Skill 提供标准接口框架，企业需根据实际税局接口规范自行实现具体调用逻辑。
 
 ## 更新日志
 
-### v3.4.0 (2026-07-13)
-
-- **修复**：移除 install_tesseract.ps1 中指向个人 Gitee 仓库的下载源，替换为 winget/scoop 官方源和 GitHub 官方 Release
-- **修复**：移除 check_env.py 中 Gitee 镜像推荐，替换为 GitHub 官方下载地址
-- **修复**：将 approval_abstract.py、api-endpoints.md、setup-guide.md、example-approval.md 中所有 `open.duxiaoman.com` 错误链接替换为钉钉官方地址 `open-dev.dingtalk.com`
-- **修复**：verify_engine.py 中 `subprocess.Popen` 移除 `shell=True`，改为列表参数形式，降低命令注入风险
-
-### v3.3.0 (2026-07-13)
-
-- **更名**：插件文件夹名从 `tax-receipt-compliance` 改为 `receipt-compliance`
-- **更名**：displayName 从 `财税合规全链路助手` 改为 `会计助手`
-- **更名**：description 和标题同步更新为"会计助手"
+| v3.7.0 | 2026-07-22 | 新增：全电发票（数电票）XML 格式解析器 xml_parser.py，支持 20 位全电发票号码、校验码、税务数字账户等特有字段提取；新增：OFD 版式文件解析器 ofd_parser.py；新增：票种自动识别模块 invoice_detector.py，自动路由传统 OCR 或全电解析；新增：统一发票数据结构 unified_invoice.py，兼容新旧发票格式；新增：SKILL.md 全电发票使用章节；新增：版本更新提醒机制；新增：联系信息 njskills@agent.qq.com |
+| v3.4.0 | 2026-07-13 | 修复：移除 install_tesseract.ps1 中指向个人 Gitee 仓库的下载源，替换为 winget/scoop 官方源和 GitHub 官方 Release；修复：将 approval_abstract.py、api-endpoints.md、setup-guide.md、example-approval.md 中所有 open.duxiaoman.com 错误链接替换为钉钉官方地址 open-dev.dingtalk.com；修复：verify_engine.py 中 subprocess.Popen 移除 shell=True，改为列表参数形式 |
+| v3.3.0 | 2026-07-13 | 更名：插件文件夹名从 tax-receipt-compliance 改为 receipt-compliance；更名：displayName 从财税合规全链路助手改为会计助手 |
 
 ### v3.2.0 (2026-07-04)
 
