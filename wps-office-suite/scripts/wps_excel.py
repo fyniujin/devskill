@@ -1,5 +1,5 @@
 """
-WPS Excel CLI v4.0 - 完整命令集
+WPS Excel CLI v4.3 - 完整命令集（含 Excel 深度分析）
 """
 import subprocess
 import json
@@ -113,6 +113,22 @@ def main():
     p.add_argument("--input", required=True, help="发票文件路径（PDF/图片）")
     p.add_argument("--output", default="", help="输出 Excel 路径")
 
+    p = sub.add_parser("excel-analyze", help="Excel 深度分析（公式纠错/数据清洗/透视表/预测/NL2Formula）")
+    p.add_argument("--file", required=True, help="Excel 文件路径")
+    p.add_argument("--task", default="profile",
+                   choices=["profile", "fix_formulas", "pivot", "predict", "nl2formula", "clean"],
+                   help="分析任务类型")
+    p.add_argument("--sheet", default="Sheet1")
+    p.add_argument("--column", help="预测列名（predict 任务）")
+    p.add_argument("--method", default="auto", help="预测方法: auto/moving_avg/exponential/linear")
+    p.add_argument("--steps", type=int, default=3, help="预测步数")
+    p.add_argument("--query", help="自然语言查询（nl2formula 任务）")
+    p.add_argument("--use-llm", action="store_true", help="使用 LLM 辅助（可选）")
+    p.add_argument("--row-field", help="透视表行字段")
+    p.add_argument("--value-field", help="透视表值字段")
+    p.add_argument("--col-field", help="透视表列字段")
+    p.add_argument("--agg-func", default="sum", help="透视表聚合方式")
+
     args = parser.parse_args()
 
     if args.command == "create":
@@ -168,6 +184,21 @@ def main():
         })
     elif args.command == "invoice":
         r = call_worker("invoice_ocr", {"input": args.input, "output": args.output})
+    elif args.command == "excel-analyze":
+        r = call_worker("excel_analyze", {
+            "file": args.file,
+            "task": args.task,
+            "sheet": args.sheet,
+            "column": args.column or "",
+            "method": args.method,
+            "steps": args.steps,
+            "query": args.query or "",
+            "use_llm": args.use_llm,
+            "row_field": args.row_field or "",
+            "value_field": args.value_field or "",
+            "col_field": args.col_field or "",
+            "agg_func": args.agg_func,
+        })
     else:
         r = {"ok": False, "error": "未知命令"}
 
