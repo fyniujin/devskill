@@ -2,6 +2,7 @@
 """
 企业微信语音消息 Agent - 会话管理器
 管理对话上下文，支持创建、查询、清理会话
+新增：情感状态跟踪（v2.2）
 """
 
 import json
@@ -40,7 +41,13 @@ def create_session(userid, max_history=5):
         "created_at": int(time.time()),
         "updated_at": int(time.time()),
         "max_history": max_history,
-        "active": True
+        "active": True,
+        "emotion_state": {
+            "current_emotion": "neutral",
+            "consecutive_negative": 0,
+            "emotion_history": [],
+            "should_escalate": False
+        }
     }
     
     save_session(session)
@@ -77,8 +84,16 @@ def get_active_session(userid):
                 continue
     return None
 
-def add_message(session_id, role, content, intent=None):
-    """向会话添加消息"""
+def add_message(session_id, role, content, intent=None, emotion=None):
+    """向会话添加消息
+    
+    Args:
+        session_id: 会话ID
+        role: user 或 assistant
+        content: 消息内容
+        intent: 意图类型
+        emotion: 情感类型 (angry/anxious/satisfied/confused/neutral)
+    """
     session = get_session(session_id)
     if not session:
         return None
@@ -90,8 +105,16 @@ def add_message(session_id, role, content, intent=None):
         "intent": intent
     }
     
+    # 如果有情感信息，添加到消息中
+    if emotion:
+        message["emotion"] = emotion
+    
     session['messages'].append(message)
     session['updated_at'] = int(time.time())
+    
+    # 更新情感状态
+    if emotion:
+        update_emotion_state(session, emotion)
     
     # 压缩历史消息
     if len(session['messages']) > session['max_history']:
@@ -102,6 +125,71 @@ def add_message(session_id, role, content, intent=None):
     
     save_session(session)
     return session
+
+
+def update_emotion_state(session, emotion):
+    """更新会话的情感状态
+    
+    Args:
+        session: 会话对象
+        emotion: 情感类型字符串
+    """
+    # 确保 emotion_state 存在
+    if "emotion_state" not in session:
+        session["emotion_state"] = {
+            "current_emotion": "neutral",
+            "consecutive_negative": 0,
+            "emotion_history": [],
+            "should_escalate": False
+        }
+    
+    state = session["emotion_state"]
+    
+    # 更新当前情感
+    state["current_emotion"] = emotion
+    
+    # 记录情感历史
+    state["emotion_history"].append({
+        "emotion": emotion,
+        "timestamp": int(time.time())
+    })
+    
+    # 限制历史记录长度
+    if len(state["emotion_history"]) > 10:
+        state["emotion_history"] = state["emotion_history"][-10:]
+    
+    # 负面情感计数
+    negative_emotions = {"angry", "anxious"}
+    if emotion in negative_emotions:
+        state["consecutive_negative"] += 1
+    else:
+        state["consecutive_negative"] = 0
+    
+    # 判断是否应升级（超过阈值2）
+    state["should_escalate"] = state["consecutive_negative"] > 2
+    
+    # 更新到会话中
+    session["emotion_state"] = state
+
+
+def get_emotion_state(session_id):
+    """获取会话的情感状态
+    
+    Args:
+        session_id: 会话ID
+        
+    Returns:
+        dict: 情感状态，不存在返回 None
+    """
+    session = get_session(session_id)
+    if not session:
+        return None
+    return session.get("emotion_state", {
+        "current_emotion": "neutral",
+        "consecutive_negative": 0,
+        "emotion_history": [],
+        "should_escalate": False
+    })
 
 def cleanup_expired(timeout=120):
     """清理过期会话"""
