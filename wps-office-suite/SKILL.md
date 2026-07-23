@@ -2,8 +2,8 @@
 name: wps-office-suite
 displayName: WPS Office 全家桶
 slug: wps-office-suite
-description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、反模式FAQ、避坑指南、自动重试、硬件自适应、环境自检、错误速查手册、Skill更新提醒；v4.0新增：Word→PPT一键生成、Excel自然语言数据分析、Word合同条款审查、Excel发票OCR入账
-version: 4.1.0
+description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、反模式FAQ、避坑指南、自动重试、硬件自适应、环境自检、错误速查手册、Skill更新提醒；v4.0新增：Word→PPT一键生成、Excel自然语言数据分析、Word合同条款审查、Excel发票OCR入账；v4.3新增：Excel深度分析（公式纠错/数据清洗/透视表/数据预测/NL2Formula）
+version: 4.3.0
 category: 办公协作与生产力工具
 platforms:
   - windows
@@ -51,6 +51,7 @@ tags:
 > 📚 **文档模板 + 最佳实践 + 避坑指南**：代码生成3个即用模板 + 10个最佳实践案例 + 20+个避坑指南
 > 📬 **Skill 更新提醒**：自动检查新版本，7天提醒一次，保持最新
 > 🆕 **文件大小明确限制**：单文件 < 50MB 直接处理，> 50MB 有分片建议
+> 🔬 **Excel 深度分析 v4.3**：公式纠错、数据清洗、透视表自动生成、数据预测、NL2Formula
 > 📧 **建议反馈**：有更好建议？邮箱：[njskills@agent.qq.com](mailto:njskills@agent.qq.com)
 
 ---
@@ -638,6 +639,18 @@ python scripts/wps_ppt.py engine-info
 | 合同审查 | `python scripts/wps_word.py review --file contract.docx --output 审查版.docx` |
 | 发票OCR | `python scripts/wps_excel.py invoice --input 发票.pdf --output 入账台账.xlsx` |
 
+### 🆕 v4.3 Excel 深度分析命令
+
+```bash
+python scripts/excel_analyzer.py profile --file data.xlsx --sheet Sheet1
+python scripts/excel_analyzer.py fix-formulas --file data.xlsx --sheet Sheet1
+python scripts/excel_analyzer.py pivot --file data.xlsx --sheet Sheet1
+python scripts/excel_analyzer.py predict --file data.xlsx --sheet Sheet1 --column 销售额 --method auto --steps 3
+python scripts/excel_analyzer.py nl2formula --query "同比增长率"
+python scripts/excel_analyzer.py clean --file data.xlsx --sheet Sheet1
+python scripts/excel_analyzer.py hardware
+```
+
 ### 其他工具
 
 ```bash
@@ -689,6 +702,7 @@ python templates/generate_templates.py --dir ./output  # 生成模板
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v4.3.0 | 2026-07-23 | 增加：Excel 智能分析模块 excel_analyzer.py（公式自动纠错/数据清洗辅助/透视表自动生成/数据预测/NL2Formula 自然语言转公式/硬件自适应降级）；增加：6 个 CLI 子命令（profile/fix-formulas/pivot/predict/nl2formula/clean/hardware）；优化：数据类型探测算法（数值/日期/文本自动识别）；优化：透视表智能字段推荐（基于唯一值比例+数据类型）；增加：数据质量评分体系（0-100分） |
 | v4.1.0 | 2026-07-17 | 增加：PPT智能生成深度增强模块 ppt_generator.py（多源输入/演讲者备注/动画建议/配色适配/图表推荐/排练辅助）；增加：4 大工具 CLI 子命令扩展（docx-to-ppt/generate/nl-analyze/invoice/review）；增加：配色方案自动生成引擎；增加：演讲者备注双模式（模板引擎 + 外部 LLM 可选）；优化：PPT 生成流程重构为分层架构 |
 | v4.0.0 | 2026-07-13 | 增加：Word→PPT一键生成；增加：Excel自然语言数据分析；增加：Word合同条款审查标注；增加：Excel发票OCR入账；增加：4 个专用脚本（wps_docx_to_ppt/wps_nl_analysis/wps_contract_review/wps_invoice_ocr）；增加：Worker 路由扩展至 28 个命令 |
 | v3.1.0 | 2026-07-07 | 修复：模板安全问题（删除二进制文件，改为纯Python代码生成）；增加：20+避坑指南；增加：FAQ扩展到15个；增加：文件限制速查表 |
