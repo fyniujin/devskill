@@ -27,6 +27,23 @@ import socket
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta
 
+# 日志格式（必须在情感分析模块之前定义 logger）
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
+logger = logging.getLogger("WeComServer")
+
+# 情感分析模块（v2.2 新增）
+sys.path.insert(0, os.path.dirname(__file__))
+try:
+    from emotion_analyzer import EmotionAnalyzer, Emotion, EmotionEscalationTracker, HardwareAdaptiveConfig
+    EMOTION_AVAILABLE = True
+    logger.info("情感分析模块已加载")
+except ImportError:
+    EMOTION_AVAILABLE = False
+    logger.warning("情感分析模块不可用，将跳过情感分析")
+
 # 自选导入 urllib（兼容 Python 3.x）
 try:
     from urllib.request import urlopen, Request
@@ -42,12 +59,55 @@ SERVER_HOST = "0.0.0.0"
 SERVER_PORT = 8080
 USER_AGENT = "workbuddy-wecom-voice/2.0"
 
-# 日志格式
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
-logger = logging.getLogger("WeComServer")
+# ==========================================
+# 情感分析管理器（v2.2 新增）
+# ==========================================
+
+class EmotionManager:
+    """情感分析管理器，集成到对话处理流程中"""
+    
+    def __init__(self):
+        self.analyzer = None
+        self.tracker = None
+        self.config = None
+        
+        if EMOTION_AVAILABLE:
+            templates_path = os.path.join(os.path.dirname(__file__), '..', 'templates', 'emotion_strategies.json')
+            self.analyzer = EmotionAnalyzer(strategies_path=templates_path)
+            self.tracker = EmotionEscalationTracker(threshold=2)
+            self.config = HardwareAdaptiveConfig.get_config()
+            logger.info("情感分析管理器已初始化")
+    
+    def analyze(self, text: str) -> dict:
+        """分析文本情感"""
+        if not self.analyzer:
+            return {"emotion": "neutral", "confidence": 0.5}
+        return self.analyzer.analyze(text)
+    
+    def should_escalate(self, userid: str) -> bool:
+        """判断是否应该转人工"""
+        if not self.tracker:
+            return False
+        return self.tracker.should_escalate(userid)
+    
+    def record_emotion(self, emotion: str, userid: str):
+        """记录情感状态"""
+        if self.tracker and EMOTION_AVAILABLE:
+            emotion_enum = Emotion.from_string(emotion)
+            self.tracker.record(emotion_enum, userid)
+    
+    def get_strategy(self, emotion: str, confidence: float) -> dict:
+        """获取对应情感的策略"""
+        if not self.analyzer:
+            return {}
+        emotion_enum = Emotion.from_string(emotion) if EMOTION_AVAILABLE else None
+        if emotion_enum:
+            return self.analyzer.get_strategy(emotion_enum, confidence)
+        return {}
+
+
+# 全局情感管理器实例
+emotion_manager = EmotionManager()
 
 
 # ==========================================
@@ -436,7 +496,7 @@ class MessageHandler:
             return self._text_resp("暂不支持此类消息格式 😅 请发送语音或文字。")
     
     def _handle_voice(self, callback):
-        """处理语音消息"""
+        """处理语音消息（含情感分析 v2.2）"""
         content = callback.get("voice", {}).get("content", "").strip()
         userid = callback.get("from", {}).get("userid", "")
         
@@ -452,19 +512,68 @@ class MessageHandler:
                 "• 控制在 60 秒内"
             )
         
+        # 情感分析（v2.2 新增）
+        emotion_result = self._analyze_emotion(content, userid)
+        
+        # 情感升级检测
+        if emotion_result.get("should_escalate"):
+            return self._text_resp(
+                "为了更好地解决您的问题，我现在为您转接专属人工客服，请稍等... 🙏\n\n"
+                "您也可以留下联系方式，我们会尽快回复。"
+            )
+        
         # 意图分析
         intent, confidence, entities = self.parser.parse(content)
-        logger.info(f"意图: {intent}, 置信度: {confidence:.2f}")
+        logger.info(f"意图: {intent}, 置信度: {confidence:.2f}, 情感: {emotion_result.get('emotion', 'unknown')}")
+        
+        # 根据情感调整回复策略
+        emotion = emotion_result.get("emotion", "neutral")
+        strategy = emotion_manager.get_strategy(emotion, emotion_result.get("confidence", 0.5))
         
         # 置信度低时，用智能确认策略
         if confidence < 0.25:
-            return self._smart_clarify(content)
+            return self._smart_clarify(content, emotion=emotion, strategy=strategy)
         
-        return self._dispatch(intent, entities, content)
+        return self._dispatch(intent, entities, content, emotion=emotion, strategy=strategy)
+    
+    def _analyze_emotion(self, text: str, userid: str) -> dict:
+        """
+        分析文本情感并记录状态（v2.2）
+        
+        Returns:
+            dict: {
+                "emotion": str,
+                "confidence": float,
+                "should_escalate": bool
+            }
+        """
+        if not EMOTION_AVAILABLE:
+            return {"emotion": "neutral", "confidence": 0.5, "should_escalate": False}
+        
+        try:
+            result = emotion_manager.analyze(text)
+            emotion = result.get("emotion", Emotion.NEUTRAL)
+            confidence = result.get("confidence", 0.5)
+            
+            # 记录情感
+            emotion_manager.record_emotion(emotion.value if hasattr(emotion, 'value') else str(emotion), userid)
+            
+            # 检查是否升级
+            should_escalate = emotion_manager.should_escalate(userid)
+            
+            return {
+                "emotion": emotion.value if hasattr(emotion, 'value') else str(emotion),
+                "confidence": confidence,
+                "should_escalate": should_escalate
+            }
+        except Exception as e:
+            logger.warning(f"情感分析失败: {e}")
+            return {"emotion": "neutral", "confidence": 0.5, "should_escalate": False}
     
     def _handle_text(self, callback):
-        """处理文本消息"""
+        """处理文本消息（含情感分析 v2.2）"""
         content = callback.get("text", {}).get("content", "").strip()
+        userid = callback.get("from", {}).get("userid", "")
         
         if not content:
             return self._text_resp("您好！请输入您的需求，或发送语音消息。")
@@ -480,15 +589,31 @@ class MessageHandler:
         if content in ["帮助", "能做什么", "怎么用", "?"]:
             return self._help_response()
         
+        # 情感分析（v2.2 新增）
+        emotion_result = self._analyze_emotion(content, userid)
+        
+        # 情感升级检测
+        if emotion_result.get("should_escalate"):
+            return self._text_resp(
+                "为了更好地解决您的问题，我现在为您转接专属人工客服，请稍等... 🙏\n\n"
+                "您也可以留下联系方式，我们会尽快回复。"
+            )
+        
         # 其他文本→按语音流程处理
         intent, confidence, entities = self.parser.parse(content)
+        logger.info(f"意图: {intent}, 置信度: {confidence:.2f}, 情感: {emotion_result.get('emotion', 'unknown')}")
+        
+        # 根据情感调整回复策略
+        emotion = emotion_result.get("emotion", "neutral")
+        strategy = emotion_manager.get_strategy(emotion, emotion_result.get("confidence", 0.5))
+        
         if confidence >= 0.25:
-            return self._dispatch(intent, entities, content)
+            return self._dispatch(intent, entities, content, emotion=emotion, strategy=strategy)
         else:
-            return self._smart_clarify(content)
+            return self._smart_clarify(content, emotion=emotion, strategy=strategy)
     
-    def _dispatch(self, intent, entities, raw_text):
-        """分发到具体处理器"""
+    def _dispatch(self, intent, entities, raw_text, emotion=None, strategy=None):
+        """分发到具体处理器（含情感策略 v2.2）"""
         handlers = {
             "query_schedule": self._do_query_schedule,
             "create_todo": self._do_create_todo,
@@ -498,15 +623,57 @@ class MessageHandler:
             "exit_voice": self._do_exit,
             "greeting": self._do_greeting,
             "time_query": self._do_time_query,
-            "custom": lambda e, t: self._smart_clarify(t)
+            "custom": lambda e, t: self._smart_clarify(t, emotion=emotion, strategy=strategy)
         }
-        handler = handlers.get(intent, lambda e, t: self._smart_clarify(t))
+        handler = handlers.get(intent, lambda e, t: self._smart_clarify(t, emotion=emotion, strategy=strategy))
+        
+        # 如果有情感策略，传递给处理器
+        if emotion and strategy:
+            # 在响应前添加情感策略前缀
+            result = handler(entities, raw_text)
+            if result and isinstance(result, str):
+                # 根据情感调整回复
+                return self._apply_emotion_strategy(result, emotion, strategy)
+            return result
+        
         return handler(entities, raw_text)
     
-    def _smart_clarify(self, text):
+    def _apply_emotion_strategy(self, response: str, emotion: str, strategy: dict) -> str:
+        """应用情感策略到响应中
+        
+        Args:
+            response: 原始响应文本
+            emotion: 情感类型
+            strategy: 策略模板
+            
+        Returns:
+            str: 应用策略后的响应
+        """
+        if not strategy or emotion == "neutral":
+            return response
+        
+        # 愤怒/焦虑：在回复前添加安抚前缀
+        if emotion == "angry":
+            calm_prefix = "非常抱歉给您带来不好的体验，我理解您的不满。\n\n"
+            return calm_prefix + response
+        elif emotion == "anxious":
+            reassure_prefix = "请您放心，我马上为您处理。\n\n"
+            return reassure_prefix + response
+        elif emotion == "confused":
+            clarify_prefix = "抱歉刚才没讲清楚，我再详细说明一下：\n\n"
+            return clarify_prefix + response
+        elif emotion == "satisfied":
+            # 满意时顺势请求反馈
+            feedback_suffix = "\n\n如果您方便的话，可以给我们一个五星好评吗？⭐"
+            return response + feedback_suffix
+        
+        return response
+    
+    def _smart_clarify(self, text, emotion=None, strategy=None):
         """
         智能确认：尝试理解用户模糊意图并给出选项
         不再回复"需要配置API接入"
+        含情感策略调整（v2.2）
         """
         # 尝试从文本中提取关键信息进行智能匹配
         text_lower = text.lower()
