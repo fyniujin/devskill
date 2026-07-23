@@ -2,7 +2,7 @@
 slug: wecom-voice-agent
 displayName: 企业微信语音消息 Agent
 name: wecom-voice-agent
-version: 2.1.0
+version: 2.2.0
 description: >
   企业微信语音消息 AI Agent 技能，自动处理语音消息的意图识别、多轮对话与任务执行。
   支持被动接收语音消息、主动外呼、来电接线、通话纪要、合规录音、外呼调度等完整电话场景。
@@ -954,6 +954,7 @@ records_dir: ~/.wecom_voice/records  # 录音存储路径
 
 ## 更新日志
 
+| v2.2.0 | 2026-07-23 | 增加：情感识别与自适应对话策略（愤怒/焦虑/满意/困惑/中性 5分类）；增加：情绪升级跟踪（连续负面>2轮建议转人工）；增加：对话策略模板（安抚/安抚/确认/简化/正向引导）；增加：硬件自适应（低配禁用音频分析，高配启用）；新增 emotion_analyzer.py 脚本、emotion_strategies.json 策略模板；扩展 session_manager.py 情感状态跟踪 |
 | v2.1.0 | 2026-07-15 | 修复bug；增加：主动外呼、来电接线、合规录音、通话纪要、外呼调度、通话看板、全文转写；增加：ASR置信度二次确认、外呼任务批量导入；新增state_machine.py、compliance.py、ivr_minutes.py、scheduler.py、stats.py、transcriber.py六个脚本 |
 | v2.0.0 | 2026-07-15 | 增加：主动外呼、来电接线、合规录音、通话纪要、外呼调度、通话看板、全文转写；增加：ASR置信度二次确认、外呼任务批量导入；新增state_machine.py、compliance.py、ivr_minutes.py、scheduler.py、stats.py、transcriber.py六个脚本 |
 | v1.3.0 | 2026-07-10 | 增加：wttr.in天气查询（中文描述+穿衣建议）；增加：本地时间查询（100%可用）；增加：--quick一键体验模式；增加：意图识别增强（关键词+正则混合匹配）；修复：回复不再出现"需要配置API接入"，改为真正执行 |
