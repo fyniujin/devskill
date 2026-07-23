@@ -68,17 +68,20 @@ wecom-voice-agent/
 ├── references/
 │   ├── step_by_step_setup.md     # 分步部署指南（7步图文教程）
 │   └── wecom_bot_api.md          # 企业微信机器人 API 参考
+├── templates/
+│   └── emotion_strategies.json   # 情感对话策略模板 v2.2（新增）
 └── scripts/
     ├── detect_hardware.py        # 硬件检测脚本
     ├── voice_simulator.py        # 语音消息模拟器
-    ├── session_manager.py        # 会话管理器
-    ├── wecom_webhook_server.py   # 智能机器人回调服务器 v2.0
+    ├── session_manager.py        # 会话管理器（v2.2 扩展情感状态）
+    ├── wecom_webhook_server.py   # 智能机器人回调服务器 v2.2（集成情感分析）
     ├── state_machine.py          # 多轮对话状态机 v2.0
     ├── compliance.py             # 合规录音管理器 v2.0
     ├── ivr_minutes.py            # 通话自动纪要 v2.0
     ├── scheduler.py              # 外呼任务调度 v2.0
     ├── stats.py                  # 通话记录看板 v2.0
-    └── transcriber.py            # 录音全文转写 v2.0
+    ├── transcriber.py            # 录音全文转写 v2.0
+    └── emotion_analyzer.py       # 情感识别与自适应策略 v2.2（新增）
 ```
 
 ## 📋 支持的语音命令
@@ -125,6 +128,7 @@ wecom-voice-agent/
 
 ## 📜 版本历史
 
+- **v2.2.0** (2026-07-23) - 情感识别与自适应对话策略：5分类情感分析（愤怒/焦虑/满意/困惑/中性）、情绪升级跟踪、对话策略模板、硬件自适应
 - **v2.1.0** (2026-07-16) - 安全修复：自测代码移除恶意路径字符串，提升安全审计评分
 - **v2.0.0** (2026-07-15) - 重大升级：主动外呼、来电接线、通话纪要、合规录音、外呼调度、通话看板、全文转写
 - **v1.3.0** (2026-07-10) - webhook 服务器 v2.0：真正的天气查询（wttr.in）、当前时间查询、增强意图识别、--quick 一键体验
