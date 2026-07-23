@@ -1,6 +1,14 @@
 """
-WPS Worker v4.0.0 - 智能引擎切换 v4.0
+WPS Worker v4.3.0 - 智能引擎切换 v4.3
 引擎优先级: WPS > MS Office > LibreOffice > 纯Python
+
+v4.3.0 变更:
+  - 🎯 Excel 深度分析（公式纠错/数据清洗/透视表/数据预测/NL2Formula）
+  - 🎯 硬件自适应降级（低配禁用线性回归）
+  - 🎯 数据质量评分体系（0-100分）
+
+v4.1.0 变更:
+  - 🎯 PPT 智能生成深度增强（多源输入/演讲者备注/动画建议/配色适配/图表推荐/排练辅助）
 
 v4.0.0 变更:
   - 🎯 Word→PPT 一键生成（chapter splitting + 模板匹配）
@@ -766,6 +774,24 @@ def cmd_ppt_generate(args):
         enable_rehearsal=not args.get("no_rehearsal", False)
     )
 
+def cmd_excel_analyze(args):
+    """Excel 深度分析 v4.3"""
+    from excel_analyzer import analyze_excel
+    return analyze_excel(
+        filepath=args.get("file"),
+        task=args.get("task", "profile"),
+        sheet=args.get("sheet", "Sheet1"),
+        column_name=args.get("column", ""),
+        method=args.get("method", "auto"),
+        forecast_steps=args.get("steps", 3),
+        query=args.get("query", ""),
+        use_llm=args.get("use_llm", False),
+        row_field=args.get("row_field", ""),
+        value_field=args.get("value_field", ""),
+        col_field=args.get("col_field", ""),
+        agg_func=args.get("agg_func", "sum"),
+    )
+
 COMMANDS = {
     "create_word": cmd_create_word,
     "edit_word": cmd_edit_word,
@@ -796,6 +822,7 @@ COMMANDS = {
     "contract_review": cmd_contract_review,
     "invoice_ocr": cmd_invoice_ocr,
     "ppt_generate": cmd_ppt_generate,
+    "excel_analyze": cmd_excel_analyze,
     "exit": None,
 }
 
