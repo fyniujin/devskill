@@ -33,6 +33,7 @@ import report as report_mod
 import update_check
 import mock_engine
 from adapters import build, AdapterError
+from adapters.base import _estimate_tokens as estimate_tokens
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MODELS_YAML = os.path.normpath(os.path.join(HERE, "..", "references", "models.yaml"))
@@ -95,6 +96,20 @@ def _price(m):
     return float(m.get("price_in", 0) or 0) + float(m.get("price_out", 0) or 0)
 
 
+def _cap(m, key):
+    """读取能力画像分数（reason_score/code_score/long_score），缺失回退 5（中性）。"""
+    try:
+        return float(m.get(key, 5) or 5)
+    except (TypeError, ValueError):
+        return 5.0
+
+
+def _best_by_capability(models, cap_key):
+    """在候选中选能力画像最高者；同分时选更便宜的（性价比优先）。
+    这样新增厂商只要在 models.yaml 填了画像，就能被 auto 策略自动选中，无需改代码。"""
+    return max(models, key=lambda pm: (_cap(pm[1], cap_key), -_price(pm[1])))
+
+
 def resolve(strategy, classification, reg, manual_model=None, allow_unconfigured=False):
     """返回 (provider, model_name, reason)。失败抛中文异常。
 
@@ -141,28 +156,29 @@ def resolve(strategy, classification, reg, manual_model=None, allow_unconfigured
         best = max(models, key=qscore)
         return best[0], best[1]["name"], "quality 策略：选择能力最强的模型"
 
-    # auto：任务感知
+    # auto：任务感知（v2.1 起结合能力画像 reason_score/code_score/long_score）
     reason_bits = []
     if cls["needs_reasoning"]:
         reasoner = [pm for pm in models if pm[1].get("reasoner")]
         if reasoner:
-            best = reasoner[0]
-            reason_bits.append("需推理→选 reasoner 模型")
+            # 有 reasoner 时按 reason_score 选最强的
+            best = max(reasoner, key=lambda pm: _cap(pm[1], "reason_score"))
+            reason_bits.append("需推理→选 reasoner 模型(按推理画像)")
         else:
-            best = min(models, key=lambda pm: _price(pm[1]))
-            reason_bits.append("需推理但无 reasoner，退而求其次选最便宜")
+            # 无 reasoner：按 reason_score 选最强，其次看价格
+            best = _best_by_capability(models, "reason_score")
+            reason_bits.append("需推理但无 reasoner→选推理画像最强")
     elif cls["length_bucket"] == "long":
         longs = [pm for pm in models if (pm[1].get("ctx") or 0) >= 128000]
         if longs:
-            best = max(longs, key=lambda pm: pm[1].get("ctx", 0))
-            reason_bits.append("长文→选超长上下文模型(≥128k)")
+            best = max(longs, key=lambda pm: (_cap(pm[1], "long_score"), pm[1].get("ctx", 0)))
+            reason_bits.append("长文→选超长上下文(≥128k)且长文画像最强")
         else:
-            best = min(models, key=lambda pm: _price(pm[1]))
-            reason_bits.append("长文但无超长上下文，退选最便宜")
+            best = _best_by_capability(models, "long_score")
+            reason_bits.append("长文但无超长上下文→选长文画像最强")
     elif cls["task_type"] == "code":
-        code_models = [pm for pm in models if "code" in pm[1]["name"].lower() or pm[0] in ("deepseek", "qwen")]
-        best = code_models[0] if code_models else min(models, key=lambda pm: _price(pm[1]))
-        reason_bits.append("代码任务→偏好 DeepSeek/通义")
+        best = _best_by_capability(models, "code_score")
+        reason_bits.append("代码任务→选代码画像最强(性价比优先)")
     elif cls["budget_sensitive"]:
         best = min(models, key=lambda pm: _price(pm[1]))
         reason_bits.append("价格敏感(分类/抽取/翻译)→选最便宜")
@@ -245,6 +261,7 @@ def cmd_chat(args, reg):
             return
 
     t0 = time.time()
+    est_tokens = False  # 是否为估算 token（流式无精确 usage 时置 True）
     try:
         adapter = build(reg["providers"][provider]["adapter"], _adapter_cfg(provider, reg))
         if args.stream:
@@ -260,8 +277,12 @@ def cmd_chat(args, reg):
                     sys.stdout.flush()
             print("")
             content = "".join(full)
-            # 流式无法可靠拿 usage，按字符粗估（仅日志用，不影响计费的准确性承诺）
-            it = ot = 0
+            # 流式多数厂商不返回精确 usage：用 _estimate_tokens 兜底估算，
+            # 输入按完整 prompt(+system) 估、输出按累积文本估，并标注为「估」。
+            in_text = "".join(m.get("content", "") for m in messages)
+            it = estimate_tokens(in_text)
+            ot = estimate_tokens(content)
+            est_tokens = True
         else:
             res = adapter.chat(messages, model, stream=False, timeout=args.timeout)
             content = res["content"]
@@ -277,16 +298,18 @@ def cmd_chat(args, reg):
     cost_tracker.log_call(provider, model, classification["task_type"], it, ot, cost, elapsed, True)
     cache.put(prompt, provider, model, content)
 
+    tok_tag = "(估)" if est_tokens else ""
     if args.json:
         print(json.dumps({"content": content, "provider": provider, "model": model,
-                          "in_tokens": it, "out_tokens": ot, "cost": cost,
-                          "route_reason": reason},
+                          "in_tokens": it, "out_tokens": ot, "tokens_estimated": est_tokens,
+                          "cost": cost, "route_reason": reason},
                          ensure_ascii=False))
     else:
         print("🤖 [%s / %s] %s\n" % (provider, model, reason))
         print(content)
         print("\n────────── 用量 ──────────")
-        print("  token: 入 %d / 出 %d ｜ 花费 ¥%.6f ｜ 耗时 %dms" % (it, ot, cost, elapsed))
+        print("  token: 入 %d%s / 出 %d%s ｜ 花费 ¥%.6f%s ｜ 耗时 %dms"
+              % (it, tok_tag, ot, tok_tag, cost, tok_tag, elapsed))
 
     # 预算告警（可选）
     cfg = config.load_config(args.config)
