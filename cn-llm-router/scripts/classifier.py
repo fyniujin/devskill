@@ -62,6 +62,17 @@ def classify(prompt, task_hint=None):
     # 批量 / 简单任务对价格更敏感
     budget_sensitive = task_type in ("classify", "extract", "summarize", "translate")
 
+    # 是否适合流式输出：
+    #   对话/翻译/代码/摘要/写作 → 逐字生成体验好，建议流式；
+    #   数学推理/复杂推导 → 需完整思维链，建议一次性返回（避免半截推理误导）；
+    #   结构化抽取/分类 → 结果通常需整体解析（如 JSON），一次性更稳妥。
+    # 纯规则判断，零额外开销。
+    if needs_reasoning or task_type in ("reason", "extract", "classify"):
+        stream_friendly = False
+    else:
+        # general / translate / code / summarize / long 等适合流式
+        stream_friendly = True
+
     # 置信度：关键词命中且长度适中 → 高；纯 general 且无推理词 → 低
     if task_type != "general" or needs_reasoning:
         confidence = 0.8
@@ -73,6 +84,7 @@ def classify(prompt, task_hint=None):
         "needs_reasoning": needs_reasoning,
         "length_bucket": length_bucket,
         "budget_sensitive": budget_sensitive,
+        "stream_friendly": stream_friendly,
         "confidence": confidence,
         "char_len": char_len,
     }
