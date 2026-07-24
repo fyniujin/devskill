@@ -1,1 +1,1 @@
-{"version": "2.0.0", "homepage": "https://skillhub.cn/skill/cn-llm-router", "notes": "v2.0.0：新增全链路离线 Mock 模式（--mock），含 12 个预设场景 + 网络自动熔断 + 延迟模拟 + 交互式编辑器。无网/无密钥也能完整开发调试。mock 数据完全本地，不依赖外部 API。"}
+{"version": "2.1.0", "homepage": "https://skillhub.cn/skill/cn-llm-router", "notes": "v2.1.0：新增 MiniMax、零一万物 Yi、百川、阶跃 Step-2 四家厂商（覆盖扩至 12 家 32 款模型）；补 DeepSeek V3 能力画像；auto 策略改由能力画像（推理/代码/长文得分）智能选型；分类器新增流式适配判断；修复流式输出 token 计费恒为 0 的问题。"}
