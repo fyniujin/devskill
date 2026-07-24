@@ -2,8 +2,8 @@
 slug: cn-llm-router
 displayName: 国产大模型统一路由
 name: cn-llm-router
-description: 国产大模型统一路由。把 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、字节豆包、百度文心、讯飞星火等 8 家国产大模型收敛成一个命令入口；按任务类型（代码/推理/长文/翻译/摘要/抽取）自动或手动选择最合适、最省钱的模型；自动统计跨厂商 token 成本、硬件自适应限流（不拖累电脑）、本地语义缓存省 token、技能更新提醒。当用户需要「调用国产大模型」「多模型比价/降本」「统一管理多个模型 Key」「本地跑大模型路由」「不想被某一家厂商绑定」时使用。
-version: 2.0.0
+description: 国产大模型统一路由。把 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、字节豆包、百度文心、讯飞星火、MiniMax、零一万物 Yi、百川、阶跃 Step 等 12 家国产大模型收敛成一个命令入口；按任务类型（代码/推理/长文/翻译/摘要/抽取）结合能力画像自动或手动选择最合适、最省钱的模型；支持流式输出、自动统计跨厂商 token 成本、硬件自适应限流（不拖累电脑）、本地语义缓存省 token、全链路离线 Mock 调试、技能更新提醒。当用户需要「调用国产大模型」「多模型比价/降本」「统一管理多个模型 Key」「本地跑大模型路由」「不想被某一家厂商绑定」时使用。
+version: 2.1.0
 author: njskills
 license: MIT
 tags: [国产大模型, 模型路由, 成本统计, 多模型, 硬件自适应, 语义缓存, 零密钥]
@@ -11,7 +11,7 @@ tags: [国产大模型, 模型路由, 成本统计, 多模型, 硬件自适应, 
 
 # 国产大模型统一路由（cn-llm-router）
 
-> 一个**核心零依赖（纯 Python 标准库，仅讯飞星火可选一个 `websocket-client`）、零密钥打包**的命令行工具，把 8 家国产大模型收敛成「一个入口、一套命令」。你只管说「我要干嘛」，它帮你挑模型、算成本、限并发；断网或无 Key 时也能演示路由逻辑。
+> 一个**核心零依赖（纯 Python 标准库，仅讯飞星火可选一个 `websocket-client`）、零密钥打包**的命令行工具，把 12 家国产大模型收敛成「一个入口、一套命令」。你只管说「我要干嘛」，它帮你挑模型、算成本、限并发、逐字流式输出；断网或无 Key 时也能演示路由逻辑。
 
 ## 一、30 秒速查
 
@@ -57,8 +57,8 @@ $ python scripts/router.py hardware
 ╚═══════════════════════════════════════╝
 ```
 
-- 支持厂商（8 家）：DeepSeek、阿里通义千问、智谱 GLM、Kimi、腾讯混元、字节豆包、百度文心、讯飞星火。
-- 运行要求：Python 3.8+；**7 家厂商（DeepSeek/通义/智谱/Kimi/混元/豆包/文心）与全部离线功能无需安装任何第三方包**；讯飞星火为可选 `websocket-client`（不装也能用其余 7 家，仅星火调用时给出中文安装指引）。
+- 支持厂商（12 家 · 32 款模型）：DeepSeek、阿里通义千问、智谱 GLM、Kimi、腾讯混元、字节豆包、百度文心、讯飞星火、MiniMax、零一万物 Yi、百川智能、阶跃星辰 Step。
+- 运行要求：Python 3.8+；**11 家厂商（DeepSeek/通义/智谱/Kimi/混元/豆包/文心/MiniMax/Yi/百川/阶跃）与全部离线功能无需安装任何第三方包**；讯飞星火为可选 `websocket-client`（不装也能用其余 11 家，仅星火调用时给出中文安装指引）。
 - 密钥来源：只用**环境变量**，绝不明文落盘、绝不打包进 skill。
 
 ## 二、架构
@@ -113,7 +113,7 @@ cn-llm-router/
 
 ### 4.1 运行环境
 - Python 3.8+（Windows / macOS / Linux 均可）。
-- **除讯飞星火的可选 `websocket-client` 外，无需 `pip install` 任何依赖**；其余 7 家与全部离线功能均用标准库实现，讯飞星火签名（hmac/hashlib/base64）也自研，仅 WS 传输用可选客户端。
+- **除讯飞星火的可选 `websocket-client` 外，无需 `pip install` 任何依赖**；其余 11 家与全部离线功能均用标准库实现，讯飞星火签名（hmac/hashlib/base64）也自研，仅 WS 传输用可选客户端。
 
 ### 4.2 配置密钥（只用环境变量，三种任选其一）
 ```bash
@@ -127,6 +127,10 @@ export ARK_API_KEY=sk-xxx              # 字节豆包
 export ERNIE_OPENAI_KEY=sk-xxx         # 文心（OpenAI 兼容端点，推荐）
 # 或文心原生：ERNIE_API_KEY=xxx  +  ERNIE_SECRET_KEY=xxx
 export SPARK_APP_ID=xxx SPARK_API_KEY=xxx SPARK_API_SECRET=xxx  # 讯飞星火
+export MINIMAX_API_KEY=sk-xxx          # MiniMax（abab 系列）
+export YI_API_KEY=sk-xxx               # 零一万物 Yi
+export BAICHUAN_API_KEY=sk-xxx         # 百川智能
+export STEP_API_KEY=sk-xxx             # 阶跃星辰 Step
 
 # 方式 B：写进 shell 配置文件（~/.bashrc / ~/.zshrc）后 source 生效
 # 方式 C：Windows PowerShell
@@ -344,6 +348,10 @@ $ python scripts/router.py config
 │   ARK_API_KEY             — 字节豆包         │
 │   ERNIE_OPENAI_KEY        — 百度文心(推荐)   │
 │   SPARK_APP_ID + _API_KEY + _API_SECRET — 讯飞│
+│   MINIMAX_API_KEY         — MiniMax         │
+│   YI_API_KEY              — 零一万物 Yi      │
+│   BAICHUAN_API_KEY        — 百川智能         │
+│   STEP_API_KEY            — 阶跃星辰 Step    │
 ╚══════════════════════════════════════════════╝
 ```
 
@@ -357,14 +365,28 @@ python scripts/router.py version
 **运行效果：**
 ```
 $ python scripts/router.py version
-cn-llm-router v1.2.0 | 作者: njskills@agent.qq.com
+cn-llm-router v2.1.0 | 作者: njskills@agent.qq.com
 主页: https://skillhub.cn/skill/cn-llm-router
 
 $ python scripts/router.py update-check
-✅ 已是最新版本 v1.2.0
+✅ 已是最新版本 v2.1.0
 ```
 
 > Windows 用户把 `python` 换成 `python.exe` 或 `py`；PowerShell 里环境变量用 `$env:XXX="..."`。
+
+## 五（B）、能力画像智能选型（v2.1）
+
+`references/models.yaml` 里每个模型都带三项**能力画像**（0-10 的本地静态经验值，不联网、不打分服务）：
+
+| 字段 | 含义 | auto 策略如何用 |
+|------|------|----------------|
+| `reason_score` | 推理能力 | 推理类任务选此项最高者 |
+| `code_score` | 代码能力 | 代码类任务选此项最高者 |
+| `long_score` | 长文能力 | 长文任务在超长上下文中选此项最高者 |
+
+`auto` 策略决策链：**需推理 → 优先 reasoner 且推理画像最强；长文 → ≥128k 上下文且长文画像最强；代码 → 代码画像最强（同分选更便宜）；价格敏感 → 最便宜；常规 → 均衡默认**。
+
+> 好处：新增厂商只要在 `models.yaml` 填好画像，就会被 `auto` 自动纳入选型，**无需改任何代码**。v2.1 新增的 MiniMax / 零一万物 Yi / 百川 / 阶跃 Step 正是如此接入。画像为经验参考值，追求极致效果请用 `--strategy quality` 或 `--model 厂商:模型` 手动指定。
 
 ## 六、硬件自适应（不拖累电脑）
 
@@ -499,7 +521,7 @@ python scripts/router.py test --mock
 6. **不收集任何个人隐私数据**：prompt 内容仅用于本地分类与缓存，默认不上报；如需成本聚合请自行管理本地数据库。
 7. **语义缓存在本地做模糊匹配**（v1.1.0 加入长度惩罚机制），理论上不同问题可能被判定为「相似」而误命中缓存。关键场景（如生产环境、金融计算）建议加 `--no-cache` 关闭缓存，确保每次都是实时结果。
 
-> 依赖风险：除讯飞星火的可选 `websocket-client` 外，本技能无任何强制第三方依赖（自研 YAML 解析、自研 WebSocket 签名），不存在供应链投毒面；不装该包时，星火调用会给出中文安装指引，不影响其余 7 家与全部离线功能。
+> 依赖风险：除讯飞星火的可选 `websocket-client` 外，本技能无任何强制第三方依赖（自研 YAML 解析、自研 WebSocket 签名），不存在供应链投毒面；不装该包时，星火调用会给出中文安装指引，不影响其余 11 家与全部离线功能。
 
 ## 八、能力边界（明确不做）
 
@@ -538,7 +560,7 @@ python scripts/router.py test --mock
 | `未找到模型: xxx` | manual 指定模型不存在 | 用 `route --model provider:model` 时确认名称 |
 | `解析注册表失败` | models.yaml 被改坏 | 用 `git diff` 还原或重新拉取技能 |
 | `更新检查失败` | 无网络 | 正常，静默跳过；不影响使用 |
-| `讯飞星火需要可选依赖 websocket-client` | 未安装星火的 WS 库 | `pip install websocket-client`，或不使用星火改用其他 7 家 |
+| `讯飞星火需要可选依赖 websocket-client` | 未安装星火的 WS 库 | `pip install websocket-client`，或不使用星火改用其他 11 家 |
 | `流式读取中断` | 网络中途断开 | 重试即可；已内置重试机制（最多 2 次，指数退避） |
 
 所有报错均为中文，且 `chat`/`route` 异常会被捕获后以 `❌ ...` 友好提示退出（**不会抛 Python traceback**）。
@@ -549,7 +571,7 @@ python scripts/router.py test --mock
 不一定。`route`（建议模式）、`hardware`、`report`、`cache`、`update-check`、`version` 都**不需要 Key**，可纯离线体验路由逻辑与硬件画像。只有 `chat`（真正调用大模型）才需要至少一个厂商的 Key。
 
 **Q2：怎么新增一个厂商？**
-编辑 `references/models.yaml`，加一段 `providers.<新厂商>`（填 `adapter`/`base_url`/`env_hint`/`models`），若该厂商走 OpenAI 兼容协议则无需写代码；非兼容协议在 `scripts/adapters/` 加一个适配器即可，路由逻辑零改动。
+编辑 `references/models.yaml`，加一段 `providers.<新厂商>`（填 `adapter`/`base_url`/`env_hint`/`models`），并给每个模型补能力画像 `reason_score`/`code_score`/`long_score`（0-10）；若该厂商走 OpenAI 兼容协议则**无需写任何代码**（v2.1 新增的 MiniMax/Yi/百川/阶跃就是这样接入的）；非兼容协议在 `scripts/adapters/` 加一个适配器即可，路由逻辑零改动。补了能力画像后，`auto` 策略会自动把该厂商纳入智能选型。
 
 **Q3：成本统计准吗？**
 非流式调用：计费公式透明（`compute_cost(price, in, out)`），精度取决于厂商返回的 `usage` 字段，通常准确。流式输出：**token 数为估算值**（基于中文字≈1.5 tok/字、英文词≈1.3 tok/词的混合规则），标注 `(估)`，仅供参考，**不作为精确账单**。精确用量以各厂商控制台为准。
@@ -561,7 +583,7 @@ python scripts/router.py test --mock
 不会。prompt 只在本地做分类与缓存，默认不上传任何服务器；成本库与缓存在你本地目录（`~/.cn_llm_router/`）。唯一联网行为是调用厂商 API（你主动发的请求）和可选的版本更新检查。
 
 **Q6：支持流式吗？**
-支持，`chat --stream`；所有 8 家厂商均可流式输出。注意流式下 token 为估算值（见 Q3）。
+支持，`chat --stream`；所有 12 家厂商均可流式输出，内容逐字生成、无需等待全部完成。分类器会判断任务是否适合流式（`stream_friendly` 字段：对话/翻译/代码/摘要适合流式；数学推理/结构化抽取建议一次性返回，避免半截思维链误导）。注意流式下 token 为估算值（见 Q3）。
 
 **Q7：缓存会不会返回错误答案？（误命中问题）**
 有可能，但概率很低。v1.1.0 引入了三层防护：
@@ -648,6 +670,7 @@ python scripts/router.py update-check
 
 ## 更新日志
 
+| v2.1.0 | 2026-07-24 | 增加：MiniMax（abab 系列）、零一万物 Yi、百川智能、阶跃星辰 Step-2 四家厂商，覆盖扩展至 12 家 32 款模型；增加：DeepSeek V3 及全部模型的能力画像字段（推理/代码/长文得分）；优化：auto 策略改由能力画像驱动智能选型，新增厂商填画像即被自动纳入、无需改代码；增加：分类器 stream_friendly 流式适配判断（对话/翻译/代码适合流式，推理/抽取建议一次性）；修复：流式输出 token 计费恒为 0 的问题，改用估算兜底并标注（估） |
 | v2.0.0 | 2026-07-16 | 新增：全链路离线 Mock 模式（`--mock`），含 12 个预设场景（代码/推理/翻译/摘要/提取/分析/创意写作等）；新增：网络自动检测与厂商级熔断（所有厂商不可达时自动进入 mock 模式）；新增：延迟模拟（`--latency 2000`）用于测试超时降级；新增：交互式 Mock 数据编辑器（`mock --edit`）支持自定义 query→response 映射；新增：Mock 回归测试（`test --mock`，10 项 mock 专项测试）；定位：mock 数据完全本地（JSON + SQLite），不依赖外部 API，仅限开发调试，生产环境强制禁用 |
 | v1.1.0 | 2026-07-10 | 优化：缓存模糊匹配加入长度惩罚系数与最短查询限制，大幅减少「答非所问」式误命中；提升：流式输出 token 估算精度（无 usage 时按中英文混合规则兜底并标注「估」）；新增：SKILL.md 命令运行效果示例（每个命令均有真实输出样例）、反模式章节（8 条常见坑）、FAQ 扩充至 10 条、使用场景推荐与调优建议章节；修复：displayName 改为中文「国产大模型统一路由」，解决上传后显示英文名的问题 |
 | v1.0.0 | 2026-07-09 | 首发：单入口路由 + 任务感知策略（auto/cheap/quality/manual）+ 跨模型成本聚合 + 硬件自适应并发限制 + 本地语义缓存 + 更新提醒 + 8 家国产大模型全覆盖 |
@@ -664,4 +687,4 @@ python scripts/router.py update-check
 
 ---
 
-*版本：v2.0.0 ｜ 许可：MIT ｜ 核心纯标准库（讯飞星火可选 websocket-client）、零密钥打包、可只读审计。*
+*版本：v2.1.0 ｜ 许可：MIT ｜ 核心纯标准库（讯飞星火可选 websocket-client）、零密钥打包、可只读审计。*
