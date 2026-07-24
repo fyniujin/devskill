@@ -25,6 +25,11 @@ PROVIDER_ENV = {
     "spark_app_id": "SPARK_APP_ID",
     "spark_api_key": "SPARK_API_KEY",
     "spark_api_secret": "SPARK_API_SECRET",
+    # v2.1 新增 4 家（均 OpenAI 兼容，单 Key）
+    "minimax": "MINIMAX_API_KEY",
+    "yi": "YI_API_KEY",
+    "baichuan": "BAICHUAN_API_KEY",
+    "step": "STEP_API_KEY",
 }
 
 
@@ -79,7 +84,8 @@ def has_any_key_for(provider):
 def configured_providers():
     """返回当前已配置密钥的厂商列表。"""
     out = []
-    for p in ["deepseek", "qwen", "glm", "kimi", "hunyuan", "doubao", "ernie", "spark"]:
+    for p in ["deepseek", "qwen", "glm", "kimi", "hunyuan", "doubao", "ernie", "spark",
+              "minimax", "yi", "baichuan", "step"]:
         if has_any_key_for(p):
             out.append(p)
     return out
