@@ -12,6 +12,10 @@ from src.adapters.base import ChatMessage, BaseAdapter, ChatResponse, ContentChu
 from src.router import ModelRouter, ERROR_PARAM_INVALID, ERROR_RATE_LIMITED, ERROR_INTERNAL
 from src.monitor import get_hardware_info, compute_concurrency_limit, Monitor
 from src.mcp_server import MCPServer
+from src.frameworks import (
+    LangChainToolAdapter, AutoGPTPluginAdapter, CrewAIToolAdapter,
+    CozePluginAdapter, DifyToolAdapter,
+)
 
 
 class TestChatMessage(unittest.TestCase):
@@ -127,6 +131,67 @@ class TestMCPServer(unittest.TestCase):
                "params": {"name": "list_providers", "arguments": {}}}
         resp = self.server.handle_request(req)
         self.assertIn("result", resp)
+
+
+class TestFrameworkAdapters(unittest.TestCase):
+    def setUp(self):
+        self.router = ModelRouter()
+
+    def test_langchain_adapter_instantiation(self):
+        adapter = LangChainToolAdapter(self.router)
+        self.assertIsNotNone(adapter)
+
+    def test_autogpt_adapter_instantiation(self):
+        adapter = AutoGPTPluginAdapter(self.router)
+        self.assertIsNotNone(adapter)
+
+    def test_crewai_adapter_instantiation(self):
+        adapter = CrewAIToolAdapter(self.router)
+        self.assertIsNotNone(adapter)
+
+    def test_coze_adapter_instantiation(self):
+        adapter = CozePluginAdapter(self.router)
+        self.assertIsNotNone(adapter)
+
+    def test_dify_adapter_instantiation(self):
+        adapter = DifyToolAdapter(self.router)
+        self.assertIsNotNone(adapter)
+
+    def test_langchain_adapter_has_methods(self):
+        adapter = LangChainToolAdapter(self.router)
+        self.assertTrue(hasattr(adapter, 'ask_model'))
+        self.assertTrue(hasattr(adapter, 'compare_models'))
+        self.assertTrue(hasattr(adapter, 'list_providers'))
+
+    def test_autogpt_adapter_has_methods(self):
+        adapter = AutoGPTPluginAdapter(self.router)
+        self.assertTrue(hasattr(adapter, 'ask_model'))
+        self.assertTrue(hasattr(adapter, 'handle_prompt'))
+        self.assertTrue(hasattr(adapter, 'get_autogpt_commands'))
+
+    def test_coze_openapi_spec(self):
+        adapter = CozePluginAdapter(self.router)
+        spec = adapter.get_openapi_spec()
+        self.assertIn("openapi", spec)
+        self.assertIn("paths", spec)
+        self.assertIn("/ask_model", spec["paths"])
+
+    def test_dify_provider_config(self):
+        adapter = DifyToolAdapter(self.router)
+        config = adapter.get_dify_provider_config()
+        self.assertIn("provider", config)
+        self.assertIn("tools", config)
+        self.assertEqual(len(config["tools"]), 3)
+
+    def test_coze_handle_request_unknown(self):
+        adapter = CozePluginAdapter(self.router)
+        result = adapter.handle_coze_request("/unknown", "get", {})
+        self.assertEqual(result["status"], 404)
+
+    def test_dify_handle_request_unknown(self):
+        adapter = DifyToolAdapter(self.router)
+        result = adapter.handle_dify_request("unknown_tool", {})
+        self.assertIn("未知工具", result)
 
 
 if __name__ == "__main__":
