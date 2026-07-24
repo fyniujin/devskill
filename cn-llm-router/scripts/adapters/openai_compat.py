@@ -1,7 +1,9 @@
-"""OpenAI 兼容适配器：覆盖 DeepSeek / 通义 / 智谱 / Kimi / 混元 / 豆包。
+"""OpenAI 兼容适配器：覆盖 DeepSeek / 通义 / 智谱 / Kimi / 混元 / 豆包 /
+MiniMax / 零一万物 Yi / 百川 / 阶跃星辰 Step 等厂商。
 
 以上厂商均提供 OpenAI 格式的 /chat/completions 端点，统一用 Bearer Token 调用，
-因此一个适配器（纯标准库 urllib）即可复用于六家，零额外依赖。
+因此一个适配器（纯标准库 urllib）即可复用于所有 OpenAI 兼容厂商，零额外依赖；
+新增同类厂商时只需在 models.yaml 增配 base_url + env_hint，无需改动本文件。
 """
 
 import json
