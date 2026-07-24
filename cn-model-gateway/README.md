@@ -6,6 +6,7 @@
 
 - **标准 MCP 协议**：完整实现 JSON-RPC 2.0，tools/list/call + resources/list/read + prompts/list/get
 - **10 家国产模型**：DeepSeek / 通义千问 / 智谱 GLM / Kimi / 腾讯混元 / 火山豆包 / MiniMax / 零一万物 / 百川智能 / 阶跃星辰
+- **全 Agent 生态**：新增 5 个非 MCP 框架适配器（LangChain Tool、AutoGPT Plugin、CrewAI Tool、Coze 插件、Dify 工具节点）
 - **统一错误映射**：各厂商错误码统一映射为 MCP 标准错误码，全中文提示
 - **流式 SSE 输出**：长对话实时返回，不堵内存
 - **开箱即用**：4 个内置工具 + 2 个资源 + 2 个 prompt 模板
@@ -73,6 +74,13 @@ cn-model-gateway/
 │   │   ├── lingyi.py          ← 零一万物 Yi 系列
 │   │   ├── baichuan.py        ← 百川智能
 │   │   └── stepfun.py         ← 阶跃星辰 Step 系列
+│   ├── frameworks/            ← 5 个非 MCP 框架适配器（新增）
+│   │   ├── __init__.py        ← 统一导出
+│   │   ├── langchain_tool.py  ← LangChain Tool 适配器
+│   │   ├── autogpt_plugin.py  ← AutoGPT Plugin 适配器
+│   │   ├── crewai_tool.py     ← CrewAI Tool 适配器
+│   │   ├── coze_plugin.py     ← Coze 插件适配器
+│   │   └── dify_tool.py       ← Dify 工具节点适配器
 │   ├── router.py              ← 路由 + 统一错误映射（10 家）
 │   ├── mcp_server.py          ← MCP JSON-RPC 2.0 实现
 │   ├── monitor.py             ← 使用量统计 + 硬件感知
@@ -80,7 +88,7 @@ cn-model-gateway/
 ├── config/
 │   └── config.json.example    ← 配置模板（含 10 家）
 └── tests/
-    └── test_basic.py          ← 基础测试（10 家全覆盖）
+    └── test_basic.py          ← 基础测试（29 tests 全过）
 ```
 
 ## License
