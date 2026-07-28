@@ -9,6 +9,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import sys
 import os
+
+# 不生成 __pycache__（死规则 13）
+sys.dont_write_bytecode = True
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
 from search import (
@@ -139,40 +143,45 @@ class TestEngineAdapters(unittest.TestCase):
         adapter = DuckDuckGoAdapter()
         self.assertEqual(adapter.name, "duckduckgo")
 
-    def test_duckduckgo_dnt_header(self):
-        """DuckDuckGo 适配器应包含 DNT 头"""
-        async def _test():
-            adapter = DuckDuckGoAdapter()
-            # Mock session
-            mock_response = AsyncMock()
-            mock_response.text = AsyncMock(return_value="<html><body></body></html>")
-            mock_response.status = 200
-            mock_session = AsyncMock()
-            mock_session.get = MagicMock()
-            mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_response)
-            mock_session.get.return_value.__aexit__ = AsyncMock(return_value=False)
+    def test_dnt_header_from_privacy_context(self):
+        """
+        DNT 头由统一 HTTP 出口注入
 
-            result = await adapter.search(mock_session, "test")
-            # 验证 DNT 头被传递
-            call_args = mock_session.get.call_args
-            headers = call_args[1].get('headers', {})
-            self.assertEqual(headers.get('DNT'), '1')
+        V1.2 起适配器不再各自硬编码请求头。此前九个适配器各写各的，
+        只有三个偶然带了 DNT，导致隐私配置无法一致生效。
+        现改为由 PrivacyManager 生成上下文，http_client 统一注入。
+        """
+        from privacy import PrivacyManager
 
-        asyncio.run(_test())
+        pm = PrivacyManager({"privacy": {"default_mode": "strict"}})
+        pm.set_mode_silent("strict")
+        ctx = pm.build_request_context()
+
+        self.assertEqual(ctx.headers.get("DNT"), "1")
+        self.assertNotIn("Cookie", ctx.headers)
+        self.assertNotIn("Referer", ctx.headers)
+        self.assertIn("User-Agent", ctx.headers)
 
 
 class TestSearchOrchestrator(unittest.TestCase):
     """测试搜索编排器"""
 
     def test_init_engines(self):
+        """引擎由 EngineManager 统一持有，编排器按需取用"""
         config = {
             "search": {"default_engines": ["baidu", "bing", "duckduckgo"]},
             "searxng": {"host": "127.0.0.1", "port": 8888},
         }
         orch = SearchOrchestrator(config)
-        self.assertIn("baidu", orch.engines)
-        self.assertIn("bing", orch.engines)
-        self.assertIn("duckduckgo", orch.engines)
+        for name in ("baidu", "bing", "duckduckgo"):
+            self.assertIsNotNone(
+                orch.engine_manager.get_adapter(name),
+                f"{name} 适配器应可获取",
+            )
+        self.assertEqual(
+            orch.resolve_engines(None, "normal"),
+            ["baidu", "bing", "duckduckgo"],
+        )
 
     def test_rate_limit_check(self):
         config = {
