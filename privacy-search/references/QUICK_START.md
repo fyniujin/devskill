@@ -77,7 +77,7 @@ python scripts/search.py "Python asyncio 教程" --privacy strict
 
 输出示例：
 ```
-🔍 搜索: Python asyncio 教程 | 模式: strict | 结果: 12 条
+搜索: Python asyncio 教程 | 模式: strict | 来源: 实时 | 结果: 12 条
 
 [1] Python Asynchronous Programming
     https://docs.python.org/3/library/asyncio.html
@@ -87,15 +87,31 @@ python scripts/search.py "Python asyncio 教程" --privacy strict
 [2] Async IO in Python: A Complete Walkthrough
     https://realpython.com/async-io-python/
     Async IO is a concurrent programming design...
-    — startpage
-
-[3] 本地已缓存 - Python asyncio 文档
-    http://127.0.0.1:8888/search?q=Python+asyncio
-    This is a local cached version...
-    — searxng
-
-⚠️  提示：strict 模式仅使用 Yandex/Startpage/Qwant/Brave/DDG/SearXNG（国内可用）
+    — startpage, qwant
 ```
+
+> strict 模式仅使用 SearXNG/Yandex/Startpage/Qwant/Brave/DDG。
+> 即使显式指定 `--engines baidu` 也会被拒绝，避免隐私承诺被绕过。
+
+### 缓存加速
+
+相同查询在 1 小时内直接复用结果，输出标注「来源: 缓存」。
+
+```bash
+python scripts/search.py "Python asyncio 教程"     # 来源: 实时
+python scripts/search.py "Python asyncio 教程"     # 来源: 缓存，秒回
+python scripts/search.py "Python asyncio 教程" --no-cache   # 强制刷新
+```
+
+### 引擎体检
+
+搜不到结果时，先判断是引擎坏了还是关键词没匹配：
+
+```bash
+python scripts/search.py --selftest
+```
+
+输出会标明每个引擎是「正常」「被拦截」还是「选择器失效」。
 
 ### 显示错误诊断网络问题时
 
@@ -121,20 +137,20 @@ python scripts/search.py "test" --privacy strict --verbose
 
 ---
 
-## 🆕 V1.1 新增：国内可用引擎
-
-strict 模式现在支持 5 个国内可用的隐私友好引擎：
+## strict 模式可用引擎
 
 | 引擎 | 来源 | 国内速度 | 隐私保护 | 状态 |
 |------|------|---------|---------|------|
+| **SearXNG** | 本机 | ⭐⭐⭐⭐⭐ 极快 | 极高 | ✅ 最优先 |
 | **Yandex** | 俄罗斯 | ⭐⭐⭐⭐ 快 | 中等 | ✅ 默认启用 |
-| **Startpage** | 德国（Google代理） | ⭐⭐⭐ 中等 | 高 | ✅ 默认启用 |
+| **Startpage** | 荷兰（Google 代理） | ⭐⭐⭐ 中等 | 高 | ✅ 默认启用 |
 | **Qwant** | 法国 | ⭐⭐⭐ 中等 | 高 | ✅ 默认启用 |
 | **Brave** | 美国 | ⭐⭐ 较慢 | 高 | ✅ 默认启用 |
 | **DuckDuckGo** | 美国 | ⭐ 不稳定 | 极高 | ⚠️ 最后备选 |
-| **SearXNG** | 本机 | ⭐⭐⭐⭐⭐ 极快 | 极高 | ✅ 最优先 |
 
-自动降级策略：SearXNG → Yandex → Startpage → Qwant → Brave → DuckDuckGo → 国内引擎（最后手段）
+优先顺序：SearXNG → Yandex → Startpage → Qwant → Brave → DuckDuckGo
+
+若以上全部不可用，默认**停止搜索**而非降级到国内引擎——因为 strict 用户的预期是宁可无结果也不泄露查询词。确需降级请加 `--allow-fallback`。
 
 ---
 
@@ -151,6 +167,16 @@ privacy:
 ```
 
 其他配置项暂不需要修改。
+
+### 想隐藏 IP
+
+strict 模式不隐藏 IP，需自行配置代理：
+
+```yaml
+privacy:
+  strict:
+    proxy: "http://127.0.0.1:7890"    # 支持 http:// 与 socks5://
+```
 
 ---
 
@@ -197,14 +223,16 @@ python scripts/searxng_manager start --method pip
 
 ### Q3: 国内使用 strict 模式搜不到结果？
 
-V1.1 已增加自动降级：
-- 默认使用 Yandex（国内最快）
-- 如 Yandex 失败，自动尝试 Startpage → Qwant → Brave
-- 如全部失败，降级到 baidu/bing
+按顺序自动尝试 Yandex → Startpage → Qwant → Brave → DDG。全部失败时默认停止并提示，不会静默降级。
 
-可手动排除 DDG 只用国内可用引擎：
+只用国内直连较好的几个：
 ```bash
 python scripts/search.py "关键词" --privacy strict --engines yandex,startpage,qwant,searxng
+```
+
+确需降级到国内引擎：
+```bash
+python scripts/search.py "关键词" --privacy strict --allow-fallback
 ```
 
 ### Q4: 如何排除某个引擎？
@@ -217,8 +245,25 @@ python scripts/search.py "关键词" --privacy strict --engines startpage,qwant,
 ### Q5: 如何查看隐私保护详情？
 
 ```bash
+# 独立的隐私报告
 python scripts/privacy report
+
+# 搜索时附带本次实际生效的隐私设置
+python scripts/search.py "关键词" --privacy strict --privacy-report
 ```
+
+### Q6: 搜索记录会留在本地吗？
+
+会。缓存与历史存于 `~/.workbuddy/output/privacy-search-cache.db`。
+
+```bash
+python scripts/search.py --cache-stats        # 查看占用
+python scripts/search.py --history            # 查看历史
+python scripts/search.py --clear-cache        # 清空缓存
+python scripts/search.py --clear-history      # 清空历史
+```
+
+共享设备上建议在 config.yaml 设 `cache.enabled: false`。
 
 ---
 
