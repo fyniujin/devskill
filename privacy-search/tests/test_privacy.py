@@ -6,6 +6,10 @@ F3 单测：隐私模式切换
 import unittest
 import sys
 import os
+
+# 不生成 __pycache__（死规则 13）
+sys.dont_write_bytecode = True
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
 from privacy import PrivacyManager, PrivacyConfig
