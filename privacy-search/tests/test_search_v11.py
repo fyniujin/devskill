@@ -10,6 +10,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import sys
 import os
+
+# 不生成 __pycache__（死规则 13）
+sys.dont_write_bytecode = True
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
 from search import (
@@ -57,42 +61,42 @@ class TestNewEngines(unittest.TestCase):
         
         asyncio.run(_test())
 
-    def test_startpage_has_dnt(self):
-        """Startpage 应该包含 DNT 头"""
-        async def _test():
-            adapter = StartpageAdapter()
-            mock_response = AsyncMock()
-            mock_response.text = AsyncMock(return_value="<html><body></body></html>")
-            mock_response.status = 200
-            mock_session = AsyncMock()
-            mock_session.get = MagicMock()
-            mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_response)
-            mock_session.get.return_value.__aexit__ = AsyncMock(return_value=False)
-            await adapter.search(mock_session, "test")
-            call_args = mock_session.get.call_args
-            headers = call_args[1].get('headers', {})
-            # Startpage 不一定有 DDG=1，但我们应该检查它不发送 Cookie
-            self.assertNotIn("Cookie", headers)
+    def test_normal_mode_keeps_cookie_policy(self):
+        """normal 模式不强制移除 Cookie，但仍带 User-Agent"""
+        from privacy import PrivacyManager
 
-        asyncio.run(_test())
+        pm = PrivacyManager({"privacy": {"default_mode": "normal"}})
+        pm.set_mode_silent("normal")
+        ctx = pm.build_request_context()
+        self.assertIn("User-Agent", ctx.headers)
 
-    def test_brave_has_dnt(self):
-        """Brave 应该包含 DNT 头"""
-        async def _test():
-            adapter = BraveAdapter()
-            mock_response = AsyncMock()
-            mock_response.text = AsyncMock(return_value="<html><body></body></html>")
-            mock_response.status = 200
-            mock_session = AsyncMock()
-            mock_session.get = MagicMock()
-            mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_response)
-            mock_session.get.return_value.__aexit__ = AsyncMock(return_value=False)
-            await adapter.search(mock_session, "test")
-            call_args = mock_session.get.call_args
-            headers = call_args[1].get('headers', {})
-            self.assertIn("User-Agent", headers)
+    def test_all_engines_share_privacy_headers(self):
+        """
+        全部引擎共享同一套隐私请求头
 
-        asyncio.run(_test())
+        V1.1 时各适配器自行拼装 headers，只有部分带 DNT。
+        V1.2 收归统一出口后，隐私设置对所有引擎一致生效。
+        """
+        from privacy import PrivacyManager
+        from engines_registry import all_engine_names
+
+        pm = PrivacyManager({"privacy": {"default_mode": "strict"}})
+        pm.set_mode_silent("strict")
+        ctx = pm.build_request_context()
+
+        self.assertEqual(ctx.headers.get("DNT"), "1")
+        self.assertNotIn("Cookie", ctx.headers)
+        self.assertNotIn("Referer", ctx.headers)
+
+        # 该上下文不区分引擎，对全部 10 个引擎适用
+        self.assertEqual(len(all_engine_names()), 10)
+
+    def test_adapters_build_url(self):
+        """适配器只需构造 URL，查询词应被正确编码"""
+        for adapter in (YandexAdapter(), StartpageAdapter(), QwantAdapter(), BraveAdapter()):
+            url = adapter.build_url("test query", 10)
+            self.assertTrue(url.startswith("http"), f"{adapter.name} URL 应为绝对地址")
+            self.assertNotIn(" ", url, f"{adapter.name} URL 不应含未编码空格")
 
 
 class TestErrorClassification(unittest.TestCase):
@@ -160,26 +164,29 @@ class TestEngineManager(unittest.TestCase):
     """测试引擎管理器"""
 
     def test_init_all_engines(self):
-        config = {
-            "searxng": {"host": "127.0.0.1", "port": 8888},
-            "search": {"default_engines": ["baidu", "bing"]},
-            "privacy": {"default_mode": "normal"},
-        }
-        em = EngineManager(config)
-        self.assertIn("yandex", em.engines)
-        self.assertIn("startpage", em.engines)
-        self.assertIn("qwant", em.engines)
-        self.assertIn("brave", em.engines)
-        self.assertIn("duckduckgo", em.engines)
+        """EngineManager 现接收 SearXNG base_url，按名取适配器"""
+        em = EngineManager("http://127.0.0.1:8888")
+        for name in ("yandex", "startpage", "qwant", "brave", "duckduckgo", "searxng"):
+            self.assertIsNotNone(em.get_adapter(name), f"{name} 适配器应存在")
+
+    def test_registry_covers_all_adapters(self):
+        """注册表与适配器实现必须一一对应，避免清单漂移"""
+        from engines_registry import all_engine_names
+
+        em = EngineManager("http://127.0.0.1:8888")
+        for name in all_engine_names():
+            self.assertIsNotNone(
+                em.get_adapter(name),
+                f"注册表声明了 {name} 但没有对应适配器实现",
+            )
 
     def test_strict_fallback_engines_list(self):
         """验证 strict 模式备用引擎列表包含国内可用引擎"""
-        self.assertIn("yandex", STRICT_FALLBACK_ENGINES)
-        self.assertIn("startpage", STRICT_FALLBACK_ENGINES)
-        self.assertIn("qwant", STRICT_FALLBACK_ENGINES)
-        self.assertIn("brave", STRICT_FALLBACK_ENGINES)
-        # DDG 应该排在最后（国内不稳定）
-        self.assertIn("duckduckgo", STRICT_FALLBACK_ENGINES)
+        for name in ("yandex", "startpage", "qwant", "brave", "duckduckgo"):
+            self.assertIn(name, STRICT_FALLBACK_ENGINES)
+        # 隐私保护不足的引擎不得出现在 strict 备选中
+        for name in ("baidu", "bing", "sogou", "360"):
+            self.assertNotIn(name, STRICT_FALLBACK_ENGINES)
 
 
 class TestSearchOrchestratorErrors(unittest.TestCase):
