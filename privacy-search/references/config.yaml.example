@@ -1,27 +1,36 @@
 # ═══════════════════════════════════════════════════════════
-#  隐私搜索 V1.1 - 配置文件模板
+#  隐私搜索 V1.2 - 配置文件模板
 #  复制为 config.yaml 后修改
 #  cp config.yaml.example config.yaml
 #
-#  🆕 V1.1 新增: Yandex/Startpage/Qwant/Brave 国内备用引擎
-#  🆕 V1.1 新增: 推荐配置项标注 [推荐修改]
+#  V1.2 新增: cache 结果缓存与搜索历史
+#  V1.2 新增: search.retry_max 网络错误自动重试
+#  V1.2 新增: privacy.strict.proxy 代理出口
+#  V1.2 新增: ranking 排序权重可调
 # ═══════════════════════════════════════════════════════════
 
 # ═══════ 搜索设置 ═══════
 search:
   # 默认搜索引擎（可多选）
-  # 可选: baidu, bing, sogou, 360, duckduckgo, yandex, startpage, qwant, brave, searxng
+  # 全部可选值（共 10 个，与 --list-engines 输出一致）:
+  #   baidu, bing, sogou, 360, duckduckgo,
+  #   yandex, startpage, qwant, brave, searxng
   default_engines:        # [推荐修改] 修改你想用的引擎
     - baidu
     - bing
     - duckduckgo
     - searxng
 
-  # 每个引擎返回结果数
+  # 每个引擎返回结果数（V1.2 起真正生效，CLI 的 --num 优先级更高）
   num_results: 10
 
   # 请求超时（秒）
   timeout: 15             # [推荐修改] 网速慢可增大到 20
+
+  # 网络错误自动重试次数（V1.2 新增）
+  # 仅对超时/连接失败等网络类错误重试，解析失败不重试
+  # 采用指数退避 + 随机抖动，避免多引擎同时重试造成请求尖峰
+  retry_max: 2
 
   # 并发请求数上限
   max_concurrent: 6
@@ -33,19 +42,40 @@ search:
   request_delay_min: 1.0
   request_delay_max: 5.0
 
-# ═══════ 隐私模式（V1.1 增强） ═══════
+# ═══════ 结果缓存与搜索历史（V1.2 新增） ═══════
+cache:
+  # 是否启用缓存。关闭后每次都实时请求
+  # 单次跳过缓存可用 CLI 参数 --no-cache
+  enabled: true
+
+  # 缓存有效期（秒），默认 1 小时
+  # 设为 0 等同于关闭缓存（而非永不过期），避免隐私数据长期滞留
+  ttl_seconds: 3600
+
+  # 缓存文件容量上限（MB），超出后按最近最少使用淘汰
+  max_size_mb: 50
+
+  # 缓存数据库路径
+  path: "~/.workbuddy/output/privacy-search-cache.db"
+
+# ═══════ 隐私模式 ═══════
 privacy:
   # 默认模式: normal | strict
+  # 可选 normal / strict；也接受写作 mode，两者等价
   default_mode: strict    # [推荐修改] strict 为默认隐私模式
 
   # strict 模式配置
   strict:
-    # strict 模式下使用的国内可用引擎（按优先级排序）
-    # 默认使用: yandex, startpage, qwant, brave, duckduckgo, searxng
-    # 这些引擎在国内可访问，且隐私保护优于百度/必应
+    # strict 模式下使用的引擎（按优先级排序）
+    # 留空时自动取引擎注册表中所有标记 strict_ok 的引擎：
+    #   searxng, yandex, startpage, qwant, brave, duckduckgo
     allowed_engines:
-      - duckduckgo
       - searxng
+      - yandex
+      - startpage
+      - qwant
+      - brave
+      - duckduckgo
 
     # 强制 DNT (Do Not Track)
     dnt: true
@@ -53,13 +83,37 @@ privacy:
     no_cookie: true
     # 不发送 Referrer
     no_referrer: true
+
     # 自定义 User-Agent
-    user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    # 留空时自动从内置 UA 池随机取用，降低指纹一致性（V1.2 推荐留空）
+    user_agent: ""
+
+    # 代理出口（V1.2 新增），支持 http:// 与 socks5://
+    # 留空表示直连。设置后所有搜索请求经由该代理，可隐藏真实 IP
+    # 示例: "http://127.0.0.1:7890"
+    proxy: ""
+
+    # 隐私引擎全部失败时，是否允许降级到国内引擎（V1.2 新增）
+    # 默认 false：宁可返回空结果，也不把查询词发给隐私保护不足的引擎
+    # 改为 true 后等同于每次搜索都带 --allow-fallback
+    allow_fallback: false
+
+# ═══════ 结果排序权重（V1.2 新增，可选） ═══════
+# 多因子加权排序，数值越大该因子影响越强。不确定时保持默认
+ranking:
+  consensus: 6.0          # 多引擎共同命中的加权
+  position: 3.0           # 引擎内原始位次（对数衰减）
+  relevance: 4.0          # 查询词覆盖率
+  authority: 2.0          # 引擎权威度
+  domain: 1.5             # 域名质量
 
 # ═══════ SearXNG 本地实例 ═══════
 searxng:
-  # 监听地址（强制 127.0.0.1，禁止 0.0.0.0）
+  # 总开关（V1.2 起真正生效）
+  # false 时搜索自动跳过该引擎，且拒绝执行 searxng_manager 的 install/start
   enabled: true
+
+  # 监听地址（强制 127.0.0.1，禁止 0.0.0.0）
   host: "127.0.0.1"
   port: 8888
 
