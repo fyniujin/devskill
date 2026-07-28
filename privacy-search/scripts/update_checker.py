@@ -6,6 +6,10 @@
 - 24h 不重复检查（可配置）
 - 支持关闭（隐私优先）
 - 网络异常时静默失败，不打扰用户
+
+V1.2 变更：
+    版本号不再硬编码，改由 version_util 从 SKILL.md frontmatter 解析。
+    此前 V1.1 因常量未同步导致最新版用户被反复误报"有新版本"。
 """
 
 import asyncio
@@ -13,11 +17,29 @@ import hashlib
 import json
 import os
 import sqlite3
+import sys
 import time
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
+
+# 不生成 __pycache__（死规则 13）
+sys.dont_write_bytecode = True
+
+try:
+    from version_util import (
+        get_current_version, compare_versions as _cmp_ver, require_dependencies,
+        pad_display, display_width,
+    )
+except ImportError:  # 以包方式导入时
+    from .version_util import (
+        get_current_version, compare_versions as _cmp_ver, require_dependencies,
+        pad_display, display_width,
+    )
+
+# 依赖检查须早于第三方 import，避免用户只看到裸 ModuleNotFoundError
+require_dependencies(("aiohttp", "yaml"))
 
 import aiohttp
 import yaml
@@ -26,7 +48,8 @@ import yaml
 # 元数据
 # ============================================================
 
-CURRENT_VERSION = "1.0.0"
+# 从 SKILL.md 动态读取，避免版本漂移
+CURRENT_VERSION = get_current_version()
 SKILL_SLUG = "privacy-search"
 UPDATE_CHECK_URL = "https://api.skillhub.cn/api/v1/skills/privacy-search"
 GITHUB_UPDATE_URL = "https://api.github.com/repos/your-org/privacy-search/releases/latest"
@@ -130,58 +153,29 @@ class UpdateCache:
 # 版本比较
 # ============================================================
 
+# V1.2：实现统一收归 version_util，此处仅做转发以保持向后兼容
+# （旧版本存在两套解析逻辑，容易出现行为不一致）
+
 def parse_version(version_str: str) -> tuple:
     """
-    解析版本号为可比较的元组
+    解析版本号为可比较的三元组
+
     支持: "1.0.0", "v1.0.0", "1.0.0-beta.1"
-    始终返回3元组 (major, minor, patch)，预发布版本通过额外逻辑处理
+    实现委托给 version_util.parse_version
     """
-    import re
-    # 去除 v 前缀
-    v = version_str.lower().lstrip("v")
-    # 分离主版本和预发布标识
-    parts = v.split("-", 1)
-    main = parts[0]
-    pre = parts[1] if len(parts) > 1 else ""
-
-    try:
-        nums = tuple(int(x) for x in main.split("."))
-    except ValueError:
-        nums = (0, 0, 0)
-
-    # 补齐到3位
-    nums = nums + (0,) * (3 - len(nums))
-    nums = nums[:3]
-
-    # 预发布版本比正式版本小（通过额外权重）
-    # 这里不修改元组长度，而是在 compare_versions 中处理
-    return nums
+    from version_util import parse_version as _pv
+    return _pv(version_str)
 
 
 def compare_versions(v1: str, v2: str) -> int:
     """
     比较两个版本号
+
     返回: -1 (v1 < v2), 0 (相等), 1 (v1 > v2)
-    预发布版本（含'-'）小于对应正式版本
+    预发布版本（含 '-'）小于对应正式版本
+    实现委托给 version_util.compare_versions
     """
-    # 检查是否为预发布版本
-    v1_pre = "-" in v1.lower()
-    v2_pre = "-" in v2.lower()
-
-    p1 = parse_version(v1)
-    p2 = parse_version(v2)
-
-    if p1 < p2:
-        return -1
-    elif p1 > p2:
-        return 1
-    else:
-        # 主版本相同时，预发布 < 正式
-        if v1_pre and not v2_pre:
-            return -1
-        elif not v1_pre and v2_pre:
-            return 1
-        return 0
+    return _cmp_ver(v1, v2)
 
 
 # ============================================================
@@ -306,22 +300,70 @@ class UpdateChecker:
 # 通知显示
 # ============================================================
 
+# 提示框内容区宽度（列数，不含左右边框）
+_BOX_WIDTH = 62
+
+
+def _box_line(text: str = "") -> str:
+    """把一行内容包进边框，按显示列数对齐"""
+    return "║" + pad_display("  " + text, _BOX_WIDTH) + "║"
+
+
+def _box_field(label: str, value: str) -> List[str]:
+    """
+    渲染「标签: 值」字段，过长时折行而非截断
+
+    截断会让下载地址无法复制、更新说明看不全，
+    折行虽多占几行，但信息完整。续行缩进对齐到标签之后。
+    """
+    indent = " " * display_width(label)
+    avail = _BOX_WIDTH - 2 - display_width(label)
+    if avail < 8:  # 边框过窄时不再折行，避免退化成竖排
+        return [_box_line(label + value)]
+
+    lines: List[str] = []
+    current = ""
+    used = 0
+    for ch in value:
+        w = display_width(ch)
+        if used + w > avail:
+            lines.append(current)
+            current, used = "", 0
+        current += ch
+        used += w
+    lines.append(current)
+
+    return [_box_line((label if i == 0 else indent) + seg)
+            for i, seg in enumerate(lines)]
+
+
 def display_update_notification(update_info: UpdateInfo):
-    """在 CLI 中显示更新提示"""
-    print("""
-╔══════════════════════════════════════════════════════════════╗
-║  🔔 发现新版本可用                                            ║
-╠══════════════════════════════════════════════════════════════╣""")
-    print(f"║  当前版本: v{update_info.current_version:<52}║")
-    print(f"║  最新版本: v{update_info.latest_version:<52}║")
-    print(f"║  更新内容: {update_info.changelog[:50]:<52}║")
-    print(f"║  下载地址: {update_info.download_url[:50]:<52}║")
-    print("""║                                                              ║
-║  更新方式:                                                    ║
-║    clawhub install privacy-search --force                     ║
-║    或访问 SkillHub 页面手动更新                                ║
-╚══════════════════════════════════════════════════════════════╝
-""")
+    """
+    在 CLI 中显示更新提示
+
+    对齐必须按显示列数计算：早期版本用 f-string 的 {:<52}，
+    它按字符数填充，中文标签实占两列，边框因此永远错位。
+    """
+    changelog = (update_info.changelog or "").strip() or "无更新说明"
+    lines = [
+        "",
+        "╔" + "═" * _BOX_WIDTH + "╗",
+        _box_line("🔔 发现新版本可用"),
+        "╠" + "═" * _BOX_WIDTH + "╣",
+        _box_line("当前版本: v%s" % update_info.current_version),
+        _box_line("最新版本: v%s" % update_info.latest_version),
+    ]
+    lines += _box_field("更新内容: ", changelog)
+    lines += _box_field("下载地址: ", update_info.download_url or "-")
+    lines += [
+        _box_line(),
+        _box_line("更新方式:"),
+        _box_line("  clawhub install privacy-search --force"),
+        _box_line("  或访问 SkillHub 页面手动更新"),
+        "╚" + "═" * _BOX_WIDTH + "╝",
+        "",
+    ]
+    print("\n".join(lines))
 
 
 def display_no_update():
