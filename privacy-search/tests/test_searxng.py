@@ -7,6 +7,10 @@ import unittest
 from unittest.mock import patch, MagicMock
 import sys
 import os
+
+# 不生成 __pycache__（死规则 13）
+sys.dont_write_bytecode = True
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
 from searxng_manager import DockerManager, PipManager, SearXNGManager, load_config
