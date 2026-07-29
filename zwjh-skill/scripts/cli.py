@@ -43,7 +43,8 @@ except Exception:
     pass
 
 from scripts import (config, store, embeddings, retrieval, graph, deposit,
-                     health, backup, legacy, setup, update_check, hardware, version)
+                     health, backup, legacy, setup, update_check, hardware, version,
+                     conflict_resolver)
 
 
 # ── 子命令实现 ────────────────────────────────────────────────────────────
@@ -196,6 +197,68 @@ def cmd_hardware(args):
     print("示例：5000 条知识点建议子任务数 =", hardware.recommend_subtasks(5000))
 
 
+def cmd_conflicts(args):
+    """查看和消解冲突。"""
+    pending = conflict_resolver.get_all_pending()
+
+    # 处理指定冲突
+    if args.resolve is not None:
+        if args.resolve < 1 or args.resolve > len(pending):
+            print(f"❌ 编号无效（1~{len(pending)}）")
+            return
+        c = pending[args.resolve - 1]
+        strategies = [
+            conflict_resolver.ConflictResolution.OVERWRITE,
+            conflict_resolver.ConflictResolution.KEEP_BOTH,
+            conflict_resolver.ConflictResolution.MERGE,
+            conflict_resolver.ConflictResolution.IGNORE,
+        ]
+        strategy = strategies[args.strategy - 1]
+
+        # 构建 Conflict 对象
+        conflict = conflict_resolver.Conflict(
+            conflict_id=c.get("conflict_id", ""),
+            entity_id=c.get("entity_id", 0),
+            entity_name=c.get("entity_name", ""),
+            predicate=c.get("predicate", ""),
+            old_value=c.get("old_value", ""),
+            new_value=c.get("new_value", ""),
+        )
+
+        resolver = conflict_resolver.get_resolver()
+        result = resolver.resolve_with_strategy(conflict, strategy)
+        conflict_resolver.remove_pending_conflict(c.get("conflict_id", ""))
+        print(f"✅ 已处理冲突 #{args.resolve}：{result}")
+        return
+
+    # 显示列表
+    if not pending:
+        print("✅ 没有待处理冲突。")
+        return
+
+    print(f"共 {len(pending)} 个待处理冲突：")
+    print("=" * 50)
+    for i, c in enumerate(pending, 1):
+        print(f"{'=' * 50}")
+        print(f"  编号 #{i}")
+        print(f"  类型：{c.get('type', '?')}")
+        print(f"  实体：{c.get('entity_name', '?')}")
+        print(f"  属性：{c.get('predicate', '?')}")
+        print(f"  旧值：{c.get('old_value', '?')}")
+        print(f"  新值：{c.get('new_value', '?')}")
+        print(f"  描述：{c.get('description', '?')}")
+        print(f"  创建时间：{c.get('created_at', '?')}")
+        print(f"  冲突ID：{c.get('conflict_id', '?')}")
+
+    print(f"\n{'=' * 50}")
+    print("处理方式：")
+    print("  1. 覆盖（新替旧）")
+    print("  2. 保留两者（标注版本）")
+    print("  3. 合并（取并集）")
+    print("  4. 忽略（保留旧值）")
+    print(f"\n运行 `python cli.py conflicts --resolve <编号> --strategy <1-4>` 处理")
+
+
 def cmd_status_overview(args):
     h = health.audit()
     print("═══════════════════════════════════════════")
@@ -333,6 +396,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     hw = sub.add_parser("hardware", help="查看硬件自适应计划")
     hw.set_defaults(func=cmd_hardware)
+
+    cf = sub.add_parser("conflicts", help="查看/消解冲突")
+    cf.add_argument("--resolve", type=int, default=None, help="按编号处理冲突")
+    cf.add_argument("--strategy", type=int, default=1, choices=[1, 2, 3, 4],
+                    help="1=覆盖 2=保留两者 3=合并 4=忽略")
+    cf.set_defaults(func=cmd_conflicts)
 
     ov = sub.add_parser("status", help="总览")
     ov.set_defaults(func=cmd_status_overview)
