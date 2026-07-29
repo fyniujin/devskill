@@ -5,7 +5,6 @@ Skill 更新检测模块 v3.0
 """
 
 import json
-import os
 import re
 import time
 import urllib.request
