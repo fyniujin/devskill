@@ -24,6 +24,7 @@ from datetime import date
 from . import config, embeddings, store
 from .hardware import get_plan, recommend_subtasks
 from . import graph
+from .conflict_resolver import get_resolver, add_pending_conflict, Conflict
 
 # 可读取的纯文本类型（避开一切二进制/可执行类型）
 _TEXT_SUFFIXES = {
@@ -31,9 +32,14 @@ _TEXT_SUFFIXES = {
     ".html", ".htm", ".xml", ".toml", ".ini", ".cfg", ".rst", ".tex",
 }
 
-# 事实抽取模板：("X 的 Y 是/为 Z") -> (实体 X, 谓词 Y, 值 Z)
+# 事实抽取模板：多种中文表达格式（按优先级排序，避免重叠）
 _FACT_PATTERNS = [
-    re.compile(r"([一-龥A-Za-z0-9_]{1,20})的([一-龥A-Za-z0-9_]{1,10})[是为：:]\s*([^\n。；;]{1,60})"),
+    # X的Y是/为Z
+    re.compile(r"([一-龥]{1,15})的([一-龥]{1,8})[是为：:]\s*([^\n。；;]{1,40})"),
+    # X其实是在Y / X实际上在Y / X是在Y
+    re.compile(r"([一-龥]{1,15})(?:其实是|实际上|确实|其实)\s*(?:在|来到|去[了到]|加入)\s*([一-龥]{1,15})(?:工作|上班|任职)?"),
+    # X在Y工作（不含"现在""目前"等副词在实体名中）
+    re.compile(r"([一-龥]{1,15})(?:现在|目前)?\s*(?:在|来到|去[了到]|加入|跳槽到|转到)\s*([一-龥]{1,15})(?:工作|上班|任职|入职)?"),
 ]
 
 
@@ -110,28 +116,89 @@ _FACT_SUBJECT_STOP = {
 }
 
 
-def extract_facts(text: str, memory_id: int | None = None) -> list[dict]:
-    """从文本抽取简单事实并写入（带冲突消解）。"""
+def extract_facts(text: str, memory_id: int | None = None,
+                  enable_conflict_detection: bool = True) -> list[dict]:
+    """从文本抽取简单事实并写入（带冲突消解 + 冲突检测增强）。
+
+    支持多种中文格式：
+      - X的Y是Z → (X, Y, Z)
+      - X在Y工作 → (X, 工作, Y)
+      - X加入/去了Y → (X, 工作, Y)
+    """
     out = []
     for pat in _FACT_PATTERNS:
         for m in pat.finditer(text):
-            ent_name = graph._clean_entity(m.group(1))
-            pred = m.group(2).strip()
-            val = m.group(3).strip()
+            groups = m.groups()
+            if len(groups) == 3:
+                ent_name = graph._clean_entity(groups[0])
+                pred = groups[1].strip()
+                val = graph._clean_entity(groups[2])
+            elif len(groups) == 2:
+                # X在Y工作 → (X, 工作, Y)
+                ent_name = graph._clean_entity(groups[0])
+                val = graph._clean_entity(groups[1])
+                pred = "工作"
+            else:
+                continue
+
+            # 清理值中的尾随动词（"腾讯工作" → "腾讯"）
+            for suf in ["工作", "上班", "任职", "入职", "公司", "集团"]:
+                if val.endswith(suf) and len(val) > len(suf):
+                    val = val[: -len(suf)]
+                    break
+            val = graph._clean_entity(val)
+
             if not ent_name or not pred or not val:
                 continue
             if ent_name in _FACT_SUBJECT_STOP or pred in _FACT_SUBJECT_STOP:
                 continue
             if len(pred) > 8 or len(val) > 60 or len(ent_name) > 20:
                 continue
-            if ent_name == pred:
+            if ent_name == pred or ent_name == val:
                 continue
             ent_type = graph._guess_type(ent_name)
             eid = store.upsert_entity(ent_type, ent_name, importance=0.7)
+
+            # 冲突检测增强（在写入前检测）
+            if enable_conflict_detection:
+                conflict_result = _check_and_resolve_conflict(
+                    eid, pred, val, new_text=text
+                )
+                if conflict_result["conflict_detected"]:
+                    # 已自动消解：直接写新值
+                    if conflict_result["action"] == "resolved":
+                        res = store.add_fact(eid, pred, val, source_memory_id=memory_id)
+                        out.append({
+                            "entity": ent_name, "predicate": pred,
+                            "value": val, "conflict": res["conflict"],
+                            "conflict_resolution": conflict_result["resolution"],
+                        })
+                        continue
+                    # 需用户仲裁：保存待处理冲突，仍写入新值（旧值保留）
+                    elif conflict_result["action"] == "pending":
+                        add_pending_conflict(conflict_result["conflict"])
+                        res = store.add_fact(eid, pred, val, source_memory_id=memory_id)
+                        out.append({
+                            "entity": ent_name, "predicate": pred,
+                            "value": val, "conflict": res["conflict"],
+                            "conflict_needs_review": True,
+                            "conflict_id": conflict_result["conflict"].conflict_id,
+                        })
+                        continue
+
+            # 无冲突或检测关闭：直接写入
             res = store.add_fact(eid, pred, val, source_memory_id=memory_id)
             out.append({"entity": ent_name, "predicate": pred,
                         "value": val, "conflict": res["conflict"]})
     return out
+
+
+def _check_and_resolve_conflict(entity_id: int, predicate: str,
+                                 new_value: str, new_text: str = "") -> dict:
+    """冲突检测与自动消解（供 extract_facts 调用）。"""
+    resolver = get_resolver()
+    return resolver.check_and_resolve(entity_id, predicate, new_value, new_text,
+                                       auto_resolve=True)
 
 
 def deposit_conversation(text: str, day: str | None = None) -> dict:
