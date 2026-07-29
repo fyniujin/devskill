@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-LLM 审查模块 v3.2
+LLM 审查模块 v4.0
 调用大模型进行语义理解和深度审查
 支持 OpenAI / 本地模型（Ollama）/ 兼容 API
 v3.2 新增：按合同类型加载专用 LLM 提示词模板
+v4.0 新增：按行业追加专项合规审查视角与术语上下文
 """
 
 import json
@@ -90,6 +91,62 @@ CONTRACT_TYPE_PROMPT_FILES = {
     '采购框架协议': 'procurement_framework.md',
 }
 
+# v4.0 行业专项审查视角（追加到 system prompt 末尾）
+INDUSTRY_FOCUS = {
+    'medical': (
+        "医疗/医药行业", [
+            "医疗器械注册证、经营许可证、生产许可证等资质有效性",
+            "药品/器械采购的两票制、集中带量采购、医保支付政策合规",
+            "临床试验的伦理审查、受试者知情同意、数据归属与保险",
+            "医疗数据与患者个人信息（敏感个人信息）处理合规",
+            "冷链运输、不良事件报告、召回与追溯责任划分",
+            "反商业贿赂与医药合规（禁止学术推广变相返利）",
+        ]),
+    'construction': (
+        "建筑/建设工程行业", [
+            "施工资质等级、安全生产许可证、项目负责人资格匹配",
+            "违法分包、转包、挂靠导致合同无效的风险",
+            "工程款支付节点、进度款比例、农民工工资专用账户",
+            "工期顺延、签证变更、索赔时效与证据留存",
+            "质量保证金比例与返还期限（不得超过3%）",
+            "安全生产责任划分、意外伤害保险、第三方责任",
+        ]),
+    'cross_border': (
+        "跨境电商/国际贸易行业", [
+            "国际贸易术语（Incoterms 2020）与风险转移节点",
+            "适用法律、管辖与仲裁地选择，CISG 排除与否",
+            "信用证/托收/电汇结算方式与单据一致性",
+            "出口管制、制裁名单、原产地规则与关税合规",
+            "外汇管制、跨境资金结算与税务合规",
+            "跨境数据传输、平台规则（VAT/EPR）与知识产权海外布局",
+        ]),
+    'internet': (
+        "互联网/软件行业", [
+            "软件著作权与源代码归属、开源组件许可（GPL 传染性）",
+            "SLA 可用性承诺、故障赔偿与责任上限合理性",
+            "个人信息告知同意、最小必要、敏感信息单独同意",
+            "数据出境安全评估/标准合同、委托处理协议（DPA）",
+            "平台责任与避风港、格式条款提示说明义务、自动续费",
+            "生成式 AI 备案、深度合成标识、训练数据合法来源",
+        ]),
+}
+
+# v4.0 行业专项提示词补充模板
+INDUSTRY_PROMPT_SUFFIX = """
+
+---
+
+## 行业专项审查要求（{industry_name}）
+
+本合同属于{industry_name}，除通用审查要点外，必须额外重点核查以下专项合规事项：
+
+{focus_list}
+
+要求：
+1. 行业专项风险须在 risk_type 中标注为「合规风险」或对应类型，并在 title 前加「[行业]」前缀
+2. 法律依据须引用该行业的专门法规、部门规章或行业标准，不得只引用《民法典》
+3. 修改建议须符合该行业监管实践，给出可直接落地的条款表述"""
+
 
 class LLMReviewer:
     """LLM 审查器"""
@@ -154,7 +211,8 @@ class LLMReviewer:
         return "none"
     
     def review(self, contract_text: str, contract_type: str = "",
-               party_role: str = "双方", structure: Dict = None) -> Dict[str, Any]:
+               party_role: str = "双方", structure: Dict = None,
+               industry: str = "") -> Dict[str, Any]:
         """
         调用 LLM 进行审查
         
@@ -163,6 +221,7 @@ class LLMReviewer:
             contract_type: 合同类型
             party_role: 审查视角（甲方/乙方/双方）
             structure: 合同结构
+            industry: v4.0 行业代码（medical/construction/cross_border/internet）
             
         Returns:
             审查结果字典
@@ -180,6 +239,10 @@ class LLMReviewer:
         
         # v3.2 加载专用提示词模板
         system_prompt = self._load_contract_specific_prompt(contract_type)
+        # 填充审查视角占位符（通用模板含 {party_role}，专用模板通常不含）
+        system_prompt = self._fill_prompt_placeholders(system_prompt, party_role)
+        # v4.0 追加行业专项审查要求
+        system_prompt += self._build_industry_suffix(industry)
         
         # 截断过长文本
         max_length = 15000
@@ -227,6 +290,38 @@ class LLMReviewer:
         except Exception as e:
             logger.warning(f"加载专用提示词失败: {e}")
             return self.system_prompt
+    
+    @staticmethod
+    def _fill_prompt_placeholders(prompt: str, party_role: str) -> str:
+        """填充提示词中的审查视角占位符，并还原 JSON 示例的转义大括号"""
+        if '{party_role}' in prompt:
+            prompt = prompt.replace('{party_role}', party_role or '双方')
+        # 模板中 JSON 示例使用 {{ }} 转义，此处还原为单层大括号
+        if '{{' in prompt or '}}' in prompt:
+            prompt = prompt.replace('{{', '{').replace('}}', '}')
+        return prompt
+    
+    def _build_industry_suffix(self, industry: str) -> str:
+        """v4.0 构建行业专项审查提示词补充段"""
+        try:
+            from rule_engine import normalize_industry
+        except ImportError:
+            try:
+                from .rule_engine import normalize_industry
+            except ImportError:
+                normalize_industry = None
+        
+        code = normalize_industry(industry) if normalize_industry else (industry or '').strip().lower()
+        if not code or code not in INDUSTRY_FOCUS:
+            return ''
+        
+        industry_name, focus_points = INDUSTRY_FOCUS[code]
+        focus_list = '\n'.join(f"{i}. {p}" for i, p in enumerate(focus_points, 1))
+        logger.info(f"启用 {industry_name} 专项审查视角")
+        return INDUSTRY_PROMPT_SUFFIX.format(
+            industry_name=industry_name,
+            focus_list=focus_list,
+        )
     
     def _call_openai(self, system_prompt: str, user_prompt: str) -> str:
         """调用 OpenAI 兼容 API"""
