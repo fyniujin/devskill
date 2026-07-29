@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Word 报告生成模块 v3.0
+Word 报告生成模块 v4.0
 生成带删除线、下划线、批注的 .docx 审查报告
+v4.0 修复：docx 依赖改为模块级延迟导入，供全部方法共享
 """
 
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -12,6 +12,51 @@ import logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# v4.0 复用报告模块的严重等级归一化，避免两套定义各自漂移
+try:
+    from generate_report import normalize_severity
+except ImportError:  # pragma: no cover - 作为包导入时的回退
+    from .generate_report import normalize_severity
+
+# docx 依赖占位（由 _ensure_docx() 延迟填充，避免未安装时导入失败）
+Document = None
+Pt = None
+RGBColor = None
+Cm = None
+Inches = None
+WD_ALIGN_PARAGRAPH = None
+qn = None
+OxmlElement = None
+
+DOCX_INSTALL_HINT = (
+    "Word 报告生成需要 python-docx 库。\n"
+    "安装方法：pip install python-docx"
+)
+
+
+def _ensure_docx():
+    """延迟导入 python-docx，并把符号提升到模块级供所有方法使用"""
+    global Document, Pt, RGBColor, Cm, Inches, WD_ALIGN_PARAGRAPH, qn, OxmlElement
+    if Document is not None:
+        return
+    try:
+        from docx import Document as _Document
+        from docx.shared import Pt as _Pt, RGBColor as _RGBColor, Cm as _Cm, Inches as _Inches
+        from docx.enum.text import WD_ALIGN_PARAGRAPH as _WD_ALIGN
+        from docx.oxml.ns import qn as _qn
+        from docx.oxml import OxmlElement as _OxmlElement
+    except ImportError as e:
+        raise ImportError(DOCX_INSTALL_HINT) from e
+    
+    Document = _Document
+    Pt = _Pt
+    RGBColor = _RGBColor
+    Cm = _Cm
+    Inches = _Inches
+    WD_ALIGN_PARAGRAPH = _WD_ALIGN
+    qn = _qn
+    OxmlElement = _OxmlElement
 
 
 class DocxGenerator:
@@ -34,17 +79,11 @@ class DocxGenerator:
         Returns:
             生成的文件路径
         """
-        try:
-            from docx import Document
-            from docx.shared import Pt, RGBColor, Cm, Inches
-            from docx.enum.text import WD_ALIGN_PARAGRAPH
-            from docx.oxml.ns import qn, nsmap
-            from docx.oxml import OxmlElement
-        except ImportError:
-            raise ImportError(
-                "Word 报告生成需要 python-docx 库。\n"
-                "安装方法：pip install python-docx"
-            )
+        _ensure_docx()
+        
+        # v4.0 严重等级归一化，保证统计/评分/分组口径与 Markdown 报告一致
+        for risk in risks:
+            risk['severity'] = normalize_severity(risk.get('severity'))
         
         # 创建文档
         if template_path and Path(template_path).exists():
@@ -244,7 +283,7 @@ class DocxGenerator:
                 if len(snippet) > 100:
                     snippet = snippet[:97] + "..."
                 run = p.add_run(snippet)
-                run.strike = True  # 删除线
+                run.font.strike = True  # 删除线
                 run.font.color.rgb = RGBColor(0xCC, 0x00, 0x00)
             
             # 问题描述
