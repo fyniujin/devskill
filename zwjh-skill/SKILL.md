@@ -4,7 +4,7 @@ slug: zwjh-skill
 displayName: "长期记忆 / 知识图谱 会思考的进化 AI"
 description: "统一记忆底座：长期记忆 + 知识图谱 + 自动沉淀 + 检索。让 AI「记得你」，跨会话持久记忆、实体/关系图谱、语义与时间线检索、记忆健康度审计、本地备份（可接百度网盘）。纯本地、零密钥、按硬件自适应，不拖累电脑。并保留 v1.7 的根因分析/预测性维护/进化报告。"
 description_zh: "统一记忆底座：长期记忆 + 知识图谱 + 自动沉淀 + 检索。纯本地、零密钥、按硬件自适应，不拖累电脑。"
-version: 2.1.0
+version: 2.2.0
 category: ai-agent
 platforms:
   - windows
@@ -23,7 +23,7 @@ tags:
 requires_api_key: false
 ---
 
-# 长期记忆 / 知识图谱 会思考的进化 AI — zwjh-skill v2.1.0
+# 长期记忆 / 知识图谱 会思考的进化 AI — zwjh-skill v2.2.0
 
 > **安装后说「帮我配置 + 设置定时任务」，AI 自动完成一切。**
 >
@@ -68,6 +68,7 @@ requires_api_key: false
 | 备份 / 恢复 | `python scripts/cli.py backup` / `restore <路径>` |
 | 写日记 | `python scripts/cli.py diary --text "今天想清楚了一件事"` |
 | 看是否有新版本 | `python scripts/cli.py update-check` |
+| 查看/消解冲突 | `python scripts/cli.py conflicts` |
 | 一键配置定时任务 | `python scripts/cli.py setup` |
 | 总览 | `python scripts/cli.py status` |
 
@@ -230,6 +231,30 @@ python scripts/cli.py update-check
 
 ---
 
+### 模块 11：记忆冲突消解
+
+**做了什么**：当新记忆与旧记忆矛盾时，智能检测、分类、消解，避免"记错了还固执"。
+
+- **冲突自动检测**：写入时自动对比同 entity+predicate 的已有事实，计算语义相似度与矛盾度
+- **冲突分类**：信息更新（换工作）/ 信息纠错（之前记错）/ 视角变化（同义不同描述）/ 真实冲突（需仲裁）
+- **自动消解**：UPDATE / CORRECTION 类型自动处理（新替旧），PERSPECTIVE 自动合并
+- **冲突提示**：REAL_CONFLICT 生成对比报告，存入待处理队列，提示用户仲裁
+- **处理策略**：覆盖 / 保留两者 / 合并 / 忽略
+- **性能保障**：仅在同 entity+predicate 写入时触发，向量缓存，超时保护，不拖累写入
+
+**示例**：
+```bash
+python scripts/cli.py deposit --text "我之前记错了，张三其实去了字节跳动" --source conversation
+# → 自动检测到纠错模式，新值覆盖旧值
+
+python scripts/cli.py conflicts
+# → 查看待处理冲突
+python scripts/cli.py conflicts --resolve 1 --strategy 1
+# → 处理冲突 #1，策略：覆盖
+```
+
+---
+
 ### 模块 10：知识图谱可视化（Web 界面）
 
 **做了什么**：在浏览器中直观探索实体关系网络，从"黑盒存储"变为"可视化探索"。
@@ -298,6 +323,7 @@ python scripts/cli.py demo
 
 ## 更新日志
 
+| v2.2.0 | 2026-07-29 | 新增：记忆冲突消解（冲突自动检测 + 四类分类 + 自动/手动消解策略）；新增 conflict_resolver.py；新增 CLI conflicts 命令 |
 | v2.1.0 | 2026-07-17 | 新增：知识图谱 Web 可视化（力导向图/详情面板/路径探索/时间线/子图过滤）；增加 web_server.py 零依赖内置 HTTP 服务器；增加大规模图谱分层加载与聚合；新增 REST API |
 | v2.0.0 | 2026-07-08 | 新增：统一记忆底座（长期记忆 + 知识图谱 + 自动沉淀 + 检索 + 健康度 + 备份）；新增硬件自适应调度与技能更新提醒；保留 v1.7 能力；零密钥纯本地 |
 | v1.7.0 | 2026-06 | 优化：大幅简化操作（一键启动）、增强自愈能力（极少人工介入） |
