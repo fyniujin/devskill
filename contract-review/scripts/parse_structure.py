@@ -237,25 +237,59 @@ class ContractParser:
         
         return parties
     
+    # v4.0 金额量级单位（中文合同常用万/亿计价，需换算为元）
+    _AMOUNT_SCALE = {'': 1, '元': 1, '万': 10000, '万元': 10000,
+                     '亿': 100000000, '亿元': 100000000}
+
     def _extract_amount(self, text: str) -> tuple:
-        """提取合同金额"""
-        # 匹配金额模式
+        """
+        提取合同金额
+        
+        v4.0 增加「万元/亿元」量级换算与币种识别。
+        原版不识别量级单位，"12800 万元"会被读为 12800 元，量级偏差达 1 万倍，
+        直接影响"标的额超 100 万建议咨询律师"等基于金额的判断。
+        """
+        # 金额主体：可选币种前缀 + 数字 + 可选量级 + 可选币种后缀
         amount_patterns = [
-            r'(?:总价|金额|价款|费用|报酬)[：:]\s*([¥￥]?\s*[\d,]+\.?\d*)\s*(元|人民币|美元|USD|CNY)?',
-            r'([¥￥]\s*[\d,]+\.?\d*)\s*(元|人民币|美元|USD|CNY)?',
-            r'(?:人民币|¥|￥)\s*([\d,]+\.?\d*)\s*(元)?',
+            # 带引导词：合同总价人民币 186 万元整 / 基础服务费每月 5 万元
+            r'(?:总价|总额|金额|价款|费用|报酬|租金|对价|合同价|服务费|开发费|佣金)'
+            r'[^\d¥￥]{0,12}?([¥￥]?\s*[\d][\d,]*\.?\d*)\s*(亿元|亿|万元|万)?\s*(元|人民币|美元|USD|CNY)?',
+            # 币种前置：人民币 96 万元 / USD 12,000
+            r'(?:人民币|美元|USD|CNY|[¥￥])\s*([\d][\d,]*\.?\d*)\s*(亿元|亿|万元|万)?\s*(元)?',
+            # 裸金额兜底
+            r'([¥￥]\s*[\d][\d,]*\.?\d*)\s*(亿元|亿|万元|万)?\s*(元|人民币|美元|USD|CNY)?',
         ]
         
+        currency_map = {'元': 'CNY', '人民币': 'CNY', '美元': 'USD',
+                        'USD': 'USD', 'CNY': 'CNY'}
+        
         for pattern in amount_patterns:
-            matches = re.findall(pattern, text)
-            if matches:
-                amount = matches[0][0] if isinstance(matches[0], tuple) else matches[0]
-                currency = matches[0][1] if isinstance(matches[0], tuple) and len(matches[0]) > 1 else '元'
+            for m in re.finditer(pattern, text):
+                raw = m.group(1) or ''
+                scale_word = (m.group(2) or '').strip()
+                unit_word = (m.group(3) or '').strip()
                 
-                # 标准化货币
-                currency_map = {'元': 'CNY', '人民币': 'CNY', '美元': 'USD', 'USD': 'USD', 'CNY': 'CNY'}
-                currency = currency_map.get(currency, 'CNY')
+                num_str = raw.replace('¥', '').replace('￥', '').replace(',', '').strip()
+                if not num_str:
+                    continue
+                try:
+                    value = float(num_str)
+                except ValueError:
+                    continue
+                if value <= 0:
+                    continue
                 
+                value *= self._AMOUNT_SCALE.get(scale_word, 1)
+                
+                # 币种：优先看后缀词，其次回看匹配段与前文是否出现美元标识
+                currency = currency_map.get(unit_word, '')
+                if not currency:
+                    head = text[max(0, m.start() - 10):m.end()]
+                    currency = 'USD' if ('美元' in head or 'USD' in head
+                                         or '$' in head) else 'CNY'
+                
+                # 整数金额不显示小数尾巴
+                amount = str(int(value)) if value == int(value) else f"{value:.2f}"
                 return amount, currency
         
         return None, 'CNY'
@@ -337,13 +371,6 @@ class ContractParser:
     def _split_clauses(self, text: str, pages: Optional[List[Dict]] = None) -> List[Clause]:
         """切分合同条款"""
         clauses = []
-        
-        # 匹配条款编号模式
-        clause_patterns = [
-            r'(第[一二三四五六七八九十百千]+条[\s\d\.\、\-\*]*[^\n]*)',
-            r'(\d+[\.\、][^\n]+)',
-            r'(\([一二三四五六七八九十]+\)[^\n]+)',
-        ]
         
         # 尝试按"第X条"切分
         matches = re.findall(r'第[一二三四五六七八九十百千]+条', text)
