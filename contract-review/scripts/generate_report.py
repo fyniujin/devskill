@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-报告生成模块 v2.0
+报告生成模块 v4.0
 将审查结果生成为结构化报告
-新增：评分说明、法律依据日期标注、更友好的风险展示
+v4.0 增加：严重等级跨模块归一化、条款库推荐文本富化
 """
 
 import json
@@ -13,6 +13,26 @@ import logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# v4.0 严重等级归一化映射
+# 规则引擎产出英文（critical/high/medium/low），LLM 与条款库产出中文，
+# 报告层统一归一到中文四档，保证统计、评分、分组口径一致。
+SEVERITY_NORMALIZE = {
+    'critical': '严重', 'high': '中等', 'medium': '一般', 'low': '提示',
+    '严重': '严重', '中等': '中等', '一般': '一般', '提示': '提示',
+    '高': '中等', '中': '一般', '低': '提示',
+}
+
+DEFAULT_SEVERITY = '一般'
+
+
+def normalize_severity(value: Any) -> str:
+    """将任意来源的严重等级归一为中文四档"""
+    if not value:
+        return DEFAULT_SEVERITY
+    return SEVERITY_NORMALIZE.get(str(value).strip().lower(), None) \
+        or SEVERITY_NORMALIZE.get(str(value).strip(), DEFAULT_SEVERITY)
+
 
 # 严重等级排序权重
 SEVERITY_WEIGHTS = {
@@ -50,8 +70,64 @@ SCORE_DESCRIPTIONS = {
 class ReportGenerator:
     """报告生成器"""
     
-    def __init__(self):
-        pass
+    def __init__(self, enable_clause_match: bool = True):
+        """
+        Args:
+            enable_clause_match: v4.0 是否自动匹配条款库推荐文本
+        """
+        self.enable_clause_match = enable_clause_match
+        self._matcher = None
+    
+    def _get_matcher(self):
+        """v4.0 惰性加载条款匹配器"""
+        if not self.enable_clause_match:
+            return None
+        if self._matcher is None:
+            try:
+                try:
+                    from clause_matcher import ClauseMatcher
+                except ImportError:
+                    from .clause_matcher import ClauseMatcher
+                self._matcher = ClauseMatcher()
+                self._matcher.load()
+            except Exception as e:
+                logger.debug(f"条款匹配器不可用: {e}")
+                self.enable_clause_match = False
+                return None
+        return self._matcher
+    
+    def _enrich_with_clauses(self, risks: List[Dict], contract_type: str) -> List[Dict]:
+        """
+        v4.0 为风险点附加条款库推荐文本
+        
+        写入字段：template（推荐范本）、clause_id、clause_name
+        已有 template 的风险点不覆盖
+        """
+        matcher = self._get_matcher()
+        if matcher is None:
+            return risks
+        
+        matched = 0
+        for risk in risks:
+            if risk.get('template'):
+                continue
+            try:
+                clause = matcher.match(risk, contract_type)
+            except Exception as e:
+                logger.debug(f"条款匹配失败: {e}")
+                continue
+            if not clause:
+                continue
+            risk['template'] = clause.get('recommended_text', '')
+            risk['clause_id'] = clause.get('id', '')
+            risk['clause_name'] = clause.get('name', '')
+            if not risk.get('legal_basis'):
+                risk['legal_basis'] = clause.get('legal_basis', '')
+            matched += 1
+        
+        if matched:
+            logger.info(f"条款库匹配成功 {matched}/{len(risks)} 个风险点")
+        return risks
     
     def generate(self, risks: List[Dict], contract_info: Dict,
                  output_format: str = 'markdown') -> str:
@@ -66,6 +142,13 @@ class ReportGenerator:
         Returns:
             报告内容字符串
         """
+        # v4.0 严重等级归一化：规则引擎产出英文、LLM 产出中文，此处统一口径
+        for risk in risks:
+            risk['severity'] = normalize_severity(risk.get('severity'))
+        
+        # v4.0 自动匹配条款库推荐文本
+        risks = self._enrich_with_clauses(risks, contract_info.get('contract_type', ''))
+        
         # 按严重等级排序
         sorted_risks = sorted(risks, key=lambda r: SEVERITY_WEIGHTS.get(r.get('severity', '一般'), 99))
         
@@ -224,10 +307,14 @@ class ReportGenerator:
                 if risk.get('suggestion'):
                     lines.append(f"- **修改建议**：{risk['suggestion']}")
                 
-                # 推荐范本
+                # 推荐范本 / v4.0 条款库建议替换文本
                 if risk.get('template'):
                     template = risk['template'].replace('\n', '\n  > ')
-                    lines.append(f"- **推荐范本**：\n\n  > {template}")
+                    if risk.get('clause_id'):
+                        label = f"建议替换为（条款库 {risk['clause_id']} {risk.get('clause_name', '')}）"
+                    else:
+                        label = "推荐范本"
+                    lines.append(f"- **{label}**：\n\n  > {template}")
                 
                 lines.append("")
         
