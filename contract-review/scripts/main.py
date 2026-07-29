@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-合同审查主入口 v3.0
+合同审查主入口 v4.0
 完整工作流：文本提取 → 结构解析 → 风险审查 → 报告生成
 新增：硬件自适应调度、历史版本对比、Word 报告生成、更新检测、危险文件拦截
 """
 
 import json
-import os
 import sys
 import time
 import subprocess
@@ -52,8 +51,27 @@ def print_progress(step: str, detail: str = "", done: bool = False):
         print(f"  ⏳ {step} {detail}...", flush=True)
 
 
-def print_banner(version: str = "3.0"):
+def get_skill_version(default: str = "4.0.0") -> str:
+    """v4.0 从 SKILL.md frontmatter 读取版本号，避免版本硬编码脱节"""
+    try:
+        skill_md = Path(__file__).parent.parent / 'SKILL.md'
+        if not skill_md.exists():
+            return default
+        with open(skill_md, 'r', encoding='utf-8') as f:
+            for _ in range(30):  # 只读 frontmatter 区域
+                line = f.readline()
+                if not line:
+                    break
+                if line.startswith('version:'):
+                    return line.split(':', 1)[1].strip().strip('"\'') or default
+    except Exception:
+        pass
+    return default
+
+
+def print_banner(version: str = None):
     """打印工具横幅"""
+    version = version or get_skill_version()
     print("\n" + "=" * 50, flush=True)
     print(f"📋 合同智能审查 v{version}", flush=True)
     print("=" * 50, flush=True)
@@ -211,10 +229,52 @@ def show_history(contract_text: Optional[str] = None):
             print(f"     最近审查: {c['last_reviewed']}")
 
 
+# v4.0 行业展示名与可选别名
+INDUSTRY_DISPLAY = {
+    'medical': ('医疗/医药', '医疗器械采购、临床试验、药品配送、多点执业'),
+    'construction': ('建筑/建设工程', '施工总承包、专业分包、EPC、监理、材料设备采购'),
+    'cross_border': ('跨境电商/国际贸易', '国际货物买卖、跨境平台入驻、海外仓、国际物流'),
+    'internet': ('互联网/软件', '软件开发外包、SaaS 服务、数据合规、平台运营、AI 应用'),
+}
+
+
+def show_industries():
+    """v4.0 列出支持的行业专项及规则数量"""
+    from pathlib import Path as _Path
+    import yaml as _yaml
+
+    base = _Path(__file__).parent.parent / 'references' / 'industries'
+    print(f"\n{'=' * 60}")
+    print("🏭 支持的行业专项合规审查 (v4.0)")
+    print(f"{'=' * 60}")
+
+    total = 0
+    for code, (name, scope) in INDUSTRY_DISPLAY.items():
+        rule_path = base / code / 'rules.yaml'
+        count = 0
+        if rule_path.exists():
+            try:
+                with open(rule_path, 'r', encoding='utf-8') as f:
+                    data = _yaml.safe_load(f.read(2 * 1024 * 1024)) or {}
+                count = len(data.get('rules', []))
+            except Exception:
+                count = 0
+        total += count
+        status = '✅' if count else '⚠️ 规则文件缺失'
+        print(f"\n  {status} {name}  （--industry {code}）")
+        print(f"     专项规则：{count} 条")
+        print(f"     适用场景：{scope}")
+
+    print(f"\n{'-' * 60}")
+    print(f"  合计 {total} 条行业专项规则")
+    print(f"  用法：python scripts/main.py 合同.pdf --industry medical")
+    print(f"{'=' * 60}\n")
+
+
 def main():
     """主函数"""
     parser = argparse.ArgumentParser(
-        description='合同智能审查工具 v3.0',
+        description='合同智能审查工具 v4.0',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 使用示例:
@@ -222,6 +282,10 @@ def main():
   python scripts/main.py 合同.pdf --role 甲方          # 从甲方视角审查
   python scripts/main.py 合同.pdf --format docx        # 输出 Word 报告
   python scripts/main.py 合同.pdf --diff old.json      # 版本对比审查
+  python scripts/main.py 合同.pdf --industry medical   # 医疗行业专项审查（v4.0）
+  python scripts/main.py 合同.pdf --revise             # 生成一键修订稿（v4.0）
+  python scripts/main.py 合同.pdf --revise --revise-output 修订稿.docx
+  python scripts/main.py --list-industries             # 查看支持的行业（v4.0）
   python scripts/main.py --history                     # 查看历史记录
   python scripts/main.py --history --text "合同内容"    # 查看该合同历史
   python scripts/main.py 合同.pdf --install-ollama     # 安装本地模型
@@ -255,12 +319,33 @@ def main():
                         help='显示硬件信息和性能配置（v3.0）')
     parser.add_argument('--check-update', action='store_true',
                         help='检查 Skill 更新（v3.0）')
+    # ===== v4.0 新增参数 =====
+    parser.add_argument('--industry', default='',
+                        help='行业专项审查（v4.0）：medical/construction/cross_border/internet，'
+                             '也支持中文如 医疗/建筑/跨境/互联网')
+    parser.add_argument('--list-industries', action='store_true',
+                        help='列出支持的行业专项及规则数量（v4.0）')
+    parser.add_argument('--revise', action='store_true',
+                        help='生成一键修订稿，自动匹配条款库推荐文本（v4.0）')
+    parser.add_argument('--revise-output', default='',
+                        help='修订稿输出路径（v4.0，默认 revision.docx）')
+    parser.add_argument('--revise-format', default='auto',
+                        choices=['auto', 'docx', 'md'],
+                        help='修订稿格式（v4.0，默认按输出后缀自动判断）')
+    parser.add_argument('--full-revision', action='store_true',
+                        help='修订稿包含合同全文并就地标记（v4.0，默认仅输出修订清单）')
+    parser.add_argument('--no-clause-match', action='store_true',
+                        help='关闭条款库自动匹配（v4.0）')
 
     args = parser.parse_args()
     
     start_time = time.time()
     
     # ===== v3.0 特殊命令处理 =====
+    
+    if args.list_industries:
+        show_industries()
+        return
     
     if args.check_update:
         from updater import UpdateChecker
@@ -306,8 +391,8 @@ def main():
         if not args.file:
             return
     
-    # ===== v3.0 硬件检测与性能调度 =====
-    print_banner("3.0")
+    # ===== 硬件检测与性能调度 =====
+    print_banner()
     
     from hardware_detector import HardwareDetector
     hw_detector = HardwareDetector()
@@ -389,12 +474,36 @@ def main():
         # Step 3: 规则引擎检查
         print_step(3, total_steps, "规则引擎检查")
         
-        from rule_engine import RuleEngine
+        from rule_engine import RuleEngine, normalize_industry
         rules_path = Path(__file__).parent.parent / 'references' / 'risk_rules.yaml'
         engine = RuleEngine(str(rules_path))
-        rule_risks = engine.check_all(contract_text, structure.contract_type, structure.to_dict())
+        
+        # v4.0 行业专项审查
+        industry_code = normalize_industry(args.industry)
+        industry_name = ''
+        if args.industry and not industry_code:
+            print_warning(
+                f"未识别的行业「{args.industry}」，已忽略行业专项规则。"
+                f"可用值：{', '.join(INDUSTRY_DISPLAY.keys())}"
+            )
+        elif industry_code:
+            industry_name = INDUSTRY_DISPLAY.get(industry_code, (industry_code, ''))[0]
+            print(f"  🏭 启用 {industry_name} 行业专项规则")
+        
+        rule_risks = engine.check_all(
+            contract_text, structure.contract_type, structure.to_dict(),
+            industry=industry_code,
+        )
         
         print_success(f"完成 {len(rule_risks)} 项硬规则检查")
+        
+        # v4.0 行业专项规则均为语义审查型，需 LLM 参与才能生效，
+        # 在 --no-llm 模式下明确告知用户，避免误以为已完成行业审查。
+        if industry_code and args.no_llm:
+            print_warning(
+                f"{industry_name}行业专项规则为语义审查型，需 AI 参与才能生效。"
+                f"当前为 --no-llm 模式，本次仅执行通用硬规则检查。"
+            )
         
         # Step 4: LLM 审查（可选）
         print_step(4, total_steps, "AI 审查")
@@ -413,6 +522,7 @@ def main():
                     contract_text=contract_text,
                     contract_type=structure.contract_type,
                     party_role=args.role,
+                    industry=industry_code,
                 )
                 llm_risks = llm_result.get('risks', [])
                 missing_clauses = llm_result.get('missing_clauses', [])
@@ -471,9 +581,21 @@ def main():
             'currency': structure.currency,
             'missing_clauses': missing_clauses,
             'special_notes': special_notes,
+            'industry': industry_code,
+            'industry_name': industry_name,
+            'file_name': Path(args.file).name if args.file else '文本输入',
         }
         
-        generator = ReportGenerator()
+        generator = ReportGenerator(enable_clause_match=not args.no_clause_match)
+        
+        # v4.0 条款库匹配（统一在此执行，Word/Markdown/JSON 三种格式共享结果）
+        if not args.no_clause_match:
+            unique_risks = generator._enrich_with_clauses(
+                unique_risks, structure.contract_type
+            )
+            matched = sum(1 for r in unique_risks if r.get('clause_id'))
+            if matched:
+                print_success(f"条款库匹配 {matched} 条推荐替换文本")
         
         # ===== v3.0 版本对比 =====
         diff_result = None
@@ -526,6 +648,33 @@ def main():
                 with open(output_path, 'w', encoding='utf-8') as f:
                     f.write(report)
                 print_success(f"报告已保存至: {output_path}")
+        
+        # ===== v4.0 一键修订稿 =====
+        if args.revise:
+            try:
+                from contract_reviser import ContractReviser
+                reviser = ContractReviser()
+                revise_out = args.revise_output or 'revision.docx'
+                revise_result = reviser.revise(
+                    unique_risks,
+                    contract_info,
+                    revise_out,
+                    contract_text=contract_text if args.full_revision else '',
+                    fmt=args.revise_format,
+                )
+                print_success(
+                    f"修订稿已生成: {revise_result['output']}"
+                    f"（{revise_result['count']} 条修订建议"
+                    + (f"，原文定位 {revise_result['located']} 处" if args.full_revision else "")
+                    + "）"
+                )
+                if revise_result['count'] == 0:
+                    if not unique_risks:
+                        print("  ℹ️  本次未发现需修订的风险点，修订稿为空稿", flush=True)
+                    else:
+                        print_warning("未生成修订条目：风险点缺少推荐条款文本")
+            except Exception as e:
+                print_warning(f"修订稿生成失败: {e}")
         
         elapsed = time.time() - start_time
         
