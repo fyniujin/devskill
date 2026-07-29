@@ -5,10 +5,9 @@
 安全特性：魔术字节校验、文件大小限制、日志脱敏
 """
 
-import os
 import sys
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 import logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -51,7 +50,7 @@ BLOCKED_EXTENSIONS = (
     _BLOCKED_EXEC_EXT
     | _BLOCKED_OFFICE_EXT
     | _BLOCKED_ARCHIVE_EXT
-    | Blocked_SYSTEM_EXT
+    | _BLOCKED_SYSTEM_EXT
     | _BLOCKED_SCRIPT_EXT
 )
 
@@ -103,7 +102,7 @@ def _validate_file_safety(file_path: str) -> None:
             category = "老版本 Office 二进制格式"
         elif ext in _BLOCKED_ARCHIVE_EXT:
             category = "压缩包/镜像文件"
-        elif ext in Blocked_SYSTEM_EXT:
+        elif ext in _BLOCKED_SYSTEM_EXT:
             category = "系统缓存/临时文件"
         elif ext in _BLOCKED_SCRIPT_EXT:
             category = "脚本文件"
