@@ -2,8 +2,8 @@
 name: wps-office-suite
 displayName: WPS Office 全家桶
 slug: wps-office-suite
-description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、反模式FAQ、避坑指南、自动重试、硬件自适应、环境自检、错误速查手册、Skill更新提醒；v4.0新增：Word→PPT一键生成、Excel自然语言数据分析、Word合同条款审查、Excel发票OCR入账；v4.3新增：Excel深度分析（公式纠错/数据清洗/透视表/数据预测/NL2Formula）
-version: 4.3.0
+description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、反模式FAQ、避坑指南、自动重试、硬件自适应、环境自检、错误速查手册、Skill更新提醒；v4.0新增：Word→PPT一键生成、Excel自然语言数据分析、Word合同条款审查、Excel发票OCR入账；v4.3新增：Excel深度分析（公式纠错/数据清洗/透视表/数据预测/NL2Formula）；v4.4新增：长文档排版自动化（目录/页眉页脚/标题编号/图表索引/交叉引用/格式统一）
+version: 4.4.0
 category: 办公协作与生产力工具
 platforms:
   - windows
@@ -651,6 +651,20 @@ python scripts/excel_analyzer.py clean --file data.xlsx --sheet Sheet1
 python scripts/excel_analyzer.py hardware
 ```
 
+### 🆕 v4.4 长文档排版命令
+
+```bash
+python scripts/long_document.py analyze --file report.docx
+python scripts/long_document.py toc --file report.docx --max-level 3 --insert
+python scripts/long_document.py header --file report.docx --chapter-in-header --page-number
+python scripts/long_document.py numbering --file report.docx --style arabic --max-level 4
+python scripts/long_document.py fig-index --file report.docx --insert
+python scripts/long_document.py xref --file report.docx
+python scripts/long_document.py format --file report.docx --preset thesis
+python scripts/long_document.py all --file report.docx --preset thesis --output 排版后.docx
+python scripts/long_document.py preview --file report.docx --preset thesis
+```
+
 ### 其他工具
 
 ```bash
@@ -702,6 +716,7 @@ python templates/generate_templates.py --dir ./output  # 生成模板
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v4.4.0 | 2026-07-30 | 增加：长文档排版自动化模块 long_document.py（自动目录生成/页眉页脚自动化/标题编号自动化/图表索引自动化/交叉引用自动化/格式统一/批量排版）；增加：8 个 CLI 子命令（analyze/toc/header/numbering/fig-index/xref/format/all/preview）；增加：多级标题编号引擎（支持中文/阿拉伯/罗马数字三种样式）；增加：图表索引自动生成（图 1-1 xxx / 表 1-1 xxx）；增加：交叉引用验证与自动修复；增加：格式统一预设模板（论文/标书/报告三种风格）；增加：性能优化（分批处理 + 进度回调 + 单次保存） |
 | v4.3.0 | 2026-07-23 | 增加：Excel 智能分析模块 excel_analyzer.py（公式自动纠错/数据清洗辅助/透视表自动生成/数据预测/NL2Formula 自然语言转公式/硬件自适应降级）；增加：6 个 CLI 子命令（profile/fix-formulas/pivot/predict/nl2formula/clean/hardware）；优化：数据类型探测算法（数值/日期/文本自动识别）；优化：透视表智能字段推荐（基于唯一值比例+数据类型）；增加：数据质量评分体系（0-100分） |
 | v4.1.0 | 2026-07-17 | 增加：PPT智能生成深度增强模块 ppt_generator.py（多源输入/演讲者备注/动画建议/配色适配/图表推荐/排练辅助）；增加：4 大工具 CLI 子命令扩展（docx-to-ppt/generate/nl-analyze/invoice/review）；增加：配色方案自动生成引擎；增加：演讲者备注双模式（模板引擎 + 外部 LLM 可选）；优化：PPT 生成流程重构为分层架构 |
 | v4.0.0 | 2026-07-13 | 增加：Word→PPT一键生成；增加：Excel自然语言数据分析；增加：Word合同条款审查标注；增加：Excel发票OCR入账；增加：4 个专用脚本（wps_docx_to_ppt/wps_nl_analysis/wps_contract_review/wps_invoice_ocr）；增加：Worker 路由扩展至 28 个命令 |
