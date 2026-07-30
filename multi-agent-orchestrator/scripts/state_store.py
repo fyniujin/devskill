@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-状态持久化管理器 - 多Agent协作编排引擎 v4.0
+状态持久化管理器 - 多Agent协作编排引擎 v5.0
 
 功能：pipeline_state.json 的创建、读取、更新、查询 + 断点续传支持
 新增：执行历史追踪（.execution_history.json）+ 控制流节点专有字段持久化
+新增：节点完成后自动保存快照（供执行回放 / Time Travel 使用）
 零第三方依赖，仅使用 Python 标准库
 
 ★★★ 安全说明 ★★★
@@ -167,7 +168,8 @@ def init_state(pipeline, state_path=None):
         for ctrl_field in ('condition', 'on_true', 'on_false',
                            'switch', 'cases', 'default',
                            'items', 'template', 'join',
-                           'loop_body', 'max_iterations'):
+                           'loop_body', 'max_iterations',
+                           'pipeline_ref', 'params', 'outputs'):
             if ctrl_field in agent:
                 node_state[ctrl_field] = agent[ctrl_field]
         # while-loop 迭代计数初始化
@@ -230,6 +232,13 @@ def complete_node(state_path, node_id, output_json=None):
     if output_json:
         print(f"  输出数据已保存")
     print(f"  完成时间：{node['completed_at']}")
+
+    # 自动保存快照（供执行回放 / Time Travel 使用）
+    try:
+        import snapshot_store
+        snapshot_store.save_snapshot(state_path, node_id)
+    except Exception as e:
+        pass  # 快照保存失败不应阻塞主流程
 
     if all_done:
         print(f"\n🎉 流水线 [{state['pipeline_name']}] 全部节点已完成！")
@@ -699,7 +708,7 @@ def compare_history(state_path):
 
 if __name__ == '__main__':
     if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
-        print("状态持久化管理器 - 多Agent协作编排引擎 v3.0")
+        print("状态持久化管理器 - 多Agent协作编排引擎 v5.0")
         print("=" * 50)
         print("命令列表：")
         print("  python state_store.py init <pipeline.json> [state_path]")
@@ -725,6 +734,10 @@ if __name__ == '__main__':
         print("")
         print("  python state_store.py compare <state.json>")
         print("      → 对比最近5次执行（耗时/成功率/重试次数）")
+        print("")
+        print("★★★ 快照功能（v5.0 新增）★★★")
+        print("  节点完成后自动保存快照，用于执行回放 / Time Travel")
+        print("  快照管理命令：python orchestrator.py snapshot list/show/restore/diff")
         print("")
         print("★★★ 重要：错误处理流程 ★★★")
         print("  1. 执行失败时，先运行 fail 标记失败")
