@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-编排引擎入口 - 多Agent协作编排引擎 v4.0
+编排引擎入口 - 多Agent协作编排引擎 v5.0
 
 功能：统一入口，整合 DAG 验证、状态管理、执行调度、错误恢复、报告生成
 支持人工审批节点、HTML 甘特图、历史执行对比、硬件自适应
-新增动态工作流：if-else 条件分支、switch 多路分支、for-each 动态节点、while-loop 循环
+动态工作流：if-else 条件分支、switch 多路分支、for-each 动态节点、while-loop 循环
+新增：子流水线引用（pipeline 节点）、执行回放 / Time Travel（快照机制）
 零第三方依赖，仅使用 Python 标准库
 
 ★★★ 安全说明 ★★★
@@ -367,7 +368,7 @@ def cmd_impact(args):
 
 
 USAGE = """
-编排引擎 - 多Agent协作编排引擎 v4.0
+编排引擎 - 多Agent协作编排引擎 v5.0
 ================================
 
 用法：python orchestrator.py <command> [args]
@@ -385,6 +386,7 @@ USAGE = """
   compare <state.json>                         ★☆☆ 对比最近5次执行（耗时/成功率/重试）
   hardware                                     ★☆☆ 硬件检测与参数推荐
   check-update                                 ☆☆  检查是否有新版本
+  snapshot <cmd> <state.json> [node_id]        ☆☆  快照管理（list/show/restore/diff）
   impact <state.json> <node_id>                ☆☆  分析下游影响（只读）
 
 典型工作流：
@@ -397,7 +399,12 @@ USAGE = """
   7. python orchestrator.py gantt state.json            # 生成 HTML 甘特图
   8. python orchestrator.py report state.json           # 生成 Markdown 报告
 
-★★★ 新功能 v4.0（动态工作流）★★★
+★★★ 新功能 v5.0（子流水线 + 执行回放）★★★
+  - 子流水线引用：type: pipeline，引用已注册的子流水线隔离执行
+  - 执行回放 / Time Travel：节点快照 + 增量存储 + 从快照恢复 + 执行对比
+  - 快照命令：snapshot list/show/restore/diff
+
+★★★ v4.0 功能（动态工作流）★★★
   - if-else 条件分支：type: condition，按条件走 on_true / on_false
   - switch 多路分支：type: switch，按值命中 cases / default
   - for-each 动态节点：type: for-each，按列表长度展开子节点并汇合
@@ -462,6 +469,25 @@ def cmd_check_update(args):
     update_checker.check_update()
 
 
+def cmd_snapshot(args):
+    """快照管理：list/show/restore/diff"""
+    import snapshot_store
+    if not args:
+        print("用法：python orchestrator.py snapshot <list|show|restore|diff> <state.json> [node_id]")
+        sys.exit(1)
+    sub = args[0]
+    if sub == 'list':
+        snapshot_store.list_snapshots(args[1])
+    elif sub == 'show':
+        snapshot_store.show_snapshot(args[1], args[2])
+    elif sub == 'restore':
+        snapshot_store.restore_snapshot(args[1], args[2])
+    elif sub == 'diff':
+        snapshot_store.diff_snapshots(args[1], args[2], args[3])
+    else:
+        print(f"未知 snapshot 子命令：{sub}")
+
+
 if __name__ == '__main__':
     if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
         print(USAGE)
@@ -484,6 +510,7 @@ if __name__ == '__main__':
         'hardware': cmd_hardware,
         'check-update': cmd_check_update,
         'impact': cmd_impact,
+        'snapshot': cmd_snapshot,
     }
 
     if cmd not in commands:
