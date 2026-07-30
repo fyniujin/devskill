@@ -1,6 +1,11 @@
 """
-WPS Worker v4.3.0 - 智能引擎切换 v4.3
+WPS Worker v4.4.0 - 智能引擎切换 v4.4
 引擎优先级: WPS > MS Office > LibreOffice > 纯Python
+
+v4.4.0 变更:
+  - 🎯 长文档排版自动化（目录/页眉页脚/标题编号/图表索引/交叉引用/格式统一）
+  - 🎯 多级标题编号引擎（中文/阿拉伯/罗马数字三种样式）
+  - 🎯 格式统一预设模板（论文/标书/报告）
 
 v4.3.0 变更:
   - 🎯 Excel 深度分析（公式纠错/数据清洗/透视表/数据预测/NL2Formula）
@@ -792,6 +797,28 @@ def cmd_excel_analyze(args):
         agg_func=args.get("agg_func", "sum"),
     )
 
+def cmd_long_document(args):
+    """长文档排版 v4.4"""
+    from long_document import format_document
+    return format_document(
+        filepath=args.get("file"),
+        task=args.get("task", "analyze"),
+        max_level=args.get("max_level", 3),
+        field=args.get("field", False),
+        insert=args.get("insert", False),
+        odd_even=args.get("odd_even", False),
+        odd_header=args.get("odd_header", ""),
+        even_header=args.get("even_header", ""),
+        chapter_in_header=args.get("chapter_in_header", False),
+        page_number=args.get("page_number", False),
+        page_format=args.get("page_format", "arabic"),
+        page_start=args.get("page_start", 1),
+        style=args.get("style", "arabic"),
+        preset=args.get("preset", "thesis"),
+        numbering_style=args.get("numbering_style", "arabic"),
+        output_path=args.get("output", ""),
+    )
+
 COMMANDS = {
     "create_word": cmd_create_word,
     "edit_word": cmd_edit_word,
@@ -823,6 +850,7 @@ COMMANDS = {
     "invoice_ocr": cmd_invoice_ocr,
     "ppt_generate": cmd_ppt_generate,
     "excel_analyze": cmd_excel_analyze,
+    "long_document": cmd_long_document,
     "exit": None,
 }
 
