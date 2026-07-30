@@ -36,7 +36,7 @@ from engine.hardware import get_recommended_settings
 from engine.update_check import build_reminder, FEEDBACK_EMAIL
 from engine.exceptions import KingDocError
 
-APP_VERSION = "3.3.0"
+APP_VERSION = "3.4.0"
 
 # 配置路径：环境变量优先，其次 skill 根目录 config.json
 CONFIG_PATH = os.environ.get("KINGDOC_CONFIG", str(SKILL_ROOT / "config.json"))
@@ -580,6 +580,60 @@ async def kdoc_conflict_resolve(base_text: str, version_a: str, version_b: str,
         return _to_text(result)
     except Exception as e:
         return f"[ERR] 冲突解决失败：{e}"
+
+
+# ===========================================================================
+# 十二、文档内容合规检查（v3.4.0 新增，自研正则+规则引擎）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_compliance_sensitive(text: str, custom_words: str = "") -> str:
+    """【免密钥】敏感词扫描：内置敏感词库（适配中国监管），标注命中位置。
+
+    custom_words: 逗号分隔的额外敏感词
+    本地正则匹配，零配置可用。"""
+    try:
+        from engine.compliance_check import scan_sensitive
+        words = [w.strip() for w in custom_words.split(",") if w.strip()] if custom_words else None
+        result = scan_sensitive(text, custom_words=words)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 敏感词扫描失败：{e}"
+
+@mcp.tool()
+async def kdoc_compliance_leak(text: str) -> str:
+    """【免密钥】数据泄露检测：扫描手机号/身份证号/银行卡号/邮箱等敏感信息。
+
+    返回风险等级+脱敏显示。本地正则匹配，零配置可用。"""
+    try:
+        from engine.compliance_check import detect_leak
+        result = detect_leak(text)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 泄露检测失败：{e}"
+
+@mcp.tool()
+async def kdoc_compliance_format(file_path: str) -> str:
+    """【免密钥】格式规范检查：按企业文档规范逐项检查，生成不合规清单。
+
+    支持 .docx / .pptx / .txt / .md 格式。本地 XML 解析，零配置可用。"""
+    try:
+        from engine.compliance_check import check_format
+        result = check_format(file_path)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 格式检查失败：{e}"
+
+@mcp.tool()
+async def kdoc_compliance_classify(text: str) -> str:
+    """【免密钥】密级自动标注：根据内容建议密级（公开/内部/秘密/机密）。
+
+    本地关键词+规则引擎，零配置可用。"""
+    try:
+        from engine.compliance_check import classify
+        result = classify(text)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 密级标注失败：{e}"
 
 
 def main():
