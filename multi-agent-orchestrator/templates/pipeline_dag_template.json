@@ -1,7 +1,7 @@
 {
   "pipeline_name": "多Agent协作流水线模板",
-  "version": "4.0",
-  "description": "v4.0 模板 - 线性流水线 + 人工审批节点（动态控制流示例见 control_flow_template.json）",
+  "version": "5.0",
+  "description": "v5.0 模板 - 线性流水线 + 人工审批节点（动态控制流示例见 control_flow_template.json，子流水线示例见 sub_pipeline_template.json）",
   "agents": [
     {
       "id": "collector",
