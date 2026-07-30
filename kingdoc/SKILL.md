@@ -2,13 +2,13 @@
 name: kingdoc
 displayName: 金山文档 KingDoc
 slug: kingdoc
-version: 3.3.0
+version: 3.4.0
 description: >
   金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理
   （智能文档/文字/电子表格/演示文稿/多维表格/收集表/思维导图/流程图/附件），
   深度直连金山文档（WPS）开放平台原生 API，覆盖腾讯文档全部能力 + 金山独有 10 项增强
   （回收站、版本历史、格式转换、纯文本提取、本地 Tesseract OCR、通知推送、Webhook、
-  批量任务、政企合规、硬件自适应性能、WPS AI 能力、协同冲突解决）。文字/演示/思维导图/流程图采用"本地生成→上传覆盖"，
+  批量任务、政企合规、硬件自适应性能、WPS AI 能力、协同冲突解决、文档合规检查）。文字/演示/思维导图/流程图采用"本地生成→上传覆盖"，
   电子表格/多维表格采用 API 精细编辑。本地生成、OCR、硬件画像、WPS AI 等能力零密钥可用。
 description_zh: "金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理（深度直连 WPS 开放平台 + WPS AI 能力）"
 category: 办公效率
@@ -318,7 +318,69 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 ---
 
-## 11. 完整场景案例（v3.0.0 新增）
+## 11. 文档内容合规检查（v3.4.0 新增，自研正则+规则引擎）
+
+> 政企客户对文档内容有严格合规要求，手动检查耗时易遗漏。
+> 本模块提供**敏感词扫描 + 数据泄露检测 + 格式规范检查 + 密级标注**，零外部依赖。
+
+### 11.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.compliance.sensitive` | 敏感词扫描 | 输入全文 → 返回命中词+位置+上下文+风险等级 |
+| `kdoc.compliance.leak` | 数据泄露检测 | 扫描手机号/身份证号/银行卡号/邮箱 → 风险等级+脱敏显示 |
+| `kdoc.compliance.format` | 格式规范检查 | 输入文件路径 → 返回不合规清单（支持 DOCX/PPTX/TXT/MD） |
+| `kdoc.compliance.classify` | 密级自动标注 | 输入全文 → 建议密级（公开/内部/秘密/机密） |
+
+### 11.2 工作流程
+
+```
+① 敏感词扫描：kdoc.file.content → 取全文 → compliance.sensitive() → 命中列表+位置
+② 泄露检测：compliance.leak() → 正则匹配手机/身份证/银行卡/邮箱 → 风险等级
+③ 格式检查：kdoc.local.docx 解析 → compliance.format() → 不合规清单
+④ 密级标注：compliance.classify() → 关键词+规则 → 建议密级
+```
+
+### 11.3 敏感词库管理
+
+- **内置词库**：`references/sensitive_words.txt`（适配中国监管要求）
+- **用户黑名单**：`references/user_blacklist.txt`（追加自定义敏感词）
+- **用户白名单**：`references/user_whitelist.txt`（跳过误判词）
+- **定期更新**：替换 `sensitive_words.txt` 即可，无需改代码
+
+### 11.4 数据泄露检测能力
+
+| 类型 | 正则匹配 | 额外校验 | 风险等级 |
+|------|---------|---------|---------|
+| 手机号 | 1[3-9]\d{9} | — | high |
+| 身份证号 | 18位 | 校验码验证 | critical |
+| 银行卡号 | 16-19位 | Luhn 算法 | critical |
+| 邮箱地址 | 标准邮箱正则 | — | medium |
+| IP地址 | IPv4 | — | low |
+
+### 11.5 格式规范检查
+
+| 检查项 | 规范 | 严重度 |
+|--------|------|--------|
+| 字体 | 宋体 | warning |
+| 字号 | 10-14pt | warning |
+| 行距 | 1.5倍行距 | info |
+| 页边距 | 2.54cm/3.17cm | info |
+| 行长度 | ≤80字符 | info |
+| 标题层级 | 长文档必须有 H1 | warning |
+
+### 11.6 密级标注规则
+
+| 密级 | 关键词示例 |
+|------|-----------|
+| 机密 | 绝密、核心机密、国家安全、军事机密、情报来源 |
+| 秘密 | 商业机密、技术机密、客户名单、未公开财报 |
+| 内部 | 内部资料、内部通知、仅限内部、不得外传 |
+| 公开 | 无匹配关键词 |
+
+---
+
+## 12. 完整场景案例（v3.0.0 新增）
 
 ### 场景 A：月度销售复盘（全链路）
 ```
@@ -364,6 +426,16 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 4) kdoc.conflict.diff(a, b) → Git 风格可视化
 5) 用户选择保留A/保留B/手动合并 → kdoc.conflict.resolve(strategy="keep_a")
 6) ⚠️ 强制确认 → kdoc.file.upload 覆盖回云端
+```
+
+### 场景 G：政企文档合规检查（v3.4.0 新增）
+```
+1) kdoc.file.content(file_id) → 取全文
+2) kdoc.compliance.sensitive(text) → 扫描敏感词（命中"反动"、"毒品"等）
+3) kdoc.compliance.leak(text) → 检测数据泄露（手机号/身份证号脱敏）
+4) kdoc.compliance.classify(text) → 建议密级（如"秘密"）
+5) kdoc.compliance.format(file_path) → 格式规范检查（字体/字号/行距）
+6) 生成合规报告 → 用户确认 → 修复不合规项
 ```
 
 ---
@@ -518,6 +590,7 @@ python -m engine.update_check --version 3.0.0 --reminder
 
 ## 更新日志
 
+| v3.4.0 | 2026-07-30 | 增加：文档内容合规检查模块 `engine/compliance_check.py`（自研正则+规则引擎，零第三方依赖）；增加：敏感词扫描 `kdoc.compliance.sensitive`（内置词库+用户黑白名单）、数据泄露检测 `kdoc.compliance.leak`（手机号/身份证号/银行卡号/邮箱，Luhn+校验码验证）、格式规范检查 `kdoc.compliance.format`（DOCX/PPTX/TXT/MD）、密级自动标注 `kdoc.compliance.classify`（公开/内部/秘密/机密）；增加：合规检查 MCP 工具 4 个；增加：敏感词库 `references/sensitive_words.txt`、格式规范 `references/format_spec.md`、用户黑白名单模板；增加：政企文档合规检查场景案例 |
 | v3.3.0 | 2026-07-21 | 增加：协同编辑冲突解决模块 `engine/conflict_resolver.py`（自研 difflib 实现，零第三方依赖）；增加：冲突检测 `kdoc.conflict.detect`、智能合并 `kdoc.conflict.merge`（自动合并无冲突段 + 标注冲突段）、Git diff 可视化 `kdoc.conflict.diff`、解决模板 `kdoc.conflict.resolve`（keep_a/keep_b/manual/auto_merge）；增加：冲突解决 MCP 工具 4 个；增加：大文档 diff 分块硬件自适应处理；增加：多人协作冲突解决场景案例；优化：冲突段强制用户确认，绝不自动覆盖 |
 | v3.2.0 | 2026-07-17 | 增加：WPS AI 能力适配层（写作辅助/数据分析/PPT 生成/阅读助手），本地降级优先、自研逻辑实现、零密钥可用；增加：WPS AI 适配器 `engine/wps_ai/adapter.py`；增加：本地降级后端 `engine/wps_ai/backends/local_fallback.py`；增加：能力定义与意图映射 `engine/wps_ai/capabilities.py`；增加：WPS AI API 调研记录 `engine/wps_ai/research_notes.md`；优化：MCP Server 注册 5 个 WPS AI 工具；优化：版本号 3.0.0→3.2.0 |
 | v3.1.0 | 2026-07-15 | 增加：wps-office-suite 互通方案调研（已废弃，因平台合规不允许双 skill 互通） |
