@@ -177,6 +177,89 @@ highlight:
   # 视觉权重 (用于高光检测)
   visual_weight: 0.5
 
+# ==================== 短视频平台适配配置 (v4.0 新增) ====================
+platform_adapters:
+  # 是否启用短视频平台适配
+  enabled: true
+  
+  # 抖音配置
+  douyin:
+    # 是否启用抖音适配
+    enabled: true
+    # 下载超时（秒）
+    download_timeout: 300
+  
+  # 快手配置
+  kuaishou:
+    enabled: true
+    download_timeout: 300
+  
+  # B站配置
+  bilibili:
+    enabled: true
+    download_timeout: 300
+  
+  # 微信视频号配置
+  wechat_video:
+    enabled: true
+    download_timeout: 300
+
+# ==================== 自动剪辑建议配置 (v4.0 新增) ====================
+editing:
+  # 是否启用自动剪辑建议
+  enabled: true
+  
+  # 高光检测配置
+  highlight:
+    # 最小高光时长（秒）
+    min_duration: 2.0
+    # 最大高光时长（秒）
+    max_duration: 30.0
+    # 视觉活跃度权重
+    visual_weight: 0.3
+    # 音频能量权重
+    audio_weight: 0.3
+    # 情感分析权重
+    emotion_weight: 0.2
+    # 内容分析权重
+    content_weight: 0.2
+    # 高光阈值 (0-1)
+    threshold: 0.6
+  
+  # 冗余检测配置
+  redundancy:
+    # 静音阈值（秒），超过此时长视为冗余
+    silence_threshold: 2.0
+    # 填充词阈值（个），超过此次数视为冗余
+    filler_threshold: 3
+    # 语速过慢阈值（字/秒）
+    slow_speed_threshold: 3.0
+    # 画面静止阈值（秒）
+    static_threshold: 5.0
+  
+  # 时间线生成配置
+  timeline:
+    # 最大输出时长（秒）
+    max_output_duration: 120
+    # 最小片段时长（秒）
+    min_clip_duration: 1.0
+    # 转场时长（秒）
+    transition_duration: 0.5
+  
+  # EDL 导出配置
+  edl:
+    # 帧率
+    fps: 30
+  
+  # 字幕样式配置
+  subtitle:
+    # 默认样式模板: douyin/bilibili/movie/minimal
+    default_style: douyin
+    # 字体大小
+    font_size: 48
+    # 字体名称
+    font_name: "Microsoft YaHei"
+
 # ==================== 日志配置 ====================
 logging:
   level: INFO
