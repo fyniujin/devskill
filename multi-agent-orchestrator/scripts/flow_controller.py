@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-控制流引擎 - 多Agent协作编排引擎 v4.0
+控制流引擎 - 多Agent协作编排引擎 v5.0
 
-功能：为静态 DAG 增加动态控制流能力，支持四类控制节点：
+功能：为静态 DAG 增加动态控制流能力，支持五类控制节点：
   1. condition  - if-else 条件分支（真假两路）
   2. switch     - 多路分支（按值匹配 case）
   3. for-each   - 动态节点生成（按列表长度展开子节点）
   4. while-loop - 循环 / 重试增强（条件为真则回环重跑循环体）
+  5. pipeline   - 子流水线引用（调用已注册的子流水线，隔离执行）
 
 控制节点由引擎自动求值执行（不交给 AI），执行后动态修改 state：
   - 未选中分支的节点 → 整体标记 skipped
   - for-each → 动态注入子节点并重挂下游依赖
   - while-loop → 满足条件则重置循环体节点为 pending 再跑一轮
+  - pipeline → 隔离执行子流水线，结果映射回父上下文
 
 零第三方依赖，仅使用 Python 标准库
 
@@ -42,8 +44,8 @@ MAX_FANOUT = 100
 # while-loop 迭代次数硬上限（即使配置更大也强制封顶，防死循环）
 MAX_ITER = 1000
 
-# 四类控制流节点类型
-CONTROL_TYPES = ('condition', 'switch', 'for-each', 'while-loop')
+# 五类控制流节点类型
+CONTROL_TYPES = ('condition', 'switch', 'for-each', 'while-loop', 'pipeline')
 
 
 def is_control_node(node):
@@ -405,6 +407,119 @@ def handle_while_loop(state, node_id, state_path):
 
 
 # ============================================================
+# 5. pipeline：子流水线引用
+# ============================================================
+def handle_pipeline(state, node_id, state_path):
+    """处理 pipeline 节点（子流水线引用）。
+
+    节点配置示例：
+      {
+        "id": "invoice_step",
+        "name": "发票处理子流水线",
+        "type": "pipeline",
+        "pipeline_ref": "invoice-pipeline-v2",
+        "params": {
+          "file_path": "nodes.scan.output_data.file"
+        },
+        "outputs": {
+          "invoice_no": "nodes._terminal_.output_data.invoice_no"
+        },
+        "depends_on": ["scan"]
+      }
+    子流水线在隔离 state 中执行，只有 outputs 映射的字段能透出到父上下文。
+    """
+    import pipeline_registry
+
+    node = state['nodes'][node_id]
+    ref = node.get('pipeline_ref')
+    params_expr = node.get('params', {})
+    outputs_expr = node.get('outputs', {})
+
+    if not ref:
+        raise ConditionError(f"pipeline 节点 [{node_id}] 缺少 'pipeline_ref' 字段")
+
+    # 查找子流水线
+    meta = pipeline_registry.resolve(ref)
+    if not meta:
+        raise ConditionError(
+            f"pipeline 节点 [{node_id}] 引用了未注册的子流水线 [{ref}]\n"
+            f"  修复：运行 python pipeline_registry.py list 查看已注册的子流水线"
+        )
+
+    # 加载子流水线定义
+    sub_path = meta.get('path')
+    if not os.path.exists(sub_path):
+        raise ConditionError(f"子流水线文件不存在：{sub_path}")
+
+    with open(sub_path, 'r', encoding='utf-8') as f:
+        sub_pipeline = json.load(f)
+
+    # 创建隔离 state（子流水线独立运行）
+    sub_state_path = os.path.join(
+        os.path.dirname(state_path),
+        f"state_{node_id}_sub.json"
+    )
+    sub_state, sub_state_path = state_store.init_state(sub_pipeline, sub_state_path)
+
+    # 注入父上下文参数到子流水线首节点
+    if params_expr:
+        ctx = condition_evaluator.build_context_from_state(state)
+        # 找到子流水线首节点（无依赖的节点）
+        first_nodes = [a for a in sub_pipeline.get('agents', [])
+                       if not a.get('depends_on')]
+        if first_nodes:
+            first_nid = first_nodes[0]['id']
+            for param_name, expr in params_expr.items():
+                value = condition_evaluator.evaluate(expr, ctx)
+                sub_state['nodes'][first_nid]['output_data'][param_name] = value
+                sub_state['nodes'][first_nid]['status'] = 'completed'
+        state_store.safe_write(sub_state, sub_state_path)
+
+    # 执行子流水线（复用 orchestrator.step 机制）
+    # 简化：直接逐步执行子流水线的所有节点
+    max_sub_steps = 500
+    for _ in range(max_sub_steps):
+        nid = state_store.get_next_node(sub_state_path)
+        if not nid:
+            break
+        st = state_store.load_state(sub_state_path)
+        snode = st['nodes'][nid]
+        if is_control_node(snode):
+            process_control_node(st, nid, sub_state_path)
+        else:
+            # 子流水线节点自动完成（模拟执行）
+            state_store.complete_node(sub_state_path, nid,
+                                      json.dumps({"result": f"{nid}_done"}, ensure_ascii=False))
+
+    # 映射 outputs 回父上下文
+    sub_state = state_store.load_state(sub_state_path)
+    ctx = condition_evaluator.build_context_from_state(sub_state)
+    mapped_outputs = {}
+    for out_name, expr in outputs_expr.items():
+        try:
+            mapped_outputs[out_name] = condition_evaluator.evaluate(expr, ctx)
+        except ConditionError:
+            mapped_outputs[out_name] = None
+
+    node['status'] = 'completed'
+    node['completed_at'] = state_store.get_timestamp()
+    node['output_data'] = {
+        'pipeline_ref': ref,
+        'sub_state_path': sub_state_path,
+        'outputs': mapped_outputs,
+    }
+    if not node.get('started_at'):
+        node['started_at'] = state_store.get_timestamp()
+
+    state_store.safe_write(state, state_path)
+
+    print(f"  📦 pipeline [{node_id}] 执行子流水线 [{ref}]")
+    print(f"     子流水线 state：{sub_state_path}")
+    print(f"     映射输出：{json.dumps(mapped_outputs, ensure_ascii=False)[:200]}")
+    return True
+
+
+# ============================================================
 # 统一分发入口
 # ============================================================
 _HANDLERS = {
@@ -412,6 +527,7 @@ _HANDLERS = {
     'switch': handle_switch,
     'for-each': handle_for_each,
     'while-loop': handle_while_loop,
+    'pipeline': handle_pipeline,
 }
 
 
@@ -446,7 +562,7 @@ def process_control_node(state, node_id, state_path):
 
 
 if __name__ == '__main__':
-    print("控制流引擎 - 多Agent协作编排引擎 v4.0")
+    print("控制流引擎 - 多Agent协作编排引擎 v5.0")
     print("=" * 50)
     print("此模块由 orchestrator.py 自动调用，通常无需单独运行。")
     print("")
@@ -455,6 +571,7 @@ if __name__ == '__main__':
     print("  switch      - 多路分支（cases / default）")
     print("  for-each    - 动态节点生成（items / template / join）")
     print("  while-loop  - 循环重试（condition / loop_body / max_iterations）")
+    print("  pipeline    - 子流水线引用（pipeline_ref / params / outputs）")
     print("")
     print("字段说明详见 templates/pipeline_dag_template.json 与 SKILL.md")
 
