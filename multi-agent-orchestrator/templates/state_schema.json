@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Pipeline State Schema",
-  "description": "多Agent协作编排引擎 - 状态文件格式规范 v4.0",
+  "description": "多Agent协作编排引擎 - 状态文件格式规范 v5.0",
   "type": "object",
   "required": ["pipeline_id", "pipeline_name", "status", "nodes", "created_at", "updated_at"],
   "properties": {
@@ -16,7 +16,7 @@
     "version": {
       "type": "string",
       "description": "DAG 定义版本号",
-      "default": "4.0"
+      "default": "5.0"
     },
     "created_at": {
       "type": "string",
@@ -42,8 +42,8 @@
           "role": {"type": "string"},
           "type": {
             "type": "string",
-            "enum": ["task", "approval", "condition", "switch", "for-each", "while-loop"],
-            "description": "节点类型：task=普通任务，approval=人工审批，condition=if-else 分支，switch=多路分支，for-each=动态节点，while-loop=循环重试",
+            "enum": ["task", "approval", "condition", "switch", "for-each", "while-loop", "pipeline"],
+            "description": "节点类型：task=普通任务，approval=人工审批，condition=if-else 分支，switch=多路分支，for-each=动态节点，while-loop=循环重试，pipeline=子流水线引用",
             "default": "task"
           },
           "status": {
@@ -79,6 +79,9 @@
           "iteration": {"type": "integer", "description": "while-loop 节点：当前迭代轮次"},
           "item": {"description": "for-each 动态子节点：当前迭代的数据项"},
           "item_index": {"type": "integer", "description": "for-each 动态子节点：迭代序号"},
+          "pipeline_ref": {"type": "string", "description": "pipeline 节点：引用的子流水线名称"},
+          "params": {"type": "object", "description": "pipeline 节点：传递给子流水线的参数"},
+          "outputs": {"type": "object", "description": "pipeline 节点：子流水线输出到父上下文的映射"},
           "error": {"type": ["string", "null"]},
           "started_at": {"type": ["string", "null"]},
           "completed_at": {"type": ["string", "null"]}
