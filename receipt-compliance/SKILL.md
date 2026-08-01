@@ -3,7 +3,7 @@ name: receipt-compliance
 slug: receipt-compliance
 displayName: 会计助手
 description: 会计助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。
-version: 3.7.0
+version: 4.0.0
 category: 财税管理
 appName: 财税合规
 platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
@@ -19,10 +19,14 @@ platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
 
 | 模块 | 功能 | 状态 | 输入 | 输出 |
 |------|------|------|------|------|
-| 1. 发票OCR识别 | Tesseract本地识别增值税发票 | ✅ 直接可用 | 发票图片 | 结构化JSON |
+| 1. 发票OCR识别 | Tesseract本地识别增值税发票及各类票据 | ✅ 直接可用 | 发票图片/PDF | 结构化JSON |
 | 2. 真伪查验 | 一键生成国税总局查验链接，自动打开浏览器 | ✅ 直接可用 | 发票代码/号码 | 查验链接+结果 |
 | 3. 报销单填充 | 自适应学习模板，一键填充 | ✅ 直接可用 | 发票数据+模板 | Excel文件 |
 | 4. 审批对接 | 对接钉钉/企微/飞书审批（有完整代码模板） | ⚠️ 需配置密钥 | 报销单+配置 | 审批结果 |
+| 5. 全电发票 | 全电发票XML/OFD格式解析 | ✅ 直接可用 | 全电发票文件 | 结构化JSON |
+| 6. 多票据支持 | 火车票/飞机票/出租车/定额发票/通行费/财政票据 | ✅ 直接可用 | 票据图片 | 统一结构化JSON |
+| 7. 智能分类 | 自动匹配会计科目、计算进项税、生成凭证摘要 | ✅ 直接可用 | 结构化发票数据 | 分类结果+科目 |
+| 8. 记账凭证 | 自动生成记账凭证（用友/金蝶/QuickBooks格式） | ✅ 直接可用 | 分类结果 | 凭证文件 |
 
 > ✅ = 装即用 ｜ ⚠️ = 需在 config.yaml 中配置对应API密钥
 >
@@ -1047,6 +1051,7 @@ python scripts/invoice_detector.py path/to/any_invoice
 
 ## 更新日志
 
+| v4.0.0 | 2026-08-01 | 新增：全电发票XML解析器 xml_parser.py；新增：OFD版式文件解析器 ofd_parser.py；新增：火车票解析器 train_parser.py；新增：飞机行程单解析器 flight_parser.py；新增：出租车票解析器 taxi_parser.py；新增：定额发票解析器 fixed_parser.py；新增：通行费票据解析器 toll_parser.py；新增：财政票据解析器 fiscal_parser.py；新增：智能分类器 smart_classifier.py，支持费用类型自动匹配、进项税额自动计算、会计科目自动映射；新增：记账凭证生成器 voucher_generator.py，支持用友/金蝶/QuickBooks导入格式；新增：统一发票数据结构 unified_invoice.py，兼容新旧发票和多种票据类型；新增：票种自动识别模块 invoice_detector.py，自动路由传统OCR或专用解析器；新增：会计科目对照表 account_mapping.md；新增：费用分类规则 expense_rules.md |
 | v3.7.0 | 2026-07-22 | 新增：全电发票（数电票）XML 格式解析器 xml_parser.py，支持 20 位全电发票号码、校验码、税务数字账户等特有字段提取；新增：OFD 版式文件解析器 ofd_parser.py；新增：票种自动识别模块 invoice_detector.py，自动路由传统 OCR 或全电解析；新增：统一发票数据结构 unified_invoice.py，兼容新旧发票格式；新增：SKILL.md 全电发票使用章节；新增：版本更新提醒机制；新增：联系信息 njskills@agent.qq.com |
 | v3.4.0 | 2026-07-13 | 修复：移除 install_tesseract.ps1 中指向个人 Gitee 仓库的下载源，替换为 winget/scoop 官方源和 GitHub 官方 Release；修复：将 approval_abstract.py、api-endpoints.md、setup-guide.md、example-approval.md 中所有 open.duxiaoman.com 错误链接替换为钉钉官方地址 open-dev.dingtalk.com；修复：verify_engine.py 中 subprocess.Popen 移除 shell=True，改为列表参数形式 |
 | v3.3.0 | 2026-07-13 | 更名：插件文件夹名从 tax-receipt-compliance 改为 receipt-compliance；更名：displayName 从财税合规全链路助手改为会计助手 |
