@@ -3,7 +3,7 @@ slug: cn-llm-router
 displayName: 国产大模型统一路由
 name: cn-llm-router
 description: 国产大模型统一路由。把 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、字节豆包、百度文心、讯飞星火、MiniMax、零一万物 Yi、百川、阶跃 Step 等 12 家国产大模型收敛成一个命令入口；按任务类型（代码/推理/长文/翻译/摘要/抽取）结合能力画像自动或手动选择最合适、最省钱的模型；支持流式输出、自动统计跨厂商 token 成本、硬件自适应限流（不拖累电脑）、本地语义缓存省 token、全链路离线 Mock 调试、技能更新提醒。当用户需要「调用国产大模型」「多模型比价/降本」「统一管理多个模型 Key」「本地跑大模型路由」「不想被某一家厂商绑定」时使用。
-version: 2.1.0
+version: 2.2.0
 author: njskills
 license: MIT
 tags: [国产大模型, 模型路由, 成本统计, 多模型, 硬件自适应, 语义缓存, 零密钥]
@@ -365,11 +365,11 @@ python scripts/router.py version
 **运行效果：**
 ```
 $ python scripts/router.py version
-cn-llm-router v2.1.0 | 作者: njskills@agent.qq.com
+cn-llm-router v2.2.0 | 作者: njskills@agent.qq.com
 主页: https://skillhub.cn/skill/cn-llm-router
 
 $ python scripts/router.py update-check
-✅ 已是最新版本 v2.1.0
+✅ 已是最新版本 v2.2.0
 ```
 
 > Windows 用户把 `python` 换成 `python.exe` 或 `py`；PowerShell 里环境变量用 `$env:XXX="..."`。
@@ -670,6 +670,7 @@ python scripts/router.py update-check
 
 ## 更新日志
 
+| v2.2.0 | 2026-08-01 | 增加：模型竞技场 arena（并行调用 2-4 家模型，盲选最佳回答，长期追踪各模型胜率）；增加：健康检查 health-check（3 秒超时、60s 缓存、并行 ping）；增加：模型降级与故障转移（超时自动切备用模型，最多重试 2 次，成本报表标注降级事件）；增加：AdapterTimeoutError 子类（区分超时与鉴权失败）|
 | v2.1.0 | 2026-07-24 | 增加：MiniMax（abab 系列）、零一万物 Yi、百川智能、阶跃星辰 Step-2 四家厂商，覆盖扩展至 12 家 32 款模型；增加：DeepSeek V3 及全部模型的能力画像字段（推理/代码/长文得分）；优化：auto 策略改由能力画像驱动智能选型，新增厂商填画像即被自动纳入、无需改代码；增加：分类器 stream_friendly 流式适配判断（对话/翻译/代码适合流式，推理/抽取建议一次性）；修复：流式输出 token 计费恒为 0 的问题，改用估算兜底并标注（估） |
 | v2.0.0 | 2026-07-16 | 新增：全链路离线 Mock 模式（`--mock`），含 12 个预设场景（代码/推理/翻译/摘要/提取/分析/创意写作等）；新增：网络自动检测与厂商级熔断（所有厂商不可达时自动进入 mock 模式）；新增：延迟模拟（`--latency 2000`）用于测试超时降级；新增：交互式 Mock 数据编辑器（`mock --edit`）支持自定义 query→response 映射；新增：Mock 回归测试（`test --mock`，10 项 mock 专项测试）；定位：mock 数据完全本地（JSON + SQLite），不依赖外部 API，仅限开发调试，生产环境强制禁用 |
 | v1.1.0 | 2026-07-10 | 优化：缓存模糊匹配加入长度惩罚系数与最短查询限制，大幅减少「答非所问」式误命中；提升：流式输出 token 估算精度（无 usage 时按中英文混合规则兜底并标注「估」）；新增：SKILL.md 命令运行效果示例（每个命令均有真实输出样例）、反模式章节（8 条常见坑）、FAQ 扩充至 10 条、使用场景推荐与调优建议章节；修复：displayName 改为中文「国产大模型统一路由」，解决上传后显示英文名的问题 |
@@ -687,4 +688,4 @@ python scripts/router.py update-check
 
 ---
 
-*版本：v2.1.0 ｜ 许可：MIT ｜ 核心纯标准库（讯飞星火可选 websocket-client）、零密钥打包、可只读审计。*
+*版本：v2.2.0 ｜ 许可：MIT ｜ 核心纯标准库（讯飞星火可选 websocket-client）、零密钥打包、可只读审计。*
