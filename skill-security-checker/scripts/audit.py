@@ -13,9 +13,11 @@ Features:
   7. Hardware-aware parallelism (auto-detect CPU/memory for concurrency)
   8. Update check with 24h caching
   9. Dynamic sandbox execution scanning (Docker / Windows Sandbox, graceful fallback)
+ 10. Supply chain risk analysis (dependency tree, typo-squatting, CVE auto-pull, license)
+ 11. CI/CD integration (GitHub Action / GitLab CI templates, SARIF output, quality gate)
 
 Author: njskills@agent.qq.com
-Version: 2.0.0
+Version: 3.0.0
 """
 
 import os
@@ -37,6 +39,13 @@ try:
     _SANDBOX_AVAILABLE = True
 except Exception:
     _SANDBOX_AVAILABLE = False
+
+# Supply chain risk analysis (optional module; degrades gracefully if missing)
+try:
+    from supply_chain import scan_supply_chain
+    _SUPPLY_CHAIN_AVAILABLE = True
+except Exception:
+    _SUPPLY_CHAIN_AVAILABLE = False
 
 # ============================================================
 # Constants & Rule Definitions
@@ -200,7 +209,7 @@ KNOWN_VULN_DEPS = {
 
 # Update check URL and version info
 UPDATE_CHECK_URL = "https://api.github.com/repos/njskills/skill-security-checker/releases/latest"
-CURRENT_VERSION = "2.0.0"
+CURRENT_VERSION = "3.0.0"
 
 # Update check cache TTL (hours)
 UPDATE_CACHE_HOURS = 24
@@ -316,7 +325,7 @@ class FileWalker:
 
 class ScanResult:
     """Single scan result."""
-    def __init__(self, category, severity, file, line, message, pattern, suggestion):
+    def __init__(self, category, severity, file, line, message, pattern, suggestion, source=''):
         self.category = category
         self.severity = severity
         self.file = str(file)
@@ -324,9 +333,10 @@ class ScanResult:
         self.message = str(message)
         self.pattern = str(pattern) if pattern else ''
         self.suggestion = str(suggestion) if suggestion else ''
+        self.source = str(source) if source else ''
     
     def to_dict(self):
-        return {
+        d = {
             'category': self.category,
             'severity': self.severity,
             'file': self.file,
@@ -335,12 +345,15 @@ class ScanResult:
             'pattern': self.pattern,
             'suggestion': self.suggestion,
         }
+        if self.source:
+            d['source'] = self.source
+        return d
 
 
 class SecurityAuditor:
     """Core security audit engine."""
     
-    def __init__(self, skill_path, dynamic=False, dynamic_options=None):
+    def __init__(self, skill_path, dynamic=False, dynamic_options=None, supply_chain=False):
         self.skill_path = Path(skill_path)
         self.results = []
         self.score = 100
@@ -351,6 +364,8 @@ class SecurityAuditor:
         self.dynamic = dynamic
         self.dynamic_options = dynamic_options
         self.dynamic_report = None
+        self.supply_chain = supply_chain
+        self.supply_chain_findings = []
         self._load_skill_md()
         self._load_changelog()
     
@@ -393,9 +408,9 @@ class SecurityAuditor:
             matches = re.findall(r'\|\s*v(\d+\.\d+\.\d+)\s*\|', self.skill_md_content)
             self.changelog_version_count = len(matches)
     
-    def add_result(self, category, severity, file, line, message, pattern, suggestion):
+    def add_result(self, category, severity, file, line, message, pattern, suggestion, source=''):
         """Add a scan result."""
-        result = ScanResult(category, severity, file, line, message, pattern, suggestion)
+        result = ScanResult(category, severity, file, line, message, pattern, suggestion, source=source)
         self.results.append(result)
         score_map = {'critical': 25, 'high': 15, 'medium': 8, 'low': 3, 'info': 0}
         self.score -= score_map.get(severity, 0)
@@ -512,6 +527,42 @@ class SecurityAuditor:
                 file='.', line=0,
                 message=f"动态扫描部分失败: {report['error']}",
                 pattern='', suggestion='请将该问题反馈给开发者',
+            )
+
+    def scan_supply_chain(self):
+        """Supply chain risk analysis: dependency tree, typo-squatting,
+        CVE auto-pull (OSV/NVD with local fallback), license compliance.
+        """
+        if not self.supply_chain:
+            return
+        if not _SUPPLY_CHAIN_AVAILABLE:
+            self.add_result(
+                category='supply_chain_skipped', severity='info',
+                file='.', line=0,
+                message='供应链分析模块不可用，已跳过',
+                pattern='', suggestion='确认 supply_chain.py 文件存在',
+            )
+            return
+
+        try:
+            findings = scan_supply_chain(str(self.skill_path), self.frontmatter)
+        except Exception as e:
+            self.add_result(
+                category='supply_chain_error', severity='low',
+                file='.', line=0,
+                message=f'供应链分析异常: {e}',
+                pattern='', suggestion='请将该问题反馈给开发者',
+            )
+            return
+
+        self.supply_chain_findings = findings
+
+        for f in findings:
+            self.add_result(
+                category=f.category, severity=f.severity,
+                file=f.file, line=f.line,
+                message=f.message, pattern=f.pattern, suggestion=f.suggestion,
+                source=f.source,
             )
 
     def _get_suggestion(self, category, line):
@@ -901,6 +952,9 @@ class SecurityAuditor:
             ('Quality Score', self.scan_quality),
             ('Structure Check', self.scan_structure),
         ]
+
+        if self.supply_chain:
+            scan_methods.append(('Supply Chain', self.scan_supply_chain))
         
         if not skip_update:
             scan_methods.append(('Update Check', self.check_update))
@@ -962,6 +1016,10 @@ class SecurityAuditor:
                 'total_files_skipped': len(self.walker.skipped_files),
                 'workers_used': get_optimal_workers(),
                 'dynamic_scan': self._dynamic_meta(),
+                'supply_chain': {
+                    'enabled': self.supply_chain,
+                    'findings': len(self.supply_chain_findings),
+                },
             },
             'score': self.score,
             'grade': self._get_grade(),
@@ -1164,6 +1222,69 @@ code {{ background:#f1f3f5; padding:2px 6px; border-radius:3px; font-size:12px; 
             Path(output_path).write_text(html, encoding='utf-8')
         return html
 
+    @staticmethod
+    def to_sarif(report, output_path=None):
+        """Generate SARIF 2.1.0 output (GitHub Code Scanning format)."""
+        rules_map = {}
+        results = []
+        for r in report['results']:
+            rule_id = r.get('category', 'unknown')
+            if rule_id not in rules_map:
+                rules_map[rule_id] = {
+                    'id': rule_id,
+                    'name': rule_id.replace('_', ' ').title(),
+                    'shortDescription': {'text': r.get('message', '')[:200]},
+                    'fullDescription': {'text': r.get('message', '')},
+                    'defaultConfiguration': {
+                        'level': {
+                            'critical': 'error',
+                            'high': 'error',
+                            'medium': 'warning',
+                            'low': 'warning',
+                            'info': 'note',
+                        }.get(r.get('severity', 'warning'), 'warning'),
+                    },
+                    'help': {'text': r.get('suggestion', '')},
+                }
+            results.append({
+                'ruleId': rule_id,
+                'level': {
+                    'critical': 'error',
+                    'high': 'error',
+                    'medium': 'warning',
+                    'low': 'warning',
+                    'info': 'note',
+                }.get(r.get('severity', 'warning'), 'warning'),
+                'message': {'text': r.get('message', '')},
+                'locations': [{
+                    'physicalLocation': {
+                        'artifactLocation': {'uri': r.get('file', '')},
+                        'region': {'startLine': max(1, r.get('line', 0))},
+                    },
+                }],
+            })
+
+        sarif = {
+            '$schema': 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json',
+            'version': '2.1.0',
+            'runs': [{
+                'tool': {
+                    'driver': {
+                        'name': 'skill-security-checker',
+                        'version': report['meta'].get('version', '0.0.0'),
+                        'informationUri': 'https://github.com/njskills/skill-security-checker',
+                        'rules': list(rules_map.values()),
+                    },
+                },
+                'results': results,
+            }],
+        }
+
+        json_str = json.dumps(sarif, ensure_ascii=False, indent=2)
+        if output_path:
+            Path(output_path).write_text(json_str, encoding='utf-8')
+        return json_str
+
 
 # ============================================================
 # CLI Entry Point
@@ -1180,9 +1301,11 @@ Examples:
   python audit.py /path/to/skill --skip-update
   python audit.py /path/to/skill --dynamic
   python audit.py /path/to/skill --dynamic --allow-domain api.github.com --sandbox-timeout 60
+  python audit.py /path/to/skill --supply-chain
+  python audit.py /path/to/skill --format sarif -o sarif.json
         ''')
     parser.add_argument('skill_path', help='Path to skill directory to audit')
-    parser.add_argument('--format', choices=['json', 'html', 'text'], default='text',
+    parser.add_argument('--format', choices=['json', 'html', 'text', 'sarif'], default='text',
                         help='Output format (default: text)')
     parser.add_argument('-o', '--output', help='Output file path')
     parser.add_argument('--skip-update', action='store_true', help='Skip update check')
@@ -1192,6 +1315,8 @@ Examples:
                         help='Whitelist a domain for sandbox network (repeatable)')
     parser.add_argument('--sandbox-timeout', type=int, default=30,
                         help='Sandbox execution timeout in seconds (default: 30)')
+    parser.add_argument('--supply-chain', action='store_true',
+                        help='Enable supply chain risk analysis')
     
     args = parser.parse_args()
     
@@ -1207,7 +1332,7 @@ Examples:
             network=bool(args.allow_domain),
         )
     
-    auditor = SecurityAuditor(args.skill_path, dynamic=args.dynamic, dynamic_options=dyn_opts)
+    auditor = SecurityAuditor(args.skill_path, dynamic=args.dynamic, dynamic_options=dyn_opts, supply_chain=args.supply_chain)
     report = auditor.run(skip_update=args.skip_update)
     
     if args.format == 'json':
@@ -1218,6 +1343,10 @@ Examples:
         output = ReportGenerator.to_html(report, args.output)
         if not args.output:
             print(f"HTML report generated ({len(output)} chars)")
+    elif args.format == 'sarif':
+        output = ReportGenerator.to_sarif(report, args.output)
+        if not args.output:
+            print(output)
     else:
         print(f"\n{'='*60}")
         print(f"  Skill Security Audit Report")
@@ -1234,6 +1363,9 @@ Examples:
                       f"findings={dyn.get('findings', 0)}")
             else:
                 print(f"  Dynamic: skipped ({dyn.get('hint', 'no isolation backend')})")
+        sc = report['meta'].get('supply_chain', {})
+        if sc.get('enabled'):
+            print(f"  Supply Chain: {sc.get('findings', 0)} findings")
         print(f"{'='*60}")
         print(f"\n  Score: {report['score']}/100 (Grade: {report['grade']})")
         print(f"  {report['summary']}\n")
