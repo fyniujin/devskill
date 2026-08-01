@@ -16,6 +16,8 @@ from src.frameworks import (
     LangChainToolAdapter, AutoGPTPluginAdapter, CrewAIToolAdapter,
     CozePluginAdapter, DifyToolAdapter,
 )
+from src.benchmark import BenchmarkSuite, QUESTION_BANK
+from src.price_tracker import PriceTracker, DEFAULT_PRICES
 
 
 class TestChatMessage(unittest.TestCase):
@@ -192,6 +194,45 @@ class TestFrameworkAdapters(unittest.TestCase):
         adapter = DifyToolAdapter(self.router)
         result = adapter.handle_dify_request("unknown_tool", {})
         self.assertIn("未知工具", result)
+
+
+class TestBenchmark(unittest.TestCase):
+    def test_question_bank_has_50_questions(self):
+        total = sum(len(qs) for qs in QUESTION_BANK.values())
+        self.assertEqual(total, 50)
+
+    def test_question_bank_has_5_dimensions(self):
+        # 5 question-based dimensions (speed is measured by runner, not questions)
+        self.assertEqual(len(QUESTION_BANK), 5)
+
+    def test_benchmark_suite_instantiation(self):
+        suite = BenchmarkSuite()
+        self.assertIsNotNone(suite)
+
+    def test_benchmark_suite_dimensions(self):
+        suite = BenchmarkSuite()
+        self.assertEqual(len(suite.DIMENSIONS), 6)
+
+
+class TestPriceTracker(unittest.TestCase):
+    def test_price_tracker_instantiation(self):
+        tracker = PriceTracker()
+        self.assertIsNotNone(tracker)
+
+    def test_default_prices_have_10_providers(self):
+        self.assertEqual(len(DEFAULT_PRICES), 10)
+
+    def test_price_table_generation(self):
+        tracker = PriceTracker()
+        table = tracker.generate_price_table()
+        self.assertIn("Provider", table)
+        self.assertIn("Input", table)
+
+    def test_predict_cost(self):
+        tracker = PriceTracker()
+        result = tracker.predict_cost({"deepseek": 1000000})
+        self.assertIn("total_estimated_cost", result)
+        self.assertIn("predictions", result)
 
 
 if __name__ == "__main__":
