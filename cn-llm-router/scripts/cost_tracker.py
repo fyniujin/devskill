@@ -8,6 +8,7 @@
 """
 
 import os
+import json
 import sqlite3
 import time
 from datetime import datetime, timedelta
@@ -26,24 +27,49 @@ def _conn(db_path=None):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ts TEXT, provider TEXT, model TEXT, task TEXT,
             in_tokens INTEGER, out_tokens INTEGER, cost REAL,
-            elapsed_ms INTEGER, success INTEGER, error TEXT
+            elapsed_ms INTEGER, success INTEGER, error TEXT,
+            fallback_from TEXT
         )"""
     )
+    # 兼容旧表无 fallback_from 列
+    try:
+        c.execute("ALTER TABLE calls ADD COLUMN fallback_from TEXT")
+    except Exception:
+        pass
+    # v2.2 竞技场表
+    c.execute(
+        """CREATE TABLE IF NOT EXISTS arena_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts TEXT NOT NULL,
+            prompt TEXT NOT NULL,
+            task_type TEXT NOT NULL,
+            models_json TEXT NOT NULL,
+            voted_provider TEXT,
+            voted_model TEXT,
+            vote_ts TEXT
+        )"""
+    )
+    c.commit()
+    return c
     c.commit()
     return c
 
 
 def log_call(provider, model, task, in_tokens, out_tokens, cost,
-             elapsed_ms, success, error="", db_path=None):
-    """记录一次调用。参数化写入，防注入。"""
+             elapsed_ms, success, error="", fallback_from=None, db_path=None):
+    """记录一次调用。参数化写入，防注入。
+    
+    fallback_from: 若本次调用为降级触发，记录原主模型 "provider:model"。
+    """
     c = _conn(db_path)
     try:
         c.execute(
-            "INSERT INTO calls (ts, provider, model, task, in_tokens, out_tokens, cost, elapsed_ms, success, error) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO calls (ts, provider, model, task, in_tokens, out_tokens, cost, elapsed_ms, success, error, fallback_from) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (datetime.now().isoformat(timespec="seconds"), provider, model, task,
              int(in_tokens or 0), int(out_tokens or 0), float(cost or 0.0),
-             int(elapsed_ms or 0), 1 if success else 0, error or ""),
+             int(elapsed_ms or 0), 1 if success else 0, error or "",
+             fallback_from or ""),
         )
         c.commit()
     finally:
@@ -146,3 +172,40 @@ def clear_old(days=30, db_path=None):
         return n
     finally:
         c.close()
+
+
+# ───────────────────────── 竞技场 ─────────────────────────
+def log_arena_vote(prompt, task_type, models, voted_provider, voted_model, db_path=None):
+    """记录一次竞技场投票。"""
+    c = _conn(db_path)
+    try:
+        c.execute(
+            "INSERT INTO arena_sessions (ts, prompt, task_type, models_json, voted_provider, voted_model, vote_ts) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (datetime.now().isoformat(timespec="seconds"), prompt, task_type,
+             json.dumps(models, ensure_ascii=False),
+             voted_provider or "", voted_model or "",
+             datetime.now().isoformat(timespec="seconds")),
+        )
+        c.commit()
+    finally:
+        c.close()
+
+
+def win_rates(db_path=None):
+    """统计各模型在不同任务类型下的胜率。"""
+    c = _conn(db_path)
+    try:
+        rows = c.execute(
+            "SELECT task_type, voted_provider, voted_model, COUNT(*) as wins "
+            "FROM arena_sessions WHERE voted_provider IS NOT NULL AND voted_provider != '' "
+            "GROUP BY task_type, voted_provider, voted_model ORDER BY task_type, wins DESC"
+        ).fetchall()
+    finally:
+        c.close()
+    result = {}
+    for task_type, prov, model, wins in rows:
+        result.setdefault(task_type, []).append({
+            "provider": prov, "model": model, "wins": wins
+        })
+    return result
