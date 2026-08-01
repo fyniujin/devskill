@@ -3,6 +3,7 @@
 企业微信语音消息 Agent - 会话管理器
 管理对话上下文，支持创建、查询、清理会话
 新增：情感状态跟踪（v2.2）
+新增：方言检测跟踪 + 工单关联（v2.3）
 """
 
 import json
@@ -47,7 +48,13 @@ def create_session(userid, max_history=5):
             "consecutive_negative": 0,
             "emotion_history": [],
             "should_escalate": False
-        }
+        },
+        "dialect_state": {
+            "detected_dialect": "mandarin",
+            "confidence": 0.0,
+            "dialect_history": []
+        },
+        "ticket_ids": []
     }
     
     save_session(session)
@@ -116,12 +123,15 @@ def add_message(session_id, role, content, intent=None, emotion=None):
     if emotion:
         update_emotion_state(session, emotion)
     
-    # 压缩历史消息
-    if len(session['messages']) > session['max_history']:
+    # 压缩历史消息（仅当 max_history >= 2 时执行）
+    if session['max_history'] >= 2 and len(session['messages']) > session['max_history']:
         # 保留第一条 + 最近 max_history-2 条
         first = session['messages'][0]
         last_n = session['messages'][-(session['max_history']-2):]
         session['messages'] = [first] + last_n
+    elif session['max_history'] < 2 and len(session['messages']) > 2:
+        # max_history < 2 时只保留最近 1 条
+        session['messages'] = session['messages'][-1:]
     
     save_session(session)
     return session
@@ -190,6 +200,98 @@ def get_emotion_state(session_id):
         "emotion_history": [],
         "should_escalate": False
     })
+
+def update_dialect_state(session_id, dialect, confidence=0.0):
+    """更新会话的方言状态
+    
+    Args:
+        session_id: 会话ID
+        dialect: 检测到的方言类型字符串
+        confidence: 置信度
+    """
+    session = get_session(session_id)
+    if not session:
+        return None
+    
+    # 确保 dialect_state 存在
+    if "dialect_state" not in session:
+        session["dialect_state"] = {
+            "detected_dialect": "mandarin",
+            "confidence": 0.0,
+            "dialect_history": []
+        }
+    
+    state = session["dialect_state"]
+    state["detected_dialect"] = dialect
+    state["confidence"] = confidence
+    state["dialect_history"].append({
+        "dialect": dialect,
+        "confidence": confidence,
+        "timestamp": int(time.time())
+    })
+    
+    # 限制历史长度
+    if len(state["dialect_history"]) > 10:
+        state["dialect_history"] = state["dialect_history"][-10:]
+    
+    session["dialect_state"] = state
+    session["updated_at"] = int(time.time())
+    save_session(session)
+    return session
+
+
+def get_dialect_state(session_id):
+    """获取会话的方言状态
+    
+    Args:
+        session_id: 会话ID
+        
+    Returns:
+        dict: 方言状态，不存在返回 None
+    """
+    session = get_session(session_id)
+    if not session:
+        return None
+    return session.get("dialect_state", {
+        "detected_dialect": "mandarin",
+        "confidence": 0.0,
+        "dialect_history": []
+    })
+
+
+def add_ticket_id(session_id, ticket_id):
+    """为会话添加工单ID关联
+    
+    Args:
+        session_id: 会话ID
+        ticket_id: 工单ID
+    """
+    session = get_session(session_id)
+    if not session:
+        return None
+    
+    if ticket_id not in session["ticket_ids"]:
+        session["ticket_ids"].append(ticket_id)
+        session["updated_at"] = int(time.time())
+        save_session(session)
+    
+    return session
+
+
+def get_session_tickets(session_id):
+    """获取会话关联的工单ID列表
+    
+    Args:
+        session_id: 会话ID
+        
+    Returns:
+        list: 工单ID列表
+    """
+    session = get_session(session_id)
+    if not session:
+        return []
+    return session.get("ticket_ids", [])
+
 
 def cleanup_expired(timeout=120):
     """清理过期会话"""
