@@ -44,6 +44,24 @@ except ImportError:
     EMOTION_AVAILABLE = False
     logger.warning("情感分析模块不可用，将跳过情感分析")
 
+# 方言检测模块（v2.3 新增）
+try:
+    from dialect_detector import DialectDetector, Dialect
+    DIALECT_AVAILABLE = True
+    logger.info("方言检测模块已加载")
+except ImportError:
+    DIALECT_AVAILABLE = False
+    logger.warning("方言检测模块不可用，将跳过方言检测")
+
+# 工单管理模块（v2.3 新增）
+try:
+    from ticket_manager import TicketManager, TicketStatus, TicketPriority, TicketCategory
+    TICKET_AVAILABLE = True
+    logger.info("工单管理模块已加载")
+except ImportError:
+    TICKET_AVAILABLE = False
+    logger.warning("工单管理模块不可用，将跳过工单管理")
+
 # 自选导入 urllib（兼容 Python 3.x）
 try:
     from urllib.request import urlopen, Request
@@ -106,8 +124,92 @@ class EmotionManager:
         return {}
 
 
-# 全局情感管理器实例
+# ==========================================
+# 方言管理器（v2.3 新增）
+# ==========================================
+
+class DialectManager:
+    """方言管理器：检测方言并提供方言回复"""
+    
+    def __init__(self):
+        self.detector = None
+        if DIALECT_AVAILABLE:
+            self.detector = DialectDetector()
+            logger.info("方言管理器已初始化")
+    
+    def detect(self, text: str) -> dict:
+        """检测方言类型"""
+        if not self.detector:
+            return {"dialect": "mandarin", "confidence": 0.0}
+        return self.detector.detect(text)
+    
+    def get_reply(self, dialect: str, template_name: str) -> str:
+        """获取方言回复模板"""
+        if not self.detector:
+            return "您好！请问有什么可以帮您？"
+        try:
+            d = Dialect(dialect) if DIALECT_AVAILABLE else Dialect.MANDARIN
+            return self.detector.get_reply_template(d, template_name)
+        except (ValueError, AttributeError):
+            return "您好！请问有什么可以帮您？"
+
+
+# ==========================================
+# 工单管理器集成（v2.3 新增）
+# ==========================================
+
+class TicketManagerIntegration:
+    """工单管理器集成：自动创建工单、检测意图"""
+    
+    def __init__(self):
+        self.manager = None
+        if TICKET_AVAILABLE:
+            self.manager = TicketManager()
+            logger.info("工单管理器集成已初始化")
+    
+    def should_create_ticket(self, text: str, emotion: str = "neutral") -> bool:
+        """判断是否需要创建工单"""
+        if not self.manager:
+            return False
+        
+        # 紧急/投诉类内容自动建单
+        urgent_keywords = ["投诉", "差评", "欺骗", "骗子", "骗钱", "虚假宣传",
+                          "态度恶劣", "敷衍", "推诿", "不处理"]
+        for kw in urgent_keywords:
+            if kw in text:
+                return True
+        
+        # 愤怒情绪自动建单
+        if emotion == "angry":
+            return True
+        
+        # 退款/账户问题
+        refund_keywords = ["退款", "退费", "退货", "账号被封", "密码忘记", "无法登录"]
+        for kw in refund_keywords:
+            if kw in text:
+                return True
+        
+        return False
+    
+    def auto_create(self, text: str, userid: str = "system",
+                    emotion_tag: str = "neutral", dialect_tag: str = "mandarin") -> dict:
+        """自动创建工单"""
+        if not self.manager:
+            return {"success": False, "error": "工单管理器不可用"}
+        
+        return self.manager.auto_create_ticket(
+            text=text,
+            created_by=userid,
+            emotion_tag=emotion_tag,
+            dialect_tag=dialect_tag,
+            source="auto"
+        )
+
+
+# 全局管理器实例
 emotion_manager = EmotionManager()
+dialect_manager = DialectManager()
+ticket_integration = TicketManagerIntegration()
 
 
 # ==========================================
@@ -496,7 +598,7 @@ class MessageHandler:
             return self._text_resp("暂不支持此类消息格式 😅 请发送语音或文字。")
     
     def _handle_voice(self, callback):
-        """处理语音消息（含情感分析 v2.2）"""
+        """处理语音消息（含情感分析 v2.2、方言检测+工单 v2.3）"""
         content = callback.get("voice", {}).get("content", "").strip()
         userid = callback.get("from", {}).get("userid", "")
         
@@ -522,19 +624,40 @@ class MessageHandler:
                 "您也可以留下联系方式，我们会尽快回复。"
             )
         
+        # 方言检测（v2.3 新增）
+        dialect_result = dialect_manager.detect(content)
+        dialect = dialect_result.get("dialect", "mandarin")
+        # 统一为字符串（兼容枚举和字符串两种返回）
+        dialect_str = dialect.value if hasattr(dialect, 'value') else str(dialect)
+        
+        # 自动工单创建（v2.3 新增）
+        ticket_id = None
+        emotion = emotion_result.get("emotion", "neutral")
+        if ticket_integration.should_create_ticket(content, emotion):
+            ticket_result = ticket_integration.auto_create(
+                text=content,
+                userid=userid,
+                emotion_tag=emotion,
+                dialect_tag=dialect_str
+            )
+            if ticket_result.get("success") or ticket_result.get("id"):
+                ticket_id = ticket_result.get("id")
+                logger.info(f"自动创建工单: {ticket_id}")
+        
         # 意图分析
         intent, confidence, entities = self.parser.parse(content)
-        logger.info(f"意图: {intent}, 置信度: {confidence:.2f}, 情感: {emotion_result.get('emotion', 'unknown')}")
+        logger.info(f"意图: {intent}, 置信度: {confidence:.2f}, 情感: {emotion}, 方言: {dialect_str}")
         
         # 根据情感调整回复策略
-        emotion = emotion_result.get("emotion", "neutral")
         strategy = emotion_manager.get_strategy(emotion, emotion_result.get("confidence", 0.5))
         
         # 置信度低时，用智能确认策略
         if confidence < 0.25:
-            return self._smart_clarify(content, emotion=emotion, strategy=strategy)
+            return self._smart_clarify(content, emotion=emotion, strategy=strategy,
+                                       dialect=dialect_str, ticket_id=ticket_id)
         
-        return self._dispatch(intent, entities, content, emotion=emotion, strategy=strategy)
+        return self._dispatch(intent, entities, content, emotion=emotion, strategy=strategy,
+                              dialect=dialect_str, ticket_id=ticket_id)
     
     def _analyze_emotion(self, text: str, userid: str) -> dict:
         """
@@ -571,7 +694,7 @@ class MessageHandler:
             return {"emotion": "neutral", "confidence": 0.5, "should_escalate": False}
     
     def _handle_text(self, callback):
-        """处理文本消息（含情感分析 v2.2）"""
+        """处理文本消息（含情感分析 v2.2、方言检测+工单 v2.3）"""
         content = callback.get("text", {}).get("content", "").strip()
         userid = callback.get("from", {}).get("userid", "")
         
@@ -599,21 +722,43 @@ class MessageHandler:
                 "您也可以留下联系方式，我们会尽快回复。"
             )
         
+        # 方言检测（v2.3 新增）
+        dialect_result = dialect_manager.detect(content)
+        dialect = dialect_result.get("dialect", "mandarin")
+        # 统一为字符串
+        dialect_str = dialect.value if hasattr(dialect, 'value') else str(dialect)
+        
+        # 自动工单创建（v2.3 新增）
+        ticket_id = None
+        emotion = emotion_result.get("emotion", "neutral")
+        if ticket_integration.should_create_ticket(content, emotion):
+            ticket_result = ticket_integration.auto_create(
+                text=content,
+                userid=userid,
+                emotion_tag=emotion,
+                dialect_tag=dialect_str
+            )
+            if ticket_result.get("success") or ticket_result.get("id"):
+                ticket_id = ticket_result.get("id")
+                logger.info(f"自动创建工单: {ticket_id}")
+        
         # 其他文本→按语音流程处理
         intent, confidence, entities = self.parser.parse(content)
-        logger.info(f"意图: {intent}, 置信度: {confidence:.2f}, 情感: {emotion_result.get('emotion', 'unknown')}")
+        logger.info(f"意图: {intent}, 置信度: {confidence:.2f}, 情感: {emotion}, 方言: {dialect_str}")
         
         # 根据情感调整回复策略
-        emotion = emotion_result.get("emotion", "neutral")
         strategy = emotion_manager.get_strategy(emotion, emotion_result.get("confidence", 0.5))
         
         if confidence >= 0.25:
-            return self._dispatch(intent, entities, content, emotion=emotion, strategy=strategy)
+            return self._dispatch(intent, entities, content, emotion=emotion, strategy=strategy,
+                                  dialect=dialect_str, ticket_id=ticket_id)
         else:
-            return self._smart_clarify(content, emotion=emotion, strategy=strategy)
+            return self._smart_clarify(content, emotion=emotion, strategy=strategy,
+                                       dialect=dialect_str, ticket_id=ticket_id)
     
-    def _dispatch(self, intent, entities, raw_text, emotion=None, strategy=None):
-        """分发到具体处理器（含情感策略 v2.2）"""
+    def _dispatch(self, intent, entities, raw_text, emotion=None, strategy=None,
+                  dialect=None, ticket_id=None):
+        """分发到具体处理器（含情感策略 v2.2、方言+工单 v2.3）"""
         handlers = {
             "query_schedule": self._do_query_schedule,
             "create_todo": self._do_create_todo,
@@ -623,20 +768,43 @@ class MessageHandler:
             "exit_voice": self._do_exit,
             "greeting": self._do_greeting,
             "time_query": self._do_time_query,
-            "custom": lambda e, t: self._smart_clarify(t, emotion=emotion, strategy=strategy)
+            "custom": lambda e, t: self._smart_clarify(t, emotion=emotion, strategy=strategy,
+                                                       dialect=dialect, ticket_id=ticket_id)
         }
-        handler = handlers.get(intent, lambda e, t: self._smart_clarify(t, emotion=emotion, strategy=strategy))
+        handler = handlers.get(intent, lambda e, t: self._smart_clarify(t, emotion=emotion, strategy=strategy,
+                                                                         dialect=dialect, ticket_id=ticket_id))
         
-        # 如果有情感策略，传递给处理器
-        if emotion and strategy:
-            # 在响应前添加情感策略前缀
-            result = handler(entities, raw_text)
-            if result and isinstance(result, str):
-                # 根据情感调整回复
-                return self._apply_emotion_strategy(result, emotion, strategy)
+        result = handler(entities, raw_text)
+        
+        # handler 返回 dict（_text_resp 格式）或 str
+        if not result:
             return result
         
-        return handler(entities, raw_text)
+        # 提取文本内容进行处理
+        if isinstance(result, dict):
+            text_content = result.get("text", {}).get("content", "")
+        elif isinstance(result, str):
+            text_content = result
+        else:
+            return result
+        
+        # 应用情感策略
+        if emotion and strategy:
+            text_content = self._apply_emotion_strategy(text_content, emotion, strategy)
+        
+        # 应用方言模板（v2.3 新增）
+        if dialect and dialect != "mandarin":
+            text_content = self._apply_dialect_template(text_content, dialect)
+        
+        # 添加工单信息（v2.3 新增）
+        if ticket_id:
+            text_content = self._append_ticket_info(text_content, ticket_id)
+        
+        # 返回格式化响应
+        if isinstance(result, dict):
+            result["text"]["content"] = text_content
+            return result
+        return text_content
     
     def _apply_emotion_strategy(self, response: str, emotion: str, strategy: dict) -> str:
         """应用情感策略到响应中
@@ -669,11 +837,49 @@ class MessageHandler:
         
         return response
     
-    def _smart_clarify(self, text, emotion=None, strategy=None):
+    def _apply_dialect_template(self, response: str, dialect: str) -> str:
+        """应用方言模板到响应中（v2.3 新增）
+        
+        Args:
+            response: 原始响应文本
+            dialect: 方言类型字符串
+            
+        Returns:
+            str: 应用方言模板后的响应
+        """
+        if not DIALECT_AVAILABLE or dialect == "mandarin":
+            return response
+        
+        # 获取方言问候模板，替换标准问候
+        dialect_greeting = dialect_manager.get_reply(dialect, "greeting")
+        
+        # 检测回复中是否含有标准问候，如果有则替换
+        mandarin_greetings = ["您好！", "你好！", "您好，"]
+        for mg in mandarin_greetings:
+            if mg in response:
+                response = response.replace(mg, dialect_greeting + " ", 1)
+                break
+        
+        return response
+    
+    def _append_ticket_info(self, response: str, ticket_id: str) -> str:
+        """在响应末尾添加工单信息（v2.3 新增）
+        
+        Args:
+            response: 原始响应文本
+            ticket_id: 工单ID
+            
+        Returns:
+            str: 添加工单信息后的响应
+        """
+        ticket_suffix = f"\n\n📋 已为您创建工单：{ticket_id}\n我们将尽快为您处理。"
+        return response + ticket_suffix
+    
+    def _smart_clarify(self, text, emotion=None, strategy=None, dialect=None, ticket_id=None):
         """
         智能确认：尝试理解用户模糊意图并给出选项
         不再回复"需要配置API接入"
-        含情感策略调整（v2.2）
+        含情感策略调整（v2.2）、方言+工单支持（v2.3）
         """
         # 尝试从文本中提取关键信息进行智能匹配
         text_lower = text.lower()
@@ -694,6 +900,15 @@ class MessageHandler:
             '"给张三发消息，明天开会"\n\n'
             "请用上面的例子对我说，我会尽力帮到您！"
         )
+        
+        # 应用方言模板（v2.3 新增）
+        if dialect and dialect != "mandarin":
+            guide = self._apply_dialect_template(guide, dialect)
+        
+        # 添加工单信息（v2.3 新增）
+        if ticket_id:
+            guide = self._append_ticket_info(guide, ticket_id)
+        
         return self._text_resp(guide)
     
     def _do_query_schedule(self, entities, raw_text):
