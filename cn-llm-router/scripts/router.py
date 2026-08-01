@@ -19,6 +19,7 @@ import sys
 import json
 import argparse
 import time
+import random
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -32,7 +33,9 @@ import yaml_simple
 import report as report_mod
 import update_check
 import mock_engine
+import health_check
 from adapters import build, AdapterError
+from adapters.base import AdapterTimeoutError
 from adapters.base import _estimate_tokens as estimate_tokens
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -234,11 +237,14 @@ def cmd_chat(args, reg):
     if getattr(args, "mock", False):
         return _cmd_chat_mock(args, reg, prompt, system, classification, strategy)
 
+    # 解析主模型 + 备用模型列表（用于故障转移）
     try:
         if strategy == "manual":
-            provider, model, reason = _resolve_manual(args.model, reg)
+            primary_p, primary_m, reason = _resolve_manual(args.model, reg)
+            backups = []
         else:
-            provider, model, reason = resolve(strategy, classification, reg)
+            (primary_p, primary_m), backups, reason = health_check.resolve_with_fallback(
+                strategy, classification, reg, max_backups=2)
     except AdapterError as e:
         raise SystemExit("❌ 路由失败：%s" % e)
 
@@ -260,37 +266,66 @@ def cmd_chat(args, reg):
                 print(hresp)
             return
 
+    # 尝试主模型 + 备用模型（故障转移）
+    candidates = [(primary_p, primary_m)] + backups
+    fallback_from = None
+    last_error = None
+    success = False
     t0 = time.time()
-    est_tokens = False  # 是否为估算 token（流式无精确 usage 时置 True）
-    try:
-        adapter = build(reg["providers"][provider]["adapter"], _adapter_cfg(provider, reg))
-        if args.stream:
-            print("🤖 [%s / %s] %s\n" % (provider, model, reason))
-            chunks = adapter.chat(messages, model, stream=True, timeout=args.timeout)
-            full = []
-            for piece in chunks:
-                if piece == "":
-                    break
-                full.append(piece)
-                if not args.json:
-                    sys.stdout.write(piece)
-                    sys.stdout.flush()
-            print("")
-            content = "".join(full)
-            # 流式多数厂商不返回精确 usage：用 _estimate_tokens 兜底估算，
-            # 输入按完整 prompt(+system) 估、输出按累积文本估，并标注为「估」。
-            in_text = "".join(m.get("content", "") for m in messages)
-            it = estimate_tokens(in_text)
-            ot = estimate_tokens(content)
-            est_tokens = True
-        else:
-            res = adapter.chat(messages, model, stream=False, timeout=args.timeout)
-            content = res["content"]
-            it, ot = res["in_tokens"], res["out_tokens"]
-    except AdapterError as e:
-        cost_tracker.log_call(provider, model, classification["task_type"], 0, 0, 0.0,
-                               int((time.time() - t0) * 1000), False, str(e))
-        raise SystemExit("❌ 调用失败：%s" % e)
+    est_tokens = False
+    provider = model = None
+    content = None
+
+    for idx, (prov, mod) in enumerate(candidates):
+        # 跳过不可达的备用模型
+        if idx > 0 and not health_check.check_health().get(prov, False):
+            continue
+        try:
+            adapter = build(reg["providers"][prov]["adapter"], _adapter_cfg(prov, reg))
+            if args.stream:
+                if idx > 0:
+                    print("⚡ 降级到 %s / %s（原模型 %s 不可用）" % (prov, mod, candidates[0][0]))
+                print("🤖 [%s / %s] %s\n" % (prov, mod, reason))
+                chunks = adapter.chat(messages, mod, stream=True, timeout=args.timeout)
+                full = []
+                for piece in chunks:
+                    if piece == "":
+                        break
+                    full.append(piece)
+                    if not args.json:
+                        sys.stdout.write(piece)
+                        sys.stdout.flush()
+                print("")
+                content = "".join(full)
+                in_text = "".join(m.get("content", "") for m in messages)
+                it = estimate_tokens(in_text)
+                ot = estimate_tokens(content)
+                est_tokens = True
+            else:
+                res = adapter.chat(messages, mod, stream=False, timeout=args.timeout)
+                if idx > 0:
+                    print("⚡ 降级到 %s / %s（原模型 %s 不可用）" % (prov, mod, candidates[0][0]))
+                content = res["content"]
+                it, ot = res["in_tokens"], res["out_tokens"]
+            provider, model = prov, mod
+            fallback_from = candidates[0][0] + ":" + candidates[0][1] if idx > 0 else None
+            success = True
+            break
+        except (AdapterTimeoutError, AdapterError) as e:
+            last_error = e
+            err_str = str(e)
+            # 记录失败
+            cost_tracker.log_call(prov, mod, classification["task_type"], 0, 0, 0.0,
+                                  int((time.time() - t0) * 1000), False, err_str,
+                                  fallback_from=candidates[0][0] + ":" + candidates[0][1] if idx > 0 else None)
+            if isinstance(e, AdapterTimeoutError):
+                print("⚠️ %s / %s 超时（%ds），尝试下一个..." % (prov, mod, e.timeout_sec))
+            else:
+                print("⚠️ %s / %s 失败：%s" % (prov, mod, err_str[:80]))
+            continue
+
+    if not success:
+        raise SystemExit("❌ 所有模型调用均失败：%s" % last_error)
 
     elapsed = int((time.time() - t0) * 1000)
     price = _price_of(provider, model, reg)
@@ -537,6 +572,20 @@ def build_parser():
     p_mock = sub.add_parser("mock", help="v2.0 Mock 数据编辑器（自定义 query→response 映射）")
     p_mock.add_argument("--edit", action="store_true", help="进入交互式 mock 数据编辑")
     p_mock.add_argument("--list", action="store_true", help="列出所有自定义 mock 场景")
+
+    # v2.2 健康检查
+    sub.add_parser("health-check", help="v2.2 检查各厂商 API 连通性")
+
+    # v2.2 模型竞技场
+    p_arena = sub.add_parser("arena", help="v2.2 模型竞技场（盲测对比多家模型）")
+    p_arena.add_argument("--prompt", help="用户问题")
+    p_arena.add_argument("-m", "--message", action="append")
+    p_arena.add_argument("--task", help="显式任务类型")
+    p_arena.add_argument("--models", default="auto",
+                         help="auto=自动选 2-4 家，或指定 provider:model,provider:model")
+    p_arena.add_argument("--json", action="store_true")
+    p_arena.add_argument("--mock", action="store_true",
+                         help="Mock 模式：不调真实 API，从本地预设库返回")
     return ap
 
 
@@ -560,6 +609,132 @@ def cmd_mock(args, reg):
         print("  mock --list  列出所有自定义 mock 场景")
 
 
+def cmd_arena(args, reg):
+    """模型竞技场：同一 prompt 并行发给 2-4 家模型，盲选最佳。"""
+    prompt = args.prompt or " ".join(args.message or [])
+    if not prompt:
+        raise SystemExit("❌ 请提供 --prompt 或 -m")
+    task_hint = args.task
+    cls = classifier.classify(prompt, task_hint)
+    task_type = cls["task_type"]
+
+    # 选模型：auto 策略自动选 2-4 家（已配置密钥 + 可达），或用户指定
+    if args.models == "auto":
+        all_models = _all_models(reg, only_configured=True)
+        health = health_check.check_health()
+        reachable = [(p, m) for p, m in all_models if health.get(p, False)]
+        # 优先选不同厂商，受硬件并发限制（死规则#9）
+        max_arena = min(4, hardware.profile().get("max_concurrency", 4))
+        by_prov = {}
+        for p, m in reachable:
+            by_prov.setdefault(p, []).append(m)
+        selected = []
+        for p, ms in by_prov.items():
+            if len(selected) >= max_arena:
+                break
+            selected.append((p, ms[0]))
+        random.shuffle(selected)
+        selected = selected[:max_arena]
+    else:
+        selected = []
+        for token in args.models.split(","):
+            token = token.strip()
+            if ":" not in token:
+                continue
+            prov, mod = token.split(":", 1)
+            found = False
+            for p, pinfo in reg.get("providers", {}).items():
+                if p != prov:
+                    continue
+                for m in pinfo.get("models", []):
+                    if m["name"] == mod:
+                        selected.append((p, m))
+                        found = True
+                        break
+                if found:
+                    break
+            if not found:
+                print("⚠️ 未找到模型：%s" % token)
+
+    if len(selected) < 2:
+        raise SystemExit("❌ 至少需要 2 家模型，请检查 --models 或密钥配置")
+
+    print("🏟️  模型竞技场 — 任务类型：%s（%s）" % (task_type, prompt[:60]))
+    print("   正在并行调用 %d 家模型...\n" % len(selected))
+
+    # 并行调用
+    import concurrent.futures
+    from adapters import build as build_adapter
+
+    def call_one(idx, prov, model):
+        try:
+            if getattr(args, "mock", False):
+                # Mock 模式：不调 API，返回预设响应
+                resp = mock_engine.build_mock_response(prompt, task_type)
+                return idx, prov, model["name"], resp["content"], None
+            cfg = _adapter_cfg(prov, reg)
+            adapter = build_adapter(reg["providers"][prov]["adapter"], cfg)
+            res = adapter.chat([{"role": "user", "content": prompt}],
+                               model["name"], stream=False, timeout=60)
+            return idx, prov, model["name"], res["content"], None
+        except Exception as e:
+            return idx, prov, model["name"], "", str(e)
+
+    results = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(selected)) as pool:
+        futures = [pool.submit(call_one, i, p, m) for i, (p, m) in enumerate(selected)]
+        for fut in concurrent.futures.as_completed(futures):
+            idx, prov, mod, content, err = fut.result()
+            results[idx] = (prov, mod, content, err)
+
+    # 打乱顺序
+    order = list(range(len(selected)))
+    random.shuffle(order)
+    labels = [chr(65 + i) for i in range(len(order))]  # A/B/C/D
+    display = []
+    for lbl, idx in zip(labels, order):
+        prov, mod, content, err = results[idx]
+        if err:
+            print("❌ [%s] %s / %s 调用失败：%s" % (lbl, prov, mod, err[:60]))
+        else:
+            display.append((lbl, prov, mod, content))
+            print("[%s] %s" % (lbl, content[:300]))
+            if len(content) > 300:
+                print("   ...（%d 字）" % len(content))
+            print()
+
+    if not display:
+        raise SystemExit("❌ 所有模型调用均失败")
+
+    # 记录竞技场会话（不含投票，投票在交互后记录）
+    session_record = {
+        "task_type": task_type,
+        "models": [{"provider": p, "model": m} for p, m in selected],
+        "results": {lbl: {"provider": p, "model": m, "content": c[:200]}
+                   for lbl, p, m, c in display}
+    }
+
+    # 盲选
+    if args.json:
+        # JSON 模式：输出结果，不交互投票
+        print(json.dumps({"arena": session_record, "hint": "请使用 arena --vote 记录投票"}, ensure_ascii=False))
+        return
+
+    try:
+        vote = input("请选择最佳回答（%s）：" % "/".join(lbl for lbl, *_ in display)).strip().upper()
+    except (EOFError, KeyboardInterrupt):
+        vote = ""
+    if vote:
+        for lbl, prov, mod, content in display:
+            if lbl == vote:
+                print("\n✅ 你选择了 [%s] %s / %s" % (lbl, prov, mod))
+                cost_tracker.log_arena_vote(prompt, task_type,
+                                           [{"provider": p, "model": m} for p, m in selected],
+                                           prov, mod)
+                return
+    print("\n未记录投票。")
+
+
 def main():
     ap = build_parser()
     args = ap.parse_args()
@@ -571,7 +746,8 @@ def main():
         "chat": cmd_chat, "route": cmd_route, "report": cmd_report,
         "hardware": cmd_hardware, "cache": cmd_cache, "config": cmd_config,
         "update-check": cmd_update, "budget": cmd_budget, "version": cmd_version,
-        "mock": cmd_mock,
+        "mock": cmd_mock, "health-check": health_check.cmd_health_check,
+        "arena": cmd_arena,
     }
     dispatch[args.cmd](args, reg)
 
