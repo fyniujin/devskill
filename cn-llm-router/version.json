@@ -1,1 +1,1 @@
-{"version": "2.1.0", "homepage": "https://skillhub.cn/skill/cn-llm-router", "notes": "v2.1.0：新增 MiniMax、零一万物 Yi、百川、阶跃 Step-2 四家厂商（覆盖扩至 12 家 32 款模型）；补 DeepSeek V3 能力画像；auto 策略改由能力画像（推理/代码/长文得分）智能选型；分类器新增流式适配判断；修复流式输出 token 计费恒为 0 的问题。"}
+{"version": "2.2.0", "homepage": "https://skillhub.cn/skill/cn-llm-router", "notes": "v2.2.0：新增模型竞技场 arena（并行调用 2-4 家模型盲选最佳，长期追踪胜率）；新增健康检查 health-check（3 秒超时、60s 缓存）；新增故障转移（超时自动切备用模型，最多重试 2 次，成本报表标注降级事件）；新增 AdapterTimeoutError 子类"}
