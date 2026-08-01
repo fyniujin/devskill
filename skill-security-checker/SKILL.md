@@ -2,8 +2,8 @@
 slug: skill-security-checker
 displayName: Skill 安全审计扫描器
 name: skill-security-checker
-description: 'Skill Security — 安全审计扫描器，帮助你快速发现 Skill 中的安全风险。静态扫描（提示注入/命令注入/SSRF/凭证外泄/路径遍历/危险函数）、依赖漏洞审计、权限审计、质量评分、动态沙箱执行扫描（Docker/Windows Sandbox）、JSON/HTML 报告生成。'
-version: 2.0.0
+description: 'Skill Security — 安全审计扫描器，帮助你快速发现 Skill 中的安全风险。静态扫描（提示注入/命令注入/SSRF/凭证外泄/路径遍历/危险函数）、依赖漏洞审计、权限审计、质量评分、动态沙箱执行扫描（Docker/Windows Sandbox）、供应链风险分析（依赖树/typo-squatting/CVE自动拉取/许可证合规）、CI/CD集成（GitHub Action/GitLab CI/SARIF/质量门禁）、JSON/HTML/SARIF 报告生成。'
+version: 3.0.0
 tags: ['security', 'audit', 'skill', 'scanner', 'code-analysis', 'vulnerability']
 icon: '🔒'
 author: 'njskills'
@@ -311,6 +311,7 @@ A: 动态扫描在隔离环境中运行：Docker 用 `--network=none` 断网 + �
 
 ## 更新日志
 
+| v3.0.0 | 2026-08-01 | 增加：供应链风险分析模块，支持依赖树扫描、typo-squatting 钓鱼包检测、维护状态评估（僵尸包识别）、许可证合规检查；增加：CVE 数据库从 26 条手动维护升级为 OSV/NVD API 自动拉取并每日缓存更新；增加：ci_templates/ 目录提供 GitHub Action 与 GitLab CI 开箱即用模板；增加：SARIF 2.1.0 格式输出支持 GitHub Code Scanning；增加：PR 自动评论扫描结果功能；增加：质量门禁机制（默认 70 分阈值阻止合并）；增加：--supply-chain 与 --format sarif 命令行参数；优化：audit.py 报告 meta 区新增 supply_chain 维度统计；优化：依赖解析器支持 requirements.txt / package.json / pyproject.toml 三种格式 |
 | v2.0.0 | 2026-07-22 | 增加：动态沙箱执行扫描模块，在 Docker 或 Windows Sandbox 隔离环境中实际运行脚本捕获运行时行为；增加：网络请求、文件读写、进程创建、环境变量读取、动态代码执行五类运行时行为捕获；增加：敏感路径访问、未知目标外联、下载并执行远程载荷、shell 进程创建、密钥环境变量读取五类异常行为标记；增加：沙箱默认断网与 --allow-domain 域名白名单机制；增加：--dynamic、--allow-domain、--sandbox-timeout 三个命令行参数；增加：无 Docker/Windows Sandbox 时自动降级为纯静态扫描并给出提示；优化：报告 meta 区展示动态扫描后端与行为统计 |
 | v1.3.0 | 2026-07-13 | 修复：base64 编码的命令注入模式中有两个模式解码后正则表达式括号不匹配导致扫描报错；修复：CVE 列表中 protobuf 的 CVE 编号错误；增加：24 小时缓存的更新检查机制避免频繁联网请求；增加：# nosec 内联注释排除规则降低误报；优化：依赖库覆盖范围从 17 个扩展到 26 个常见高危依赖；优化：错误信息改为更友好的中文提示；优化：扫描输出显示优化减少信息密度过高的问题；优化：新增详细说明文档和常见问答
 | v1.2.0 | 2026-07-13 | 增加：硬件感知并行度自动调整功能，根据 CPU/内存动态分配线程数；增加：更新检查功能自动提示新版本；优化：依赖审计支持 pyproject.toml 和 Pipfile 格式；修复：凭证外泄检测正则表达式中转义字符导致扫描崩溃的问题
