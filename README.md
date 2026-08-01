@@ -19,7 +19,7 @@
 | cn-llm-router | v2.1.0 | 国产大模型统一路由。把 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、字节豆包、百度文心、讯飞星火、MiniMax、零一万物 Yi、百川、阶跃 Step 等 12 家国产大模型收敛成一个命令入口；按任务类型（代码/推理/长文/翻译/摘要/抽取）结合能力画像自动或手动选择最合适、最省钱的模型；支持流式输出、自动统计跨厂商 token 成本、硬件自适应限流（不拖累电脑）、本地语义缓存省 token、全链路离线 Mock 调试、技能更新提醒。当用户需要「调用国产大模型」「多模型比价/降本」「统一管理多个模型 Key」「本地跑大模型路由」「不想被某一家厂商绑定」时使用。 |
 | receipt-compliance | v4.0.0 | 会计助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。 |
 | skill-security-checker | v3.0.0 | Skill Security — 安全审计扫描器，帮助你快速发现 Skill 中的安全风险。静态扫描（提示注入/命令注入/SSRF/凭证外泄/路径遍历/危险函数）、依赖漏洞审计、权限审计、质量评分、动态沙箱执行扫描（Docker/Windows Sandbox）、供应链风险分析（依赖树/typo-squatting/CVE自动拉取/许可证合规）、CI/CD集成（GitHub Action/GitLab CI/SARIF/质量门禁）、JSON/HTML/SARIF 报告生成。 |
-| cn-model-gateway | v1.2.0 | 国产大模型统一 MCP 服务器，通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline / n8n 等 18+ Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包、MiniMax、零一万物、百川智能、阶跃星辰十家模型的统一调用接口。新增 5 个非 MCP 框架适配器：LangChain Tool、AutoGPT Plugin、CrewAI Tool、Coze 插件、Dify 工具节点，实现从 MCP 生态到全 Agent 生态的扩展。支持工具调用（ask_model/compare_models/list_providers/health_check）、资源读取（配置/使用统计）、预置 prompt 模板（代码审查/翻译），内置统一错误映射、流式 SSE 输出、使用量统计、硬件感知并发控制。config.json 填写 api_key 即可启动，无需 GPU、不做微调、不做私有部署，只做标准 MCP 协议网关。 |
+| cn-model-gateway | v1.3.0 | 国产大模型统一 MCP 服务器，通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline / n8n 等 18+ Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包、MiniMax、零一万物、百川智能、阶跃星辰十家模型的统一调用接口。新增 5 个非 MCP 框架适配器：LangChain Tool、AutoGPT Plugin、CrewAI Tool、Coze 插件、Dify 工具节点，实现从 MCP 生态到全 Agent 生态的扩展。内置模型性能基准测试套件（50 道题库、6 维度评分、雷达图对比、历史追踪）和 Token 价格实时追踪（价格抓取、变更通知、趋势图、成本预测）。支持工具调用（ask_model/compare_models/list_providers/health_check）、资源读取（配置/使用统计）、预置 prompt 模板（代码审查/翻译），内置统一错误映射、流式 SSE 输出、使用量统计、硬件感知并发控制。config.json 填写 api_key 即可启动，无需 GPU、不做微调、不做私有部署，只做标准 MCP 协议网关。 |
 | privacy-search | v1.2.0 | 隐私优先的多引擎并行搜索 Skill，提供十大搜索引擎（百度/必应/搜狗/360/DuckDuckGo/Yandex/Startpage/Qwant/Brave/本地SearXNG）并行检索。V1.2 提供结果缓存与搜索历史、统一 HTTP 出口（隐私头/UA池/代理/自动重试真正生效）、标准 SimHash 去重、多因子加权排序（共识度/位次/相关度/权威度/域名质量）、多套备选选择器与解析诊断、bangs 语法透传。SearXNG 本地实例双路径部署，隐私模式 normal/strict 一键切换，不污染系统 Python 环境。 |
 
 ---
@@ -290,6 +290,7 @@ git push → GitHub Actions 触发
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v1.3.0 | 2026-08-01 | 新增模型性能基准测试套件（benchmark.py：50 道题库、6 维度评分、雷达图对比、历史追踪）；新增 Token 价格实时追踪（price_tracker.py：价格抓取、变更通知、趋势图、成本预测）；新增 4 个 CLI 子命令（benchmark/price/benchmark-history/price-history/cost-predict）；测试覆盖新增 8 个 benchmark + price_tracker 单元测试（总计 37 tests） |
 | v1.2.0 | 2026-07-24 | 新增 5 个非 MCP 框架适配器（LangChain Tool、AutoGPT Plugin、CrewAI Tool、Coze 插件、Dify 工具节点）；扩展框架适配层从 MCP 生态到全 Agent 生态；新增 frameworks 模块（5 个适配器 + 统一导出）；测试覆盖新增 11 个框架适配器单元测试（总计 29 tests） |
 | v1.1.0 | 2026-07-17 | 新增 4 家模型提供商（MiniMax/零一万物/百川智能/阶跃星辰）；更新 DeepSeek-V3 支持（deepseek-chat, deepseek-reasoner）；更新 Kimi 新版本（moonshot-v1-32k, moonshot-v1-128k）；扩展统一错误映射覆盖 10 家厂商；支持模型表格同步更新 |
 | v1.0.0 | 2026-07-16 | 初始版本发布，包含：MCP JSON-RPC 2.0 完整协议适配（tools/list/call + resources/list/read + prompts/list/get）；6 家国产模型适配器（DeepSeek/通义/智谱/Kimi/混元/豆包）；统一错误映射（4 种 MCP 标准错误码 + 中文 message）；流式 SSE 输出；本地 MCP 服务器 stdio 启动；内置 4 个工具（ask_model/compare_models/list_providers/health_check）；2 个 prompt 模板（code_review/translate）；使用量统计（SQLite + 周报）；硬件感知并发控制（自动采集 CPU/内存 → 动态分配并发数）；纯 Python 标准库零依赖；CLAUDE.md/Cursor/Cline 配置文件模板 |
