@@ -45,15 +45,6 @@ your-skill-name/
 
 ---
 
-## 🔄 自动发布流程
-
-```
-git push → GitHub Actions 触发
-  → 检测哪些 skill 文件夹有变更
-  → 为有变更的 skill 创建/更新 GitHub Release
-  → 自动更新本 README.md 的技能索引表
-```
-
 ---
 
 ## 📝 更新历史
