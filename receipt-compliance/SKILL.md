@@ -3,7 +3,7 @@ name: receipt-compliance
 slug: receipt-compliance
 displayName: 会计助手
 description: 会计助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。
-version: 4.0.0
+version: 4.1.0
 category: 财税管理
 appName: 财税合规
 platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
@@ -27,6 +27,8 @@ platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
 | 6. 多票据支持 | 火车票/飞机票/出租车/定额发票/通行费/财政票据 | ✅ 直接可用 | 票据图片 | 统一结构化JSON |
 | 7. 智能分类 | 自动匹配会计科目、计算进项税、生成凭证摘要 | ✅ 直接可用 | 结构化发票数据 | 分类结果+科目 |
 | 8. 记账凭证 | 自动生成记账凭证（用友/金蝶/QuickBooks格式） | ✅ 直接可用 | 分类结果 | 凭证文件 |
+| 9. 风险预警 | 发票连号/整数金额/频繁开票/品名异常/进销项匹配检测 | ✅ 直接可用 | 发票列表 | 三级预警报告 |
+| 10. 归档管理 | 电子档案四性检测、归档包生成、元数据采集、目录索引 | ✅ 直接可用 | 发票文件 | 标准归档包 |
 
 > ✅ = 装即用 ｜ ⚠️ = 需在 config.yaml 中配置对应API密钥
 >
@@ -1051,6 +1053,7 @@ python scripts/invoice_detector.py path/to/any_invoice
 
 ## 更新日志
 
+| v4.1.0 | 2026-08-05 | 新增：税务风险预警引擎 risk_detector.py，支持发票连号检测、大额整数金额预警、频繁开票检测、供应商品名异常检测、进销项匹配分析，三级预警体系（提示/关注/严重）；新增：电子档案合规归档管理器 archive_manager.py，支持四性检测（真实性/完整性/可用性/安全性）、标准归档包生成、元数据采集、归档目录索引；新增：供应商经营范围对照表 supplier_scope_rules.md；新增：风险检测规则配置文件 risk_rules_config.yaml；扩展：unified_invoice.py 新增 risk_level、risk_details 字段 |
 | v4.0.0 | 2026-08-01 | 新增：全电发票XML解析器 xml_parser.py；新增：OFD版式文件解析器 ofd_parser.py；新增：火车票解析器 train_parser.py；新增：飞机行程单解析器 flight_parser.py；新增：出租车票解析器 taxi_parser.py；新增：定额发票解析器 fixed_parser.py；新增：通行费票据解析器 toll_parser.py；新增：财政票据解析器 fiscal_parser.py；新增：智能分类器 smart_classifier.py，支持费用类型自动匹配、进项税额自动计算、会计科目自动映射；新增：记账凭证生成器 voucher_generator.py，支持用友/金蝶/QuickBooks导入格式；新增：统一发票数据结构 unified_invoice.py，兼容新旧发票和多种票据类型；新增：票种自动识别模块 invoice_detector.py，自动路由传统OCR或专用解析器；新增：会计科目对照表 account_mapping.md；新增：费用分类规则 expense_rules.md |
 | v3.7.0 | 2026-07-22 | 新增：全电发票（数电票）XML 格式解析器 xml_parser.py，支持 20 位全电发票号码、校验码、税务数字账户等特有字段提取；新增：OFD 版式文件解析器 ofd_parser.py；新增：票种自动识别模块 invoice_detector.py，自动路由传统 OCR 或全电解析；新增：统一发票数据结构 unified_invoice.py，兼容新旧发票格式；新增：SKILL.md 全电发票使用章节；新增：版本更新提醒机制；新增：联系信息 njskills@agent.qq.com |
 | v3.4.0 | 2026-07-13 | 修复：移除 install_tesseract.ps1 中指向个人 Gitee 仓库的下载源，替换为 winget/scoop 官方源和 GitHub 官方 Release；修复：将 approval_abstract.py、api-endpoints.md、setup-guide.md、example-approval.md 中所有 open.duxiaoman.com 错误链接替换为钉钉官方地址 open-dev.dingtalk.com；修复：verify_engine.py 中 subprocess.Popen 移除 shell=True，改为列表参数形式 |
@@ -1158,6 +1161,80 @@ python scripts/invoice_detector.py path/to/any_invoice
 - 支持多种查验引擎接口
 - 支持模板自适应学习
 - 支持多种审批平台对接
+
+## 税务风险预警
+
+本模块提供发票数据的风险检测功能，帮助企业在税务稽查前自查风险。
+
+### 检测方法
+
+| 检测项 | 说明 | 预警级别 |
+|--------|------|---------|
+| 连号检测 | 同一供应商连续开具多张连号发票 | 关注 |
+| 大额整数金额 | 发票金额为大额整数（如 100000.00 元） | 提示 |
+| 频繁开票 | 短时间内同一供应商开具大量发票 | 关注 |
+| 品名异常 | 发票品名与供应商经营范围不符 | 关注 |
+| 进销项匹配 | 进项发票品名与销项发票品名匹配度低 | 严重 |
+
+### 三级预警体系
+
+| 级别 | 说明 | 建议操作 |
+|------|------|---------|
+| 提示 | 低风险，可能存在异常 | 建议关注 |
+| 关注 | 中风险，需要核实 | 建议核实业务真实性 |
+| 严重 | 高风险，可能涉及虚开 | 建议立即处理 |
+
+### 使用方式
+
+```bash
+python scripts/risk_detector.py <path_to_invoices_json>
+```
+
+输出 JSON 格式的风险检测报告，包含所有检测结果和综合评估。
+
+## 电子档案合规归档
+
+本模块按照《电子发票全流程电子化管理指南》生成标准归档包，满足财政部和国家档案局对电子发票归档的要求。
+
+### 四性检测
+
+| 检测项 | 说明 |
+|--------|------|
+| 真实性 | 检测电子发票是否为原始真实文件，未经篡改 |
+| 完整性 | 检测电子发票文件是否完整，未损坏或缺失 |
+| 可用性 | 检测电子发票文件是否能正常打开、读取和使用 |
+| 安全性 | 检测电子发票文件是否安全，未被篡改或感染 |
+
+### 使用方式
+
+**单个文件四性检测**：
+```bash
+python scripts/archive_manager.py <path_to_invoice_file>
+```
+
+**批量归档（目录）**：
+```bash
+python scripts/archive_manager.py <path_to_directory>
+```
+
+**生成归档包**：
+```python
+from scripts.archive_manager import create_archive
+package = create_archive(["invoice1.pdf", "invoice2.xml"], "./output")
+```
+
+### 归档包结构
+
+```
+archive_20260805_120000.zip
+├── metadata.json          # 元数据总表
+├── four_properties.json   # 四性检测报告
+├── invoice_data.json      # 结构化发票数据
+├── invoices/              # 原始发票文件
+│   ├── invoice_001.pdf
+│   └── invoice_002.xml
+└── README.txt             # 归档说明
+```
 
 ## 免责声明
 
