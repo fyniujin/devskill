@@ -1,0 +1,52 @@
+# 风险检测规则配置文件
+# 可根据最新税务稽查重点动态更新
+
+version: "1.0"
+last_updated: "2026-08-05"
+
+# 连号检测配置
+consecutive_number_check:
+  enabled: true
+  threshold: 3  # 同一供应商连续 N 张发票触发
+
+# 大额整数金额检测
+round_amount_check:
+  enabled: true
+  threshold: 10000  # 金额 >= 此值
+  min_digits: 5     # 整数位数 >= 此值
+
+# 频繁开票检测
+frequent_invoicing_check:
+  enabled: true
+  threshold: 10    # N 天内开具 M 张
+  window_days: 30  # 时间窗口（天）
+
+# 品名异常检测
+scope_anomaly_check:
+  enabled: true
+  # 是否使用外部企业信息API
+  use_external_api: false
+  # 内置行业关键词表
+  scope_keywords:
+    餐饮: [餐饮, 饭店, 酒楼, 餐厅, 食品]
+    技术服务: [技术, 软件, 信息, 网络, 科技]
+    建筑: [建筑, 工程, 施工, 装修, 建材]
+    零售: [百货, 超市, 零售, 商店, 商贸]
+    运输: [运输, 物流, 快递, 货运]
+
+# 进销项匹配检测
+input_output_match_check:
+  enabled: true
+  similarity_threshold: 0.1  # Jaccard 相似度低于此值触发
+
+# 预警级别定义
+risk_levels:
+  提示:
+    priority: 1
+    action: 建议关注
+  关注:
+    priority: 2
+    action: 建议核实
+  严重:
+    priority: 3
+    action: 建议立即处理
