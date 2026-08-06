@@ -52,19 +52,12 @@ jobs:
             exit 1
           fi
           echo "Gitee sync OK"
-      - name: Trigger AtomGit sync
+      - name: Push to AtomGit
         if: success()
         env:
           ATOMGIT_TOKEN: ${{ secrets.ATOMGIT_TOKEN }}
         run: |
-          echo "Triggering AtomGit mirror sync from Gitee..."
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT             "https://api.atomgit.com/api/v5/repos/fyniujin/devskill/sync_repo?access_token=${ATOMGIT_TOKEN}"             -H "Content-Type: application/json"             -d '{"branch": "main"}')
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | head -n -1)
-          echo "HTTP Status: $HTTP_CODE"
-          echo "Response: $BODY"
-          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
-            echo "AtomGit sync triggered successfully"
-          else
-            echo "AtomGit sync trigger failed (HTTP $HTTP_CODE)"
-          fi
+          echo "Pushing to AtomGit..."
+          git remote add atomgit "https://fyniujin:${ATOMGIT_TOKEN}@atomgit.com/fyniujin/devskill.git" 2>/dev/null || git remote set-url atomgit "https://fyniujin:${ATOMGIT_TOKEN}@atomgit.com/fyniujin/devskill.git"
+          git push atomgit main 2>&1 || git push atomgit main --force 2>&1
+          echo "AtomGit push OK"
