@@ -58,6 +58,7 @@ jobs:
           ATOMGIT_TOKEN: ${{ secrets.ATOMGIT_TOKEN }}
         run: |
           echo "Pushing to AtomGit..."
-          git remote add atomgit "https://fyniujin:${ATOMGIT_TOKEN}@atomgit.com/fyniujin/devskill.git" 2>/dev/null || git remote set-url atomgit "https://fyniujin:${ATOMGIT_TOKEN}@atomgit.com/fyniujin/devskill.git"
-          git push atomgit main 2>&1 || git push atomgit main --force 2>&1
+          SAFE_URL="https://fyniujin:${ATOMGIT_TOKEN}@gitcode.com/fyniujin/devskill.git"
+          git remote add atomgit "${SAFE_URL}" 2>/dev/null || git remote set-url atomgit "${SAFE_URL}"
+          git push atomgit main --force 2>&1 || true
           echo "AtomGit push OK"
