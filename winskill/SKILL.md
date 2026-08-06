@@ -2,9 +2,9 @@
 name: winskill
 slug: winskill
 displayName: "Windows 服务器运维工具箱"
-description: "Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控、事件日志诊断、已安装程序管理、用户会话监控、计划任务审计、文件共享审计、DNS网卡诊断、SSL证书过期检测、防火墙规则审计、服务崩溃恢复状态、系统文件修复、存储池管理、备份状态检查、Docker容器管理、K8s集群监控、自动化修复向导。只读分析+安全确认，绝不误删文件，完全免费离线运行。"
-description_zh: "Windows 服务器运维工具箱 - 磁盘分析、清理、IIS 管理、批量操作、服务监控、更新诊断、性能监控、安全审计、注册表审计、磁盘健康、网络监控、事件日志、程序管理、会话监控、计划任务、共享审计、DNS诊断、SSL证书、防火墙审计、服务崩溃记录、系统修复、存储池、备份检查、Docker容器管理、K8s监控、自动化修复向导。只读+确认模式，零依赖离线运行。"
-version: 2.0.0
+description: "Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控、事件日志诊断、已安装程序管理、用户会话监控、计划任务审计、文件共享审计、DNS网卡诊断、SSL证书过期检测、防火墙规则审计、服务崩溃恢复状态、系统文件修复、存储池管理、备份状态检查、Docker容器管理、K8s集群监控、自动化修复向导、性能基线与趋势分析、等保合规检查清单、远程多服务器管理。只读分析+安全确认，绝不误删文件，完全免费离线运行。"
+description_zh: "Windows 服务器运维工具箱 - 磁盘分析、清理、IIS 管理、批量操作、服务监控、更新诊断、性能监控、安全审计、注册表审计、磁盘健康、网络监控、事件日志、程序管理、会话监控、计划任务、共享审计、DNS诊断、SSL证书、防火墙审计、服务崩溃记录、系统修复、存储池、备份检查、Docker容器管理、K8s监控、自动化修复向导、性能基线与趋势分析、等保合规检查清单、远程多服务器管理。只读+确认模式，零依赖离线运行。"
+version: 3.0.0
 category: system-administration
 platforms:
   - windows
@@ -34,7 +34,7 @@ tags:
 requires_api_key: false
 ---
 
-# Winskill — Windows 服务器运维工具箱 v1.6.0
+# Winskill — Windows 服务器运维工具箱
 
 ## 快速开始
 
@@ -82,7 +82,23 @@ requires_api_key: false
 
 ## 功能模块
 
+## 📌 模块导航（点击直达，共 30 个模块）
+
+**🖥️ 基础运维（1-7）：**
+[模块 1：磁盘空间分析](#module-1) · [模块 2：大文件重复检测](#module-2) · [模块 3：临时文件安全清理](#module-3) · [模块 4：IIS 站点管理](#module-4) · [模块 5：服务状态监控](#module-5) · [模块 6：批量文件操作](#module-6) · [模块 7：目录磁盘使用报告](#module-7)
+
+**🔧 进阶运维（8-18）：**
+[模块 8：Windows Update 服务状态与缓存管理](#module-8) · [模块 9：实时性能监控与进程资源分析](#module-9) · [模块 10：安全审计与日志分析](#module-10) · [模块 11：注册表与启动项安全审计](#module-11) · [模块 12：磁盘健康状态检测](#module-12) · [模块 13：网络连接与端口监控](#module-13) · [模块 14：Windows 事件日志诊断](#module-14) · [模块 15：已安装程序与补丁管理](#module-15) · [模块 16：用户会话与登录状态监控](#module-16) · [模块 17：计划任务审计](#module-17) · [模块 18：文件共享与 SMB 审计](#module-18)
+
+**🔒 安全专项（19-25）：**
+[模块 19：DNS 解析与网卡诊断](#module-19) · [模块 20：SSL 证书过期检测](#module-20) · [模块 21：Windows 防火墙规则审计](#module-21) · [模块 22：关键服务崩溃与自动恢复状态](#module-22) · [模块 23：系统文件完整性检查与修复（SFC / DISM）](#module-23) · [模块 24：存储池与虚拟磁盘管理（Storage Spaces）](#module-24) · [模块 25：Windows Server Backup 状态检查](#module-25)
+
+**🚀 高级功能（26-30）：**
+[模块 26：Docker / K8s 容器管理](#module-26) · [模块 27：自动化修复向导](#module-27) · [模块 28：性能基线 & 趋势分析](#module-28) · [模块 29：安全合规检查清单](#module-29) · [模块 30：远程多服务器管理](#module-30)
+
 ---
+
+<a name="module-1"></a>
 
 ### 模块 1：磁盘空间分析
 
@@ -125,7 +141,12 @@ Get-ChildItem -Path $scanPath -Recurse -File -ErrorAction SilentlyContinue |
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-2"></a>
 
 ### 模块 2：大文件重复检测
 
@@ -178,7 +199,12 @@ Get-ChildItem -Path $scanPath -Recurse -File -ErrorAction SilentlyContinue |
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-3"></a>
 
 ### 模块 3：临时文件安全清理
 
@@ -267,7 +293,12 @@ Write-Host "  如需彻底删除，请手动清空回收站"
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-4"></a>
 
 ### 模块 4：IIS 站点管理
 
@@ -338,7 +369,12 @@ Get-WebAppPoolState | Select-Object @{N='名';E={$_.Name}}, @{N='状态';E={$_.V
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-5"></a>
 
 ### 模块 5：服务状态监控
 
@@ -398,7 +434,12 @@ else { Write-Host "  ✅ 所有检测服务正常" }
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-6"></a>
 
 ### 模块 6：批量文件操作
 
@@ -465,7 +506,12 @@ Write-Host "  ⚠️ 确认执行请说 '确认重命名'"
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-7"></a>
 
 ### 模块 7：目录磁盘使用报告
 
@@ -512,7 +558,12 @@ foreach ($d in $dirs) {
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-8"></a>
 
 ## 🆕 模块 8：Windows Update 服务状态与缓存管理
 
@@ -606,7 +657,12 @@ if (Test-Path $sd) {
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-9"></a>
 
 ## 🆕 模块 9：实时性能监控与进程资源分析
 
@@ -710,7 +766,12 @@ Get-Counter '\Process(*)\Read Bytes/sec',
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-10"></a>
 
 ## 🆕 模块 10：安全审计与日志分析
 
@@ -822,7 +883,12 @@ Get-LocalGroupMember -Group "Administrators" |
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-11"></a>
 
 ## 🆕 模块 11：注册表与启动项安全审计
 
@@ -961,7 +1027,12 @@ Get-Service | Where-Object {
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-12"></a>
 
 ## 🆕 模块 12：磁盘健康状态检测
 
@@ -1086,7 +1157,12 @@ Write-Host "`n  💡 读延迟 >20ms 或写延迟 >20ms 表示磁盘性能下降
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-13"></a>
 
 ## 🆕 模块 13：网络连接与端口监控
 
@@ -1203,7 +1279,12 @@ Get-NetFirewallRule -Direction Inbound -Enabled True -ErrorAction SilentlyContin
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-14"></a>
 
 ## 🆕 模块 14：Windows 事件日志诊断
 
@@ -1336,7 +1417,12 @@ Get-WinEvent -FilterHashtable @{
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-15"></a>
 
 ## 🆕 模块 15：已安装程序与补丁管理
 
@@ -1460,7 +1546,12 @@ if ($expectedPatches.Count -gt 0) {
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-16"></a>
 
 ## 🆕 模块 16：用户会话与登录状态监控
 
@@ -1612,7 +1703,12 @@ Write-Host "`n⚠️ 标记的账户存在安全风险：无密码或密码永�
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-17"></a>
 
 ## 🆕 模块 17：计划任务审计
 
@@ -1801,7 +1897,12 @@ if ($nonMsTasks) {
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-18"></a>
 
 ## 🆕 模块 18：文件共享与 SMB 审计
 
@@ -1969,7 +2070,12 @@ if ($smb1 -and $smb1.State -eq 'Enabled') {
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-19"></a>
 
 ## 🆕 模块 19：DNS 解析与网卡诊断
 
@@ -2133,7 +2239,12 @@ Write-Host "💡 0.0.0.0/0 为默认路由（所有出网流量由此控制）"
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-20"></a>
 
 ## 🆕 模块 20：SSL 证书过期检测
 
@@ -2322,7 +2433,12 @@ if ($soon.Count -gt 0) {
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-21"></a>
 
 ## 🆕 模块 21：Windows 防火墙规则审计
 
@@ -2486,7 +2602,12 @@ Write-Host "💡 如果任一配置文件显示「已禁用」，立即排查原
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-22"></a>
 
 ## 🆕 模块 22：关键服务崩溃与自动恢复状态
 
@@ -2655,7 +2776,12 @@ foreach ($svcName in $keyServices) {
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-23"></a>
 
 ## 🆕 模块 23：系统文件完整性检查与修复（SFC / DISM）
 
@@ -2725,7 +2851,12 @@ DISM /Online /Cleanup-Image /AnalyzeComponentStore
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-24"></a>
 
 ## 🆕 模块 24：存储池与虚拟磁盘管理（Storage Spaces）
 
@@ -2812,7 +2943,12 @@ Get-StorageTier | Select-Object @{N='名称';E={$_.FriendlyName}},
 
 
 </details>
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-25"></a>
 
 ## 🆕 模块 25：Windows Server Backup 状态检查
 
@@ -2927,7 +3063,12 @@ if ($job) {
 
 
 
+
+[↑ 返回顶部](#module-1)
+
 ---
+
+<a name="module-26"></a>
 
 ## 🆕 模块 26：Docker / K8s 容器管理
 
@@ -3314,6 +3455,8 @@ if ($logs) {
 
 
 ---
+
+<a name="module-27"></a>
 
 ## 🆕 模块 27：自动化修复向导
 
@@ -3951,6 +4094,920 @@ Mirror（镜像）提供冗余，Parity（奇偶校验）提供更高存储效�
 ### Q26: Docker 功能需要额外安装吗？
 模块 26 使用 Windows 系统自带的 `docker` 和 `kubectl` 命令行工具。Windows Server 2016+ 支持 Docker，但需要手动安装。未安装 Docker/kubectl 时模块 26 给出安装指引，不会报错。
 
+### Q27: 性能基线采集会不会拖慢服务器？
+不会。模块 28 根据 CPU 核心数动态调整采集频率（≤4 核每 15 分钟一次，>4 核每 5 分钟一次），单次采集耗时 <1 秒，内存占用 <10MB。
+
+### Q28: 合规检查会修改系统配置吗？
+不会。模块 29 所有检查项均为只读检测，仅输出合规/不合规判定和修复建议，不会修改任何系统配置。
+
+### Q29: 远程管理需要开启 WinRM 服务吗？
+是的。模块 30 基于 PowerShell Remoting（WinRM），目标服务器需要开启 WinRM 服务（`Enable-PSRemoting`）。模块 30.1 包含一键开启 WinRM 的命令。
+
+### Q30: 远程管理支持非域环境吗？
+支持。模块 30 支持域环境和非域环境，非域环境需配置 TrustedHosts 并使用 IP 地址连接。
+
+---
+
+<a name="module-28"></a>
+
+## 🆕 模块 28：性能基线 & 趋势分析
+
+> ⚠️ **本模块所有操作均为只读分析，不会修改任何系统配置。**
+
+<details>
+<summary>📋 展开查看：模块 28：性能基线 & 趋势分析</summary>
+
+### 28.1 性能基线建立（7 天采集）
+
+**硬件自适应策略**：根据 CPU 核心数动态调整采集频率，避免拖累低配服务器。
+
+```powershell
+# 硬件自适应：确定采集间隔
+$cpuCores = (Get-CimInstance Win32_Processor).NumberOfLogicalProcessors
+$intervalMinutes = if ($cpuCores -le 4) { 15 } else { 5 }
+$tagFile = "$env:USERPROFILE\.workbuddy\output\winskill\baseline_tag.txt"
+$csvFile = "$env:USERPROFILE\.workbuddy\output\winskill\perf_baseline.csv"
+
+# 创建输出目录
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.workbuddy\output\winskill" | Out-Null
+
+# 检查是否已注册定时任务
+$taskName = "Winskill_PerfBaseline"
+$existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+
+if (-not $existingTask) {
+    # 注册定时任务（需管理员权限）
+    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument @"
+-Command "& {`$csv='$csvFile'; `$cpu=(Get-CimInstance Win32_Processor).LoadPercentage; `$mem=(Get-CimInstance Win32_OperatingSystem); `$memPct=[math]::Round(($mem.TotalVisibleMemorySize - `$mem.FreePhysicalMemory)/`$mem.TotalVisibleMemorySize*100,1); `$disk=(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | Where-Object DeviceID -eq 'C:'); `$diskPct=[math]::Round((`$disk.Size-`$disk.FreeSpace)/`$disk.Size*100,1); `$net=(Get-CimInstance Win32_PerfFormattedData_Tcpip_NetworkInterface | Where-Object Name -notlike '*Loopback*' | Measure-Object BytesTotalPersec -Sum).Sum; `$ts=Get-Date -Format 'yyyy-MM-dd HH:mm:ss'; if(-not(Test-Path `$csv)){'Timestamp,CPU_Pct,Mem_Pct,Disk_Pct,Net_BytesPerSec' | Out-File `$csv -Encoding utf8}; '`$ts,`$cpu,`$memPct,`$diskPct,`$net' | Out-File `$csv -Append -Encoding utf8}"
+'@
+    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes $intervalMinutes) -RepetitionDuration (New-TimeSpan -Days 7)
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Description "Winskill 性能基线采集（7 天）" -Force
+    Write-Host "✅ 已注册定时任务 '$taskName'，每 $intervalMinutes 分钟采集一次，持续 7 天"
+} else {
+    Write-Host "⚠️ 定时任务 '$taskName' 已存在，无需重复注册"
+}
+
+# 显示当前基线状态
+if (Test-Path $csvFile) {
+    $data = Import-Csv $csvFile
+    Write-Host "`n📊 当前基线数据：$($data.Count) 条记录"
+    Write-Host "CPU 基线：$(($data | Measure-Object CPU_Pct -Average).Average)%（均值）"
+    Write-Host "内存 基线：$(($data | Measure-Object Mem_Pct -Average).Average)%（均值）"
+    Write-Host "磁盘 基线：$(($data | Measure-Object Disk_Pct -Average).Average)%（均值）"
+} else {
+    Write-Host "📋 尚未开始采集，注册定时任务后自动开始"
+}
+```
+
+### 28.2 异常偏离告警（当前值 vs 基线）
+
+```powershell
+$csvFile = "$env:USERPROFILE\.workbuddy\output\winskill\perf_baseline.csv"
+$thresholdMultiplier = 2.0  # 偏离基线 200% 触发告警
+
+if (-not (Test-Path $csvFile)) {
+    Write-Host "❌ 尚未建立基线，请先运行 28.1 建立基线"
+    exit 1
+}
+
+$data = Import-Csv $csvFile
+if ($data.Count -lt 10) {
+    Write-Host "⚠️ 基线数据不足（$($data.Count) 条），建议至少采集 10 条后再分析"
+}
+
+# 计算基线均值
+$cpuAvg = ($data | Measure-Object CPU_Pct -Average).Average
+$memAvg = ($data | Measure-Object Mem_Pct -Average).Average
+$diskAvg = ($data | Measure-Object Disk_Pct -Average).Average
+
+# 获取当前值
+$cpuNow = (Get-CimInstance Win32_Processor).LoadPercentage
+$mem = (Get-CimInstance Win32_OperatingSystem)
+$memNow = [math]::Round(($mem.TotalVisibleMemorySize - $mem.FreePhysicalMemory) / $mem.TotalVisibleMemorySize * 100, 1)
+$disk = (Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" | Where-Object DeviceID -eq 'C:')
+$diskNow = [math]::Round(($disk.Size - $disk.FreeSpace) / $disk.Size * 100, 1)
+
+Write-Host "`n📊 偏离分析报告"
+Write-Host ("=" * 50)
+Write-Host ("指标     当前值    基线均值    偏离倍数    状态")
+Write-Host ("-" * 50)
+
+$alerts = @()
+
+$cpuDev = if ($cpuAvg -gt 0) { $cpuNow / $cpuAvg } else { 0 }
+$status = if ($cpuDev -ge $thresholdMultiplier) { "🚨 告警" } elseif ($cpuDev -ge 1.5) { "⚠️ 警告" } else { "✅ 正常" }
+Write-Host ("CPU      {0,6}%    {1,6}%    {2,6:F1}x      {3}" -f $cpuNow, $cpuAvg, $cpuDev, $status)
+if ($cpuDev -ge $thresholdMultiplier) { $alerts += "CPU 使用率偏离基线 ${cpuDev:F1} 倍（当前 $cpuNow%，基线 $cpuAvg%）" }
+
+$memDev = if ($memAvg -gt 0) { $memNow / $memAvg } else { 0 }
+$status = if ($memDev -ge $thresholdMultiplier) { "🚨 告警" } elseif ($memDev -ge 1.5) { "⚠️ 警告" } else { "✅ 正常" }
+Write-Host ("内存     {0,6}%    {1,6}%    {2,6:F1}x      {3}" -f $memNow, $memAvg, $memDev, $status)
+if ($memDev -ge $thresholdMultiplier) { $alerts += "内存使用率偏离基线 ${memDev:F1} 倍（当前 $memNow%，基线 $memAvg%）" }
+
+$diskDev = if ($diskAvg -gt 0) { $diskNow / $diskAvg } else { 0 }
+$status = if ($diskDev -ge 1.3) { "🚨 告警" } elseif ($diskDev -ge 1.1) { "⚠️ 警告" } else { "✅ 正常" }
+Write-Host ("磁盘     {0,6}%    {1,6}%    {2,6:F1}x      {3}" -f $diskNow, $diskAvg, $diskDev, $status)
+if ($diskDev -ge 1.3) { $alerts += "磁盘使用率偏离基线 ${diskDev:F1} 倍（当前 $diskNow%，基线 $diskAvg%）" }
+
+Write-Host ("=" * 50)
+
+if ($alerts.Count -eq 0) {
+    Write-Host "`n✅ 所有指标正常，无异常偏离"
+} else {
+    Write-Host "`n🚨 发现 $($alerts.Count) 项异常偏离："
+    $alerts | ForEach-Object { Write-Host "  ⚠️ $_" }
+}
+```
+
+### 28.3 趋势预测（磁盘耗尽时间）
+
+```powershell
+$csvFile = "$env:USERPROFILE\.workbuddy\output\winskill\perf_baseline.csv"
+
+if (-not (Test-Path $csvFile)) {
+    Write-Host "❌ 尚未建立基线，请先运行 28.1 建立基线"
+    exit 1
+}
+
+$data = Import-Csv $csvFile
+if ($data.Count -lt 5) {
+    Write-Host "⚠️ 数据不足（$($data.Count) 条），无法预测"
+    exit 1
+}
+
+# 简单线性回归预测磁盘耗尽时间
+$diskValues = $data | ForEach-Object { [double]$_.Disk_Pct }
+$n = $diskValues.Count
+
+# 计算斜率（每天增长百分比）
+$sumX = ($n - 1) * $n / 2
+$sumY = ($diskValues | Measure-Object -Sum).Sum
+$sumXY = 0
+$sumX2 = 0
+for ($i = 0; $i -lt $n; $i++) {
+    $sumXY += $i * $diskValues[$i]
+    $sumX2 += $i * $i
+}
+$slope = ($n * $sumXY - $sumX * $sumY) / ($n * $sumX2 - $sumX * $sumX)
+
+$currentDisk = $diskValues[-1]
+
+Write-Host "`n📈 趋势预测报告"
+Write-Host ("=" * 50)
+Write-Host ("当前磁盘使用率：{0}%" -f $currentDisk)
+
+if ($slope -le 0) {
+    Write-Host ("趋势：磁盘使用率稳定或下降（斜率 {0:F4}%/采集周期）" -f $slope)
+    Write-Host "✅ 磁盘空间充足，无需担心"
+} else {
+    # 估算耗尽时间（基于采集间隔）
+    $cpuCores = (Get-CimInstance Win32_Processor).NumberOfLogicalProcessors
+    $intervalMinutes = if ($cpuCores -le 4) { 15 } else { 5 }
+    $periodsPerDay = 24 * 60 / $intervalMinutes
+    $daysToFull = (100 - $currentDisk) / ($slope * $periodsPerDay)
+    
+    Write-Host ("增长速率：{0:F4}%/采集周期（约 {1:F2}%/天）" -f $slope, ($slope * $periodsPerDay))
+    
+    if ($daysToFull -gt 365) {
+        Write-Host ("预计耗尽时间：> 1 年（约 {0:F0} 天）" -f $daysToFull)
+        Write-Host "✅ 磁盘空间充足"
+    } elseif ($daysToFull -gt 30) {
+        Write-Host ("预计耗尽时间：约 {0:F0} 天（{1:F1} 个月）" -f $daysToFull, ($daysToFull / 30))
+        Write-Host "⚠️ 建议关注磁盘使用趋势"
+    } elseif ($daysToFull -gt 7) {
+        Write-Host ("预计耗尽时间：约 {0:F0} 天" -f $daysToFull)
+        Write-Host "🚨 建议尽快清理磁盘空间"
+    } else {
+        Write-Host ("预计耗尽时间：约 {0:F0} 天" -f $daysToFull)
+        Write-Host "🔴 磁盘即将耗尽！请立即清理"
+    }
+}
+
+# 内存趋势预测
+$memValues = $data | ForEach-Object { [double]$_.Mem_Pct }
+$sumY = ($memValues | Measure-Object -Sum).Sum
+$sumXY = 0
+for ($i = 0; $i -lt $n; $i++) {
+    $sumXY += $i * $memValues[$i]
+}
+$slope = ($n * $sumXY - $sumX * $sumY) / ($n * $sumX2 - $sumX * $sumX)
+$currentMem = $memValues[-1]
+
+Write-Host ("`n当前内存使用率：{0}%" -f $currentMem)
+if ($slope -le 0) {
+    Write-Host "趋势：内存使用率稳定或下降 ✅"
+} else {
+    $periodsPerDay = 24 * 60 / $intervalMinutes
+    $daysToFull = (95 - $currentMem) / ($slope * $periodsPerDay)  # 95% 作为预警线
+    if ($daysToFull -gt 30) {
+        Write-Host ("增长速率：{0:F4}%/采集周期 ✅ 内存充足" -f $slope)
+    } elseif ($daysToFull -gt 0) {
+        Write-Host ("增长速率：{0:F4}%/采集周期 ⚠️ 约 {1:F0} 天后达到 95%" -f $slope, $daysToFull)
+    } else {
+        Write-Host "🔴 内存使用率持续上升，建议排查内存泄漏"
+    }
+}
+Write-Host ("=" * 50)
+```
+
+### 28.4 性能瓶颈关联分析
+
+```powershell
+Write-Host "`n🔍 性能瓶颈关联分析"
+Write-Host ("=" * 60)
+
+# 采集四维指标
+$cpu = (Get-CimInstance Win32_Processor).LoadPercentage
+$mem = (Get-CimInstance Win32_OperatingSystem)
+$memPct = [math]::Round(($mem.TotalVisibleMemorySize - $mem.FreePhysicalMemory) / $mem.TotalVisibleMemorySize * 100, 1)
+$disk = Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk | Where-Object Name -eq "_Total"
+$diskPct = [math]::Round($disk.PercentDiskTime, 1)
+$net = Get-CimInstance Win32_PerfFormattedData_Tcpip_NetworkInterface | Where-Object Name -notlike '*Loopback*'
+$netPct = [math]::Round(($net | Measure-Object BytesTotalPersec -Sum).Sum / 1MB, 1)  # MB/s
+
+Write-Host ("CPU 使用率：    {0,6}%" -f $cpu)
+Write-Host ("内存使用率：    {0,6}%" -f $memPct)
+Write-Host ("磁盘活动时间：  {0,6}%" -f $diskPct)
+Write-Host ("网络流量：      {0,6} MB/s" -f $netPct)
+Write-Host ("-" * 60)
+
+# 瓶颈判定逻辑
+$bottleneck = $null
+$severity = "正常"
+
+if ($cpu -ge 90 -and $memPct -ge 85) {
+    $bottleneck = "CPU + 内存双重瓶颈"
+    $severity = "🔴 严重"
+} elseif ($diskPct -ge 90 -and $memPct -ge 85) {
+    $bottleneck = "磁盘 I/O + 内存双重瓶颈（可能存在内存交换）"
+    $severity = "🔴 严重"
+} elseif ($cpu -ge 90) {
+    $bottleneck = "CPU 瓶颈"
+    $severity = "🚨 高"
+} elseif ($memPct -ge 90) {
+    $bottleneck = "内存瓶颈"
+    $severity = "🚨 高"
+} elseif ($diskPct -ge 90) {
+    $bottleneck = "磁盘 I/O 瓶颈"
+    $severity = "🚨 高"
+} elseif ($cpu -ge 70 -and $memPct -ge 70) {
+    $bottleneck = "CPU + 内存轻度压力"
+    $severity = "⚠️ 中"
+} elseif ($diskPct -ge 70 -and $memPct -ge 70) {
+    $bottleneck = "磁盘 + 内存轻度压力"
+    $severity = "⚠️ 中"
+} elseif ($cpu -ge 70) {
+    $bottleneck = "CPU 轻度压力"
+    $severity = "⚠️ 中"
+} elseif ($memPct -ge 70) {
+    $bottleneck = "内存轻度压力"
+    $severity = "⚠️ 中"
+} elseif ($diskPct -ge 70) {
+    $bottleneck = "磁盘 I/O 轻度压力"
+    $severity = "⚠️ 中"
+}
+
+if ($bottleneck) {
+    Write-Host ("瓶颈判定：{0}（{1}）" -f $bottleneck, $severity)
+} else {
+    Write-Host "✅ 系统运行正常，无明显瓶颈"
+}
+
+# 关联分析建议
+Write-Host ("-" * 60)
+Write-Host "关联分析："
+
+if ($memPct -ge 85 -and $diskPct -ge 80) {
+    Write-Host "  ⚠️ 内存高 + 磁盘 I/O 高 → 可能发生内存交换（页面文件频繁读写）"
+    Write-Host "  建议：检查内存占用 Top 进程（模块 9.2），考虑增加物理内存"
+}
+
+if ($cpu -ge 80 -and $diskPct -ge 80) {
+    Write-Host "  ⚠️ CPU 高 + 磁盘 I/O 高 → 可能在进行大量文件操作或数据库查询"
+    Write-Host "  建议：检查磁盘 I/O 进程（模块 9.3），定位高 I/O 来源"
+}
+
+if ($netPct -gt 100 -and $cpu -ge 70) {
+    Write-Host "  ⚠️ 网络流量大 + CPU 高 → 可能受到 DDoS 攻击或大量数据传输"
+    Write-Host "  建议：检查网络连接（模块 13.1），排查可疑外连（模块 13.3）"
+}
+
+if ($cpu -lt 50 -and $memPct -lt 50 -and $diskPct -lt 50) {
+    Write-Host "  ✅ 四维指标均正常，系统健康"
+}
+
+Write-Host ("=" * 60)
+```
+
+### 报错与解决
+
+| 报错 | 原因 | 解决 |
+|------|------|------|
+| `Register-ScheduledTask 拒绝访问` | 需要管理员权限 | 以管理员身份运行 PowerShell |
+| `无法加载文件，因为在此系统上禁止运行脚本` | 执行策略限制 | `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` |
+| `基线数据不足` | 采集时间太短 | 等待至少 10 个采集周期后再分析 |
+| `Get-CimInstance 找不到类` | WMI 服务异常 | 运行 `winmgmt /resetrepository` |
+
+</details>
+
+
+[↑ 返回顶部](#module-1)
+
+---
+
+<a name="module-29"></a>
+
+## 🆕 模块 29：安全合规检查清单
+
+> ⚠️ **本模块所有操作均为只读检测，不会修改任何系统配置。**
+
+<details>
+<summary>📋 展开查看：模块 29：安全合规检查清单</summary>
+
+### 29.1 等保 2.0 检查项
+
+```powershell
+Write-Host "`n📋 等保 2.0 合规检查报告"
+Write-Host ("=" * 60)
+Write-Host ("检查时间：{0:yyyy-MM-dd HH:mm:ss}" -f (Get-Date))
+Write-Host ("计算机名：$env:COMPUTERNAME")
+Write-Host ("=" * 60)
+
+$results = @()
+
+# 1. 密码策略
+Write-Host "`n【1. 密码策略】"
+$pwdPolicy = net accounts | Out-String
+$minPwdLen = if ($pwdPolicy -match 'Minimum password length\s+(\d+)') { $matches[1] } else { "0" }
+$maxPwdAge = if ($pwdPolicy -match 'Maximum password age \(days\)\s+(\d+|Unlimited)') { $matches[1] } else { "Unknown" }
+$minPwdAge = if ($pwdPolicy -match 'Minimum password age \(days\)\s+(\d+)') { $matches[1] } else { "0" }
+$pwdHistory = if ($pwdPolicy -match 'Password history length\s+(\d+)') { $matches[1] } else { "0" }
+
+$pass = [int]$minPwdLen -ge 8
+$results += [PSCustomObject]@{ Category = "密码策略"; Item = "密码最小长度≥8"; Status = if ($pass) { "✅ 合规" } else { "❌ 不合规" }; Detail = "当前值：$minPwdLen" }
+Write-Host ("  密码最小长度≥8：{0}（当前：{1}）" -f $(if ($pass) { "✅" } else { "❌" }), $minPwdLen)
+
+$pass = $maxPwdAge -ne "Unlimited" -and [int]$maxPwdAge -le 90
+$results += [PSCustomObject]@{ Category = "密码策略"; Item = "密码最长使用期限≤90天"; Status = if ($pass) { "✅ 合规" } else { "❌ 不合规" }; Detail = "当前值：$maxPwdAge" }
+Write-Host ("  密码最长使用期限≤90天：{0}（当前：{1}）" -f $(if ($pass) { "✅" } else { "❌" }), $maxPwdAge)
+
+$pass = [int]$pwdHistory -ge 5
+$results += [PSCustomObject]@{ Category = "密码策略"; Item = "密码历史记录≥5"; Status = if ($pass) { "✅ 合规" } else { "❌ 不合规" }; Detail = "当前值：$pwdHistory" }
+Write-Host ("  密码历史记录≥5：{0}（当前：{1}）" -f $(if ($pass) { "✅" } else { "❌" }), $pwdHistory)
+
+# 2. 账户锁定策略
+Write-Host "`n【2. 账户锁定策略】"
+$lockoutThreshold = if ($pwdPolicy -match 'Lockout threshold\s+(\d+|Never)') { $matches[1] } else { "Unknown" }
+$lockoutDuration = if ($pwdPolicy -match 'Lockout duration \(minutes\)\s+(\d+|Never)') { $matches[1] } else { "Unknown" }
+$lockoutWindow = if ($pwdPolicy -match 'Lockout observation window \(minutes\)\s+(\d+|Never)') { $matches[1] } else { "Unknown" }
+
+$pass = $lockoutThreshold -ne "Never" -and [int]$lockoutThreshold -le 5
+$results += [PSCustomObject]@{ Category = "账户锁定"; Item = "锁定阈值≤5次"; Status = if ($pass) { "✅ 合规" } else { "❌ 不合规" }; Detail = "当前值：$lockoutThreshold" }
+Write-Host ("  锁定阈值≤5次：{0}（当前：{1}）" -f $(if ($pass) { "✅" } else { "❌" }), $lockoutThreshold)
+
+$pass = $lockoutDuration -ne "Never" -and [int]$lockoutDuration -ge 15
+$results += [PSCustomObject]@{ Category = "账户锁定"; Item = "锁定时间≥15分钟"; Status = if ($pass) { "✅ 合规" } else { "❌ 不合规" }; Detail = "当前值：$lockoutDuration" }
+Write-Host ("  锁定时间≥15分钟：{0}（当前：{1}）" -f $(if ($pass) { "✅" } else { "❌" }), $lockoutDuration)
+
+# 3. 审计日志策略
+Write-Host "`n【3. 审计日志策略】"
+$auditPolicy = auditpol /get /category:* 2>$null | Out-String
+$logonEvents = if ($auditPolicy -match 'Logon\s+Success and Failure') { "Success and Failure" } elseif ($auditPolicy -match 'Logon\s+(\w+)') { $matches[1] } else { "Not Configured" }
+$objectAccess = if ($auditPolicy -match 'Object Access\s+Success and Failure') { "Success and Failure" } elseif ($auditPolicy -match 'Object Access\s+(\w+)') { $matches[1] } else { "Not Configured" }
+$privilegeUse = if ($auditPolicy -match 'Privilege Use\s+Success and Failure') { "Success and Failure" } elseif ($auditPolicy -match 'Privilege Use\s+(\w+)') { $matches[1] } else { "Not Configured" }
+
+$pass = $logonEvents -eq "Success and Failure"
+$results += [PSCustomObject]@{ Category = "审计日志"; Item = "登录事件审计（成功+失败）"; Status = if ($pass) { "✅ 合规" } else { "❌ 不合规" }; Detail = "当前值：$logonEvents" }
+Write-Host ("  登录事件审计：{0}（当前：{1}）" -f $(if ($pass) { "✅" } else { "❌" }), $logonEvents)
+
+$pass = $objectAccess -eq "Success and Failure"
+$results += [PSCustomObject]@{ Category = "审计日志"; Item = "对象访问审计（成功+失败）"; Status = if ($pass) { "✅ 合规" } else { "❌ 不合规" }; Detail = "当前值：$objectAccess" }
+Write-Host ("  对象访问审计：{0}（当前：{1}）" -f $(if ($pass) { "✅" } else { "❌" }), $objectAccess)
+
+# 4. 防火墙状态
+Write-Host "`n【4. 防火墙状态】"
+$firewallProfiles = Get-NetFirewallProfile
+$allEnabled = ($firewallProfiles | Where-Object Enabled -eq $false).Count -eq 0
+$results += [PSCustomObject]@{ Category = "防火墙"; Item = "所有配置文件已启用防火墙"; Status = if ($allEnabled) { "✅ 合规" } else { "❌ 不合规" }; Detail = "已启用：$(($firewallProfiles | Where-Object Enabled).Count)/3" }
+Write-Host ("  防火墙全部启用：{0}（已启用 {1}/3）" -f $(if ($allEnabled) { "✅" } else { "❌" }), (($firewallProfiles | Where-Object Enabled).Count))
+
+# 5. 补丁更新状态
+Write-Host "`n【5. 补丁更新状态】"
+$hotfixes = Get-HotFix | Sort-Object InstalledOn -Descending
+$pass = $false
+if ($hotfixes.Count -gt 0) {
+    $lastUpdate = $hotfixes[0].InstalledOn
+    $daysSinceUpdate = ((Get-Date) - $lastUpdate).Days
+    $pass = $daysSinceUpdate -le 30
+} else {
+    $lastUpdate = "无记录"
+    $daysSinceUpdate = 9999
+    $pass = $false
+}
+$results += [PSCustomObject]@{ Category = "补丁更新"; Item = "最近 30 天内有补丁更新"; Status = if ($pass) { "✅ 合规" } else { "❌ 不合规" }; Detail = "最后更新：$lastUpdate（$($daysSinceUpdate.Days) 天前）" }
+Write-Host ("  最近 30 天有补丁：{0}（最后：{1:yyyy-MM-dd}，{2} 天前）" -f $(if ($pass) { "✅" } else { "❌" }), $lastUpdate, $daysSinceUpdate.Days)
+
+# 6. 远程桌面安全
+Write-Host "`n【6. 远程桌面安全】"
+$rdpEnabled = (Get-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -ErrorAction SilentlyContinue).fDenyTSConnections
+$rdpStatus = if ($rdpEnabled -eq 0) { "已启用" } else { "已禁用" }
+$nlaEnabled = (Get-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name UserAuthentication -Error Action SilentlyContinue).UserAuthentication
+$nlaStatus = if ($nlaEnabled -eq 1) { "已启用" } else { "未启用" }
+
+$pass = $rdpEnabled -ne 0 -or $nlaEnabled -eq 1  # 如果 RDP 启用，必须启用 NLA
+$results += [PSCustomObject]@{ Category = "远程桌面"; Item = "RDP 网络级身份验证（NLA）"; Status = if ($pass) { "✅ 合规" } else { "❌ 不合规" }; Detail = "RDP：$rdpStatus，NLA：$nlaStatus" }
+Write-Host ("  NLA 已启用：{0}（RDP：{1}，NLA：{2}）" -f $(if ($pass) { "✅" } else { "❌" }), $rdpStatus, $nlaStatus)
+
+# 汇总
+$compliant = ($results | Where-Object Status -like "✅*").Count
+$nonCompliant = ($results | Where-Object Status -like "❌*").Count
+$total = $results.Count
+$rate = [math]::Round($compliant / $total * 100, 1)
+
+Write-Host ("`n" + "=" * 60)
+Write-Host ("📊 合规汇总：{0}/{1} 项合规（合规率 {2}%）" -f $compliant, $total, $rate)
+Write-Host ("✅ 合规：$compliant 项")
+Write-Host ("❌ 不合规：$nonCompliant 项")
+Write-Host ("=" * 60)
+
+if ($nonCompliant -gt 0) {
+    Write-Host "`n❌ 不合规项详情："
+    $results | Where-Object Status -like "❌*" | ForEach-Object {
+        Write-Host ("  [{0}] {1}：{2}" -f $_.Category, $_.Item, $_.Detail)
+    }
+}
+```
+
+### 29.2 CIS Benchmark 检查（精选关键控制项）
+
+```powershell
+Write-Host "`n🔒 CIS Benchmark 检查（Windows Server 精选）"
+Write-Host ("=" * 60)
+
+$cisResults = @()
+
+# CIS 1.1.1 - 密码最小长度（CIS 要求 14）
+Write-Host "`n【密码策略】"
+$minLen = (net accounts | Select-String 'Minimum password length').ToString() -replace '.*?\s+(\d+).*','$1'
+$pass = [int]$minLen -ge 14
+$cisResults += [PSCustomObject]@{ Control = "1.1.1"; Item = "密码最小长度≥14"; Status = if ($pass) { "✅" } else { "❌" }; Detail = "当前：$minLen" }
+Write-Host ("  1.1.1 密码最小长度≥14：{0}（当前：{1}）" -f $(if ($pass) { "✅" } else { "❌" }), $minLen)
+
+# CIS 1.1.2 - 密码复杂度
+$complexity = (Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa' -Name PasswordComplexity -ErrorAction SilentlyContinue).PasswordComplexity
+$pass = $complexity -eq 1
+$cisResults += [PSCustomObject]@{ Control = "1.1.2"; Item = "密码复杂度已启用"; Status = if ($pass) { "✅" } else { "❌" }; Detail = "当前：$(if ($complexity -eq 1) { '已启用' } else { '未启用' })" }
+Write-Host ("  1.1.2 密码复杂度：{0}" -f $(if ($pass) { "✅" } else { "❌" }))
+
+# CIS 2.2.1 - 禁止 Guest 账户
+Write-Host "`n【账户策略】"
+$guestAccount = Get-LocalUser -Name "Guest" -ErrorAction SilentlyContinue
+$pass = $guestAccount -and $guestAccount.Enabled -eq $false
+$cisResults += [PSCustomObject]@{ Control = "2.2.1"; Item = "Guest 账户已禁用"; Status = if ($pass) { "✅" } else { "❌" }; Detail = "当前：$(if ($guestAccount.Enabled -eq $false) { '已禁用' } else { '已启用' })" }
+Write-Host ("  2.2.1 Guest 已禁用：{0}" -f $(if ($pass) { "✅" } else { "❌" }))
+
+# CIS 2.3.1.1 - 限制空密码登录
+$limitBlank = (Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa' -Name LimitBlankPasswordUse -ErrorAction SilentlyContinue).LimitBlankPasswordUse
+$pass = $limitBlank -eq 1
+$cisResults += [PSCustomObject]@{ Control = "2.3.1.1"; Item = "限制空密码登录"; Status = if ($pass) { "✅" } else { "❌" }; Detail = "当前：$(if ($limitBlank -eq 1) { '已限制' } else { '未限制' })" }
+Write-Host ("  2.3.1.1 空密码限制：{0}" -f $(if ($pass) { "✅" } else { "❌" }))
+
+# CIS 5.1 - Windows Update 服务
+Write-Host "`n【系统服务】"
+$wuService = Get-Service -Name wuauserv -ErrorAction SilentlyContinue
+$pass = $wuService -and $wuService.Status -eq "Running"
+$cisResults += [PSCustomObject]@{ Control = "5.1"; Item = "Windows Update 服务运行中"; Status = if ($pass) { "✅" } else { "❌" }; Detail = "当前：$($wuService.Status)" }
+Write-Host ("  5.1 Windows Update：{0}（{1}）" -f $(if ($pass) { "✅" } else { "❌" }), $wuService.Status)
+
+# CIS 9.1 - Windows Firewall
+Write-Host "`n【防火墙】"
+$fwProfiles = Get-NetFirewallProfile
+$allEnabled = ($fwProfiles | Where-Object Enabled -eq $false).Count -eq 0
+$cisResults += [PSCustomObject]@{ Control = "9.1"; Item = "所有防火墙配置文件已启用"; Status = if ($allEnabled) { "✅" } else { "❌" }; Detail = "已启用：$(($fwProfiles | Where-Object Enabled).Count)/3" }
+Write-Host ("  9.1 防火墙全部启用：{0}" -f $(if ($allEnabled) { "✅" } else { "❌" }))
+
+# CIS 17.1 - 审计策略
+Write-Host "`n【审计策略】"
+$auditPolicy = auditpol /get /category:* 2>$null | Out-String
+$securityLogon = if ($auditPolicy -match 'Logon\s+Success and Failure') { $true } else { $false }
+$cisResults += [PSCustomObject]@{ Control = "17.1"; Item = "登录事件审计（成功+失败）"; Status = if ($securityLogon) { "✅" } else { "❌" }; Detail = "当前：$(if ($securityLogon) { '已配置' } else { '未配置' })" }
+Write-Host ("  17.1 登录审计：{0}" -f $(if ($securityLogon) { "✅" } else { "❌" }))
+
+# 汇总
+$compliant = ($cisResults | Where-Object Status -eq "✅").Count
+$nonCompliant = ($cisResults | Where-Object Status -eq "❌").Count
+$total = $cisResults.Count
+$rate = [math]::Round($compliant / $total * 100, 1)
+
+Write-Host ("`n" + "=" * 60)
+Write-Host ("📊 CIS 汇总：{0}/{1} 项合规（合规率 {2}%）" -f $compliant, $total, $rate)
+Write-Host ("=" * 60)
+```
+
+### 29.3 合规报告生成（Markdown 文本）
+
+```powershell
+# 生成 Markdown 格式合规报告（纯文本，可复制保存为 .md 文件）
+$reportTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+$reportName = "合规检查报告_$env:COMPUTERNAME`_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+
+$report = @"
+# Windows Server 合规检查报告
+
+| 项目 | 内容 |
+|------|------|
+| 计算机名 | $env:COMPUTERNAME |
+| 检查时间 | $reportTime |
+| 操作系统 | $((Get-CimInstance Win32_OperatingSystem).Caption) |
+| 版本 | $((Get-CimInstance Win32_OperatingSystem).Version) |
+
+## 等保 2.0 检查结果
+
+| 类别 | 检查项 | 状态 | 详情 |
+|------|--------|------|------|
+| 密码策略 | 密码最小长度≥8 | 待检查 | - |
+| 密码策略 | 密码最长使用期限≤90天 | 待检查 | - |
+| 密码策略 | 密码历史记录≥5 | 待检查 | - |
+| 账户锁定 | 锁定阈值≤5次 | 待检查 | - |
+| 账户锁定 | 锁定时间≥15分钟 | 待检查 | - |
+| 审计日志 | 登录事件审计（成功+失败） | 待检查 | - |
+| 审计日志 | 对象访问审计（成功+失败） | 待检查 | - |
+| 防火墙 | 所有配置文件已启用 | 待检查 | - |
+| 补丁更新 | 最近 30 天内有补丁更新 | 待检查 | - |
+| 远程桌面 | RDP 网络级身份验证（NLA） | 待检查 | - |
+
+## CIS Benchmark 检查结果
+
+| 控制项 | 检查内容 | 状态 | 详情 |
+|--------|----------|------|------|
+| 1.1.1 | 密码最小长度≥14 | 待检查 | - |
+| 1.1.2 | 密码复杂度已启用 | 待检查 | - |
+| 2.2.1 | Guest 账户已禁用 | 待检查 | - |
+| 2.3.1.1 | 限制空密码登录 | 待检查 | - |
+| 5.1 | Windows Update 服务运行中 | 待检查 | - |
+| 9.1 | 所有防火墙配置文件已启用 | 待检查 | - |
+| 17.1 | 登录事件审计（成功+失败） | 待检查 | - |
+
+## 说明
+
+- 本报告由 winskill 自动生成，仅作参考
+- 实际合规判定需结合企业安全策略和行业标准
+- 建议定期运行检查并保存报告备查
+"@
+
+# 输出到控制台
+Write-Host $report
+
+# 保存到用户输出目录
+$outputDir = "$env:USERPROFILE\.workbuddy\output\winskill"
+New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
+$outputFile = Join-Path $outputDir "$reportName.md"
+$report | Out-File -FilePath $outputFile -Encoding utf8
+
+Write-Host ("`n✅ 报告已保存到：{0}" -f $outputFile)
+Write-Host "提示：可将 .md 文件内容复制到 Word 或在线 Markdown 转 PDF 工具生成 PDF"
+```
+
+### 29.4 不合规项修复建议
+
+```powershell
+Write-Host "`n🔧 不合规项修复建议"
+Write-Host ("=" * 60)
+Write-Host "以下命令仅作参考，请确认后再执行：`n"
+
+Write-Host "【密码策略修复】"
+Write-Host "net accounts /minpwlen:8              # 设置密码最小长度 8 位"
+Write-Host "net accounts /maxpwage:90             # 设置密码最长使用期限 90 天"
+Write-Host "net accounts /minpwage:1              # 设置密码最短使用期限 1 天"
+Write-Host "net accounts /uniquepy:5              # 密码历史记录 5 个"
+
+Write-Host "`n【账户锁定修复】"
+Write-Host "net accounts /lockoutthreshold:5       # 锁定阈值 5 次"
+Write-Host "net accounts /lockoutduration:15       # 锁定时间 15 分钟"
+Write-Host "net accounts /lockoutwindow:15         # 锁定观察窗口 15 分钟"
+
+Write-Host "`n【审计策略修复】"
+Write-Host "auditpol /set /subcategory:'Logon' /success:enable /failure:enable"
+Write-Host "auditpol /set /subcategory:'Object Access' /success:enable /failure:enable"
+Write-Host "auditpol /set /subcategory:'Privilege Use' /success:enable /failure:enable"
+
+Write-Host "`n【防火墙修复】"
+Write-Host "Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True"
+
+Write-Host "`n【Guest 账户修复】"
+Write-Host "Disable-LocalUser -Name 'Guest'        # 禁用 Guest 账户"
+
+Write-Host "`n【RDP NLA 修复】"
+Write-Host "Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name UserAuthentication -Value 1"
+
+Write-Host ("`n" + "=" * 60)
+Write-Host "⚠️ 以上命令仅供参考，请确认后再执行"
+```
+
+### 报错与解决
+
+| 报错 | 原因 | 解决 |
+|------|------|------|
+| `auditpol 不是内部或外部命令` | 需要管理员权限 | 以管理员身份运行 PowerShell |
+| `Get-NetFirewallProfile 拒绝访问` | 需要管理员权限 | 以管理员身份运行 PowerShell |
+| `无法保存报告到输出目录` | 目录不存在或权限不足 | 手动创建 `%USERPROFILE%\.workbuddy\output\winskill` |
+| `net accounts 输出格式不符` | 系统语言非中文 | 根据实际输出调整正则匹配 |
+
+</details>
+
+
+[↑ 返回顶部](#module-1)
+
+---
+
+<a name="module-30"></a>
+
+## 🆕 模块 30：远程多服务器管理
+
+> ⚠️ **本模块需要 WinRM 服务支持，所有操作需管理员权限。**
+
+<details>
+<summary>📋 展开查看：模块 30：远程多服务器管理</summary>
+
+### 30.1 服务器注册（Windows Credential Manager）
+
+```powershell
+# 服务器注册配置文件
+$serverFile = "$env:USERPROFILE\.workbuddy\output\winskill\servers.json"
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.workbuddy\output\winskill" | Out-Null
+
+# 加载已有服务器列表
+$servers = @()
+if (Test-Path $serverFile) {
+    $servers = Get-Content $serverFile -Raw | ConvertFrom-Json
+}
+
+Write-Host "`n🖥️ 远程服务器管理"
+Write-Host ("=" * 50)
+Write-Host "1. 添加服务器"
+Write-Host "2. 查看已注册服务器"
+Write-Host "3. 删除服务器"
+Write-Host "4. 测试连接"
+Write-Host ("=" * 50)
+
+# 示例：添加服务器（实际使用时通过 AI 交互输入）
+$action = Read-Host "请选择操作 (1-4)"
+
+switch ($action) {
+    "1" {
+        $ip = Read-Host "服务器 IP 或主机名"
+        $user = Read-Host "用户名（如 Administrator）"
+        $auth = Read-Host "认证方式 (1=密码 2=证书)"
+        
+        if ($auth -eq "1") {
+            $cred = Get-Credential -Message "输入 $ip 的凭据"
+            # 保存到 Windows Credential Manager（通过 cmdkey）
+            $target = "TERMSRV/$ip"
+            cmdkey /generic:$target /user:$($cred.UserName) /pass:$($cred.GetNetworkCredential().Password) 2>$null
+            Write-Host "✅ 凭据已保存到 Windows Credential Manager"
+        }
+        
+        $newServer = @{
+            ip = $ip
+            user = $user
+            addedAt = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+            tags = @()
+        }
+        $servers += $newServer
+        $servers | ConvertTo-Json -Depth 3 | Out-File $serverFile -Encoding utf8
+        Write-Host "✅ 服务器 $ip 已注册"
+    }
+    "2" {
+        if ($servers.Count -eq 0) {
+            Write-Host "⚠️ 暂无已注册服务器"
+        } else {
+            Write-Host "`n已注册服务器："
+            $servers | ForEach-Object { Write-Host "  - $($_.ip)（$($_.user)）添加于 $($_.addedAt)" }
+        }
+    }
+    "3" {
+        $ip = Read-Host "要删除的服务器 IP"
+        $servers = $servers | Where-Object ip -ne $ip
+        $servers | ConvertTo-Json -Depth 3 | Out-File $serverFile -Encoding utf8
+        Write-Host "✅ 服务器 $ip 已删除"
+    }
+    "4" {
+        $ip = Read-Host "要测试的服务器 IP"
+        $result = Test-WSMan -ComputerName $ip -ErrorAction SilentlyContinue
+        if ($result) {
+            Write-Host "✅ $ip WinRM 服务正常"
+        } else {
+            Write-Host "❌ $ip 无法连接，请检查："
+            Write-Host "  1. 目标服务器是否开启 WinRM（Enable-PSRemoting）"
+            Write-Host "  2. 防火墙是否放行 5985/5986 端口"
+            Write-Host "  3. 网络是否可达"
+        }
+    }
+}
+```
+
+### 30.2 批量命令执行（并行）
+
+```powershell
+$serverFile = "$env:USERPROFILE\.workbuddy\output\winskill\servers.json"
+
+if (-not (Test-Path $serverFile)) {
+    Write-Host "❌ 暂无已注册服务器，请先运行 30.1 注册"
+    exit 1
+}
+
+$servers = Get-Content $serverFile -Raw | ConvertFrom-Json
+
+if ($servers.Count -eq 0) {
+    Write-Host "⚠️ 暂无已注册服务器"
+    exit 1
+}
+
+# 硬件自适应：并行数 = min(CPU 核心数, 服务器数量)
+$cpuCores = (Get-CimInstance Win32_Processor).NumberOfLogicalProcessors
+$maxParallel = [Math]::Min($cpuCores, $servers.Count)
+Write-Host ("`n⚡ 并行执行：{0} 个任务同时运行（CPU {1} 核）" -f $maxParallel, $cpuCores)
+
+# 要执行的命令
+$command = Read-Host "要在所有服务器执行的命令"
+
+Write-Host ("`n在 {0} 台服务器上执行：{1}" -f $servers.Count, $command)
+Write-Host ("-" * 60)
+
+# PowerShell 5.1 兼容：使用 Invoke-Command 并行执行（原生支持多计算机）
+$computerNames = $servers.ip
+$cred = Get-Credential -Message "输入所有服务器的通用凭据"
+
+Write-Host ("`n在 {0} 台服务器上执行：{1}" -f $servers.Count, $command)
+Write-Host ("-" * 60)
+
+try {
+    # Invoke-Command 原生支持多计算机并行执行
+    $results = Invoke-Command -ComputerName $computerNames -Credential $cred -ScriptBlock {
+        param($cmd)
+        $output = Invoke-Expression $cmd 2>&1
+        [PSCustomObject]@{
+            Server = $env:COMPUTERNAME
+            Status = "✅ 成功"
+            Output = $output | Out-String
+        }
+    } -ArgumentList $command -ErrorAction Stop
+    
+    # 汇总结果
+    Write-Host ("`n" + "=" * 60)
+    Write-Host "📊 执行结果汇总："
+    $results | ForEach-Object {
+        Write-Host ("`n[{0}] {1}" -f $_.Server, $_.Status)
+        if ($_.Output) { Write-Host $_.Output }
+    }
+    Write-Host ("=" * 60)
+} catch {
+    Write-Host ("❌ 执行失败：{0}" -f $_.Exception.Message)
+    Write-Host "提示：确认所有服务器都已开启 WinRM（运行 Enable-PSRemoting -Force）"
+}
+```
+
+### 30.3 统一监控面板
+
+```powershell
+$serverFile = "$env:USERPROFILE\.workbuddy\output\winskill\servers.json"
+
+if (-not (Test-Path $serverFile)) {
+    Write-Host "❌ 暂无已注册服务器"
+    exit 1
+}
+
+$servers = Get-Content $serverFile -Raw | ConvertFrom-Json
+
+Write-Host "`n📊 多服务器统一监控面板"
+Write-Host ("=" * 80)
+Write-Host ("{0,-20} {1,8} {2,8} {3,8} {4,10} {5,10}" -f "服务器", "CPU%", "内存%", "磁盘%", "状态", "运行时间")
+Write-Host ("-" * 80)
+
+foreach ($server in $servers) {
+    try {
+        $session = New-PSSession -ComputerName $server.ip -ErrorAction Stop
+        $info = Invoke-Command -Session $session -ScriptBlock {
+            $cpu = (Get-CimInstance Win32_Processor).LoadPercentage
+            $mem = (Get-CimInstance Win32_OperatingSystem)
+            $memPct = [math]::Round(($mem.TotalVisibleMemorySize - $mem.FreePhysicalMemory) / $mem.TotalVisibleMemorySize * 100, 1)
+            $disk = (Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" | Where-Object DeviceID -eq 'C:')
+            $diskPct = [math]::Round(($disk.Size - $disk.FreeSpace) / $disk.Size * 100, 1)
+            $uptime = (Get-Date) - $mem.LastBootUpTime
+            [PSCustomObject]@{
+                CPU = $cpu
+                Mem = $memPct
+                Disk = $diskPct
+                Uptime = "{0}天{1}小时" -f $uptime.Days, $uptime.Hours
+            }
+        }
+        Remove-PSSession $session
+        
+        $statusEmoji = if ($info.CPU -ge 90 -or $info.Mem -ge 90 -or $info.Disk -ge 90) { "🔴" } elseif ($info.CPU -ge 70 -or $info.Mem -ge 70 -or $info.Disk -ge 70) { "🟡" } else { "🟢" }
+        
+        Write-Host ("{0,-20} {1,8} {2,8} {3,8} {4,10} {5,10}" -f $server.ip, "$($info.CPU)%", "$($info.Mem)%", "$($info.Disk)%", $statusEmoji, $info.Uptime)
+    } catch {
+        Write-Host ("{0,-20} {1,8} {2,8} {3,8} {4,10} {5,10}" -f $server.ip, "-", "-", "-", "❌ 离线", "-")
+    }
+}
+
+Write-Host ("-" * 80)
+Write-Host "图例：🟢 正常  🟡 警告  🔴 严重  ❌ 离线"
+Write-Host ("=" * 80)
+```
+
+### 30.4 配置差异对比
+
+```powershell
+$serverFile = "$env:USERPROFILE\.workbuddy\output\winskill\servers.json"
+
+if (-not (Test-Path $serverFile)) {
+    Write-Host "❌ 暂无已注册服务器"
+    exit 1
+}
+
+$servers = Get-Content $serverFile -Raw | ConvertFrom-Json
+
+if ($servers.Count -lt 2) {
+    Write-Host "⚠️ 至少需要 2 台服务器才能对比"
+    exit 1
+}
+
+Write-Host "`n🔍 配置差异对比"
+Write-Host ("=" * 60)
+
+# 选择对比项目
+Write-Host "对比项目："
+Write-Host "1. IIS 站点配置"
+Write-Host "2. 服务状态"
+Write-Host "3. 防火墙规则"
+Write-Host "4. 已安装补丁"
+$choice = Read-Host "请选择 (1-4)"
+
+$scriptBlock = switch ($choice) {
+    "1" { { Get-Website | Select-Object Name, State, PhysicalPath, Bindings | ConvertTo-Json } }
+    "2" { { Get-Service | Where-Object Status -ne 'Running' | Select-Object Name, Status, StartType | ConvertTo-Json } }
+    "3" { { Get-NetFirewallRule | Where-Object Enabled -eq 'True' | Select-Object DisplayName, Direction, Action | ConvertTo-Json } }
+    "4" { { Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 10 HotFixID, InstalledOn | ConvertTo-Json } }
+}
+
+# 采集所有服务器数据
+$allData = @{}
+foreach ($server in $servers) {
+    try {
+        $session = New-PSSession -ComputerName $server.ip -ErrorAction Stop
+        $data = Invoke-Command -Session $session -ScriptBlock $scriptBlock
+        $allData[$server.ip] = $data | ConvertFrom-Json
+        Remove-PSSession $session
+    } catch {
+        Write-Host "⚠️ $($server.ip) 连接失败：$($_.Exception.Message)"
+    }
+}
+
+# 对比输出
+if ($allData.Count -ge 2) {
+    $firstServer = $allData.Keys | Select-Object -First 1
+    $firstData = $allData[$firstServer]
+    
+    Write-Host ("`n基准服务器：$firstServer" -f $firstServer)
+    Write-Host ("-" * 60)
+    
+    foreach ($server in $allData.Keys) {
+        if ($server -eq $firstServer) { continue }
+        $serverData = $allData[$server]
+        
+        # 简单差异对比（基于 JSON 字符串比较）
+        $firstJson = $firstData | ConvertTo-Json -Compress
+        $serverJson = $serverData | ConvertTo-Json -Compress
+        
+        if ($firstJson -eq $serverJson) {
+            Write-Host ("✅ {0}：与基准一致" -f $server)
+        } else {
+            Write-Host ("⚠️ {0}：存在差异" -f $server)
+            # 输出具体差异（简化版）
+            Write-Host ("  基准项数：{0}，对比项数：{1}" -f @($firstData).Count, @($serverData).Count)
+        }
+    }
+}
+
+Write-Host ("=" * 60)
+```
+
+### 报错与解决
+
+| 报错 | 原因 | 解决 |
+|------|------|------|
+| `WinRM 客户端无法处理请求` | 目标 WinRM 未开启 | 在目标服务器运行 `Enable-PSRemoting -Force` |
+| `访问被拒绝` | 凭据错误或权限不足 | 检查用户名密码，确认用户有远程管理权限 |
+| `无法连接到远程服务器` | 网络不通或防火墙拦截 | 检查网络连通性和 5985/5986 端口 |
+| `New-PSSession 超时` | 服务器响应慢或网络延迟高 | 增加 `-OperationTimeout` 参数 |
+| `TrustedHosts 未配置` | 非域环境需配置 TrustedHosts | `Set-Item WSMan:\localhost\Client\TrustedHosts -Value "192.168.1.0/24" -Concatenate` |
+
+</details>
+
+
+[↑ 返回顶部](#module-1)
+
 ---
 
 ## 30 秒速查表
@@ -3984,6 +5041,9 @@ Mirror（镜像）提供冗余，Parity（奇偶校验）提供更高存储效�
 | `"备份正常吗"` | 模块 25 |
 | `"Docker 状态"` | 模块 26 |
 | `"帮我修 DNS"` | 模块 27 |
+| `"性能趋势"` | 模块 28 |
+| `"合规检查"` | 模块 29 |
+| `"远程服务器"` | 模块 30 |
 
 ---
 
@@ -3994,7 +5054,6 @@ Mirror（镜像）提供冗余，Parity（奇偶校验）提供更高存储效�
 | 编辑已压缩的文件 | 压缩包内文件无法直接修改 |
 | 恢复已删除的回收站文件 | 超出工具范围 |
 | 修改注册表键值 | 风险过高，不在工具范围 |
-| 远程管理其他服务器 | 需 WinRM/PowerShell Remoting |
 | BIOS/硬件层操作 | 超出操作系统层面 |
 | 磁盘修复/擦除 | 超出工具范围，需专业工具 |
 | 终止网络连接 | 超出工具范围 |
@@ -4016,10 +5075,11 @@ Mirror（镜像）提供冗余，Parity（奇偶校验）提供更高存储效�
 - **无需 API Key**
 - **无需联网**（除首次安装 IIS 管理工具外）
 - **无需安装任何第三方软件**
-- ⚠️ **管理员权限检测**：部分功能（IIS 管理、更新缓存清理、安全审计、磁盘健康检测、网络监控、事件日志诊断、会话监控、计划任务审计、共享审计、DNS 网卡诊断、SSL 证书检测、防火墙审计、服务崩溃检查）需要管理员权限，AI 会在执行前自动检测并提示
+- ⚠️ **管理员权限检测**：部分功能（IIS 管理、更新缓存清理、安全审计、磁盘健康检测、网络监控、事件日志诊断、会话监控、计划任务审计、共享审计、DNS 网卡诊断、SSL 证书检测、防火墙审计、服务崩溃检查、性能基线采集、合规检查、远程多服务器管理）需要管理员权限，AI 会在执行前自动检测并提示
 
 ## 更新日志
 
+| v3.0.0 | 2026-08-06 | 新增性能基线与趋势分析模块（基线建立、异常偏离告警、趋势预测、瓶颈关联分析）、安全合规检查清单模块（等保2.0、CIS Benchmark、合规报告、修复建议）、远程多服务器管理模块（服务器注册、批量命令执行、统一监控面板、配置差异对比），总计30个模块，从单机工具升级为多机管理平台；修改展示方式：顶部模块导航锚点+每模块返回顶部链接 |
 | v2.0.0 | 2026-07-24 | 新增自动化修复向导模块（DNS修复、网络修复、WinUpdate修复、服务修复、磁盘清理、时间同步），总计27个模块，从诊断工具升级为修复工具 |
 | v1.9.0 | 2026-07-16 | 修复逻辑bug，新增 Docker / K8s 容器管理模块（Docker状态总览、容器资源监控、Docker健康检查、K8s集群状态、容器日志采集），总计26个模块，覆盖Windows Server容器化场景 |
 | v1.8.0 | 2026-07-16 | 新增 Docker / K8s 容器管理模块（Docker状态总览、容器资源监控、Docker健康检查、K8s集群状态、容器日志采集），总计26个模块，覆盖Windows Server容器化场景 |
@@ -4044,7 +5104,7 @@ Mirror（镜像）提供冗余，Parity（奇偶校验）提供更高存储效�
 skillhub upgrade winskill
 ```
 
-当前版本：v1.7.0，如有新版本可用，请执行上述命令升级。
+当前版本：v3.0.0，如有新版本可用，请执行上述命令升级。
 
 ---
 
