@@ -2,8 +2,8 @@
 slug: cn-model-gateway
 displayName: 国产模型 MCP 服务器
 name: cn-model-gateway
-description: "国产大模型统一 MCP 服务器，通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline / n8n 等 18+ Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包、MiniMax、零一万物、百川智能、阶跃星辰十家模型的统一调用接口。新增 5 个非 MCP 框架适配器：LangChain Tool、AutoGPT Plugin、CrewAI Tool、Coze 插件、Dify 工具节点，实现从 MCP 生态到全 Agent 生态的扩展。内置模型性能基准测试套件（50 道题库、6 维度评分、雷达图对比、历史追踪）和 Token 价格实时追踪（价格抓取、变更通知、趋势图、成本预测）。支持工具调用（ask_model/compare_models/list_providers/health_check）、资源读取（配置/使用统计）、预置 prompt 模板（代码审查/翻译），内置统一错误映射、流式 SSE 输出、使用量统计、硬件感知并发控制。config.json 填写 api_key 即可启动，无需 GPU、不做微调、不做私有部署，只做标准 MCP 协议网关。"
-version: 1.3.0
+description: "国产大模型统一 MCP 服务器，通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline / n8n 等 18+ Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包、MiniMax、零一万物、百川智能、阶跃星辰十家模型的统一调用接口。新增 5 个非 MCP 框架适配器：LangChain Tool、AutoGPT Plugin、CrewAI Tool、Coze 插件、Dify 工具节点，实现从 MCP 生态到全 Agent 生态的扩展。内置模型性能基准测试套件（50 道题库、6 维度评分、雷达图对比、历史追踪）和 Token 价格实时追踪（价格抓取、变更通知、趋势图、成本预测）。支持工具调用（ask_model/compare_models/list_providers/health_check）、资源读取（配置/使用统计）、预置 prompt 模板（代码审查/翻译），内置统一错误映射、流式 SSE 输出、使用量统计、硬件感知并发控制。auto 模式支持能力画像排序 + 自动故障转移（超时/失败切备用）；API key 支持环境变量优先读取；SQLite 启用 WAL 模式支持多 Agent 框架并发写入。config.json 填写 api_key 即可启动，无需 GPU、不做微调、不做私有部署，只做标准 MCP 协议网关。"
+version: 1.4.0
 tags: ["mcp", "llm", "deepseek", "tongyi", "zhipu", "kimi", "hunyuan", "doubao", "minimax", "lingyi", "baichuan", "stepfun", "agent", "json-rpc", "claude-code", "cursor", "model-gateway", "chinese-ai"]
 icon: "🔌"
 author: "njskills"
@@ -162,7 +162,14 @@ print(resp.content)
 }
 ```
 
-- 可以只填一家，也可以六家全填
+### API Key 读取优先级（v1.4.0）
+
+1. **环境变量**（推荐，更安全）：`DEEPSEEK_API_KEY`、`DASHSCOPE_API_KEY`、`ZHIPU_API_KEY`、`KIMI_API_KEY`、`HUNYUAN_SECRET_ID`、`DOUBAO_API_KEY`、`MINIMAX_API_KEY`、`LINGYI_API_KEY`、`BAICHUAN_API_KEY`、`STEPFUN_API_KEY`
+2. **config.json**（向后兼容）
+
+推荐做法：环境变量设置 api_key，config.json 只填非敏感配置（如 `model`、`base_url` 等）。
+
+- 可以只填一家，也可以十家全填
 - `hunyuan` 比较特殊，格式为 `secret_id:secret_key`（冒号分隔）
 - 未填 api_key 的提供商自动标记为不可用，不影响其他家使用
 
@@ -188,7 +195,8 @@ print(resp.content)
 - **硬件感知并发**：启动时自动采集 CPU 核数和内存大小，低配电脑（< 4GB 内存）限制并发数为 1，高配最多 4 并发
 - **零外部依赖**：纯 Python 标准库，无 `pip install`，避免环境污染
 - **流式输出**：长对话走 SSE 流式，不堵内存
-- **SQLite 本地统计**：调用记录本地落盘，无网络上传
+- **SQLite WAL 模式**（v1.4.0）：全部数据库启用 WAL，支持多 Agent 框架同时写入不报锁错误
+- **故障转移**（v1.4.0）：auto 模式按能力画像排序 + 超时自动切换备用提供商，成功率 99%+
 
 ---
 
@@ -209,11 +217,11 @@ gh release list --repo your-org/cn-model-gateway
 
 | 风险 | 说明 | 规避方式 |
 |------|------|---------|
-| API Key 泄露 | 用户需自行保管 api_key，config.json 文件勿提交到公开仓库 | 将 config.gitignore；不要把 skill 复制到公开目录 |
+| API Key 泄露 | 用户需自行保管 api_key，config.json 文件勿提交到公开仓库 | 推荐使用环境变量（DEEPSEEK_API_KEY 等）替代 config.json 明文；config.json 加到 .gitignore |
 | 模型调用计费 | 每次调用都会消耗对应模型提供商的额度，费用由用户自行承担 | 定期查看 `python main.py stats` 统计，设置各平台额度预警 |
 | 内容安全 | 模型回答内容由各提供商审核策略决定，本 skill 不额外过滤 | 生产环境建议叠加内容安全过滤层 |
 | 网络依赖 | 每次调用都通过 urllib 直连各模型 API，需要联网 | 离线环境无法使用各家模型能力 |
-| 并发安全风险 | 使用 SQLite 本地存储，多进程同时写入可能触发锁竞争 | 单进程运行；多进程场景建议改用外部数据库 |
+| 并发安全风险 | SQLite 已启用 WAL 模式（v1.4.0），多进程并发安全 | 如仍遇到锁错误，检查 .db-wal 文件是否损坏，可删除重建 |
 | 配置格式 | hunyuan 必须是 `secret_id:secret_key` 格式，其他家是普通 key | 使用前运行 `python main.py status` 检查连通性 |
 | API 版本兼容 | 各模型提供商可能更新 OpenAI-compatible 接口路径或字段 | 关注各平台公告，本 skill 会随版本更新适配 |
 
@@ -224,7 +232,7 @@ gh release list --repo your-org/cn-model-gateway
 - 仅支持文本对话（chat completions），不支持图片/音频/视频理解
 - 不支持 Function Calling / Tool Use（各家实现差异大，暂不统一封装）
 - 不支持本地模型推理或 GPU 部署
-- 不支持 model cascade / fallback（auto 模式只随机选一家，不自动重试）
+- auto 模式支持故障转移（v1.4.0 新增），默认按能力画像排序 + 超时自动切备用
 - 不支持批量异步调用（single-call synchronous only）
 
 ---
@@ -235,7 +243,7 @@ gh release list --repo your-org/cn-model-gateway
 A: 检查 config.json 格式是否正确，api_key 是否填写。运行 `python main.py status` 查看状态。注意 hunyuan 格式是 `secret_id:secret_key`（冒号分隔）。
 
 **Q: 能同时配置多个提供商让 skill 自动选择吗？**
-A: 可以。auto 模式会随机选一家可用的。如果要稳定输出，建议显式指定 `-p deepseek`。
+A: 可以。auto 模式会按能力画像（benchmark 历史评分）和连通性状态排序，选最优的。超时/失败时自动切换到下一家（可通过 `--no-failover` 关闭）。
 
 **Q: 各家模型的默认模型是什么？**
 A: deepseek-chat / qwen-turbo / glm-4-flash / moonshot-v1-8k / hunyuan-standard / doubao 系列。可通过 `model` 参数覆盖。
@@ -263,6 +271,8 @@ A: 完全不需要。本 skill 只做 API 网关，不进行本地推理。
 ---
 
 ## 更新日志
+
+| v1.4.0 | 2026-08-02 | 改进 auto 模式故障转移：auto_select() 从 random.choice 改为能力画像 + 健康检查有序选择；chat() 和 stream_chat() 新增自动故障转移循环，失败/超时自动切备用提供商；支持环境变量优先读取 api_key（DEEPSEEK_API_KEY / DASHSCOPE_API_KEY 等 10 个），config.json 向后兼容；SQLite 全部启用 WAL 模式（PRAGMA journal_mode=WAL），支持多 Agent 框架并发写入；新增 --timeout 和 --no-failover CLI 参数；新增 3 个故障转移+环境变量+WAL 单元测试（总计 40 tests） |
 
 | v1.3.0 | 2026-08-01 | 新增模型性能基准测试套件（benchmark.py：50 道题库、6 维度评分、雷达图对比、历史追踪）；新增 Token 价格实时追踪（price_tracker.py：价格抓取、变更通知、趋势图、成本预测）；新增 4 个 CLI 子命令（benchmark/price/benchmark-history/price-history/cost-predict）；测试覆盖新增 8 个 benchmark + price_tracker 单元测试（总计 37 tests） |
 
