@@ -172,6 +172,14 @@ class SearchCache:
                         created_at  REAL NOT NULL
                     )
                 """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS engine_stats (
+                        engine      TEXT PRIMARY KEY,
+                        success     INTEGER DEFAULT 0,
+                        failure     INTEGER DEFAULT 0,
+                        last_used   REAL DEFAULT 0
+                    )
+                """)
                 conn.execute(
                     "CREATE INDEX IF NOT EXISTS idx_cache_accessed ON search_cache(accessed_at)"
                 )
@@ -437,7 +445,73 @@ class SearchCache:
         finally:
             conn.close()
 
-    # ---------- 统计 ----------
+    # ---------- 引擎统计（降级策略动态化） ----------
+
+    def record_engine_result(self, engine: str, success: bool) -> None:
+        """
+        记录引擎成功/失败次数，用于动态降级选择
+
+        幂等：引擎不存在时自动初始化
+        """
+        if not self.available:
+            return
+        conn = self._connect()
+        if conn is None:
+            return
+        try:
+            col = "success" if success else "failure"
+            with conn:
+                conn.execute(
+                    f"""INSERT INTO engine_stats (engine, {col}, last_used)
+                       VALUES (?, 1, ?)
+                       ON CONFLICT(engine) DO UPDATE SET
+                           {col} = {col} + 1,
+                           last_used = excluded.last_used""",
+                    (engine, time.time()),
+                )
+        except sqlite3.Error:
+            pass
+        finally:
+            conn.close()
+
+    def get_engine_success_rate(self, engine: str) -> float:
+        """
+        获取引擎成功率（0.0~1.0）
+
+        从未使用时返回 0.5（中性值），避免新引擎被低估或高估
+        """
+        if not self.available:
+            return 0.5
+        conn = self._connect()
+        if conn is None:
+            return 0.5
+        try:
+            row = conn.execute(
+                "SELECT success, failure FROM engine_stats WHERE engine = ?",
+                (engine,),
+            ).fetchone()
+            if not row:
+                return 0.5
+            total = (row["success"] or 0) + (row["failure"] or 0)
+            if total == 0:
+                return 0.5
+            return (row["success"] or 0) / total
+        except sqlite3.Error:
+            return 0.5
+        finally:
+            conn.close()
+
+    def rank_engines_by_success(self, engines: Sequence[str]) -> List[str]:
+        """
+        按成功率降序排列引擎列表
+
+        成功率相同时保持原始顺序，稳定排序
+        """
+        return sorted(
+            engines,
+            key=lambda e: self.get_engine_success_rate(e),
+            reverse=True,
+        )
 
     def stats(self) -> CacheStats:
         """获取缓存统计"""
