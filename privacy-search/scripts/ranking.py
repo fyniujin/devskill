@@ -501,16 +501,41 @@ def weights_from_config(config: Optional[Dict[str, Any]] = None) -> RankWeights:
 
 # 低质量内容站点，命中则降权
 LOW_QUALITY_DOMAINS = {
+    # 百度系低质内容农场
     "baijiahao.baidu.com", "zhidao.baidu.com", "wenku.baidu.com",
+    # 文档分享站（多为爬取内容）
     "docin.com", "doc88.com", "book118.com", "renrendoc.com",
     "csdn.net",  # 内容重复度较高，适度降权而非屏蔽
+    # 采集站/SEO 站
+    "www.toutiao.com", "www.360doc.com", "www.docin.com",
+    "www.doc88.com", "www.book118.com", "www.renrendoc.com",
+    "www.90so.net", "www.51wendang.com", "www.csdn.net",
+    "www.pianshen.com", "www.fenxiangdashi.com",
 }
 
 # 优质站点，命中则加权
 HIGH_QUALITY_DOMAINS = {
+    # 国际技术社区
     "github.com", "stackoverflow.com", "wikipedia.org", "zhihu.com",
     "developer.mozilla.org", "docs.python.org", "arxiv.org",
     "gitee.com", "juejin.cn", "segmentfault.com",
+    # 中文技术社区
+    "www.cnblogs.com", "www.cnblogs.cn", "blog.csdn.net",
+    "www.jianshu.com", "juejin.cn", "segmentfault.com",
+    "www.oschina.net", "www.51cto.com", "www.infoq.cn",
+    # 百科/知识
+    "baike.baidu.com", "www.baike.com", "wiki.mbalib.com",
+    # 官方文档
+    "docs.oracle.com", "docs.microsoft.com", "learn.microsoft.com",
+    "developers.google.com", "developer.apple.com",
+    "kubernetes.io", "docker.com", "docs.docker.com",
+    "www.elastic.co", "redis.io", "mongodb.com",
+    "www.postgresql.org", "www.mysql.com",
+    # 学术
+    "scholar.google.com", "www.ncbi.nlm.nih.gov",
+    "semanticscholar.org", "arxiv.org",
+    # 主流媒体
+    "www.people.com.cn", "www.xinhuanet.com", "www.chinanews.com.cn",
 }
 
 
@@ -559,9 +584,9 @@ def domain_score(url: str) -> float:
     return 0.0
 
 
-def relevance_score(query: str, title: str, snippet: str) -> float:
+def _relevance_simple(query: str, title: str, snippet: str) -> float:
     """
-    查询相关度评分（0~1）
+    词项覆盖率相关度（轻量模式）
 
     采用轻量词项覆盖率而非完整 BM25：
     搜索结果摘要长度相近，文档长度归一化收益有限，
@@ -586,6 +611,76 @@ def relevance_score(query: str, title: str, snippet: str) -> float:
             hit += 0.5
 
     return min(1.0, hit / len(set(terms)))
+
+
+def _relevance_tfidf(query: str, title: str, snippet: str) -> float:
+    """
+    TF-IDF 余弦相似度（精准模式）
+
+    使用 jieba 分词将查询和文档转为词频向量，
+    计算余弦相似度。对中文短文本，分词后的向量
+    比词项覆盖率更能捕捉语义关联。
+
+    jieba 不可用时返回 None，由调用方降级为 simple。
+    """
+    jb = _load_jieba()
+    if jb is None:
+        return None
+
+    query_terms = [w for w in jb.cut((query or "").strip().lower()) if len(w.strip()) > 1]
+    title_terms = [w for w in jb.cut((title or "").strip().lower()) if len(w.strip()) > 1]
+    snippet_terms = [w for w in jb.cut((snippet or "").strip().lower()) if len(w.strip()) > 1]
+
+    if not query_terms:
+        return 0.0
+
+    # 文档向量：标题词权重 2.0，摘要词权重 1.0
+    doc_terms: Dict[str, int] = defaultdict(int)
+    for w in title_terms:
+        doc_terms[w] += 2
+    for w in snippet_terms:
+        doc_terms[w] += 1
+
+    if not doc_terms:
+        return 0.0
+
+    # 计算点积和模长
+    dot_product = 0.0
+    query_norm = 0.0
+    doc_norm = 0.0
+
+    query_counts: Dict[str, int] = defaultdict(int)
+    for w in query_terms:
+        query_counts[w] += 1
+
+    for w, qc in query_counts.items():
+        query_norm += qc * qc
+        dot_product += qc * doc_terms.get(w, 0)
+
+    for w, dc in doc_terms.items():
+        doc_norm += dc * dc
+
+    if query_norm == 0.0 or doc_norm == 0.0:
+        return 0.0
+
+    return dot_product / (math.sqrt(query_norm) * math.sqrt(doc_norm))
+
+
+def relevance_score(query: str, title: str, snippet: str) -> float:
+    """
+    查询相关度评分（0~1）
+
+    主模式：jieba 分词 + TF-IDF 余弦相似度（中文准确度高）
+    降级模式：jieba 不可用时回退到词项覆盖率（仍可用）
+    """
+    # 含中文时优先 TF-IDF
+    if has_cjk(query) or has_cjk(title) or has_cjk(snippet):
+        tfidf = _relevance_tfidf(query, title, snippet)
+        if tfidf is not None:
+            return min(1.0, max(0.0, tfidf))
+
+    # 英文或无 jieba 时用轻量模式
+    return _relevance_simple(query, title, snippet)
 
 
 def rank_results(
