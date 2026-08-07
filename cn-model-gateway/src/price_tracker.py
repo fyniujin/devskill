@@ -53,6 +53,8 @@ class PriceTracker:
 
     def _init_db(self) -> None:
         with sqlite3.connect(self.db_path) as conn:
+            # Enable WAL mode for concurrent multi-process access (v1.4.0)
+            conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS price_history (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
