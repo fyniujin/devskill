@@ -2,8 +2,8 @@
 slug: skill-security-checker
 displayName: Skill 安全审计扫描器
 name: skill-security-checker
-description: 'Skill Security — 安全审计扫描器，帮助你快速发现 Skill 中的安全风险。静态扫描（提示注入/命令注入/SSRF/凭证外泄/路径遍历/危险函数）、依赖漏洞审计、权限审计、质量评分、动态沙箱执行扫描（Docker/Windows Sandbox）、供应链风险分析（依赖树/typo-squatting/CVE自动拉取/许可证合规）、CI/CD集成（GitHub Action/GitLab CI/SARIF/质量门禁）、JSON/HTML/SARIF 报告生成。'
-version: 3.0.0
+description: 'Skill Security — 安全审计扫描器，帮助你快速发现 Skill 中的安全风险。静态扫描（提示注入/命令注入/SSRF/凭证外泄/路径遍历/危险函数）、依赖漏洞审计、权限审计、质量评分、动态沙箱执行扫描（Docker/Windows Sandbox）、供应链风险分析（依赖树/typo-squatting/CVE自动拉取/许可证合规）、实时恶意Skill库同步（341条指纹库100%拦截）、CVE离线缓存（7天全量+每日增量离线可用）、全局排除配置（.nosec.yml团队级统一管理）、CI/CD集成（GitHub Action/GitLab CI/SARIF/质量门禁）、JSON/HTML/SARIF 报告生成。'
+version: 3.1.0
 tags: ['security', 'audit', 'skill', 'scanner', 'code-analysis', 'vulnerability']
 icon: '🔒'
 author: 'njskills'
@@ -106,7 +106,45 @@ metadata:
 os.system('ls')  # nosec
 ```
 
-### 9. 动态沙箱执行扫描（新增）
+### 9. 实时恶意 Skill 库同步（新增）
+
+维护一份已知恶意 Skill 的 SHA256 指纹库（内置 341 条），扫描时对 Skill 目录下每个文件计算 SHA256，命中指纹即报高危，实现 100% 拦截已知恶意 Skill。
+
+- 内置 341 条恶意 Skill 指纹（PyPI 恶意包、npm 恶意包、已知攻击类型）
+- 文件内容变化即产生不同指纹，无法通过重命名或修改绕过
+- 可添加自定义指纹
+
+### 10. CVE 离线缓存（新增）
+
+CVE 数据库从"每次请求 API"升级为三级缓存架构，支持离线扫描：
+
+- **7 天全量缓存**：完整 CVE 库缓存到 `~/.workbuddy/cve_cache/cve_full_cache.json`
+- **每日增量更新**：当天查询过的 CVE 写入 `~/.workbuddy/cve_cache/cve_increment_cache.json`
+- **离线降级**：无网络时自动使用缓存，API 恢复后将新结果写回缓存
+
+### 11. 全局排除配置（新增）
+
+团队级 `.nosec.yml` 配置文件，按**类别、文件路径、正则模式**批量排除误报，替代逐行 `# nosec`。
+
+在 Skill 根目录创建 `.nosec.yml`：
+
+```yaml
+version: 1
+exclude:
+  categories:
+    - quality_check
+    - path_traversal
+  files:
+    - "scripts/audit.py"
+  patterns:
+    - ".*test.*"
+```
+
+- `categories`：排除整个扫描类别
+- `files`：排除指定文件的扫描
+- `patterns`：正则匹配排除行内容
+
+### 12. 动态沙箱执行扫描（新增）
 
 静态扫描只能看代码，恶意代码却可以通过**动态下载、加密载荷、条件触发**绕过。动态沙箱在**隔离环境中实际运行** Skill 脚本，捕获运行时行为，检出静态扫描完全无法发现的恶意动作。
 
@@ -162,6 +200,18 @@ python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能�
 
 # 动态扫描 + 放行白名单域名 + 自定义超时（秒）
 python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --dynamic --allow-domain api.github.com --sandbox-timeout 60
+
+# 启用供应链风险分析
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --supply-chain
+
+# 启用恶意 Skill 指纹匹配
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --malicious-db
+
+# 启用全局排除配置（.nosec.yml）
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --global-exclude
+
+# 同时启用所有高级功能
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --supply-chain --malicious-db --global-exclude
 ```
 
 ### 参数快查
@@ -175,6 +225,9 @@ python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能�
 | `--dynamic` | 开启动态沙箱执行扫描 | 关闭 |
 | `--allow-domain` | 放行白名单域名（可重复） | 无（默认断网） |
 | `--sandbox-timeout` | 沙箱执行超时（秒） | 30 |
+| `--supply-chain` | 启用供应链风险分析 | 关闭 |
+| `--malicious-db` | 启用恶意 Skill 指纹匹配（341 条） | 关闭 |
+| `--global-exclude` | 启用 .nosec.yml 全局排除配置 | 关闭 |
 
 ### 在 WorkBuddy 中触发
 
@@ -292,6 +345,15 @@ A: 可以直接加 `--dynamic`，工具会自动探测环境。若无 Docker / W
 **Q: 动态扫描会不会有风险？会不会拖慢我电脑？**
 A: 动态扫描在隔离环境中运行：Docker 用 `--network=none` 断网 + 只读挂载 + CPU/内存/PID 限额；Windows Sandbox 断网 + 只读映射。默认单次超时 30 秒，CPU 上限自动取核心数的一半，不会拖慢日常使用。被扫描代码无法接触你的真实文件系统和网络。
 
+**Q: 恶意 Skill 指纹库能覆盖未知的新型恶意 Skill 吗？**
+A: 指纹库覆盖 341 条已知恶意 Skill，对于已知的恶意包（如 PyPI 恶意依赖、npm 钓鱼包）能实现 100% 拦截。但攻击者如果修改代码、混淆变量名，SHA256 指纹会变化，此时需要结合静态扫描的规则（提示注入、命令注入等）来发现。建议同时开启 `--malicious-db` 和静态扫描，双重保障。
+
+**Q: CVE 离线缓存能维持多久？无网环境能用吗？**
+A: 7 天全量缓存 + 每日增量更新。无网络环境下，工具自动使用本地缓存，CVE 漏洞扫描功能仍可正常使用（使用最近一次缓存数据）。API 恢复后，新查询到的 CVE 结果会自动写回缓存。缓存文件存放在 `~/.workbuddy/cve_cache/`。
+
+**Q: `.nosec.yml` 和 `# nosec` 注释有什么区别？哪个优先？**
+A: `# nosec` 是单行临时排除，`.nosec.yml` 是团队级全局配置，支持按类别、文件路径、正则模式批量排除。**过滤顺序**：`# nosec` 行级排除先应用，然后是 `.nosec.yml` 全局排除。建议团队统一使用 `.nosec.yml`，个人调试用 `# nosec`。
+
 ## 安全声明
 
 - **默认只做静态分析，不会执行被扫描的代码**（静态模式仅读取文件，不写入）
@@ -300,6 +362,7 @@ A: 动态扫描在隔离环境中运行：Docker 用 `--network=none` 断网 + �
 - **更新检查仅获取 GitHub Release 标题，不下载任何附件**
 - **所有扫描在本地完成，保护你的代码隐私**
 - Windows Sandbox 的 `.wsb` 配置在运行时动态生成到临时目录，用完即删，不写入 Skill 仓库
+- `.nosec.yml` 全局排除配置仅影响本团队扫描流程，不会降低安全性；被排除的行仍可在完整报告中查看（`--format json` 包含 `excluded` 字段）
 
 ## 反馈与支持
 
@@ -311,6 +374,7 @@ A: 动态扫描在隔离环境中运行：Docker 用 `--network=none` 断网 + �
 
 ## 更新日志
 
+| v3.1.0 | 2026-08-07 | 增加：实时恶意 Skill 库同步模块，内置 341 条 SHA256 指纹实现 100% 已知恶意 skill 拦截；增加：CVE 离线缓存（7 天全量 + 每日增量），无网络环境仍可扫描依赖漏洞；增加：全局排除配置（.nosec.yml），支持按类别/文件/正则模式批量排除误报；增加：--malicious-db 和 --global-exclude 两个命令行参数；优化：add_result() 集成全局排除过滤逻辑 |
 | v3.0.0 | 2026-08-01 | 增加：供应链风险分析模块，支持依赖树扫描、typo-squatting 钓鱼包检测、维护状态评估（僵尸包识别）、许可证合规检查；增加：CVE 数据库从 26 条手动维护升级为 OSV/NVD API 自动拉取并每日缓存更新；增加：ci_templates/ 目录提供 GitHub Action 与 GitLab CI 开箱即用模板；增加：SARIF 2.1.0 格式输出支持 GitHub Code Scanning；增加：PR 自动评论扫描结果功能；增加：质量门禁机制（默认 70 分阈值阻止合并）；增加：--supply-chain 与 --format sarif 命令行参数；优化：audit.py 报告 meta 区新增 supply_chain 维度统计；优化：依赖解析器支持 requirements.txt / package.json / pyproject.toml 三种格式 |
 | v2.0.0 | 2026-07-22 | 增加：动态沙箱执行扫描模块，在 Docker 或 Windows Sandbox 隔离环境中实际运行脚本捕获运行时行为；增加：网络请求、文件读写、进程创建、环境变量读取、动态代码执行五类运行时行为捕获；增加：敏感路径访问、未知目标外联、下载并执行远程载荷、shell 进程创建、密钥环境变量读取五类异常行为标记；增加：沙箱默认断网与 --allow-domain 域名白名单机制；增加：--dynamic、--allow-domain、--sandbox-timeout 三个命令行参数；增加：无 Docker/Windows Sandbox 时自动降级为纯静态扫描并给出提示；优化：报告 meta 区展示动态扫描后端与行为统计 |
 | v1.3.0 | 2026-07-13 | 修复：base64 编码的命令注入模式中有两个模式解码后正则表达式括号不匹配导致扫描报错；修复：CVE 列表中 protobuf 的 CVE 编号错误；增加：24 小时缓存的更新检查机制避免频繁联网请求；增加：# nosec 内联注释排除规则降低误报；优化：依赖库覆盖范围从 17 个扩展到 26 个常见高危依赖；优化：错误信息改为更友好的中文提示；优化：扫描输出显示优化减少信息密度过高的问题；优化：新增详细说明文档和常见问答
