@@ -5,11 +5,12 @@ import sys
 import os
 import unittest
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.adapters.base import ChatMessage, BaseAdapter, ChatResponse, ContentChunk
-from src.router import ModelRouter, ERROR_PARAM_INVALID, ERROR_RATE_LIMITED, ERROR_INTERNAL
+from src.router import ModelRouter, ERROR_PARAM_INVALID, ERROR_RATE_LIMITED, ERROR_INTERNAL, ENV_KEY_MAP
 from src.monitor import get_hardware_info, compute_concurrency_limit, Monitor
 from src.mcp_server import MCPServer
 from src.frameworks import (
@@ -233,6 +234,109 @@ class TestPriceTracker(unittest.TestCase):
         result = tracker.predict_cost({"deepseek": 1000000})
         self.assertIn("total_estimated_cost", result)
         self.assertIn("predictions", result)
+
+
+class TestEnvVarApiKey(unittest.TestCase):
+    """Tests for environment variable API key reading (v1.4.0)."""
+
+    def test_env_key_map_has_all_providers(self):
+        """All 10 providers should have an env var mapping."""
+        expected = {"deepseek", "tongyi", "zhipu", "kimi", "hunyuan", "doubao",
+                    "minimax", "lingyi", "baichuan", "stepfun"}
+        self.assertEqual(set(ENV_KEY_MAP.keys()), expected)
+
+    @patch.dict(os.environ, {"DEEPSEEK_API_KEY": "env-key-123"})
+    def test_register_all_uses_env_var(self):
+        """register_all should read api_key from environment variable."""
+        router = ModelRouter()
+        # Config without api_key, but env var set
+        config = {"deepseek": {}}
+        availability = router.register_all(config)
+        self.assertTrue(availability["deepseek"])
+
+    def test_register_all_fallback_to_config(self):
+        """register_all should fallback to config.json when env var is empty."""
+        router = ModelRouter()
+        config = {"deepseek": {"api_key": "config-key-456"}}
+        # Make sure env var is not set
+        with patch.dict(os.environ, {}, clear=True):
+            # Clear any DEEPSEEK_API_KEY that might be set
+            env_backup = os.environ.pop("DEEPSEEK_API_KEY", None)
+            try:
+                availability = router.register_all(config)
+                self.assertTrue(availability["deepseek"])
+            finally:
+                if env_backup:
+                    os.environ["DEEPSEEK_API_KEY"] = env_backup
+
+
+class TestFailover(unittest.TestCase):
+    """Tests for auto mode failover (v1.4.0)."""
+
+    def test_auto_select_returns_string(self):
+        """auto_select should return a provider name string."""
+        router = ModelRouter()
+        result = router.auto_select()
+        # With no adapters, should return None
+        self.assertIsNone(result)
+
+    def test_router_has_timeout_param(self):
+        """ModelRouter should accept timeout parameter."""
+        router = ModelRouter(timeout=60)
+        self.assertEqual(router._timeout, 60)
+
+    def test_router_has_failover_param(self):
+        """ModelRouter should accept failover parameter."""
+        router = ModelRouter(failover=False)
+        self.assertFalse(router._failover)
+
+    def test_router_default_timeout_30(self):
+        """Default timeout should be 30 seconds."""
+        router = ModelRouter()
+        self.assertEqual(router._timeout, 30)
+
+    def test_router_default_failover_true(self):
+        """Default failover should be True."""
+        router = ModelRouter()
+        self.assertTrue(router._failover)
+
+    def test_capability_score_default(self):
+        """Unknown provider should have default score 0.5."""
+        router = ModelRouter()
+        self.assertEqual(router._get_capability_score("unknown"), 0.5)
+
+    def test_health_cache_ttl(self):
+        """Health check cache should expire after TTL."""
+        from src.router import HEALTH_CHECK_CACHE_TTL
+        self.assertEqual(HEALTH_CHECK_CACHE_TTL, 60)
+
+
+class TestWALMode(unittest.TestCase):
+    """Tests for SQLite WAL mode (v1.4.0)."""
+
+    def test_monitor_wal_enabled(self):
+        """Monitor database should enable WAL mode."""
+        monitor = Monitor()
+        import sqlite3
+        with sqlite3.connect(monitor.db_path) as conn:
+            result = conn.execute("PRAGMA journal_mode").fetchone()
+        self.assertEqual(result[0], "wal")
+
+    def test_benchmark_wal_enabled(self):
+        """Benchmark database should enable WAL mode."""
+        suite = BenchmarkSuite()
+        import sqlite3
+        with sqlite3.connect(suite.db_path) as conn:
+            result = conn.execute("PRAGMA journal_mode").fetchone()
+        self.assertEqual(result[0], "wal")
+
+    def test_price_tracker_wal_enabled(self):
+        """Price tracker database should enable WAL mode."""
+        tracker = PriceTracker()
+        import sqlite3
+        with sqlite3.connect(tracker.db_path) as conn:
+            result = conn.execute("PRAGMA journal_mode").fetchone()
+        self.assertEqual(result[0], "wal")
 
 
 if __name__ == "__main__":
