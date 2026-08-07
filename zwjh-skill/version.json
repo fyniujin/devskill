@@ -1,11 +1,16 @@
 {
   "name": "zwjh-skill",
   "displayName": "长期记忆 / 知识图谱 会思考的进化 AI",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "min_engine": "1.0.0",
   "requires_api_key": false,
-  "updated_at": "2026-07-29",
+  "updated_at": "2026-08-07",
   "changelog": [
+    "新增：多格式导出（Markdown/JSON/Cypher/CSV/Obsidian/Logseq）与选择性筛选",
+    "新增：时间线叙事生成（项目/人脉/知识成长/周期回顾）",
+    "新增：多模态记忆（图片/音频/文件索引 + 实体关联）",
+    "新增：memory_export.py / narrative.py / multimodal.py 三个模块",
+    "新增：CLI export / import / narrative / multimodal 命令",
     "新增：记忆冲突消解（冲突自动检测 + 分类 + 消解策略）",
     "新增：conflict_resolver.py 模块（UPDATE/CORRECTION/PERSPECTIVE/REAL_CONFLICT 四类冲突）",
     "新增：冲突自动消解（信息更新/纠错自动处理，真实冲突提示用户仲裁）",
