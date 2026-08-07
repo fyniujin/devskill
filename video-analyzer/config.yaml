@@ -70,6 +70,12 @@ whisper:
   
   # 温度参数，影响输出多样性
   temperature: 0.0
+  
+  # ======== tiny 模型优先体验配置 (v4.1 新增) ========
+  # 是否启用 tiny 模型优先体验（首次使用推荐 tiny，体验后再决定是否需要大模型）
+  tiny_first: true
+  # 低配电脑强制使用 tiny（内存 < 此值则强制 tiny，单位 GB）
+  low_memory_threshold: 4
 
 # ==================== 场景检测配置 ====================
 scene_detection:
@@ -259,6 +265,22 @@ editing:
     font_size: 48
     # 字体名称
     font_name: "Microsoft YaHei"
+  
+  # ======== 剪映格式配置 (v4.1 新增) ========
+  jianying:
+    # 帧率
+    fps: 30
+    # 分辨率
+    resolution:
+      width: 1920
+      height: 1080
+
+# ==================== 说话人分离质量评分配置 (v4.1 新增) ====================
+quality_scorer:
+  # 声纹距离权重
+  distance_weight: 0.6
+  # 重叠率权重
+  overlap_weight: 0.4
 
 # ==================== 日志配置 ====================
 logging:
