@@ -77,22 +77,29 @@ privacy:
       - brave
       - duckduckgo
 
+    # 降级引擎列表（按成功率动态排序，不再固定顺序）
+    # 推荐选 2-3 个候选，系统按历史成功率自动选最优
+    fallback_engines:
+      - bing
+      - baidu
+
     # 强制 DNT (Do Not Track)
     dnt: true
     # 不发送 Cookie
     no_cookie: true
     # 不发送 Referrer
     no_referrer: true
-
     # 自定义 User-Agent
     # 留空时自动从内置 UA 池随机取用，降低指纹一致性（V1.2 推荐留空）
     user_agent: ""
-
+    # 追加 User-Agent（可选）
+    # 在内置 UA 池基础上额外添加，一行一个。自己的 UA 优先于内置池
+    # user_agent_pool:
+    #   - "MyCustomUA/1.0 MyApp/1.0"
     # 代理出口（V1.2 新增），支持 http:// 与 socks5://
     # 留空表示直连。设置后所有搜索请求经由该代理，可隐藏真实 IP
     # 示例: "http://127.0.0.1:7890"
     proxy: ""
-
     # 隐私引擎全部失败时，是否允许降级到国内引擎（V1.2 新增）
     # 默认 false：宁可返回空结果，也不把查询词发给隐私保护不足的引擎
     # 改为 true 后等同于每次搜索都带 --allow-fallback
@@ -131,13 +138,20 @@ searxng:
     use_venv: true
     venv_path: "~/.workbuddy/output/.privacy-search-venv"
 
+# ═══════ LLM 摘要（V1.5 新增） ═══════
+llm_summary:
+  enabled: true
+  provider: auto        # auto=有key调LLM，无key降级；extractive=强制抽取式
+  api_key: ""           # 智谱 GLM API Key，留空则自动降级为抽取式摘要
+  model: glm-4-flash
+
 # ═══════ 版本更新检查（死规则 11） ═══════
 update_check:
   enabled: true
   check_on_startup: true
   cache_hours: 24
   api_url: "https://api.skillhub.cn/api/v1/skills/privacy-search"
-  github_url: "https://api.github.com/repos/your-org/privacy-search/releases/latest"
+  github_url: "https://api.github.com/repos/njskills/privacy-search/releases/latest"
 
 # ═══════ 日志 ═══════
 logging:
