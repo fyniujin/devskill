@@ -31,8 +31,33 @@ require_dependencies(("aiohttp", "yaml"))
 import aiohttp
 import yaml
 
-# 启动时随机生成 SearXNG 密钥（不硬编码，每次启动重新生成）
-SEARXNG_SECRET = secrets.token_hex(16)
+# SearXNG 密钥：首次启动时生成并持久化到本地，后续启动复用。
+# 原因：每次随机生成会导致旧实例配置失效，用户需重新配置端口、引擎等。
+_SECRET_PATH = os.path.expanduser("~/.workbuddy/output/.searxng_secret")
+
+
+def _load_or_create_secret() -> str:
+    """加载已有 Secret，不存在则生成并持久化"""
+    try:
+        if os.path.exists(_SECRET_PATH):
+            with open(_SECRET_PATH, "r", encoding="utf-8") as f:
+                val = f.read().strip()
+                if len(val) >= 16:
+                    return val
+    except Exception:
+        pass
+    # 不存在或无效，重新生成
+    val = secrets.token_hex(16)
+    try:
+        os.makedirs(os.path.dirname(_SECRET_PATH), exist_ok=True)
+        with open(_SECRET_PATH, "w", encoding="utf-8", newline="") as f:
+            f.write(val)
+    except Exception:
+        pass
+    return val
+
+
+SEARXNG_SECRET = _load_or_create_secret()
 
 # ============================================================
 # 配置管理
