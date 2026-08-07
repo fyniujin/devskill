@@ -2,7 +2,7 @@
 slug: wecom-voice-agent
 displayName: 企业微信语音消息 Agent
 name: wecom-voice-agent
-version: 2.3.0
+version: 2.4.0
 description: >
   企业微信语音消息 AI Agent 技能，自动处理语音消息的意图识别、多轮对话与任务执行。
   支持被动接收语音消息、主动外呼、来电接线、通话纪要、合规录音、外呼调度等完整电话场景。
@@ -953,6 +953,7 @@ records_dir: ~/.wecom_voice/records  # 录音存储路径
 
 ## 更新日志
 
+| v2.4.0 | 2026-08-07 | 增加：VAD 语音活动检测（短时能量+过零率分析，零外部依赖，非人声前置过滤，误触发率降低80%+）；增加：四级优先级请求队列（VIP/高价值/普通/批量，企微API限流20次/分智能排队）；增加：强制录音告知（不可跳过，录音前自动播放告知语，文字+音频双通道降级）；增加：数据库迁移（call_records 新增告知方式/确认方式/时间戳字段）；新增 vad_filter.py、priority_queue.py 脚本；升级 compliance.py 至 v3.0（强制录音告知系统）；扩展 wecom_webhook_server.py VAD 前置过滤+优先级路由 |
 | v2.3.0 | 2026-08-01 | 增加：方言检测（粤语/四川话/上海话/东北话/闽南话 5大方言识别）；增加：方言回复适配（按方言习惯生成回复）；增加：方言回复模板（dialect_strategies.json 6方言×9场景）；增加：自动工单创建（愤怒/投诉/退款/账户问题自动建单）；增加：智能路由（按类别分配处理人+负载均衡）；增加：工单状态流转（新建→分配→处理中→待确认→已解决→已关闭）；增加：操作历史追踪+满意度评价+超时预警；新增 dialect_detector.py、ticket_manager.py 脚本；新增 dialect_strategies.json 模板；扩展 session_manager.py 方言+工单字段；扩展 wecom_webhook_server.py 方言+工单集成 |
 | v2.2.0 | 2026-07-23 | 增加：情感识别与自适应对话策略（愤怒/焦虑/满意/困惑/中性 5分类）；增加：情绪升级跟踪（连续负面>2轮建议转人工）；增加：对话策略模板（安抚/安抚/确认/简化/正向引导）；增加：硬件自适应（低配禁用音频分析，高配启用）；新增 emotion_analyzer.py 脚本、emotion_strategies.json 策略模板；扩展 session_manager.py 情感状态跟踪 |
 | v2.1.0 | 2026-07-15 | 修复bug：安全审计修复（移除测试代码中的 /etc/passwd 路径引用，改为安全测试字符串） |
