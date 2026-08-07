@@ -23,7 +23,7 @@ def cmd_run(args: argparse.Namespace) -> None:
     """Run the MCP server."""
     config_path = args.config or get_default_config_path()
     config = load_config(config_path)
-    router = ModelRouter()
+    router = ModelRouter(timeout=args.timeout, failover=not args.no_failover)
     availability = router.register_all(config)
     monitor = Monitor()
     server = MCPServer(router, monitor)
@@ -32,6 +32,7 @@ def cmd_run(args: argparse.Namespace) -> None:
     available = router.list_available()
     print(f"[cn-model-gateway] 已加载 {len(available)} 个提供商: {available}", file=sys.stderr)
     print(f"[cn-model-gateway] MCP 服务器已启动 (stdio 模式)", file=sys.stderr)
+    print(f"[cn-model-gateway] 故障转移: {'开启' if not args.no_failover else '关闭'}, 超时: {args.timeout}s", file=sys.stderr)
     server.run_stdio()
 
 
@@ -39,7 +40,7 @@ def cmd_ask(args: argparse.Namespace) -> None:
     """Ask a single question directly."""
     config_path = args.config or get_default_config_path()
     config = load_config(config_path)
-    router = ModelRouter()
+    router = ModelRouter(timeout=args.timeout, failover=not args.no_failover)
     router.register_all(config)
 
     question = args.question or input("请输入问题: ")
@@ -61,7 +62,7 @@ def cmd_compare(args: argparse.Namespace) -> None:
     """Compare models."""
     config_path = args.config or get_default_config_path()
     config = load_config(config_path)
-    router = ModelRouter()
+    router = ModelRouter(timeout=args.timeout, failover=not args.no_failover)
     router.register_all(config)
 
     question = args.question or input("请输入问题: ")
@@ -84,7 +85,7 @@ def cmd_status(args: argparse.Namespace) -> None:
     """Show status of all providers."""
     config_path = args.config or get_default_config_path()
     config = load_config(config_path)
-    router = ModelRouter()
+    router = ModelRouter(timeout=args.timeout, failover=not args.no_failover)
     availability = router.register_all(config)
     print("\n📋 模型提供商状态")
     print("-" * 40)
@@ -112,7 +113,7 @@ def cmd_benchmark(args: argparse.Namespace) -> None:
     """Run model performance benchmark."""
     config_path = args.config or get_default_config_path()
     config = load_config(config_path)
-    router = ModelRouter()
+    router = ModelRouter(timeout=args.timeout, failover=not args.no_failover)
     router.register_all(config)
 
     suite = BenchmarkSuite()
@@ -187,6 +188,10 @@ def main() -> None:
         description="国产模型 MCP 服务器 - DeepSeek/通义/智谱/Kimi/混元/豆包一站式接入",
     )
     parser.add_argument("-c", "--config", help="config.json 路径")
+    parser.add_argument("-t", "--timeout", type=int, default=30,
+                        help="API 调用超时秒数 (默认 30)")
+    parser.add_argument("--no-failover", action="store_true",
+                        help="关闭故障转移（auto 模式只试一家，不自动切备用）")
     subparsers = parser.add_subparsers(dest="command", help="子命令")
 
     # run - MCP server
