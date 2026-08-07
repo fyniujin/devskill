@@ -2,9 +2,9 @@
 slug: privacy-search
 displayName: 隐私搜索
 name: privacy-search
-description: "隐私优先的多引擎并行搜索 Skill，提供十大搜索引擎（百度/必应/搜狗/360/DuckDuckGo/Yandex/Startpage/Qwant/Brave/本地SearXNG）并行检索。V1.2 提供结果缓存与搜索历史、统一 HTTP 出口（隐私头/UA池/代理/自动重试真正生效）、标准 SimHash 去重、多因子加权排序（共识度/位次/相关度/权威度/域名质量）、多套备选选择器与解析诊断、bangs 语法透传。SearXNG 本地实例双路径部署，隐私模式 normal/strict 一键切换，不污染系统 Python 环境。"
-version: 1.2.0
-tags: ["privacy", "search", "multi-engine", "duckduckgo", "searxng", "local-first", "simhash", "china-friendly"]
+description: "隐私优先的多引擎并行搜索 Skill，提供十大搜索引擎（百度/必应/搜狗/360/DuckDuckGo/Yandex/Startpage/Qwant/Brave/本地SearXNG）并行检索。V1.5 提供结果缓存与搜索历史、统一 HTTP 出口（隐私头/UA池/代理/自动重试真正生效）、标准 SimHash 去重、多因子加权排序（共识度/位次/相关度/权威度/域名质量）、多套备选选择器与解析诊断、bangs 语法透传、网页正文抓取、搜索结果导出（Markdown/HTML/PDF）、LLM 摘要（智谱 GLM-4-Flash + 抽取式降级）。SearXNG 本地实例双路径部署，隐私模式 normal/strict 一键切换，不污染系统 Python 环境。"
+version: 1.5.0
+tags: ["privacy", "search", "multi-engine", "duckduckgo", "searxng", "local-first", "simhash", "china-friendly", "export", "summary"]
 icon: "🔒"
 author: "njskills"
 license: "MIT"
@@ -12,7 +12,7 @@ license: "MIT"
 
 # 隐私搜索（Privacy Search）
 
-隐私优先的多引擎并行搜索 Skill。V1.2 聚焦**搜索质量**与**隐私真实生效**：结果缓存显著降低重复查询开销，统一 HTTP 出口让隐私头与代理真正作用于每一次请求，多因子加权排序替代单一共识度排序。
+隐私优先的多引擎并行搜索 Skill。V1.5 在搜索质量与隐私真实生效基础上，新增**网页正文抓取**、**结果导出**（Markdown/HTML/PDF）与**LLM 摘要**（智谱 GLM-4-Flash + 抽取式降级）。
 
 ## 环境要求
 
@@ -338,7 +338,7 @@ privacy-search/
 
 ## 更新日志
 
-| v1.2.0 | 2026-07-27 | 增加：结果缓存与搜索历史（TTL可配、容量上限自动淘汰、--no-cache/--clear-cache/--history/--cache-stats）；增加：统一HTTP出口模块，隐私头/UA池/代理/自动重试对全部引擎一致生效；增加：每引擎多套备选选择器与解析诊断分类（无结果/被拦截/选择器失效）；增加：--selftest引擎连通性体检、--list-engines引擎清单、--privacy-report隐私摘要；增加：bangs快捷语法透传本地SearXNG；增加：运行日志模块，级别可配且默认不记录查询词原文；增加：排序权重可在配置中调整；优化：SimHash改为按位加权投票的标准实现；优化：排序改为共识度/位次/相关度/权威度/域名质量多因子加权；优化：jieba改为懒加载，模块导入耗时从0.9秒降至0.1秒；优化：识别搜索引擎跳转链接并降权，提升跨引擎去重准确度；优化：跳转中转地址与同标题直链合并为一条，同一页面不再重复占位并优先展示直链；优化：标题归并容忍全半角标点差异与截断尾缀，跨引擎去重召回率提升；优化：结果列表标注全部收录引擎与引擎数量，直观体现交叉验证；修复：去重时保留被合并条目的引擎来源与最优位次，共识度因子恢复生效；修复：共识度分母改用实际发起搜索的引擎数，部分引擎失败时不再虚高；修复：缓存路径非法时改为静默降级，不再中断搜索；修复：隐私模式配置兼容 default_mode 与 mode 两种键名并容忍大小写，写法有误时不再静默按普通模式运行；修复：版本号改为从SKILL.md解析，更新提醒不再误报；修复：引擎清单收归注册表，隐私报告屏蔽引擎统计由6项补全至10项；修复：num_results、searxng.enabled、logging三项配置由声明改为实际生效；修复：strict模式下显式指定的非白名单引擎改为拒绝，避免隐私承诺被绕过；修复：缺少依赖时改为提示可直接执行的安装命令与虚拟环境建议，不再抛出裸报错；修复：一键安装脚本标题版本号改为从SKILL.md解析，不再显示旧版本；修复：--privacy-report可单独运行，不再要求同时提供搜索关键词；修复：更新提示框按显示列数对齐并对超长内容折行，中文标签与下载链接不再错位或被截断；增加：引擎返回结果数远低于预期时提示可能触发限流，不再只在零结果时诊断；增加：识别引擎兜底响应，整体结果与查询词关联过弱时按引擎提示核对其他来源；修复：测试包在导入与退出时清理字节码缓存，运行测试不再向仓库写入pyc文件；调整：strict引擎全部失败时默认停止搜索而非降级到国内引擎，需经--allow-fallback显式授权 |
+| v1.5.0 | 2026-08-07 | 增加：网页正文抓取模块（trafilatura/boilerpy3/正则三层降级）；增加：搜索结果导出（Markdown/HTML/PDF，PDF 有降级方案）；增加：LLM 摘要（智谱 GLM-4-Flash + 抽取式降级）；增加：引擎统计与动态降级（按历史成功率选引擎）；增加：UA 池可配置化（config.yaml 追加）；增加：TF-IDF 相关度算法（jieba 分词 + 余弦相似度）；增加：降级引擎列表可配置；优化：域名质量表扩展（+30 常用中文站点）；优化：SearXNG Secret 持久化（重启不失效）；优化：request_delay 默认值与示例文件一致（1.0-5.0）；优化：update_check 接入 search.py 启动检查；修复：github_url 占位符替换为 njskills；修复：引擎改版 mock 回归测试 |
 | v1.1.0 | 2026-07-19 | 增加4个国内可用备选引擎（Yandex/Startpage/Qwant/Brave）；strict模式自动降级与故障转移；增强错误分类（网络/配置/引擎三类）；增加10+FAQ与常见错误反模式对照；增加normal/strict模式搜索输出示例；增加5分钟快速上手指南QUICK_START.md；增加一键安装脚本quick_setup.py |
 | v1.0.0 | 2026-07-18 | 初始版本发布：多引擎并行搜索（F1）；SearXNG本地实例双路径部署（F2）；隐私模式normal/strict切换（F3）；版本更新检查提醒（死规则11）；SimHash去重与交叉验证排序 |
 
