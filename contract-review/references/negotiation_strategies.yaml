@@ -1,0 +1,184 @@
+# 谈判策略库
+# 按合同类型和条款类别，提供谈判建议
+# 依据行业惯例与常见商业谈判实践整理
+
+version: "1.0.0"
+updated: "2026-08-07"
+description: "按合同类型和条款类别，提供'必须守住 / 可以适当让步 / 让了也无妨'三档建议"
+
+strategies:
+  # === 通用条款 ===
+  - clause: "付款节点"
+    category: "financial"
+    description: "付款时间、比例、条件"
+    hold_firm: true
+    hold_reason: "直接影响现金流和履约保障"
+    fallback_options:
+      - "要求分阶段付款，每期与交付里程碑挂钩"
+      - "要求预付款比例不低于 30%"
+      - "约定逾期付款的违约金"
+    avoid_concessions:
+      - "不要接受一次性全额后付"
+      - "不要接受无条件的无限期延期"
+
+  - clause: "知识产权归属"
+    category: "ip"
+    description: "开发成果、专利、技术秘密的所有权"
+    hold_firm: true
+    hold_reason: "核心资产，涉及后续商业化和再开发"
+    fallback_options:
+      - "要求全部知识产权归己方所有"
+      - "要求永久、不可撤销的使用权"
+      - "约定对方不得向第三方转让"
+    avoid_concessions:
+      - "不要接受对方单方面享有知识产权"
+      - "不要接受无期限的独占许可"
+
+  - clause: "违约金比例"
+    category: "penalty"
+    description: "违约金的计算方式与比例"
+    hold_firm: false
+    hold_reason: ""
+    fallback_options:
+      - "民法典 584 条：违约金过高的可请求减少"
+      - "可接受与实际损失挂钩的计算方式"
+      - "约定违约金上限不超过合同金额的 30%"
+    reasonable_range: "合同金额的 5%-20%"
+    red_line: "超过合同金额 30% 的固定违约金"
+
+  - clause: "争议解决方式"
+    category: "dispute"
+    description: "诉讼还是仲裁、管辖地"
+    hold_firm: false
+    hold_reason: ""
+    fallback_options:
+      - "仲裁相对保密、效率高"
+      - "争取在己方所在地仲裁/诉讼"
+      - "可接受中立地的仲裁机构"
+    avoid_concessions:
+      - "不要接受对方所在地独家管辖"
+      - "不要排除诉讼权利（如果倾向诉讼）"
+
+  - clause: "不可抗力范围"
+    category: "force_majeure"
+    description: "不可抗力的定义范围和后果"
+    hold_firm: false
+    hold_reason: ""
+    fallback_options:
+      - "列举式 + 兜底条款"
+      - "约定不可抗力发生后的通知义务"
+      - "明确部分不可抗力不免除相应责任"
+    avoid_concessions:
+      - "不要接受过于宽泛的不可抗力定义"
+
+  - clause: "保密义务"
+    category: "confidentiality"
+    description: "保密信息范围、期限、例外"
+    hold_firm: false
+    hold_reason: ""
+    fallback_options:
+      - "保密期限可接受 3-5 年"
+      - "例外情形（公开、法律要求、已合法持有）"
+      - "约定违约赔偿金额或计算方式"
+    reasonable_range: "保密期限 2-5 年"
+
+  - clause: "合同解除条件"
+    category: "termination"
+    description: "何种情形下可以解除合同"
+    hold_firm: false
+    hold_reason: ""
+    fallback_options:
+      - "根本违约可解除"
+      - "约定宽限期"
+      - "解除后结算和清理条款"
+    avoid_concessions:
+      - "不要接受对方单方面任意解除权"
+
+  # === 建设工程施工合同专项 ===
+  - clause: "工程价款调整"
+    category: "construction_price"
+    description: "固定价/可调价、材料调差"
+    hold_firm: true
+    hold_reason: "工程超 10% 变更时价款调整直接影响利润"
+    fallback_options:
+      - "超过 10-15% 的变更可调价"
+      - "约定主要材料价格波动超过 ±5% 可调差"
+      - "变更签证须双方书面确认"
+    reasonable_range: "变更超 10-15% 可调整"
+
+  - clause: "竣工验收标准"
+    category: "construction_acceptance"
+    description: "验收条件、程序、资料"
+    hold_firm: true
+    hold_reason: "影响工程款结算和质保金释放"
+    fallback_options:
+      - "约定验收期限（收到竣工报告后 28 天内）"
+      - "逾期未验收视为合格"
+      - "明确验收资料清单"
+
+  - clause: "质保金比例"
+    category: "construction_warranty"
+    description: "工程质量保证金的比例和期限"
+    hold_firm: false
+    hold_reason: ""
+    fallback_options:
+      - "质保金不超过工程结算价的 3%"
+      - "质保期满后 14 天内返还"
+      - "可用保函替代质保金"
+    reasonable_range: "3%-5% 质保金，期限 1-2 年"
+
+  # === 劳动合同专项 ===
+  - clause: "竞业限制"
+    category: "employment_noncompete"
+    description: "竞业限制范围、期限、补偿金"
+    hold_firm: false
+    hold_reason: ""
+    fallback_options:
+      - "竞业限制期限不超过 2 年"
+      - "竞业限制补偿金不低于平均工资的 30%"
+      - "按月支付补偿金"
+    reasonable_range: "期限 6 个月-2 年，补偿金 30%-60%"
+
+  - clause: "经济补偿金"
+    category: "employment_severance"
+    description: "解除劳动合同的经济补偿"
+    hold_firm: true
+    hold_reason: "劳动法法定权利，不能让"
+    fallback_options:
+      - "N+1 或 2N 标准"
+      - "按实际工龄计算"
+    avoid_concessions:
+      - "不要低于法定标准"
+
+  # === 买卖合同专项 ===
+  - clause: "交货期限"
+    category: "sales_delivery"
+    description: "交货时间、地点、方式"
+    hold_firm: false
+    hold_reason: ""
+    fallback_options:
+      - "约定宽限期"
+      - "逾期交货的违约金"
+      - "保留解除权"
+
+  - clause: "质量异议期限"
+    category: "sales_quality"
+    description: "买受人提出质量异议的时间"
+    hold_firm: false
+    hold_reason: ""
+    fallback_options:
+      - "合理检验期限"
+      - "约定异议期不少于 30 天"
+    avoid_concessions:
+      - "不要接受过短的异议期（如 7 天以内）"
+
+# === 通用谈判建议 ===
+general_tips:
+  - "谈判前明确己方的核心利益和底线条款，区分'必须守住'和'可以交换'的条款"
+  - "不要轻易放弃付款条件，现金流是企业的命脉"
+  - "知识产权归属是长期战略资产，尽量争取全部或独占"
+  - "违约金可以谈判，但要有上限意识，避免敞口风险"
+  - "争议解决地点尽量争取中立或己方所在地"
+  - "让步要交换，不要单方面让步"
+  - "所有口头承诺必须落实到书面"
+  - "重大合同建议律师参与谈判"
