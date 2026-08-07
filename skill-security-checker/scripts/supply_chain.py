@@ -519,7 +519,72 @@ def _query_osv_batch(package_names, ecosystem):
     return results
 
 
-def _query_nvd_single(package_name, ecosystem='pypi'):
+# CVE offline cache paths (7-day full + daily increment)
+CVE_OFFLINE_CACHE_DIR = Path.home() / ".workbuddy" / "cve_cache"
+CVE_OFFLINE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+CVE_FULL_CACHE_PATH = CVE_OFFLINE_CACHE_DIR / "cve_full_cache.json"
+CVE_INCREMENT_CACHE_PATH = CVE_OFFLINE_CACHE_DIR / "cve_increment_cache.json"
+CVE_FULL_TTL_DAYS = 7
+
+
+def _get_cve_offline_cache(package_names, ecosystem='pypi'):
+    """Look up CVEs from offline cache (7-day full + daily increment)."""
+    now = time.time()
+    cves = {}
+
+    # Check increment cache first (today's updates)
+    if CVE_INCREMENT_CACHE_PATH.exists():
+        try:
+            inc_data = json.loads(CVE_INCREMENT_CACHE_PATH.read_text(encoding='utf-8'))
+            inc_ts = inc_data.get('_ts', 0)
+            # Increment valid for 24h
+            if now - inc_ts < 86400:
+                inc_entries = inc_data.get('entries', {})
+                for pkg in package_names:
+                    if pkg in inc_entries:
+                        cves[pkg] = inc_entries[pkg]
+        except Exception:
+            pass
+
+    # Check full cache (7-day)
+    if CVE_FULL_CACHE_PATH.exists():
+        try:
+            full_data = json.loads(CVE_FULL_CACHE_PATH.read_text(encoding='utf-8'))
+            full_ts = full_data.get('_ts', 0)
+            if now - full_ts < CVE_FULL_TTL_DAYS * 86400:
+                full_entries = full_data.get('entries', {})
+                for pkg in package_names:
+                    if pkg not in cves and pkg in full_entries:
+                        cves[pkg] = full_entries[pkg]
+        except Exception:
+            pass
+
+    return cves
+
+
+def _update_cve_offline_cache(new_cve_data, mode='increment'):
+    """Update offline cache with fresh CVE data."""
+    try:
+        if mode == 'increment' and CVE_INCREMENT_CACHE_PATH.exists():
+            existing = json.loads(CVE_INCREMENT_CACHE_PATH.read_text(encoding='utf-8'))
+            entries = existing.get('entries', {})
+        else:
+            entries = {}
+
+        entries.update(new_cve_data)
+        cache_data = {
+            '_ts': time.time(),
+            'entries': entries,
+            'ecosystem': 'pypi',
+            'updated': datetime.now().isoformat(),
+        }
+        target = CVE_INCREMENT_CACHE_PATH if mode == 'increment' else CVE_FULL_CACHE_PATH
+        target.write_text(json.dumps(cache_data, ensure_ascii=False, indent=2), encoding='utf-8')
+    except Exception:
+        pass
+
+
+def _query_nvd_single(package_name, ecosystem):
     """Fallback: NVD NIST API for a single package."""
     if ecosystem == 'npm':
         keyword = f'npm {package_name}'
@@ -533,37 +598,61 @@ def _query_nvd_single(package_name, ecosystem='pypi'):
 
 
 def query_cve_database(package_names, ecosystem='pypi'):
-    """Query CVEs for a list of packages. OSV batch -> NVD fallback -> local DB."""
-    cves = {}
-    # Try OSV batch first
+    """Query CVEs for a list of packages.
+    
+    Flow: offline cache (7-day full + daily increment) -> OSV batch -> NVD -> local.
+    Fresh API results are written back to offline cache.
+    """
+    # 1. Try offline cache first
+    cves = _get_cve_offline_cache(package_names, ecosystem)
+    
+    # 2. Filter packages still missing
+    missing = [pkg for pkg in package_names if pkg not in cves]
+    
+    if not missing:
+        return cves
+
+    # 3. Try OSV batch for missing packages
+    fresh_results = {}
     try:
-        osv_results = _query_osv_batch(package_names, ecosystem)
+        osv_results = _query_osv_batch(missing, ecosystem)
         for pkg, vulns in osv_results.items():
-            cves[pkg] = [v.get('id') for v in vulns if v.get('id')]
+            cve_ids = [v.get('id') for v in vulns if v.get('id')]
+            if cve_ids:
+                cves[pkg] = cve_ids
+                fresh_results[pkg] = cve_ids
     except Exception:
         osv_results = {}
 
-    # NVD fallback for any missing
-    for pkg in package_names:
-        if pkg in cves:
-            continue
+    # 4. NVD fallback for any still missing
+    still_missing = [pkg for pkg in missing if pkg not in cves]
+    for pkg in still_missing:
         try:
             found = _query_nvd_single(pkg, ecosystem)
             if found:
                 cves[pkg] = found
+                fresh_results[pkg] = found
         except Exception:
             pass
-        time.sleep(0.35)  # NVD rate limit
+        time.sleep(0.35)
 
-    # Local fallback for anything still missing
+    # 5. Local fallback for anything still missing
     for pkg in package_names:
         if pkg in cves:
             continue
         norm = _normalize_pkg_name(pkg)
         for local_pkg, vulns in LOCAL_KNOWN_VULN.items():
             if _normalize_pkg_name(local_pkg) == norm:
-                cves[pkg] = [v for v in vulns.values() if v]
+                local_cves = [v for v in vulns.values() if v]
+                if local_cves:
+                    cves[pkg] = local_cves
+                    fresh_results[pkg] = local_cves
                 break
+
+    # 6. Write fresh results to offline cache
+    if fresh_results:
+        _update_cve_offline_cache(fresh_results, mode='increment')
+
     return cves
 
 
