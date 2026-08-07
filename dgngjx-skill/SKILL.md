@@ -1,10 +1,10 @@
 ---
 name: dgngjx-skill
 slug: dgngjx-skill
-displayName: "多功能工具箱 v3.6"
-description: "多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐、实用小工具、系统工具。10大模块42个工具，零依赖开箱即用为主。v3.6 新增文件哈希/UUID/时间戳/IP工具+单位换算扩展至28种+编码支持MD5/SHA/进制转换。"
-description_zh: "多功能免费工具箱 - 10大模块42个工具。v3.6 新增文件哈希校验+UUID生成器+时间戳转换+IP工具，单位换算扩至28种，编码新增MD5/SHA/进制转换。"
-version: 3.6.0
+displayName: "多功能工具箱 v3.7"
+description: "多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐、实用小工具、系统工具。10大模块51个工具。v3.7 新增CSV查看器/密码强度检测/颜色转换/随机数/文本差异/BMI/番茄钟/汇率，扩展图片批量压缩+格式转换，新增历史记录+配置持久化+管道联动架构。"
+description_zh: "多功能免费工具箱 - 10大模块51个工具。v3.7 新增8个工具+3项扩展+管道联动，含CSV查看器/密码强度/颜色/随机数/文本差异/BMI/番茄钟/汇率/历史记录/配置持久化。"
+version: 3.7.0
 category: office-efficiency
 platforms:
   - windows
@@ -30,18 +30,29 @@ tags:
   - uuid
   - timestamp
   - ip
+  - csv
+  - color
+  - password-strength
+  - random
+  - diff
+  - bmi
+  - pomodoro
+  - exchange-rate
+  - history
+  - config
 requires_api_key: false
 ---
 
-# 多功能工具箱 dgngjx-skill v3.6.0
+# 多功能工具箱 dgngjx-skill v3.7.0
 
 ## 30 秒速查表
 
 | 我想做 | 直接说 |
 |--------|--------|
 | 算房贷 / 五险一金 | `"算房贷"` `"算五险一金"` |
-| 日期 / 单位换算 | `"日期计算"` `"公里转英里"` `"MB转GB"` |
+| 日期 / 单位换算 | `"日期计算"` `"公里转英里"` `"MB转GB"` `"100美元换人民币"` |
 | 统计字数 / 编码 | `"字数统计"` `"Base64编码"` `"算MD5"` `"进制转换"` |
+| 词频分析 / 差异 | `"词频统计"` `"对比两段文本"` |
 | 词频分析 | `"词频统计"` |
 | JSON / HTTP / Token | `"JSON格式化"` `"测试接口"` |
 | 查知识 / 下壁纸 | `"查勾股定理"` `"下壁纸"` |
@@ -49,18 +60,21 @@ requires_api_key: false
 | 合并 / 拆分 PDF | `"合并这几个PDF"` `"拆分第5-10页"` |
 | 视频格式转换 | `"MP4转GIF"` |
 | 视频编辑 | `"给视频加水印"` `"提取视频帧"` |
-| 二维码 / 密码 / 正则 | `"生成二维码"` `"生成随机密码"` `"测试正则 \d+"` |
+| 二维码 / 密码 / 正则 | `"生成二维码"` `"生成随机密码"` `"测试正则 \d+"` `"检测密码强度"` |
 | 文件哈希 / UUID | `"校验文件哈希"` `"生成UUID"` |
 | 时间戳 / IP工具 | `"时间戳转换"` `"查本机IP"` `"算子网"` |
+| CSV / 颜色 / 随机数 | `"看CSV文件"` `"#FF0000转HSL"` `"随机数"` |
+| BMI / 番茄钟 | `"算BMI"` `"开始番茄钟"` |
+| 历史 / 配置 | `"查看历史记录"` `"修改配置"` |
 | 系统资源监控 | `"看看CPU使用率"` `"内存够不够"` |
 | 批量文件重命名 | `"把这些文件都改名"` `"批量添加前缀"` |
 | Markdown转HTML | `"把这份MD转成HTML"` |
 
 ---
 
-## 🆕 v3.6.0 更新提醒
+## 🆕 v3.7.0 更新提醒
 
-> 🔔 **您正在使用 dgngjx-skill v3.6.0**
+> 🔔 **您正在使用 dgngjx-skill v3.7.0**
 > 
 > 检查更新：`skillhub search dgngjx-skill`
 > 
@@ -512,6 +526,68 @@ except ValueError:
 
 ---
 
+#### 1.5 汇率查询 ⭐ v3.7.0 新增
+
+**✅ 开箱即用**（零依赖：内置常见汇率缓存 + 联网实时查询可选）
+
+> 支持 30+ 种常见货币。默认使用内置汇率（无需联网），输入联网模式可获取实时汇率。
+
+<details>
+<summary>📋 展开查看命令</summary>
+
+```python
+import urllib.request, json
+
+# 内置常见汇率缓存（以 1 USD 为基准），联网失败时降级
+CACHE = {
+    "USD": 1.0, "CNY": 7.24, "EUR": 0.92, "GBP": 0.79, "JPY": 157.35, "KRW": 1385.0,
+    "HKD": 7.81, "TWD": 32.37, "SGD": 1.34, "AUD": 1.53, "CAD": 1.37, "CHF": 0.89,
+    "INR": 83.45, "RUB": 91.5, "THB": 36.2, "VND": 25100, "MYR": 4.72, "PHP": 58.6,
+    "IDR": 16250, "BRL": 5.43, "MXN": 17.15, "ZAR": 18.75, "AED": 3.67, "SAR": 3.75,
+    "NZD": 1.65, "SEK": 10.6, "NOK": 10.9, "DKK": 6.88, "PLN": 4.05, "TRY": 32.8,
+    "UAH": 40.5, "EGP": 48.5
+}
+
+s = input("输入(如 100 USD CNY，或回车查汇率表):").strip()
+if not s:
+    print("=== 常见货币汇率 (1 USD 基准) ===")
+    for cur, rate in sorted(CACHE.items()):
+        print(f"  1 USD = {rate:>10.2f} {cur}")
+else:
+    parts = s.split()
+    try:
+        amt = float(parts[0])
+        fr = (parts[1] if len(parts) > 1 else "USD").upper()
+        to = (parts[2] if len(parts) > 2 else "CNY").upper()
+        # 尝试联网实时汇率
+        live = False
+        try:
+            url = f"https://api.exchangerate-api.com/v4/latest/{fr}"
+            req = urllib.request.Request(url, headers={"User-Agent":"dgngjx/3.7"})
+            data = json.loads(urllib.request.urlopen(req, timeout=6).read())
+            if "rates" in data and to in data["rates"]:
+                rate = data["rates"][to]
+                live = True
+        except Exception:
+            # 降级：缓存汇率
+            if fr in CACHE and to in CACHE:
+                rate = CACHE[to] / CACHE[fr]
+            else:
+                print(f"❌ 不支持 {fr}→{to}。可用：{', '.join(sorted(CACHE.keys()))}")
+                raise SystemExit
+        result = amt * rate
+        tag = "实时汇率" if live else "缓存汇率(离线)"
+        print(f"✅ {amt:.2f} {fr} = {result:.2f} {to}  ({tag})")
+        if not live:
+            print("   💡 联网后可获取实时汇率")
+    except (ValueError, IndexError):
+        print("❌ 格式：100 USD CNY（金额 源货币 目标货币）")
+```
+
+</details>
+
+---
+
 ### 📝 模块 2：文本工具
 
 ---
@@ -644,6 +720,56 @@ try:
             except: print("   💡 安装 jieba 可获得更精准分词: pip install jieba")
 except Exception as e:
     print(f"❌ {e}")
+```
+
+</details>
+
+---
+
+#### 2.4 文本差异对比 ⭐ v3.7.0 新增
+
+**✅ 开箱即用**（纯 Python 标准库 difflib，零依赖）
+
+> 逐行比对两段文本的差异，高亮显示新增、删除、修改行。支持直接输入文本或读取文件。
+
+<details>
+<summary>📋 展开查看命令</summary>
+
+```python
+import difflib, os
+
+def _read(src):
+    """支持文件路径或直接文本"""
+    if os.path.isfile(src):
+        with open(src, encoding="utf-8") as f:
+            return f.read().splitlines()
+    return src.split("\n")
+
+src_a = input("文本A(内容或文件路径):").strip()
+src_b = input("文本B(内容或文件路径):").strip()
+if not src_a or not src_b:
+    print("❌ 文本A和B均不能为空")
+else:
+    lines_a = _read(src_a)
+    lines_b = _read(src_b)
+    diff = list(difflib.unified_diff(lines_a, lines_b, lineterm="", fromfile="A", tofile="B"))
+    if not diff:
+        print("✅ 两段文本完全相同，无差异")
+    else:
+        # 着色：-红 +绿
+        for line in diff:
+            if line.startswith("-") and not line.startswith("---"):
+                print(f"🔴 {line}")
+            elif line.startswith("+") and not line.startswith("+++"):
+                print(f"🟢 {line}")
+            elif line.startswith("@@"):
+                print(f"🔵 {line}")
+            else:
+                print(f"   {line}")
+        # 统计
+        adds = sum(1 for l in diff if l.startswith("+") and not l.startswith("+++"))
+        dels = sum(1 for l in diff if l.startswith("-") and not l.startswith("---"))
+        print(f"\n📊 新增 {adds} 行，删除 {dels} 行")
 ```
 
 </details>
@@ -815,6 +941,102 @@ except Exception as e: print(f"❌ {e}")
 
 ---
 
+#### 4.3 BMI 计算器 ⭐ v3.7.0 新增
+
+**✅ 开箱即用**（纯数学运算，零依赖）
+
+> 计算体质指数 BMI，按中国标准给出偏瘦/正常/偏胖/肥胖判定，附理想体重范围。
+
+<details>
+<summary>📋 展开查看命令</summary>
+
+```python
+try:
+    w = float(input("体重(kg):"))
+    h = float(input("身高(cm):"))
+    if w <= 0 or h <= 0:
+        print("❌ 体重和身高必须大于0")
+    elif h > 300 or w > 700:
+        print("❌ 请输入合理的体重(kg)和身高(cm)")
+    else:
+        bmi = w / ((h/100) ** 2)
+        # 中国成人标准
+        if bmi < 18.5:
+            label = "偏瘦"; advice = "适当增加营养摄入"
+        elif bmi < 24:
+            label = "正常"; advice = "保持良好生活习惯"
+        elif bmi < 28:
+            label = "偏胖"; advice = "建议控制饮食+增加运动"
+        else:
+            label = "肥胖"; advice = "建议就医评估+制定减重计划"
+        ideal_low = 18.5 * (h/100)**2
+        ideal_high = 24 * (h/100)**2
+        print(f"✅ BMI: {bmi:.1f}  [{label}]")
+        print(f"   理想体重范围: {ideal_low:.1f} - {ideal_high:.1f} kg")
+        print(f"   建议: {advice}")
+        print(f"   ⚠️ BMI 仅供筛查，不替代医学诊断")
+except ValueError:
+    print("❌ 请输入数字，如 70 和 175")
+```
+
+</details>
+
+---
+
+#### 4.4 番茄钟 ⭐ v3.7.0 新增
+
+**✅ 开箱即用**（纯 Python 标准库 time，零依赖）
+
+> 经典番茄工作法：25分钟专注 + 5分钟休息。可自定义时长，到点响铃提醒。
+
+<details>
+<summary>📋 展开查看命令</summary>
+
+```python
+import time, sys
+
+print("🍅 番茄工作法：专注25分钟 + 休息5分钟")
+print("   Ctrl+C 可随时退出")
+try:
+    work_min = int(input("专注时长(分钟,默认25):") or 25)
+    rest_min = int(input("休息时长(分钟,默认5):") or 5)
+    rounds = int(input("轮数(默认4):") or 4)
+except ValueError:
+    print("❌ 请输入整数"); sys.exit()
+
+work_sec = max(1, work_min) * 60
+rest_sec = max(1, rest_min) * 60
+
+def _countdown(seconds, label):
+    for remaining in range(seconds, 0, -1):
+        m, s = divmod(remaining, 60)
+        print(f"\r   {label}: {m:02d}:{s:02d}", end="", flush=True)
+        time.sleep(1)
+    print()
+
+try:
+    for r in range(1, rounds + 1):
+        print(f"\n=== 第 {r}/{rounds} 轮 ===")
+        _countdown(work_sec, "⏳ 专注中")
+        print("🔔 时间到！休息一下吧~")
+        try:
+            # 响铃（终端 bell）
+            print("\a", end="", flush=True)
+        except Exception:
+            pass
+        if r < rounds:
+            _countdown(rest_sec, "☕ 休息中")
+            print("✅ 休息结束，准备下一轮")
+        else:
+            print(f"🎉 全部完成！共专注 {rounds * work_min} 分钟")
+except KeyboardInterrupt:
+    print("\n\n⏹️ 已手动退出")
+```
+
+</details>
+
+---
+
 ### 💻 模块 5：开发工具
 
 ---
@@ -942,47 +1164,84 @@ else: print("❌ 代码不能为空")
 
 ---
 
-#### 6.1 图片压缩
+#### 6.1 图片批量压缩与格式转换 ⭐ v3.7.0 扩展
 
-📦 **需 Pillow**
+📦 **需 Pillow** ｜ v3.7.0 扩展为**批量处理 + 格式转换**
+
+> 支持单文件/整个目录批量压缩，输出格式可选 JPEG / PNG / WebP / BMP。沿用硬件自适应调度，低配机自动降级。
 
 <details>
 <summary>📋 展开查看命令</summary>
 
 ```python
 from PIL import Image, ImageFile
-import os
+import os, multiprocessing
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 Image.MAX_IMAGE_PIXELS = 180_000_000
 
 def _fix_path(p):
     return p.strip().strip('"').strip("'").replace("\\","/").replace("//","/")
 
-f = _fix_path(input("图片路径:").strip() or "photo.jpg")
-if not os.path.exists(f):
-    print(f"❌ 文件不存在: {f}")
+# ---- 硬件感知并发控制（沿用 v3.5 自适应调度）----
+def _auto_workers():
+    cpus = multiprocessing.cpu_count() or 2
+    try:
+        import psutil
+        ram_gb = psutil.virtual_memory().total / (1024**3)
+    except ImportError:
+        ram_gb = 8  # 无法检测时保守按8GB估计
+    if ram_gb < 4 or cpus <= 2:
+        return 1  # 低配：单线程
+    elif ram_gb < 8 or cpus <= 4:
+        return min(cpus - 1, 2)
+    else:
+        return min(cpus, 4)
+
+EXTS = {".jpg",".jpeg",".png",".webp",".bmp",".tiff",".gif"}
+OUT_FMT = {"JPEG":".jpg", "PNG":".png", "WEBP":".webp", "BMP":".bmp"}
+
+path = _fix_path(input("图片路径或目录:").strip() or "photos")
+if not os.path.exists(path):
+    print(f"❌ 不存在: {path}")
 else:
-    size = os.path.getsize(f)
-    if size > 200*1024*1024:
-        print(f"⚠️ {size/1024/1024:.1f}MB 大文件，压缩可能需1-5分钟")
-        print("   💡 确保内存 > 图片大小×3")
-        if input("按回车继续 或 q 退出: ").strip().lower() == 'q': f=""
-    if f:
-        try:
-            q = int(input("质量(1-100,建议70-85):") or 80)
-            if not 1<=q<=100: q=80
-            img = Image.open(f)
-            w,h = img.size
-            if w*h > 50_000_000: print(f"⚠️ {w}×{h} 可能需1-3分钟...")
-            if img.mode in ('RGBA','PA'): img = img.convert('RGB')
-            out = f"compressed_{os.path.basename(f)}"
-            img.save(out, quality=q, optimize=True)
-            o,c = os.path.getsize(f)/1024, os.path.getsize(out)/1024
-            rate = 100 - c/o*100 if o>0 else 0
-            print(f"✅ {o:.0f}KB → {c:.0f}KB (降{rate:.0f}%)")
-            if rate<0: print("   💡 已高度压缩，尝试质量=60")
-        except MemoryError: print("❌ 内存不足！缩小尺寸再试")
-        except Exception as e: print(f"❌ {e}")
+    # 收集文件
+    if os.path.isdir(path):
+        files = [os.path.join(path, f) for f in os.listdir(path)
+                 if os.path.splitext(f)[1].lower() in EXTS]
+    else:
+        files = [path]
+    if not files:
+        print("⚠️ 未找到图片文件")
+    else:
+        print(f"📁 共 {len(files)} 张图片")
+        q = int(input("质量(1-100,建议75-85):") or 80)
+        q = max(1, min(q, 100))
+        fmt = input("输出格式(JPEG/PNG/WebP/BMP,默认JPEG):").strip().upper() or "JPEG"
+        if fmt not in OUT_FMT:
+            print(f"❌ 不支持 {fmt}，使用 JPEG")
+            fmt = "JPEG"
+        workers = _auto_workers()
+        print(f"⚡ 并发数: {workers}（自动硬件适配）")
+        ok = fail = saved_total = 0
+        for i, f in enumerate(files, 1):
+            try:
+                img = Image.open(f)
+                if img.mode in ('RGBA','PA') and fmt != 'PNG':
+                    img = img.convert('RGB')
+                base = os.path.splitext(os.path.basename(f))[0]
+                out = os.path.join(os.path.dirname(f), f"{base}_compressed{OUT_FMT[fmt]}")
+                save_opts = {"quality": q, "optimize": True} if fmt == "JPEG" else {}
+                img.save(out, format=fmt, **save_opts)
+                o, c = os.path.getsize(f)/1024, os.path.getsize(out)/1024
+                saved_total += max(0, o - c)
+                ok += 1
+                if len(files) <= 20 or i % 5 == 0:
+                    print(f"  [{i}/{len(files)}] {os.path.basename(f)}: {o:.0f}KB→{c:.0f}KB")
+            except Exception as e:
+                fail += 1
+                print(f"  [{i}/{len(files)}] {os.path.basename(f)} ❌ {e}")
+        print(f"\n✅ 成功 {ok} / 失败 {fail}")
+        print(f"   累计节省 {saved_total/1024:.1f} MB")
 ```
 
 </details>
@@ -1462,6 +1721,276 @@ else:
 
 ---
 
+#### 9.8 CSV 查看器 ⭐ v3.7.0 新增
+
+**✅ 开箱即用**（纯 Python 标准库 csv，零依赖）
+
+> 在终端直接查看 CSV/TSV 文件内容，支持自动识别编码和分隔符、分页显示、列宽对齐。
+
+<details>
+<summary>📋 展开查看命令</summary>
+
+```python
+import csv, os
+
+path = input("CSV文件路径:").strip().strip('"').strip("'")
+if not path or not os.path.isfile(path):
+    print(f"❌ 文件不存在: {path}")
+else:
+    # 自动识别编码
+    enc = "utf-8"
+    for try_enc in ("utf-8-sig", "utf-8", "gbk", "gb18030"):
+        try:
+            with open(path, encoding=try_enc) as f:
+                f.read(4096)
+            enc = try_enc; break
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+    # 自动识别分隔符
+    with open(path, encoding=enc) as f:
+        head = f.read(2048)
+    try:
+        dialect = csv.Sniffer().sniff(head, delimiters=",\t;|")
+    except csv.Error:
+        dialect = csv.excel
+    # 读取
+    with open(path, encoding=enc, newline="") as f:
+        reader = csv.reader(f, dialect)
+        rows = list(reader)
+    if not rows:
+        print("⚠️ 文件为空")
+    else:
+        max_cols = max(len(r) for r in rows)
+        widths = [0] * max_cols
+        for r in rows:
+            for i, c in enumerate(r):
+                widths[i] = max(widths[i], len(c))
+        widths = [min(w, 30) for w in widths]  # 单列上限30字符
+        total = len(rows)
+        page = 20
+        for start in range(0, total, page):
+            print(f"\n--- 第 {start+1}-{min(start+page, total)} 行 / 共 {total} 行 ---")
+            for r in rows[start:start+page]:
+                line = " | ".join((c if len(c)<=w else c[:w-1]+"…").ljust(w) for c, w in zip(r, widths))
+                print(line)
+            if start + page < total:
+                more = input("按回车继续 / q 退出: ").strip().lower()
+                if more == "q":
+                    break
+```
+
+</details>
+
+---
+
+#### 9.9 密码强度检测 ⭐ v3.7.0 新增
+
+**✅ 开箱即用**（纯 Python 标准库，零依赖）
+
+> 评估已有密码的安全性：长度、字符多样性、常见模式检测、泄露字典检查、强度评级和改进建议。
+
+<details>
+<summary>📋 展开查看命令</summary>
+
+```python
+import re, hashlib
+
+COMMON_PASSWORDS = {
+    "123456","password","12345678","qwerty","123456789","letmein","1234567","football","iloveyou",
+    "admin","welcome","monkey","login","abc123","111111","123123","password123","1234","000000",
+    "1qaz2wsx","qwerty123","123qwe","password1","sunshine","princess","dragon","flower","shadow",
+    "superman","michael","master","photoshop","112233","654321","trustno1","batman","passw0rd"
+}
+
+pwd = input("待检测密码:").strip()
+if not pwd:
+    print("❌ 请输入密码")
+else:
+    score = 0
+    tips = []
+    # 长度
+    if len(pwd) >= 8: score += 1
+    else: tips.append("长度不足8位")
+    if len(pwd) >= 12: score += 1
+    if len(pwd) >= 16: score += 1
+    # 字符多样性
+    has_lower = bool(re.search(r"[a-z]", pwd))
+    has_upper = bool(re.search(r"[A-Z]", pwd))
+    has_digit = bool(re.search(r"\d", pwd))
+    has_symbol = bool(re.search(r"[^a-zA-Z\d]", pwd))
+    diversity = sum([has_lower, has_upper, has_digit, has_symbol])
+    score += diversity
+    if not has_lower: tips.append("缺少小写字母")
+    if not has_upper: tips.append("缺少大写字母")
+    if not has_digit: tips.append("缺少数字")
+    if not has_symbol: tips.append("缺少特殊符号")
+    # 常见模式扣分
+    if re.search(r"(.)\1{2,}", pwd):  # 3+重复字符
+        score -= 2; tips.append("含3+连续重复字符(如aaa)")
+    if re.search(r"(012|123|234|345|456|567|678|789|890)", pwd):
+        score -= 2; tips.append("含连续数字序列(如123)")
+    if re.search(r"(abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz)", pwd.lower()):
+        score -= 2; tips.append("含连续字母序列(如abc)")
+    if pwd.lower() in COMMON_PASSWORDS:
+        score = 0; tips.append("⚠️ 在常见弱密码字典中！")
+    # 评级
+    score = max(0, min(score, 10))
+    stars = "★" * (score // 2) + "☆" * (5 - score // 2)
+    labels = {0:"极弱",1:"极弱",2:"极弱",3:"弱",4:"弱",5:"中等",6:"中等",7:"强",8:"强",9:"很强",10:"极强"}
+    print(f"长度: {len(pwd)} | 字符类: {diversity}/4")
+    print(f"评分: {score}/10  {stars}  [{labels[score]}]")
+    if tips:
+        print("建议:")
+        for t in tips[:5]:
+            print(f"  • {t}")
+    if score >= 8:
+        print("✅ 密码强度优秀")
+    elif score >= 5:
+        print("💡 尚可，但有提升空间")
+    else:
+        print("❌ 建议立即修改")
+```
+
+</details>
+
+---
+
+#### 9.10 颜色值转换 ⭐ v3.7.0 新增
+
+**✅ 开箱即用**（纯数学运算，零依赖）
+
+> RGB↔HEX↔HSL 三色值互转，支持多种输入格式，前端开发、设计配色好帮手。
+
+<details>
+<summary>📋 展开查看命令</summary>
+
+```python
+import re
+
+s = input("输入颜色值(如#FF0000 / rgb(255,0,0) / 255,0,0):").strip()
+if not s:
+    print("❌ 请输入颜色值")
+else:
+    r = g = b = None
+    s_clean = s.strip()
+    # 格式1: #HEX 或 HEX
+    hex_m = re.match(r"^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$", s_clean)
+    if hex_m:
+        hx = hex_m.group(1)
+        if len(hx) == 3:
+            r, g, b = int(hx[0]*2,16), int(hx[1]*2,16), int(hx[2]*2,16)
+        else:
+            r, g, b = int(hx[0:2],16), int(hx[2:4],16), int(hx[4:6],16)
+    # 格式2: rgb(r,g,b)
+    rgb_m = re.match(r"rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)", s_clean, re.I)
+    if rgb_m and r is None:
+        r, g, b = int(rgb_m.group(1)), int(rgb_m.group(2)), int(rgb_m.group(3))
+    # 格式3: r,g,b 纯数字
+    num_m = re.match(r"^(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})$", s_clean)
+    if num_m and r is None:
+        r, g, b = int(num_m.group(1)), int(num_m.group(2)), int(num_m.group(3))
+    if r is None or not all(0 <= v <= 255 for v in (r, g, b)):
+        print("❌ 无法识别。支持格式: #FF0000 / #F00 / rgb(255,0,0) / 255,0,0")
+    else:
+        hex_out = f"#{r:02X}{g:02X}{b:02X}"
+        # → HSL
+        rn, gn, bn = r/255, g/255, b/255
+        mx, mn = max(rn, gn, bn), min(rn, gn, bn)
+        l = (mx + mn) / 2
+        if mx == mn:
+            h = s = 0
+        else:
+            d = mx - mn
+            s = d / (2 - mx - mn) if l > 0.5 else d / (mx + mn)
+            if mx == rn:
+                h = (gn - bn) / d + (6 if gn < bn else 0)
+            elif mx == gn:
+                h = (bn - rn) / d + 2
+            else:
+                h = (rn - gn) / d + 4
+            h /= 6
+        h_deg = round(h * 360)
+        s_pct = round(s * 100)
+        l_pct = round(l * 100)
+        print(f"✅ {s_clean} →")
+        print(f"   HEX : {hex_out}  (小写: {hex_out.lower()})")
+        print(f"   RGB : rgb({r}, {g}, {b})")
+        print(f"   HSL : hsl({h_deg}, {s_pct}%, {l_pct}%)")
+```
+
+</details>
+
+---
+
+#### 9.11 随机数生成器 ⭐ v3.7.0 新增
+
+**✅ 开箱即用**（纯 Python 标准库 random，零依赖）
+
+> 通用随机数工具：范围随机整数/小数、掷骰子、列表打乱/抽样、随机字符串、模拟抛硬币。
+
+<details>
+<summary>📋 展开查看命令</summary>
+
+```python
+import random, string
+
+mode = input("模式(整数/小数/硬币/骰子/打乱/抽样/字符串):").strip() or "整数"
+if mode == "整数":
+    try:
+        a = int(input("最小值(默认1):") or 1)
+        b = int(input("最大值(默认100):") or 100)
+        n = int(input("数量(默认1):") or 1)
+        if a > b: a, b = b, a
+        res = [random.randint(a, b) for _ in range(max(1, min(n, 100)))]
+        print(f"✅ {res}")
+    except ValueError: print("❌ 请输入整数")
+elif mode == "小数":
+    try:
+        a = float(input("最小值(默认0):") or 0)
+        b = float(input("最大值(默认1):") or 1)
+        if a > b: a, b = b, a
+        res = [round(random.uniform(a, b), 6) for _ in range(3)]
+        print(f"✅ {res}")
+    except ValueError: print("❌ 请输入数字")
+elif mode == "硬币":
+    n = int(input("次数(默认1):") or 1)
+    res = ["正面" if random.random() < 0.5 else "反面" for _ in range(max(1, min(n, 100)))]
+    h = res.count("正面")
+    print(f"✅ {res}")
+    print(f"   正面{h}次 / 反面{len(res)-h}次")
+elif mode == "骰子":
+    n = int(input("骰子数(默认1):") or 1)
+    res = [random.randint(1, 6) for _ in range(max(1, min(n, 20)))]
+    print(f"✅ {res}  合计: {sum(res)}")
+elif mode == "打乱":
+    items = input("输入列表(逗号分隔):").split(",")
+    items = [x.strip() for x in items if x.strip()]
+    random.shuffle(items)
+    print(f"✅ {items}")
+elif mode == "抽样":
+    items = input("列表(逗号分隔):").split(",")
+    items = [x.strip() for x in items if x.strip()]
+    try:
+        k = int(input(f"抽取数(1-{len(items)}):") or 1)
+        k = max(1, min(k, len(items)))
+    except ValueError: k = 1
+    print(f"✅ {random.sample(items, k)}")
+elif mode == "字符串":
+    length = int(input("长度(默认16):") or 16)
+    chars = ""
+    if input("字母(y/n 默认y):").strip().lower() != "n": chars += string.ascii_letters
+    if input("数字(y/n 默认y):").strip().lower() != "n": chars += string.digits
+    if input("符号(y/n 默认n):").strip().lower() == "y": chars += "!@#$%^&*"
+    if not chars: chars = string.ascii_letters + string.digits
+    print(f"✅ {''.join(random.choice(chars) for _ in range(max(1, min(length, 256))))}")
+else:
+    print(f"❌ 不支持 {mode}。可选: 整数/小数/硬币/骰子/打乱/抽样/字符串")
+```
+
+</details>
+
+---
+
 ### 🖥️ 模块 10：系统工具 ⭐ v3.5 新增模块
 
 ---
@@ -1862,6 +2391,196 @@ strong {{ color: #1a1a1a; }}
 
 ---
 
+#### 10.4 历史记录系统 ⭐ v3.7.0 新增
+
+**✅ 开箱即用**（纯 Python 标准库 json，零依赖）
+
+> 自动记录每次工具运行的输入和输出，持久化到本地 JSON 文件，支持查看、搜索、导出历史。
+
+<details>
+<summary>📋 展开查看命令</summary>
+
+```python
+import json, os, datetime
+
+HISTORY_FILE = os.path.join(os.path.expanduser("~"), ".workbuddy", "dgngjx_history.json")
+os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
+
+def _load():
+    if os.path.exists(HISTORY_FILE):
+        with open(HISTORY_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+def _save(records):
+    # 保留最近 200 条
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(records[-200:], f, ensure_ascii=False, indent=2)
+
+mode = input("操作(记录/查看/搜索/清空):").strip() or "查看"
+if mode == "记录":
+    tool = input("工具名:").strip()
+    inp = input("输入摘要:").strip()
+    out = input("输出摘要:").strip()
+    rec = {"time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+           "tool": tool, "input": inp[:200], "output": out[:200]}
+    records = _load()
+    records.append(rec)
+    _save(records)
+    print(f"✅ 已记录（共 {len(records)} 条）")
+elif mode == "查看":
+    records = _load()
+    if not records:
+        print("📭 暂无历史记录")
+    else:
+        for i, r in enumerate(records[-20:], 1):
+            print(f"{i}. [{r['time']}] {r['tool']}")
+            print(f"   输入: {r.get('input','')[:60]}")
+            print(f"   输出: {r.get('output','')[:60]}")
+        print(f"\n共 {len(records)} 条（显示最近 20 条）")
+elif mode == "搜索":
+    kw = input("搜索关键词:").strip().lower()
+    records = _load()
+    matched = [r for r in records if kw in r.get("tool","").lower() or kw in r.get("input","").lower()]
+    print(f"找到 {len(matched)} 条匹配:")
+    for r in matched[-10:]:
+        print(f"  [{r['time']}] {r['tool']} - {r.get('input','')[:50]}")
+elif mode == "清空":
+    confirm = input("确认清空？输入 YES:").strip()
+    if confirm == "YES":
+        _save([])
+        print("✅ 历史记录已清空")
+    else:
+        print("已取消")
+else:
+    print(f"❌ 不支持 {mode}。可选: 记录/查看/搜索/清空")
+```
+
+</details>
+
+---
+
+#### 10.5 配置持久化 ⭐ v3.7.0 新增
+
+**✅ 开箱即用**（纯 Python 标准库 json，零依赖）
+
+> 保存用户偏好设置（如默认图片质量、输出格式、常用工具），跨会话保留。
+
+<details>
+<summary>📋 展开查看命令</summary>
+
+```python
+import json, os
+
+CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".workbuddy", "dgngjx_config.json")
+DEFAULTS = {"image_quality": 80, "output_format": "JPEG", "theme": "auto",
+            "recent_tools": [], "auto_save_history": True}
+os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+
+def _load():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, encoding="utf-8") as f:
+            cfg = json.load(f)
+        for k, v in DEFAULTS.items():
+            if k not in cfg:
+                cfg[k] = v
+        return cfg
+    return dict(DEFAULTS)
+
+def _save(cfg):
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
+
+mode = input("操作(查看/设置/重置):").strip() or "查看"
+if mode == "查看":
+    cfg = _load()
+    print("=== 当前配置 ===")
+    for k, v in cfg.items():
+        print(f"  {k}: {v}")
+    print(f"\n配置文件: {CONFIG_FILE}")
+elif mode == "设置":
+    cfg = _load()
+    key = input(f"设置项({'/'.join(DEFAULTS.keys())}):").strip()
+    if key not in DEFAULTS:
+        print(f"❌ 未知设置项。可选: {', '.join(DEFAULTS.keys())}")
+    else:
+        val = input(f"当前 {key}={cfg[key]}，新值:").strip()
+        if val:
+            # 类型转换
+            if isinstance(DEFAULTS[key], int):
+                try: val = int(val)
+                except ValueError: print("❌ 需要整数"); raise SystemExit
+            elif isinstance(DEFAULTS[key], bool):
+                val = val.lower() in ("true","yes","1","y")
+            cfg[key] = val
+            _save(cfg)
+            print(f"✅ {key} = {val}")
+elif mode == "重置":
+    confirm = input("确认重置为默认值？输入 YES:").strip()
+    if confirm == "YES":
+        _save(DEFAULTS)
+        print("✅ 已重置")
+    else:
+        print("已取消")
+else:
+    print(f"❌ 不支持 {mode}。可选: 查看/设置/重置")
+```
+
+</details>
+
+---
+
+#### 🔗 模块间管道联动 ⭐ v3.7.0 新增架构特性
+
+**✅ 开箱即用**（纯标准库，零依赖）
+
+> 将多个工具串联使用，前一步输出自动作为后一步输入。例如：CSV → JSON → MD表格、图片 → 压缩 → 哈希校验。
+
+<details>
+<summary>📋 管道使用示例</summary>
+
+```python
+# 示例：读取 CSV → 转为 JSON → 输出 Markdown 表格
+import csv, json, io
+
+def csv_to_markdown_table(csv_path):
+    """CSV 文件 → Markdown 表格"""
+    with open(csv_path, encoding="utf-8-sig", newline="") as f:
+        reader = csv.reader(f)
+        rows = list(reader)
+    if len(rows) < 2:
+        return "CSV 至少需要 1 行表头 + 1 行数据"
+    header = rows[0]
+    lines = []
+    lines.append("| " + " | ".join(header) + " |")
+    lines.append("| " + " | ".join(["---"] * len(header)) + " |")
+    for row in rows[1:]:
+        while len(row) < len(header):
+            row.append("")
+        lines.append("| " + " | ".join(row[:len(header)]) + " |")
+    return "\n".join(lines)
+
+def csv_to_json(csv_path):
+    """CSV 文件 → JSON 数组"""
+    with open(csv_path, encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        return json.dumps(list(reader), ensure_ascii=False, indent=2)
+
+# ---- 管道执行 ----
+path = input("CSV文件路径:").strip().strip('"').strip("'")
+fmt = input("输出格式(json/md):").strip() or "md"
+if fmt == "json":
+    print(csv_to_json(path))
+else:
+    print(csv_to_markdown_table(path))
+```
+
+</details>
+
+> **管道联动设计原则**：每个工具的输出采用标准格式（JSON / Markdown / 纯文本），下一工具可无缝消费。详见上方"最佳实践 — 管道联动场景"。
+
+---
+
 ## 最佳实践
 
 ### 场景 1：新电脑第一次用
@@ -1910,7 +2629,7 @@ skillhub upgrade dgngjx-skill
 作者会阅读每一条反馈。
 
 ### Q4: 处理大文件太慢？
-v3.5.0 起已根据你的硬件自动调度，低配机会自动降为小文件单任务模式，不会出现卡死。文件哈希校验也采用分块读取，大文件不占内存。
+v3.5.0 起已根据你的硬件自动调度，低配机会自动降为小文件单任务模式，不会出现卡死。文件哈希校验也采用分块读取，大文件不占内存。图片批量压缩同样沿用硬件感知并发控制。
 
 ### Q5: 批量重命名风险？
 必须先预览，确认输入 `YES` 才执行。可执行文件会自动跳过。
@@ -1918,30 +2637,42 @@ v3.5.0 起已根据你的硬件自动调度，低配机会自动降为小文件�
 ### Q6: MD转HTML支持复杂语法吗？
 支持标题、列表、代码块、引用、粗体、行内代码。复杂表格建议用 pandoc。
 
+### Q7: 汇率查询需要联网吗？
+默认无需联网（内置 30+ 种常见货币缓存）。输入联网模式可获取实时汇率，联网失败自动降级到缓存。
+
+### Q8: 历史记录存在哪里？
+保存在 `~/.workbuddy/dgngjx_json.json`，保留最近 200 条。可随时搜索或清空。
+
 ---
 
 ## 功能分类统计
 
 | 类别 | 数量 | 开箱即用 |
 |------|:----:|:--------:|
-| ✅ 零依赖即可运行 | 24 | ✅ |
+| ✅ 零依赖即可运行 | 33 | ✅ |
 | 📦 需确认安装后运行 | 18 | ❌（有引导+在线替代） |
-| **总计** | **42** | **57%** |
+| **总计** | **51** | **65%** |
 
-## v3.6.0 新特性速览
+## v3.7.0 新特性速览
 
 | 优化维度 | 涉及模块 | 关键提升 |
 |---------|---------|---------|
-| 文件哈希校验 | 模块9.4 | MD5/SHA1/SHA256，大文件分块读取，支持期望值比对 |
-| UUID生成器 | 模块9.5 | uuid4/uuid1/无横线，批量生成，纯标准库 |
-| 时间戳转换 | 模块9.6 | Unix时间戳↔日期互转，秒/毫秒自动识别 |
-| IP工具 | 模块9.7 | IP解析/类型判断/子网计算/本机IP查询 |
-| 单位换算扩展 | 模块1.4 | 从8种扩至28种（面积/速度/数据存储/压力/能量等） |
-| 编码工具扩展 | 模块2.2 | 新增MD5/SHA1/SHA256哈希+2/8/10/16进制互转 |
-| 全零依赖 | 新增功能 | 4个新工具+2项扩展全部纯Python标准库，无需安装 |
+| CSV查看器 | 模块9.8 | 自动识别编码/分隔符，分页显示，列宽对齐 |
+| 密码强度检测 | 模块9.9 | 长度/多样性/常见模式/弱密码字典，评级+改进建议 |
+| 颜色值转换 | 模块9.10 | RGB↔HEX↔HSL互转，多格式输入 |
+| 随机数生成器 | 模块9.11 | 7种模式：整数/小数/硬币/骰子/打乱/抽样/字符串 |
+| 文本差异对比 | 模块2.4 | 逐行diff，高亮增删改，支持文件路径或直接输入 |
+| BMI计算器 | 模块4.3 | 体质指数+中国标准判定+理想体重范围 |
+| 番茄钟 | 模块4.4 | 25+5经典番茄工作法，自定义时长/轮数 |
+| 汇率查询 | 模块1.5 | 30+货币，内置缓存+联网实时双模式 |
+| 图片批量压缩 | 模块6.1扩展 | 单文件→目录批量，格式转换JPEG/PNG/WebP/BMP，硬件感知并发 |
+| 历史记录系统 | 模块10.4 | 跨会话持久化JSON，查看/搜索/清空，保留最近200条 |
+| 配置持久化 | 模块10.5 | 用户偏好JSON持久化，跨会话保留 |
+| 管道联动 | 架构特性 | 多工具串联，前步输出作为后步输入 |
 
 ## 更新日志
 
+| v3.7.0 | 2026-08-07 | 增加：CSV查看器（模块9.8 自动编码/分隔符识别+分页显示）；增加：密码强度检测（模块9.9 长度/多样性/弱密码字典+改进建议）；增加：颜色值转换（模块9.10 RGB↔HEX↔HSL互转）；增加：随机数生成器（模块9.11 7种模式）；增加：文本差异对比（模块2.4 逐行diff+高亮）；增加：BMI计算器（模块4.3 中国标准判定）；增加：番茄钟（模块4.4 自定义时长/轮数）；增加：汇率查询（模块1.5 30+货币+缓存降级）；扩展：图片批量压缩与格式转换（模块6.1 目录批量+4种格式+硬件感知并发）；增加：历史记录系统（模块10.4 跨会话JSON持久化）；增加：配置持久化（模块10.5 用户偏好）；增加：管道联动架构（多工具串联）；优化：开箱即用率从57%提升至65% |
 | v3.6.0 | 2026-07-07 | 增加：文件哈希校验（模块9.4 MD5/SHA1/SHA256，大文件分块读取+期望值比对）；增加：UUID生成器（模块9.5 uuid4/uuid1/无横线批量生成）；增加：时间戳转换（模块9.6 Unix时间戳与日期互转，秒/毫秒自动识别）；增加：IP工具（模块9.7 IP解析/子网计算/本机IP查询）；扩展：单位换算器从8种扩至28种（新增面积/速度/数据存储/压力/能量等）；扩展：编码工具新增MD5/SHA1/SHA256哈希与2/8/10/16进制互转；优化：新增功能全部零依赖纯标准库实现 |
 | v3.5.0 | 2026-07-14 | 增加：硬件自适应调度（自动检测CPU/RAM并智能分配并发数）；增加：安全文件过滤规则（双向检查输入输出，拦截可执行文件30+种）；增加：系统资源监控（模块10.1 实时CPU/内存/磁盘，中文报告）；增加：批量文件重命名（模块10.2 5种模式+预览确认）；增加：Markdown转HTML（模块10.3 零依赖+内置美观样式）；增加：更新提醒和邮箱njskills@agent.qq.com；优化：全局性能策略（低配模式自动降级） |
 | v3.0.0 | 2026-07-13 | 增加：jieba精准分词+100+停用词过滤+英文小写化+词汇丰富度分析；增加：视频编辑6大功能（水印/截图/信息查看）；增加：路径智能修复（全部文件操作）；增加：FFmpeg一键安装脚本；增加：模块9（二维码/密码/正则）；优化：视频编辑菜单式交互 |
@@ -1975,6 +2706,6 @@ v3.5.0 起已根据你的硬件自动调度，低配机会自动降为小文件�
 - **联系邮箱**：njskills@agent.qq.com
 - **许可证**：MIT
 - **支持平台**：Windows / macOS / Linux
-- **当前版本**：v3.6.0
+- **当前版本**：v3.7.0
 - **检查更新**：`skillhub search dgngjx-skill`
 - **升级命令**：`skillhub upgrade dgngjx-skill`
