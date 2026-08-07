@@ -1,1 +1,1 @@
-{"version": "2.2.0", "homepage": "https://skillhub.cn/skill/cn-llm-router", "notes": "v2.2.0：新增模型竞技场 arena（并行调用 2-4 家模型盲选最佳，长期追踪胜率）；新增健康检查 health-check（3 秒超时、60s 缓存）；新增故障转移（超时自动切备用模型，最多重试 2 次，成本报表标注降级事件）；新增 AdapterTimeoutError 子类"}
+{"version": "2.3.0", "homepage": "https://skillhub.cn/skill/cn-llm-router", "notes": "v2.3.0：优化路由准确度——静态画像(60%)+动态胜率(40%)加权，新模型上线后无需手填画像；合并 route/chat 建议模式为统一 --dry-run；优化缓存误命中——可选 sentence-transformers embedding 相似度（不装时降级 difflib）"}
