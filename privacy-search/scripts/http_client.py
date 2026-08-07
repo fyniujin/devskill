@@ -65,19 +65,37 @@ USER_AGENT_POOL: List[str] = [
 ]
 
 
-def pick_user_agent(fixed: Optional[str] = None) -> str:
+def get_user_agent_pool(config: Optional[Dict[str, Any]] = None) -> List[str]:
+    """
+    获取合并后的 User-Agent 池
+
+    默认池（硬编码 8 个）+ config.yaml 中 user_agent_pool 追加的 UA。
+    用户追加的 UA 在前，默认池在后，优先使用用户自定义。
+    """
+    custom: List[str] = []
+    if config:
+        ua_config = config.get("user_agent_pool", [])
+        if isinstance(ua_config, list):
+            custom = [str(ua).strip() for ua in ua_config if str(ua).strip()]
+    return custom + USER_AGENT_POOL
+
+
+def pick_user_agent(fixed: Optional[str] = None,
+                     pool: Optional[List[str]] = None) -> str:
     """
     选取 User-Agent
 
     Args:
         fixed: 配置中指定的固定 UA；为空则从池中随机取
+        pool: 自定义 UA 池；为空时使用默认池
 
     Returns:
         User-Agent 字符串
     """
     if fixed and fixed.strip():
         return fixed.strip()
-    return random.choice(USER_AGENT_POOL)
+    use_pool = pool if pool else USER_AGENT_POOL
+    return random.choice(use_pool)
 
 
 # ============================================================
