@@ -238,6 +238,15 @@ def validate_schema(pipeline):
                 if not isinstance(mi, int) or mi <= 0:
                     warnings.append(f"{prefix} while-loop 节点的 [max_iterations] 建议为正整数")
 
+        elif node_type == 'approval':
+            if 'timeout_seconds' in agent:
+                ts = agent['timeout_seconds']
+                if not isinstance(ts, (int, float)) or ts <= 0:
+                    warnings.append(f"{prefix} approval 节点的 [timeout_seconds] 应为正数（秒）")
+            if 'timeout_action' in agent:
+                if agent['timeout_action'] not in ('approve', 'reject'):
+                    warnings.append(f"{prefix} approval 节点的 [timeout_action] 建议为 'approve' 或 'reject'")
+
         elif node_type == 'pipeline':
             if 'pipeline_ref' not in agent or not str(agent.get('pipeline_ref', '')).strip():
                 errors.append(f"{prefix} pipeline 节点必须提供非空 [pipeline_ref] 引用名")
