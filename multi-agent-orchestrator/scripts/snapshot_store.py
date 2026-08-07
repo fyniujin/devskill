@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-快照存储 - 多Agent协作编排引擎 v5.0
+快照存储 - 多Agent协作编排引擎 v5.1
 
 功能：
   1. 节点执行完毕后自动保存上下文快照（增量存储）
   2. 从任意历史快照恢复执行（下游节点重置为 pending）
   3. 执行对比（对比两次执行的输出差异，快速定位问题节点）
-  4. 版本标识：execution_id（一次运行）+ snapshot_id（每个节点快照）
+  4. 快照保留策略：时间（7天）+ 数量（100次）+ 大小（100MB）三维度淘汰
+  5. 版本标识：execution_id（一次运行）+ snapshot_id（每个节点快照）
 
 零第三方依赖，仅使用 Python 标准库
 
@@ -46,6 +47,11 @@ import state_store
 
 # 快照根目录
 SNAPSHOT_ROOT = '.snapshots'
+
+# 快照保留策略
+SNAPSHOT_MAX_AGE_DAYS = 7       # 快照最长保留天数
+SNAPSHOT_MAX_COUNT = 100        # 快照最大数量
+SNAPSHOT_MAX_SIZE_MB = 100      # 快照目录最大大小（MB）
 
 def _snapshot_dir(state_path):
     """根据 state.json 路径确定快照目录"""
@@ -128,6 +134,10 @@ def save_snapshot(state_path, node_id, log_lines=None):
     os.replace(tmp, snap_file)
 
     _update_index(exec_dir, execution_id, state)
+
+    # 执行保留策略，淘汰旧快照
+    enforce_retention_policy(state_path)
+
     return snapshot
 
 def _calc_execution_time(node):
@@ -354,6 +364,103 @@ def diff_snapshots(state_path, node_id_1, node_id_2):
     print("=" * 60)
 
     return {'added': added, 'removed': removed, 'changed': changed, 'unchanged': unchanged}
+
+
+def enforce_retention_policy(state_path):
+    """执行快照保留策略，按时间+数量+大小三维度淘汰旧快照
+
+    策略优先级：
+    1. 时间：超过 SNAPSHOT_MAX_AGE_DAYS 天的快照淘汰
+    2. 数量：超过 SNAPSHOT_MAX_COUNT 个快照时淘汰最旧的
+    3. 大小：快照目录超过 SNAPSHOT_MAX_SIZE_MB MB 时淘汰最旧的直到达标
+    """
+    state = state_store.load_state(state_path)
+    execution_id = get_execution_id(state)
+    exec_dir = _execution_dir(state_path, execution_id)
+
+    if not os.path.exists(exec_dir):
+        return
+
+    index_file = os.path.join(exec_dir, 'index.json')
+    if not os.path.exists(index_file):
+        return
+
+    with open(index_file, 'r', encoding='utf-8') as f:
+        index = json.load(f)
+
+    snapshots = index.get('snapshots', {})
+    if not snapshots:
+        return
+
+    # 收集快照文件信息
+    snap_infos = []
+    for nid, meta in snapshots.items():
+        snap_file = meta.get('file', '')
+        if not snap_file or not os.path.exists(snap_file):
+            continue
+        try:
+            stat = os.stat(snap_file)
+            snap_infos.append({
+                'node_id': nid,
+                'file': snap_file,
+                'size': stat.st_size,
+                'mtime': stat.st_mtime,
+                'timestamp': meta.get('timestamp', ''),
+            })
+        except OSError:
+            continue
+
+    if not snap_infos:
+        return
+
+    now = datetime.now().timestamp()
+    max_age_secs = SNAPSHOT_MAX_AGE_DAYS * 86400
+    to_remove = set()
+
+    # 1. 时间淘汰：超过保留天数的快照
+    for info in snap_infos:
+        if now - info['mtime'] > max_age_secs:
+            to_remove.add(info['node_id'])
+
+    # 2. 数量淘汰：按修改时间排序，保留最新的 SNAPSHOT_MAX_COUNT 个
+    remaining = [s for s in snap_infos if s['node_id'] not in to_remove]
+    remaining.sort(key=lambda x: x['mtime'], reverse=True)
+    if len(remaining) > SNAPSHOT_MAX_COUNT:
+        for info in remaining[SNAPSHOT_MAX_COUNT:]:
+            to_remove.add(info['node_id'])
+        remaining = remaining[:SNAPSHOT_MAX_COUNT]
+
+    # 3. 大小淘汰：计算总大小，超限则从最旧开始淘汰
+    total_size = sum(s['size'] for s in remaining)
+    max_size_bytes = SNAPSHOT_MAX_SIZE_MB * 1024 * 1024
+    if total_size > max_size_bytes:
+        # 按时间从旧到新排序
+        remaining.sort(key=lambda x: x['mtime'])
+        while total_size > max_size_bytes and remaining:
+            oldest = remaining.pop(0)
+            to_remove.add(oldest['node_id'])
+            total_size -= oldest['size']
+
+    # 执行删除
+    removed_count = 0
+    for nid in to_remove:
+        snap_file = os.path.join(exec_dir, f'snap_{nid}.json')
+        try:
+            if os.path.exists(snap_file):
+                os.remove(snap_file)
+                removed_count += 1
+            if nid in index['snapshots']:
+                del index['snapshots'][nid]
+        except OSError:
+            pass
+
+    if removed_count > 0:
+        index['last_updated'] = state_store.get_timestamp()
+        tmp = index_file + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(index, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, index_file)
+        print(f"  快照保留策略：已淘汰 {removed_count} 个旧快照")
 
 
 if __name__ == '__main__':
