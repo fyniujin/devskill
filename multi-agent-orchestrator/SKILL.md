@@ -2,8 +2,8 @@
 name: multi-agent-pro
 slug: multi-agent-pro
 displayName: 多Agent协作编排引擎
-description: 支持多Agent流水线编排（采集→分析→报告），基于DAG调度实现跨技能状态共享、错误重试、断点续传、执行报告生成、HTML甘特图可视化、人工审批节点、历史执行对比、硬件自适应参数和版本更新提醒。v5.0新增子流水线引用（模块化复用）和执行回放/Time Travel（快照机制）。AI即编排器，脚本提供基础设施。
-version: 5.0.0
+description: 支持多Agent流水线编排（采集→分析→报告），基于DAG调度实现跨技能状态共享、错误重断点续传、执行报告生成、HTML甘特图可视化、人工审批节点（含超时策略）、历史执行对比、硬件自适应参数和版本更新提醒。v5.1新增统一状态恢复（合并断点续传+快照恢复）、快照保留策略（7天/100次/100MB淘汰）、审批节点超时自动通过/拒绝。AI即编排器，脚本提供基础设施。
+version: 5.1.0
 category: developer-tools
 platforms:
   - windows
@@ -713,6 +713,7 @@ A: 不会。硬件检测仅读取系统信息（CPU核数、内存大小），�
 
 | 版本 | 日期 | 更新内容 |
 |------|------|---------|
+| v5.1.0 | 2026-08-07 | 增加：统一状态恢复子系统 state_recovery，合并断点续传与快照恢复为单一入口，消除两套独立恢复代码；增加：快照保留策略（SNAPSHOT_MAX_AGE_DAYS=7天 / SNAPSHOT_MAX_COUNT=100次 / SNAPSHOT_MAX_SIZE_MB=100MB），按时间+数量+大小三维度自动淘汰旧快照；增加：审批节点超时策略（timeout_seconds + timeout_action），支持超时自动通过/拒绝，避免无人值守场景阻塞；增加：恢复前自动创建检查点（.recovery_checkpoints/），防止误操作不可逆；优化：dag_validator 校验 approval 节点 timeout_seconds 与 timeout_action 字段合法性 |
 | v5.0.0 | 2026-07-13 | 增加：pipeline 子流水线节点，支持将已注册流水线作为模块嵌套到父流水线并实现上下文隔离；增加：pipeline_registry 子流水线注册表，支持注册/列出/查看/校验子流水线；增加：snapshot_store 快照存储机制，首个快照存完整数据后续只存增量 diff；增加：snapshot 子命令（list/show/restore/diff），支持从任意历史节点恢复下游重跑的 Time Travel 执行回放；增加：sub_pipeline_template 与 parent_pipeline_template 示例模板展示子流水线注册与引用；优化：flow_controller 扩展 pipeline 类型调度，自动加载子流水线并注入参数映射输出；优化：state_store 节点完成自动保存快照，持久化 pipeline_ref/params/outputs 控制流字段；优化：dag_validator 校验 pipeline 节点字段与 pipeline_ref 引用完整性 |
 | v4.0.0 | 2026-07-13 | 增加：condition 条件分支节点，按表达式走 on_true/on_false 分支；增加：switch 多路分支节点，按值命中 cases/default；增加：for-each 动态节点生成，按列表长度展开子节点并自动重挂汇合依赖；增加：while-loop 循环重试节点，条件为真回环重跑循环体并设迭代上限防死循环；增加：condition_evaluator 表达式求值器，采用 AST 白名单禁止函数调用防注入；增加：flow_controller 控制流引擎自动求值路由；增加：control_flow_template 与 test_control_flow 示例及测试；优化：dag_validator 校验控制流节点字段与分支引用；优化：控制流求值失败标记终态失败避免调度器反复重取 |
 | v3.0.0 | 2026-07-13 | 增加：HTML甘特图可视化模块，支持颜色编码的DAG执行时间轴；增加：人工审批节点（type: approval），可在关键步骤暂停等用户确认；增加：历史执行对比功能，自动保存最近10次执行摘要并对比耗时/成功率/重试次数；增加：硬件自适应模块，自动检测CPU/内存并推荐最优流水线参数；增加：版本更新提醒功能，对比GitHub远程版本；增加：禁止文件类型清单；优化：all_done判定逻辑，支持skipped节点视为完成；优化：calc_duration提取为独立函数供历史模块复用 |
