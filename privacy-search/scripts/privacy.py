@@ -34,14 +34,12 @@ try:
         strict_allowed_engines,
         strict_fallback_engines,
     )
-    from http_client import pick_user_agent
 except ImportError:  # 以包方式导入时
     from .engines_registry import (
         all_engine_names,
         strict_allowed_engines,
         strict_fallback_engines,
     )
-    from .http_client import pick_user_agent
 
 # ============================================================
 # 数据结构
@@ -178,8 +176,11 @@ class PrivacyManager:
         Returns:
             清理后的请求头
         """
+        # UA 池 = 用户追加（config.yaml） + 内置默认池
+        from http_client import get_user_agent_pool, pick_user_agent
+        ua_pool = get_user_agent_pool(self.config)
         headers = {
-            "User-Agent": pick_user_agent(self.privacy_config.user_agent),
+            "User-Agent": pick_user_agent(self.privacy_config.user_agent, pool=ua_pool),
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
             "Accept-Encoding": "gzip, deflate",
