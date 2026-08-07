@@ -35,7 +35,8 @@ from core.speaker_diarization import SpeakerDiarization
 from core.timestamped_summary import TimestampedSummary
 from core.update_notifier import UpdateNotifier
 from core.platform_adapters import PlatformRouter
-from core.editing import HighlightDetector, RedundancyDetector, TimelineGenerator, EDLExporter, SubtitleStylist
+from core.editing import HighlightDetector, RedundancyDetector, TimelineGenerator, EDLExporter, SubtitleStylist, JianyingExporter
+from core.speaker_diarization.quality_scorer import QualityScorer
 
 logger = get_logger(__name__)
 
@@ -115,6 +116,10 @@ def parse_args():
                         help="字幕输出格式 (默认: ass)")
     parser.add_argument("--export-edl", action="store_true",
                         help="导出 EDL 剪辑时间线文件")
+    parser.add_argument("--jianying", action="store_true",
+                        help="导出剪映 draft.json 格式（可直接导入剪映专业版）")
+    parser.add_argument("--quality-score", action="store_true",
+                        help="启用说话人分离质量评分")
     
     return parser.parse_args()
 
@@ -123,7 +128,7 @@ def print_banner():
     """打印启动横幅"""
     banner = """
 ╔══════════════════════════════════════════════════╗
-║          🎬 video-analyzer v4.0.0               ║
+║          🎬 video-analyzer v4.1.0               ║
 ║        视频分析处理 — 本地视频反编译工具         ║
 ╚══════════════════════════════════════════════════╝
     """
@@ -240,7 +245,7 @@ def main():
         # ========== 版本更新检查（非阻塞） ==========
         if not args.no_update_check:
             try:
-                notifier = UpdateNotifier(config, current_version="4.0.0")
+                notifier = UpdateNotifier(config, current_version="4.1.0")
                 update_result = notifier.check_for_updates()
                 update_msg = notifier.format_update_message(update_result)
                 if update_msg:
@@ -323,11 +328,23 @@ def main():
         
         # ========== 说话人分离（可选） ==========
         diarize_result = None
+        quality_score = None
         if args.diarize:
             logger.info("🗣️  说话人分离...")
             diarizer = SpeakerDiarization(config)
             diarize_result = diarizer.diarize(audio_path, transcript.get("segments", []))
             logger.info(f"   分离完成: {diarize_result['n_speakers']} 人")
+            
+            # 分离质量评分（v4.1 新增）
+            if args.quality_score:
+                logger.info("📊 评估分离质量...")
+                scorer = QualityScorer(config)
+                # 提取特征用于评分
+                features = diarizer._extract_segment_features(audio_path, transcript.get("segments", []))
+                quality_score = scorer.score(diarize_result, features, transcript.get("segments", []))
+                logger.info(f"   质量评分: {quality_score.get('overall_score')} 分 ({quality_score.get('level')}可信度)")
+                logger.info(f"   声纹距离: {quality_score.get('voiceprint_distance')}, 重叠率得分: {quality_score.get('overlap_ratio')}")
+                logger.info(f"   建议: {quality_score.get('suggestion')}")
         
         # ========== 阶段 4: 场景检测 ==========
         logger.info("🎬 [4/7] 场景检测...")
@@ -492,6 +509,22 @@ def main():
                 edl_exporter.export(timeline, edl_path, format=args.edl_format)
                 output_paths["edl"] = edl_path
                 logger.info(f"   EDL 已导出: {edl_path}")
+            
+            # 导出剪映 draft.json（v4.1 新增）
+            if args.jianying:
+                logger.info("   导出剪映 draft.json...")
+                jianying_exporter = JianyingExporter(config)
+                jy_dir = os.path.join(args.output, "jianying")
+                os.makedirs(jy_dir, exist_ok=True)
+                jy_path = os.path.join(jy_dir, "draft.json")
+                jianying_exporter.export(
+                    timeline=timeline,
+                    transcript=transcript,
+                    video_path=video_path,
+                    output_path=jy_path
+                )
+                output_paths["jianying"] = jy_path
+                logger.info(f"   剪映文件已导出: {jy_path}")
             
             # 生成字幕文件
             logger.info("   生成字幕文件...")
