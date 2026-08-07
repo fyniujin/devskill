@@ -52,7 +52,7 @@ import yaml
 CURRENT_VERSION = get_current_version()
 SKILL_SLUG = "privacy-search"
 UPDATE_CHECK_URL = "https://api.skillhub.cn/api/v1/skills/privacy-search"
-GITHUB_UPDATE_URL = "https://api.github.com/repos/your-org/privacy-search/releases/latest"
+GITHUB_UPDATE_URL = "https://api.github.com/repos/njskills/privacy-search/releases/latest"
 CACHE_DB_PATH = os.path.expanduser("~/.workbuddy/output/.privacy-search-update.db")
 
 
