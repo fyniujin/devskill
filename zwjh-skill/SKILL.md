@@ -4,7 +4,7 @@ slug: zwjh-skill
 displayName: "长期记忆 / 知识图谱 会思考的进化 AI"
 description: "统一记忆底座：长期记忆 + 知识图谱 + 自动沉淀 + 检索。让 AI「记得你」，跨会话持久记忆、实体/关系图谱、语义与时间线检索、记忆健康度审计、本地备份（可接百度网盘）。纯本地、零密钥、按硬件自适应，不拖累电脑。并保留 v1.7 的根因分析/预测性维护/进化报告。"
 description_zh: "统一记忆底座：长期记忆 + 知识图谱 + 自动沉淀 + 检索。纯本地、零密钥、按硬件自适应，不拖累电脑。"
-version: 2.2.0
+version: 2.3.0
 category: ai-agent
 platforms:
   - windows
@@ -23,7 +23,7 @@ tags:
 requires_api_key: false
 ---
 
-# 长期记忆 / 知识图谱 会思考的进化 AI — zwjh-skill v2.2.0
+# 长期记忆 / 知识图谱 会思考的进化 AI — zwjh-skill v2.3.0
 
 > **安装后说「帮我配置 + 设置定时任务」，AI 自动完成一切。**
 >
@@ -255,6 +255,66 @@ python scripts/cli.py conflicts --resolve 1 --strategy 1
 
 ---
 
+### 模块 12：记忆导出 / 迁移
+
+**做了什么**：多格式、可选中、跨平台迁移，消除数据锁定担忧。
+
+- **多格式导出**：Markdown（可读性）/ JSON（结构化）/ Neo4j Cypher（图数据库）/ CSV（Excel）/ Obsidian / Logseq
+- **选择性导出**：按实体类型 / 时间范围 / 重要度阈值筛选
+- **批量导入**：支持从 Markdown、JSON、Obsidian vault 批量导入
+- **零依赖**：所有格式纯标准库生成，无需额外工具
+
+**示例**：
+```bash
+python scripts/cli.py export --format markdown --output D:\backup
+python scripts/cli.py export --format obsidian --from-day 2026-01-01 --to-day 2026-07-31
+python scripts/cli.py export --format cypher --types person,project
+python scripts/cli.py export --format csv --output D:\export
+```
+
+---
+
+### 模块 13：时间线叙事生成
+
+**做了什么**：把分散的记忆组织成连贯的叙事，从"数据库"变成"有温度的回忆"。
+
+- **项目进展时间线**：输入项目名称，自动生成从立项到当前的所有关键节点
+- **人脉交互历史**：输入人名，生成与 TA 的所有互动时间线
+- **知识成长轨迹**：输入主题，展示认知变化（入门→深入）
+- **周期性回顾**：每周/每月自动生成回顾报告
+- **可插拔 LLM**：支持配置外部 LLM API，未配置时使用模板降级
+
+**示例**：
+```bash
+python scripts/cli.py narrative project --name "机器学习项目"
+python scripts/cli.py narrative person --name "张三"
+python scripts/cli.py narrative knowledge --name "Python"
+python scripts/cli.py narrative weekly
+python scripts/cli.py narrative monthly
+```
+
+---
+
+### 模块 14：多模态记忆
+
+**做了什么**：记忆从文字扩展到图片、音频、文件，全媒体覆盖。
+
+- **图片记忆**：AI 理解图片内容、拍摄时间、关联事件
+- **音频记忆**：会议录音摘要、关键决策关联到项目
+- **文件记忆**：文档摘要、存在路径、关联实体
+- **媒体理解适配器**：可插拔（本地模型 / LLM API / 手动描述）
+- **实体关联**：媒体文件自动链接到知识图谱实体
+
+**示例**：
+```bash
+python scripts/cli.py multimodal index-image --path D:\photo.jpg --entity "张三" --text "项目启动会合影"
+python scripts/cli.py multimodal index-audio --path D:\meeting.mp3 --project "智能客服"
+python scripts/cli.py multimodal index-file --path D:\contract.pdf --entity "李四" --project "合同审核"
+python scripts/cli.py multimodal list --type image
+```
+
+---
+
 ### 模块 10：知识图谱可视化（Web 界面）
 
 **做了什么**：在浏览器中直观探索实体关系网络，从"黑盒存储"变为"可视化探索"。
@@ -323,6 +383,7 @@ python scripts/cli.py demo
 
 ## 更新日志
 
+| v2.3.0 | 2026-08-07 | 新增：多格式导出（Markdown/JSON/Cypher/CSV/Obsidian/Logseq）与选择性筛选；新增时间线叙事生成（项目/人脉/知识成长/周期回顾）；新增多模态记忆（图片/音频/文件索引）；新增 export.py / narrative.py / multimodal.py |
 | v2.2.0 | 2026-07-29 | 新增：记忆冲突消解（冲突自动检测 + 四类分类 + 自动/手动消解策略）；新增 conflict_resolver.py；新增 CLI conflicts 命令 |
 | v2.1.0 | 2026-07-17 | 新增：知识图谱 Web 可视化（力导向图/详情面板/路径探索/时间线/子图过滤）；增加 web_server.py 零依赖内置 HTTP 服务器；增加大规模图谱分层加载与聚合；新增 REST API |
 | v2.0.0 | 2026-07-08 | 新增：统一记忆底座（长期记忆 + 知识图谱 + 自动沉淀 + 检索 + 健康度 + 备份）；新增硬件自适应调度与技能更新提醒；保留 v1.7 能力；零密钥纯本地 |
