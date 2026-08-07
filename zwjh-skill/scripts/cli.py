@@ -44,7 +44,7 @@ except Exception:
 
 from scripts import (config, store, embeddings, retrieval, graph, deposit,
                      health, backup, legacy, setup, update_check, hardware, version,
-                     conflict_resolver)
+                     conflict_resolver, export, narrative, multimodal)
 
 
 # ── 子命令实现 ────────────────────────────────────────────────────────────
@@ -195,6 +195,108 @@ def cmd_update(args):
 def cmd_hardware(args):
     print(hardware.describe())
     print("示例：5000 条知识点建议子任务数 =", hardware.recommend_subtasks(5000))
+
+
+# ── 导出命令 ─────────────────────────────────────────────────────────────
+def cmd_export(args):
+    """多格式导出。"""
+    result = export.selective_export(
+        format=args.format,
+        types=args.types.split(",") if args.types else None,
+        day_from=args.from_day,
+        day_to=args.to_day,
+        importance_min=float(args.importance),
+        output_dir=args.output,
+    )
+    if result["status"] == "ok":
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        # 对于文本格式，直接打印内容
+        if args.format in ("markdown", "json", "cypher", "csv") and result.get("content"):
+            print("\n--- 文件内容 ---")
+            print(result["content"][:2000])  # 限制输出长度
+    else:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def cmd_import(args):
+    """从 JSON 文件导入知识图谱数据（export --format json 的往返格式）。"""
+    if not os.path.exists(args.path):
+        print(f"文件不存在: {args.path}")
+        return
+    with open(args.path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    entities = data.get("entities", [])
+    relations = data.get("relations", [])
+    facts = data.get("facts", [])
+    # 导入实体
+    name_to_id = {}
+    for e in entities:
+        existing = store.find_entity(e.get("type"), e["name"])
+        if existing:
+            name_to_id[e["name"]] = existing["id"]
+        else:
+            eid = store.upsert_entity(e.get("type", "concept"), e["name"],
+                                       importance=float(e.get("importance", 0.5)))
+            name_to_id[e["name"]] = eid
+    # 导入关系
+    rel_count = 0
+    for r in relations:
+        from_id = name_to_id.get(r.get("from_name", ""))
+        to_id = name_to_id.get(r.get("to_name", ""))
+        if from_id and to_id:
+            store.add_relation(from_id, to_id, r.get("relation", "关联"),
+                               weight=float(r.get("weight", 1.0)),
+                               confidence=float(r.get("confidence", 1.0)))
+            rel_count += 1
+    # 导入事实
+    fact_count = 0
+    for f in facts:
+        ent_id = name_to_id.get(f.get("entity_name", ""))
+        if ent_id:
+            store.add_fact(ent_id, f.get("predicate", "属性"), f.get("value", ""),
+                            source_memory_id=f.get("source_memory_id"))
+            fact_count += 1
+    print(f"导入完成：实体 {len(entities)}/{len(entities)}，关系 {rel_count}/{len(relations)}，事实 {fact_count}/{len(facts)}")
+
+
+# ── 叙事命令 ─────────────────────────────────────────────────────────────
+def cmd_narrative(args):
+    """叙事生成。"""
+    if args.naction == "project":
+        print(narrative.generate_project_timeline(args.name))
+    elif args.naction == "person":
+        print(narrative.generate_person_interaction(args.name))
+    elif args.naction == "knowledge":
+        print(narrative.generate_knowledge_growth(args.name))
+    elif args.naction == "weekly":
+        print(narrative.generate_weekly_review())
+    elif args.naction == "monthly":
+        print(narrative.generate_monthly_review())
+
+
+# ── 多模态命令 ───────────────────────────────────────────────────────────
+def cmd_multimodal(args):
+    """多模态记忆。"""
+    if args.maction == "index-image":
+        r = multimodal.index_image(args.path, entity_name=args.entity,
+                                    memory_text=args.text)
+        print(json.dumps(r, ensure_ascii=False, indent=2))
+    elif args.maction == "index-audio":
+        r = multimodal.index_audio(args.path, entity_name=args.entity,
+                                    project_name=args.project)
+        print(json.dumps(r, ensure_ascii=False, indent=2))
+    elif args.maction == "index-file":
+        r = multimodal.index_file(args.path, entity_name=args.entity,
+                                   project_name=args.project)
+        print(json.dumps(r, ensure_ascii=False, indent=2))
+    elif args.maction == "list":
+        r = multimodal.list_media(media_type=args.type, entity_name=args.entity)
+        for m in r:
+            print(f"[{m['media_type']}] {m['file_path']}")
+            print(f"  描述: {m['description'][:60]}...")
+    elif args.maction == "associate":
+        r = multimodal.MultimodalManager().associate_entity(args.id, args.entity)
+        print(json.dumps(r, ensure_ascii=False, indent=2))
 
 
 def cmd_conflicts(args):
@@ -402,6 +504,39 @@ def build_parser() -> argparse.ArgumentParser:
     cf.add_argument("--strategy", type=int, default=1, choices=[1, 2, 3, 4],
                     help="1=覆盖 2=保留两者 3=合并 4=忽略")
     cf.set_defaults(func=cmd_conflicts)
+
+    # 导出
+    ex = sub.add_parser("export", help="多格式导出（Markdown/JSON/Cypher/CSV/Obsidian/Logseq）")
+    ex.add_argument("--format", default="markdown",
+                    choices=["markdown", "json", "cypher", "csv", "obsidian", "logseq"])
+    ex.add_argument("--types", default=None, help="实体类型筛选（逗号分隔）")
+    ex.add_argument("--from-day", default=None)
+    ex.add_argument("--to-day", default=None)
+    ex.add_argument("--importance", default="0")
+    ex.add_argument("--output", default=None, help="输出目录")
+    ex.set_defaults(func=cmd_export)
+
+    # 导入
+    im = sub.add_parser("import", help="导入数据")
+    im.add_argument("path", help="文件路径")
+    im.set_defaults(func=cmd_import)
+
+    # 叙事
+    na = sub.add_parser("narrative", help="时间线叙事生成")
+    na.add_argument("naction", choices=["project", "person", "knowledge", "weekly", "monthly"])
+    na.add_argument("--name", default=None, help="项目/人物/主题名称")
+    na.set_defaults(func=cmd_narrative)
+
+    # 多模态
+    mm = sub.add_parser("multimodal", help="多模态记忆")
+    mm.add_argument("maction", choices=["index-image", "index-audio", "index-file", "list", "associate"])
+    mm.add_argument("--path", default=None)
+    mm.add_argument("--entity", default=None)
+    mm.add_argument("--text", default=None)
+    mm.add_argument("--project", default=None)
+    mm.add_argument("--type", default=None)
+    mm.add_argument("--id", type=int, default=None)
+    mm.set_defaults(func=cmd_multimodal)
 
     ov = sub.add_parser("status", help="总览")
     ov.set_defaults(func=cmd_status_overview)
