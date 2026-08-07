@@ -2,8 +2,8 @@
 slug: video-analyzer-local
 displayName: 视频分析处理
 name: video-analyzer
-description: "视频分析处理 — 本地视频反编译分析工具。将视频拆解为时间轴剧本、语音转文字、场景分析、跨模态关联和精华摘要，支持多ASR引擎切换（Whisper/Paraformer/SenseVoice）、中文NLP增强、PaddleOCR中文识别。v4.0 新增短视频平台适配（抖音/快手/B站/视频号）和自动剪辑建议（高光检测/冗余标记/EDL导出/字幕样式）。"
-version: 4.0.0
+description: "视频分析处理 — 本地视频反编译分析工具。将视频拆解为时间轴剧本、语音转文字、场景分析、跨模态关联和精华摘要，支持多ASR引擎切换（Whisper/Paraformer/SenseVoice）、中文NLP增强、PaddleOCR中文识别。v4.0 新增短视频平台适配（抖音/快手/B站/视频号）和自动剪辑建议（高光检测/冗余标记/EDL导出/字幕样式）。v4.1 新增tiny模型优先体验（75MB低门槛）、说话人分离质量评分、剪映draft.json导出。"
+version: 4.1.0
 tags: ["video", "analysis", "transcription", "local-offline", "chinese", "asr"]
 icon: "🎬"
 author: "njskills"
@@ -31,7 +31,7 @@ license: "MIT"
 ## 快速开始
 
 ### 第一次使用前
-> ⚠️ **模型下载提醒**：首次运行会自动下载语音识别模型（small 约 466MB），国内用户建议先执行以下命令加速：
+> ⚠️ **模型下载提醒**：首次运行会自动下载语音识别模型。v4.1 起默认使用 tiny 模型（约 75MB），如需更高精度可加 `--model small` 切换到 small 模型（约 466MB）。国内用户建议先执行以下命令加速：
 > ```bash
 > pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 > ```
@@ -125,6 +125,8 @@ output/
 | `--subtitle-style` |  | 字幕样式模板：`douyin`/`bilibili`/`movie`/`minimal` |
 | `--subtitle-format` |  | 字幕输出格式：`srt`/`ass`/`vtt`（默认 ass） |
 | `--export-edl` |  | 导出 EDL 剪辑时间线文件 |
+| `--jianying` |  | 导出剪映 draft.json 格式（可直接导入剪映专业版） |
+| `--quality-score` |  | 启用说话人分离质量评分 |
 
 ## 功能说明
 
@@ -296,7 +298,19 @@ A: 建议用 VS Code 或 jq 命令行工具：`jq '.transcript.segments[0:3]' da
 A: 章节切片使用 ffmpeg 流复制模式（`-c copy`），切割点必须在关键帧上。如果某些章节无法播放，可在 config.yaml 中设置 `force_reencode: true` 使用重新编码模式（稍慢但兼容性好）。
 
 **Q: 说话人分离结果全是同一人？**
-A: 请确认安装了可选依赖：`pip install librosa scikit-learn`。如果没有这些库，会回退到基于时间间隔的简单猜测策略，准确率较低。
+A: 请确认安装了可选依赖：`pip install librosa scikit-learn`。如果没有这些库，会回退到基于时间间隔的简单猜测策略，准确率较低。v4.1 新增质量评分（`--quality-score`），可量化评估分离结果可信度。
+
+**Q: 说话人分离质量评分怎么使用？**
+A: 运行 `--diarize --quality-score`，会输出 0-100 分数和等级（高/中/低）。≥ 80 分可信，≥ 60 分基本可用，< 60 分建议手动调整。评分基于声纹距离和重叠率两个维度。
+
+**Q: 剪映 draft.json 怎么用？**
+A: 运行 `--editing-suggest --jianying` 生成 draft.json 文件。打开剪映专业版 → 导入 → 选择 draft.json 即可加载时间线和字幕。
+
+**Q: tiny 模型和 small 模型有什么区别？**
+A: tiny 模型（75MB）识别速度更快但准确率略低；small 模型（466MB）准确率更高但速度慢。v4.1 默认 tiny 优先体验，如需要更高精度可用 `--model small` 切换。
+
+**Q: 为什么优先推荐 tiny 模型？**
+A: v4.1 新增 tiny 模型优先体验（75MB），首次使用门槛从 466MB 降至 75MB。低配电脑也会自动使用 tiny 模型。如需更高精度，可手动切换 `--model small/medium`。
 
 ## 更新提醒
 启动时会自动检查 GitHub 上的新版本，发现更新时会显示提醒。使用 `--no-update-check` 可跳过此检查。
@@ -306,7 +320,7 @@ A: 请确认安装了可选依赖：`pip install librosa scikit-learn`。如果�
 
 ## 更新日志
 
-| v4.0.0 | 2026-07-30 | 增加：短视频平台适配（抖音/快手/B站/视频号链接自动识别+下载+元数据提取）；增加：短视频特有分析（黄金前3秒/完播率因素/带货分析/节奏分析）；增加：自动剪辑建议模块（高光检测/冗余标记/时间线生成/EDL导出）；增加：字幕样式生成（抖音/B站/电影/简洁四种风格，支持SRT/ASS/VTT）；增加：--platform/--editing-suggest/--export-edl/--subtitle-style 参数；优化：支持短视频平台和传统视频的统一处理流程 |
+| v4.1.0 | 2026-08-07 | 增加：tiny 模型优先体验（75MB 低门槛，首次使用从 466MB 降至 75MB）；增加：说话人分离质量评分（声纹距离 + 重叠率，0-100 分 + 高/中/低等级）；增加：剪映 draft.json 导出（可直接导入剪映专业版）；增加：--jianying / --quality-score 参数；优化：硬件自适应默认 tiny 模型，低配电脑友好 |
 
 <details>
 <summary>历史版本</summary>
