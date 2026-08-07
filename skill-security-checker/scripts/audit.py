@@ -15,9 +15,12 @@ Features:
   9. Dynamic sandbox execution scanning (Docker / Windows Sandbox, graceful fallback)
  10. Supply chain risk analysis (dependency tree, typo-squatting, CVE auto-pull, license)
  11. CI/CD integration (GitHub Action / GitLab CI templates, SARIF output, quality gate)
+ 12. Real-time malicious skill database sync (341 entries, fingerprint matching)
+ 13. CVE offline cache (7-day full + daily increment, API fallback)
+ 14. Global exclude configuration (.nosec.yml team-level management)
 
 Author: njskills@agent.qq.com
-Version: 3.0.0
+Version: 3.1.0
 """
 
 import os
@@ -46,6 +49,20 @@ try:
     _SUPPLY_CHAIN_AVAILABLE = True
 except Exception:
     _SUPPLY_CHAIN_AVAILABLE = False
+
+# Malicious skill database (optional module; degrades gracefully if missing)
+try:
+    from malicious_db import MaliciousDB, scan_directory_for_malicious
+    _MALICIOUS_DB_AVAILABLE = True
+except Exception:
+    _MALICIOUS_DB_AVAILABLE = False
+
+# Global exclude configuration (optional module; degrades gracefully if missing)
+try:
+    from global_exclude import GlobalExcludeConfig
+    _GLOBAL_EXCLUDE_AVAILABLE = True
+except Exception:
+    _GLOBAL_EXCLUDE_AVAILABLE = False
 
 # ============================================================
 # Constants & Rule Definitions
@@ -209,7 +226,7 @@ KNOWN_VULN_DEPS = {
 
 # Update check URL and version info
 UPDATE_CHECK_URL = "https://api.github.com/repos/njskills/skill-security-checker/releases/latest"
-CURRENT_VERSION = "3.0.0"
+CURRENT_VERSION = "3.1.0"
 
 # Update check cache TTL (hours)
 UPDATE_CACHE_HOURS = 24
@@ -353,7 +370,8 @@ class ScanResult:
 class SecurityAuditor:
     """Core security audit engine."""
     
-    def __init__(self, skill_path, dynamic=False, dynamic_options=None, supply_chain=False):
+    def __init__(self, skill_path, dynamic=False, dynamic_options=None, supply_chain=False,
+                 malicious_db=False, global_exclude=False):
         self.skill_path = Path(skill_path)
         self.results = []
         self.score = 100
@@ -366,8 +384,14 @@ class SecurityAuditor:
         self.dynamic_report = None
         self.supply_chain = supply_chain
         self.supply_chain_findings = []
+        self.malicious_db = malicious_db
+        self.malicious_db_findings = []
+        self.global_exclude = global_exclude
+        self.global_exclude_config = None
         self._load_skill_md()
         self._load_changelog()
+        if global_exclude and _GLOBAL_EXCLUDE_AVAILABLE:
+            self.global_exclude_config = GlobalExcludeConfig(str(self.skill_path))
     
     def _load_skill_md(self):
         """Load and parse SKILL.md."""
@@ -409,7 +433,11 @@ class SecurityAuditor:
             self.changelog_version_count = len(matches)
     
     def add_result(self, category, severity, file, line, message, pattern, suggestion, source=''):
-        """Add a scan result."""
+        """Add a scan result. Respects global exclude configuration."""
+        # Global exclude filter
+        if self.global_exclude_config and self.global_exclude_config.loaded:
+            if self.global_exclude_config.should_skip(category, str(file), message):
+                return
         result = ScanResult(category, severity, file, line, message, pattern, suggestion, source=source)
         self.results.append(result)
         score_map = {'critical': 25, 'high': 15, 'medium': 8, 'low': 3, 'info': 0}
@@ -563,6 +591,43 @@ class SecurityAuditor:
                 file=f.file, line=f.line,
                 message=f.message, pattern=f.pattern, suggestion=f.suggestion,
                 source=f.source,
+            )
+
+    def scan_malicious_db(self):
+        """Real-time malicious skill database sync & fingerprint matching."""
+        if not self.malicious_db:
+            return
+        if not _MALICIOUS_DB_AVAILABLE:
+            self.add_result(
+                category='malicious_db_skipped', severity='info',
+                file='.', line=0,
+                message='恶意 skill 数据库模块不可用，已跳过',
+                pattern='', suggestion='确认 malicious_db.py 文件存在',
+            )
+            return
+
+        try:
+            findings = scan_directory_for_malicious(str(self.skill_path))
+        except Exception as e:
+            self.add_result(
+                category='malicious_db_error', severity='low',
+                file='.', line=0,
+                message=f'恶意 skill 数据库扫描异常: {e}',
+                pattern='', suggestion='请将该问题反馈给开发者',
+            )
+            return
+
+        self.malicious_db_findings = findings
+
+        for f in findings:
+            self.add_result(
+                category='malicious_skill', severity='critical',
+                file=f.get('file', ''),
+                line=0,
+                message=f"匹配已知恶意 skill 指纹: {f.get('description', f.get('matched_id', ''))}",
+                pattern='malicious_fingerprint',
+                suggestion='立即删除该文件，可能是已知恶意 skill 的变种',
+                source='malicious_db',
             )
 
     def _get_suggestion(self, category, line):
@@ -955,6 +1020,9 @@ class SecurityAuditor:
 
         if self.supply_chain:
             scan_methods.append(('Supply Chain', self.scan_supply_chain))
+
+        if self.malicious_db:
+            scan_methods.append(('Malicious DB', self.scan_malicious_db))
         
         if not skip_update:
             scan_methods.append(('Update Check', self.check_update))
@@ -1019,6 +1087,14 @@ class SecurityAuditor:
                 'supply_chain': {
                     'enabled': self.supply_chain,
                     'findings': len(self.supply_chain_findings),
+                },
+                'malicious_db': {
+                    'enabled': self.malicious_db,
+                    'findings': len(self.malicious_db_findings),
+                },
+                'global_exclude': {
+                    'enabled': self.global_exclude,
+                    'loaded': self.global_exclude_config.loaded if self.global_exclude_config else False,
                 },
             },
             'score': self.score,
@@ -1317,6 +1393,10 @@ Examples:
                         help='Sandbox execution timeout in seconds (default: 30)')
     parser.add_argument('--supply-chain', action='store_true',
                         help='Enable supply chain risk analysis')
+    parser.add_argument('--malicious-db', action='store_true',
+                        help='Enable real-time malicious skill fingerprint matching (341 entries)')
+    parser.add_argument('--global-exclude', action='store_true',
+                        help='Enable .nosec.yml global exclude config parsing')
     
     args = parser.parse_args()
     
@@ -1332,7 +1412,9 @@ Examples:
             network=bool(args.allow_domain),
         )
     
-    auditor = SecurityAuditor(args.skill_path, dynamic=args.dynamic, dynamic_options=dyn_opts, supply_chain=args.supply_chain)
+    auditor = SecurityAuditor(args.skill_path, dynamic=args.dynamic, dynamic_options=dyn_opts,
+                              supply_chain=args.supply_chain, malicious_db=args.malicious_db,
+                              global_exclude=args.global_exclude)
     report = auditor.run(skip_update=args.skip_update)
     
     if args.format == 'json':
