@@ -175,6 +175,10 @@ def init_state(pipeline, state_path=None):
         # while-loop 迭代计数初始化
         if agent.get('type') == 'while-loop':
             node_state['iteration'] = 0
+        # approval 节点超时策略字段
+        if agent.get('type') == 'approval':
+            node_state['timeout_seconds'] = agent.get('timeout_seconds', 0)
+            node_state['timeout_action'] = agent.get('timeout_action', 'reject')
         state['nodes'][aid] = node_state
 
     safe_write(state, state_path)
