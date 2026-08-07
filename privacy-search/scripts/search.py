@@ -718,6 +718,13 @@ class SearchOrchestrator:
         # logging 段此前未被消费，V1.2 起真正写入日志文件
         self.logger = build_logger_from_config(self.config)
 
+        # 判定「整体跑题」的相关度上限。
+        # 实测（TF-IDF 模式）：命中主题的标题相关度 0.75~1.0，完全跑题的
+        # 泛化结果约 0.29~0.47，取 0.5 可稳妥区分而不误伤部分匹配。
+        self._LOW_RELEVANCE_MAX = 0.5
+        # 样本过少时波动大，不足此数不做判定
+        self._LOW_RELEVANCE_MIN_SAMPLES = 3
+
         self._request_counts: Dict[str, int] = defaultdict(int)
         self._last_reset = datetime.now()
         self._classified_errors: List[ClassifiedError] = []
@@ -922,13 +929,6 @@ class SearchOrchestrator:
 
         return ranked
 
-    # 判定「整体跑题」的相关度上限。
-    # 实测：命中主题的标题相关度为 1.0，完全跑题的泛化结果约 0.33，
-    # 两者之间有明显间隔，取 0.4 可稳妥区分而不误伤部分匹配。
-    _LOW_RELEVANCE_MAX = 0.4
-    # 样本过少时波动大，不足此数不做判定
-    _LOW_RELEVANCE_MIN_SAMPLES = 3
-
     def _warn_low_relevance(self, query: str, results: List[SearchResult]) -> None:
         """
         某引擎全部结果都与查询词无关时提示用户
@@ -975,8 +975,10 @@ class SearchOrchestrator:
             return []
 
         connector = build_connector(int(search_cfg.get("max_concurrent", 6)))
-        delay_min = float(search_cfg.get("request_delay_min", 0.0))
-        delay_max = float(search_cfg.get("request_delay_max", 1.0))
+        # 默认 1.0-5.0 与 config.yaml.example 一致：防封是合理默认值。
+        # 0.0-1.0 偏快，未配置时易触发限流
+        delay_min = float(search_cfg.get("request_delay_min", 1.0))
+        delay_max = float(search_cfg.get("request_delay_max", 5.0))
 
         async with aiohttp.ClientSession(connector=connector) as session:
             tasks = [
@@ -998,6 +1000,13 @@ class SearchOrchestrator:
             if items:
                 results.extend(items)
                 self._request_counts[items[0].engine] += 1
+                # 记录引擎成功率，供动态降级使用
+                self.cache.record_engine_result(items[0].engine, success=True)
+            elif err and err.category.value == "engine":
+                # 解析失败：记录为失败
+                engine_name = getattr(err, "engine", None)
+                if engine_name:
+                    self.cache.record_engine_result(engine_name, success=False)
         return results
 
     async def _strict_fallback(
@@ -1026,9 +1035,16 @@ class SearchOrchestrator:
             self.logger.warning("strict_fallback_refused reason=privacy_first")
             return []
 
-        for name in ("bing", "baidu"):
-            if not self._check_rate_limit(name):
-                continue
+        # 动态降级：按成功率排序候选引擎（排除已失败的隐私引擎），
+        # 不再写死 bing→baidu，而是优先选历史成功率最高的
+        fallback_names = strict_cfg.get("fallback_engines", ["bing", "baidu"])
+        # 按成功率排序，但跳过已知被限流的引擎
+        candidates = [
+            name for name in self.cache.rank_engines_by_success(fallback_names)
+            if self._check_rate_limit(name)
+        ]
+
+        for name in candidates:
             adapter = self.engine_manager.get_adapter(name)
             if not adapter:
                 continue
@@ -1042,8 +1058,12 @@ class SearchOrchestrator:
                             f"该引擎隐私保护较弱，建议检查网络或配置代理后重试"
                         )
                         self._request_counts[name] += 1
+                        self.cache.record_engine_result(name, success=True)
                         return resp.results
+                    else:
+                        self.cache.record_engine_result(name, success=False)
             except Exception:  # noqa: BLE001 - 兜底失败不应影响主流程
+                self.cache.record_engine_result(name, success=False)
                 continue
         return []
 
@@ -1260,6 +1280,18 @@ def main():
         "--allow-fallback", action="store_true",
         help="strict 引擎全部失败时，允许降级到国内引擎（默认拒绝以保护隐私）",
     )
+    parser.add_argument(
+        "--fetch", type=int, metavar="N", default=0,
+        help="抓取 Top-N 结果的网页正文（V1.5 新增）",
+    )
+    parser.add_argument(
+        "--export", metavar="PATH",
+        help="导出搜索结果到文件（支持 .md / .html / .pdf，V1.5 新增）",
+    )
+    parser.add_argument(
+        "--summarize", action="store_true",
+        help="对搜索结果生成摘要（V1.5 新增，需配置 llm_summary.api_key）",
+    )
 
     args = parser.parse_args()
     config = load_config(args.config)
@@ -1272,6 +1304,9 @@ def main():
 
     orchestrator = SearchOrchestrator(config)
     orchestrator.allow_fallback = bool(args.allow_fallback)
+
+    # 启动时检查更新（24h 缓存期内瞬间返回，不阻塞搜索）
+    _run_startup_update_check(config)
 
     if args.clear_cache:
         ok = orchestrator.cache.clear()
@@ -1366,6 +1401,54 @@ def main():
     else:
         _print_results(results, args, orchestrator)
 
+    # --- V1.5 新增：网页正文抓取 ---
+    if args.fetch and results:
+        print("\n正在抓取正文...")
+        try:
+            from page_fetcher import extract_text, fetch_page
+            for i, r in enumerate(results[: args.fetch]):
+                url = getattr(r, "url", "")
+                if not url:
+                    continue
+                html = fetch_page(url)
+                if html:
+                    text = extract_text(html)
+                    if text:
+                        # 把正文附加到结果对象
+                        setattr(r, "content", text[:2000])
+                        print(f"  ✓ [{i+1}] {getattr(r, 'title', '')[:40]} ({len(text)} 字)")
+                    else:
+                        print(f"  ✗ [{i+1}] 无法提取正文")
+                else:
+                    print(f"  ✗ [{i+1}] 抓取失败")
+        except Exception as e:
+            print(f"  抓取过程出错: {e}")
+
+    # --- V1.5 新增：结果导出 ---
+    if args.export:
+        try:
+            from exporters import auto_export
+            ok = auto_export(results, args.export, args.query)
+            if ok:
+                print(f"\n已导出到: {args.export}")
+            else:
+                print(f"\n导出失败: {args.export}")
+        except Exception as e:
+            print(f"\n导出过程出错: {e}")
+
+    # --- V1.5 新增：摘要生成 ---
+    if args.summarize:
+        try:
+            from summarizer import summarize
+            print("\n正在生成摘要...")
+            summary = summarize(args.query, results, config)
+            print("\n" + "=" * 60)
+            print("摘要:")
+            print(summary)
+            print("=" * 60)
+        except Exception as e:
+            print(f"\n摘要生成出错: {e}")
+
     if args.privacy_report:
         print("=" * 60)
         print(format_privacy_summary(orchestrator.privacy_manager))
@@ -1379,6 +1462,26 @@ def main():
             print("配置有误，请检查 config.yaml，或加 --verbose 查看详情")
         else:
             print("引擎解析失败，可执行 --selftest 体检各引擎状态")
+
+
+def _run_startup_update_check(config: Dict[str, Any]) -> None:
+    """
+    启动时检查更新（异步、非阻塞主流程）
+
+    config.yaml 中 update_check 段控制是否启用。
+    24h 缓存期内从缓存读取，瞬间返回；仅首次真查，最多慢 5 秒。
+    """
+    update_cfg = config.get("update_check", {}) or {}
+    if not update_cfg.get("enabled", True) or not update_cfg.get("check_on_startup", True):
+        return
+    try:
+        from update_checker import UpdateChecker, display_update_notification
+        checker = UpdateChecker(config)
+        update_info = asyncio.run(checker.check())
+        if update_info and update_info.has_update:
+            display_update_notification(update_info)
+    except Exception:  # noqa: BLE001 - 更新检查失败不干扰搜索
+        pass
 
 
 if __name__ == "__main__":
