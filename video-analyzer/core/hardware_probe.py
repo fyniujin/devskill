@@ -392,9 +392,9 @@ class HardwareProbe:
         """
         根据硬件推荐最佳配置。
         
-        策略：
+        策略（v4.1 新增 tiny 模型优先体验）：
+        - tiny 模型优先体验：首次使用/低配电脑默认 tiny (75MB)
         - 子进程数 = min(物理核心数 - 1, 内存GB / 2)
-        - whisper 模型：内存 > 16GB 可用 medium，否则 small
         - 视觉分析：GPU 可用则全量，否则限制采样率
         """
         cpu_cores = info["cpu"]["physical_cores"]
@@ -402,14 +402,22 @@ class HardwareProbe:
         gpu_available = info["gpu"]["available"]
         gpu_vram = info["gpu"]["vram_gb"]
         
+        # 获取 whisper 配置（从 config 而不是 info）
+        whisper_config = self.config.get("whisper", {})
+        tiny_first = whisper_config.get("tiny_first", True)
+        low_memory_threshold = whisper_config.get("low_memory_threshold", 4)
+        
         # === 计算最佳子进程数 ===
         # 策略：保留 1 核给系统，每 2GB 内存支持 1 子进程
         by_cpu = max(1, cpu_cores - 1)
         by_memory = max(1, int(memory_gb / 2))
         recommended_workers = min(by_cpu, by_memory, 8)  # 最多 8 子进程
         
-        # === 推荐 whisper 模型 ===
-        if memory_gb >= 16 and (gpu_available and gpu_vram >= 4):
+        # === 推荐 whisper 模型 (v4.1 tiny 优先) ===
+        # 低配电脑或启用 tiny_first 时默认 tiny
+        if memory_gb < low_memory_threshold or tiny_first:
+            recommended_model = "tiny"
+        elif memory_gb >= 16 and (gpu_available and gpu_vram >= 4):
             recommended_model = "large-v3"
         elif memory_gb >= 8:
             recommended_model = "medium"
