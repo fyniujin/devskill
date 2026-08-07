@@ -107,10 +107,38 @@ def _cap(m, key):
         return 5.0
 
 
-def _best_by_capability(models, cap_key):
+def _get_win_score(provider, model_name, task_type):
+    """查询竞技场胜率，归一化到 0-10。无数据返回 None。"""
+    rates = cost_tracker.win_rates().get(task_type, [])
+    if not rates:
+        return None
+    model_wins = None
+    for r in rates:
+        if r["provider"] == provider and r["model"] == model_name:
+            model_wins = r["wins"]
+            break
+    if model_wins is None:
+        return None
+    max_wins = max(r["wins"] for r in rates)
+    if max_wins <= 0:
+        return None
+    return model_wins / max_wins * 10.0
+
+
+def _best_by_capability(models, cap_key, task_type=None):
     """在候选中选能力画像最高者；同分时选更便宜的（性价比优先）。
+    当 task_type 提供时，静态画像(60%) + 动态胜率(40%) 加权；
+    无竞技场数据时回退纯静态画像。
     这样新增厂商只要在 models.yaml 填了画像，就能被 auto 策略自动选中，无需改代码。"""
-    return max(models, key=lambda pm: (_cap(pm[1], cap_key), -_price(pm[1])))
+    def score(pm):
+        p, m = pm
+        cap = _cap(m, cap_key)
+        if task_type:
+            win = _get_win_score(p, m["name"], task_type)
+            if win is not None:
+                cap = cap * 0.6 + win * 0.4
+        return (cap, -_price(m))
+    return max(models, key=score)
 
 
 def resolve(strategy, classification, reg, manual_model=None, allow_unconfigured=False):
@@ -160,28 +188,28 @@ def resolve(strategy, classification, reg, manual_model=None, allow_unconfigured
         return best[0], best[1]["name"], "quality 策略：选择能力最强的模型"
 
     # auto：任务感知（v2.1 起结合能力画像 reason_score/code_score/long_score）
+    # v2.3 起：静态画像(60%) + 动态胜率(40%) 加权（dead规则#9 自研+可选）
     reason_bits = []
+    task_type = cls["task_type"]
     if cls["needs_reasoning"]:
         reasoner = [pm for pm in models if pm[1].get("reasoner")]
         if reasoner:
-            # 有 reasoner 时按 reason_score 选最强的
             best = max(reasoner, key=lambda pm: _cap(pm[1], "reason_score"))
             reason_bits.append("需推理→选 reasoner 模型(按推理画像)")
         else:
-            # 无 reasoner：按 reason_score 选最强，其次看价格
-            best = _best_by_capability(models, "reason_score")
-            reason_bits.append("需推理但无 reasoner→选推理画像最强")
+            best = _best_by_capability(models, "reason_score", task_type=task_type)
+            reason_bits.append("需推理但无 reasoner→选推理画像+胜率加权")
     elif cls["length_bucket"] == "long":
         longs = [pm for pm in models if (pm[1].get("ctx") or 0) >= 128000]
         if longs:
             best = max(longs, key=lambda pm: (_cap(pm[1], "long_score"), pm[1].get("ctx", 0)))
             reason_bits.append("长文→选超长上下文(≥128k)且长文画像最强")
         else:
-            best = _best_by_capability(models, "long_score")
-            reason_bits.append("长文但无超长上下文→选长文画像最强")
-    elif cls["task_type"] == "code":
-        best = _best_by_capability(models, "code_score")
-        reason_bits.append("代码任务→选代码画像最强(性价比优先)")
+            best = _best_by_capability(models, "long_score", task_type=task_type)
+            reason_bits.append("长文但无超长上下文→选长文画像+胜率加权")
+    elif task_type == "code":
+        best = _best_by_capability(models, "code_score", task_type=task_type)
+        reason_bits.append("代码任务→选代码画像+胜率加权(性价比优先)")
     elif cls["budget_sensitive"]:
         best = min(models, key=lambda pm: _price(pm[1]))
         reason_bits.append("价格敏感(分类/抽取/翻译)→选最便宜")
@@ -225,6 +253,35 @@ def _price_of(provider, model_name, reg):
 
 
 # ───────────────────────── 命令实现 ─────────────────────────
+def _resolve_dry_run(strategy, classification, reg, manual_model=None, dry_run=False):
+    """统一路由解析（含 --dry-run 建议模式）。"""
+    allow_unconfigured = dry_run or not config.configured_providers()
+    try:
+        if strategy == "manual":
+            if not manual_model:
+                raise AdapterError("manual 模式需通过 --model provider:model 指定具体模型")
+            provider, model, reason = _resolve_manual(manual_model, reg,
+                                                      allow_unconfigured=allow_unconfigured)
+        else:
+            provider, model, reason = resolve(strategy, classification, reg,
+                                               allow_unconfigured=allow_unconfigured)
+    except AdapterError:
+        if allow_unconfigured:
+            raise
+        # 有密钥但仍失败 → 进入建议模式
+        try:
+            if strategy == "manual" and manual_model:
+                provider, model, reason = _resolve_manual(manual_model, reg, allow_unconfigured=True)
+            else:
+                provider, model, reason = resolve(strategy, classification, reg, allow_unconfigured=True)
+        except AdapterError as e2:
+            raise SystemExit("❌ 路由失败：%s" % e2)
+        reason = "【建议模式·仅展示推荐不调用】" + reason
+    if dry_run:
+        reason = "【dry-run·仅展示推荐不调用】" + reason
+    return provider, model, reason
+
+
 def cmd_chat(args, reg):
     prompt = args.prompt or " ".join(args.message or [])
     if not prompt:
@@ -237,16 +294,33 @@ def cmd_chat(args, reg):
     if getattr(args, "mock", False):
         return _cmd_chat_mock(args, reg, prompt, system, classification, strategy)
 
+    # ── dry-run 模式（v2.3 建议模式统一）──
+    dry_run = getattr(args, "dry_run", False)
+
     # 解析主模型 + 备用模型列表（用于故障转移）
     try:
         if strategy == "manual":
-            primary_p, primary_m, reason = _resolve_manual(args.model, reg)
+            primary_p, primary_m, reason = _resolve_manual(args.model, reg, allow_unconfigured=dry_run)
             backups = []
         else:
-            (primary_p, primary_m), backups, reason = health_check.resolve_with_fallback(
-                strategy, classification, reg, max_backups=2)
+            if dry_run:
+                primary_p, primary_m, reason = resolve(strategy, classification, reg, allow_unconfigured=True)
+                backups = []
+            else:
+                (primary_p, primary_m), backups, reason = health_check.resolve_with_fallback(
+                    strategy, classification, reg, max_backups=2)
     except AdapterError as e:
         raise SystemExit("❌ 路由失败：%s" % e)
+
+    # dry-run 展示后返回
+    if dry_run:
+        print("🧭 dry-run 路由决策（%s 模式）" % strategy)
+        print("  厂商/模型 : %s / %s" % (primary_p, primary_m))
+        print("  依据       : %s" % reason)
+        print("  任务分类   : 类型=%s 推理=%s 长度=%s" % (
+            classification["task_type"], classification["needs_reasoning"],
+            classification["length_bucket"]))
+        return
 
     messages = []
     if system:
@@ -429,26 +503,10 @@ def cmd_route(args, reg):
         raise SystemExit("❌ 请提供 --prompt 或 -m")
     cls = classifier.classify(prompt, args.task)
     strategy = args.strategy if args.strategy else "auto"
-    try:
-        if strategy == "manual":
-            if not args.model:
-                raise AdapterError("manual 模式需通过 --model provider:model 指定具体模型")
-            provider, model, reason = _resolve_manual(args.model, reg)
-        else:
-            provider, model, reason = resolve(strategy, cls, reg)
-    except AdapterError as e:
-        if not config.configured_providers():
-            # 未配置任何密钥 → 进入「建议模式」，仅展示推荐路由，不发起调用
-            try:
-                if strategy == "manual" and args.model:
-                    provider, model, reason = _resolve_manual(args.model, reg, allow_unconfigured=True)
-                else:
-                    provider, model, reason = resolve(strategy, cls, reg, allow_unconfigured=True)
-            except AdapterError:
-                raise SystemExit("❌ 路由失败：%s" % e)
-            reason = "【建议模式·未配置密钥，仅展示推荐不调用】" + reason
-        else:
-            raise SystemExit("❌ 路由失败：%s" % e)
+    manual_model = args.model if args.model else None
+    dry_run = getattr(args, "dry_run", False)
+    provider, model, reason = _resolve_dry_run(strategy, cls, reg,
+                                                manual_model=manual_model, dry_run=dry_run)
     if args.json:
         print(json.dumps({"strategy": strategy, "provider": provider, "model": model,
                           "reason": reason, "classification": cls}, ensure_ascii=False))
@@ -539,6 +597,9 @@ def build_parser():
                         help="v2.0 Mock 模式：不调真实 API，从本地预设库返回响应")
     p_chat.add_argument("--latency", type=int, default=0,
                         help="Mock 模式下模拟延迟（毫秒），用于测试超时逻辑")
+    # v2.3 --dry-run 建议模式（与 route 统一）
+    p_chat.add_argument("--dry-run", action="store_true",
+                        help="v2.3 dry-run 模式：仅展示推荐路由，不调用 API")
 
     p_route = sub.add_parser("route", help="仅做路由决策（不调用 API）")
     p_route.add_argument("--prompt", help="用户问题")
@@ -547,6 +608,8 @@ def build_parser():
     p_route.add_argument("--strategy", default="auto", help="auto/cheap/quality/manual")
     p_route.add_argument("--model", help="manual 时的 provider:model")
     p_route.add_argument("--json", action="store_true")
+    p_route.add_argument("--dry-run", action="store_true",
+                         help="v2.3 dry-run 模式：仅展示推荐路由，不调用 API")
 
     p_rep = sub.add_parser("report", help="成本/用量报表")
     p_rep.add_argument("--period", default="month", choices=["day", "week", "month"])
@@ -704,6 +767,9 @@ def cmd_arena(args, reg):
             print()
 
     if not display:
+        if args.json:
+            print(json.dumps({"arena": {"task_type": task_type, "error": "所有模型调用均失败"}}, ensure_ascii=False))
+            return
         raise SystemExit("❌ 所有模型调用均失败")
 
     # 记录竞技场会话（不含投票，投票在交互后记录）
