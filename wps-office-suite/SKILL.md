@@ -2,8 +2,8 @@
 name: wps-office-suite
 displayName: WPS Office 全家桶
 slug: wps-office-suite
-description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、反模式FAQ、避坑指南、自动重试、硬件自适应、环境自检、错误速查手册、Skill更新提醒；v4.0新增：Word→PPT一键生成、Excel自然语言数据分析、Word合同条款审查、Excel发票OCR入账；v4.3新增：Excel深度分析（公式纠错/数据清洗/透视表/数据预测/NL2Formula）；v4.4新增：长文档排版自动化（目录/页眉页脚/标题编号/图表索引/交叉引用/格式统一）
-version: 4.4.0
+description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v4.0新增：Word→PPT一键生成、Excel自然语言数据分析、Word合同条款审查、Excel发票OCR入账；v4.3新增：Excel深度分析（公式纠错/数据清洗/透视表/数据预测/NL2Formula）；v4.4新增：长文档排版自动化（目录/页眉页脚/标题编号/图表索引/交叉引用/格式统一）；v4.5新增：会议纪要生成（ASR转写→LLM摘要→Word）、COM健康检查（状态检测+残留进程+自动释放）
+version: 4.5.0
 category: 办公协作与生产力工具
 platforms:
   - windows
@@ -42,16 +42,18 @@ tags:
   建议反馈邮箱: njskills@agent.qq.com
 ---
 
-# WPS Office 全家桶 v4.1.0 ✅
+# WPS Office 全家桶 v4.5.0 ✅
 
 > 🏗️ **四引擎智能识别**：自动检测用户电脑已安装的软件，按 WPS → MS Office → LibreOffice → 纯Python 顺序选择最合适的引擎
 > ✨ **纯Python模式增强**：排序、筛选、图表、公式、统计 — 跨平台全部支持
 > 🔄 **自动重试**：WPS 卡住时自动重试 3 次，不用手动重启
 > ⚡ **硬件自适应**：自动检测 CPU 内存，动态调整超时和线程，不拖累电脑
-> 📚 **文档模板 + 最佳实践 + 避坑指南**：代码生成3个即用模板 + 10个最佳实践案例 + 20+个避坑指南
+> 📚 **文档模板 + 最佳实践 + 故障排除**：代码生成3个即用模板 + 10个最佳实践案例 + 统一故障排除大章
 > 📬 **Skill 更新提醒**：自动检查新版本，7天提醒一次，保持最新
 > 🆕 **文件大小明确限制**：单文件 < 50MB 直接处理，> 50MB 有分片建议
 > 🔬 **Excel 深度分析 v4.3**：公式纠错、数据清洗、透视表自动生成、数据预测、NL2Formula
+> 🎙️ **会议纪要 v4.5**：音频 → ASR 转写 → LLM 摘要 → Word（支持降级链）
+> 🏥 **COM 健康检查 v4.5**：WPS/MS Office 状态检测 + 残留进程清理
 > 📧 **建议反馈**：有更好建议？邮箱：[njskills@agent.qq.com](mailto:njskills@agent.qq.com)
 
 ---
@@ -142,7 +144,56 @@ python templates/generate_templates.py --dir ./output
 
 ---
 
-## 🚫 避坑指南（v3.1 新增，20+ 条）
+## 🔧 故障排除大章（v4.5 合并，统一索引）
+
+### 统一索引表
+
+| 类型 | 问题 | 快速解决 |
+|------|------|---------|
+| 🚫 避坑 | WPS 未安装就调用 | 运行 engine-info 检查引擎 |
+| 🚫 避坑 | 公式写入显示 #NAME? | 按 Ctrl+Alt+F9 重新计算 |
+| 🚫 避坑 | 中文路径编码错误 | 改用英文路径或 raw string |
+| 🚫 避坑 | 大文件内存溢出 | >50MB 分片处理 |
+| 🚫 避坑 | WPS 卡住无响应 | 已自动重试3次，不行就任务管理器结束 |
+| 🚫 避坑 | COM 对象残留 | Worker 自动释放，或运行 com-health release-all |
+| 🚫 避坑 | PPT 添加幻灯片失败 | 仅 WPS 支持，或一次性指定 slides_content |
+| 🚫 避坑 | openpyxl 读取公式为 None | 先 WPS 打开保存一次 |
+| 🚫 避坑 | 排序/筛选/图表错乱 | 确保第一行是表头，列名完全一致 |
+| 🚫 避坑 | 筛选返回空结果 | 数值 value 必须是字符串 |
+| ⚠️ FAQ | 该选哪个引擎？ | 自动检测，无需手动选择 |
+| ⚠️ FAQ | WPS 版本有要求？ | 2019+ 或 WPS 365，安装后必须重启 |
+| ⚠️ FAQ | 纯Python vs WPS 区别？ | 公式计算/图表/添加幻灯片不同 |
+| ⚠️ FAQ | 文件太大怎么办？ | <50MB 直接处理，>50MB 分片 |
+| ⚠️ FAQ | Linux 能用吗？ | 能，安装 LibreOffice |
+| ⚠️ FAQ | WPS 卡住怎么办？ | 自动重试3次，不行结束进程 |
+| ⚠️ FAQ | 纯Python 安装依赖？ | pip install python-docx openpyxl python-pptx |
+| ⚠️ FAQ | 模板如何获取？ | 代码生成，运行 generate_templates.py |
+| ⚠️ FAQ | 批量转换格式？ | format_converter.py batch |
+| ⚠️ FAQ | 多 Sheet 处理？ | 逐 Sheet 调用或 add-sheet |
+| ⚠️ FAQ | 排序/筛选总失败？ | 确保 openpyxl 安装、文件未占用 |
+| ⚠️ FAQ | 如何提交反馈？ | wps_feedback.py email 或发邮件 |
+| ⚠️ FAQ | 公式何时计算？ | 打开文件时由 Excel/WPS 计算 |
+| ⚠️ FAQ | 文件被占用怎么办？ | 关闭程序，等待3-5秒重试 |
+| ⚠️ FAQ | 纯Python 不可用功能？ | 添加幻灯片/插入/主题/VBA/条件格式 |
+| 🚨 错误ID | E001 WPS 未安装或 COM 注册失败 | 安装 WPS 后重启电脑 |
+| 🚨 错误ID | E002 python-docx 未安装 | pip install python-docx openpyxl python-pptx |
+| 🚨 错误ID | E003 文件路径不存在 | 改用英文路径或以管理员运行 |
+| 🚨 错误ID | E004 格式转换失败 | 安装 WPS 或 LibreOffice |
+| 🚨 错误ID | E005 需要 WPS 模式 | 安装 WPS 或改用纯Python模式 |
+| 🚨 错误ID | E006 WPS 卡住无响应 | 任务管理器结束进程；更新到最新版 |
+| 🚨 错误ID | E007 权限不足 | 以管理员运行；检查文件只读属性 |
+| 🚨 错误ID | E008 pywin32 导入失败 | pip uninstall pywin32 && pip install pywin32 |
+| 🚨 错误ID | E009 Python 版本过低 | 升级到 Python 3.8+ |
+| 🚨 错误ID | E010 引擎不支持此功能 | 安装 WPS 或改用 info 查看能力矩阵 |
+| 🚨 错误ID | E011 LibreOffice 未安装 | 下载 LibreOffice 并添加到 PATH |
+| 🚨 错误ID | E012 LibreOffice 转换失败 | 检查源文件是否损坏；避免中文路径 |
+| 🚨 错误ID | E013 文件不存在 | 确认路径正确；未被删除或移动 |
+| 🚨 错误ID | E014 未知运行时错误 | 运行环境自检 wps_test.py；联系反馈 |
+| 🚨 错误ID | E015 不支持的操作或格式 | 输出格式改为 pdf/txt/html |
+
+---
+
+## 🚫 避坑详解（20+ 条）
 
 ### 🥇 高频问题（TOP 10）
 
@@ -665,6 +716,27 @@ python scripts/long_document.py all --file report.docx --preset thesis --output 
 python scripts/long_document.py preview --file report.docx --preset thesis
 ```
 
+### 🆕 v4.5 会议纪要 + COM 健康命令
+
+```bash
+# 会议纪要生成
+python scripts/meeting_minutes.py check                    # 检查可用 ASR 引擎
+python scripts/meeting_minutes.py transcribe --file audio.wav --method auto
+python scripts/meeting_minutes.py generate --file audio.wav --output 纪要.docx
+python scripts/meeting_minutes.py batch --input-dir ./audio --output-dir ./docs
+
+# COM 健康检查
+python scripts/com_health.py wps-check                     # WPS COM 状态
+python scripts/com_health.py ms-check                     # MS Office COM 状态
+python scripts/com_health.py residuals                    # 检测残留进程
+python scripts/com_health.py release-all --force           # 强制清理所有
+python scripts/com_health.py full-check --json             # 完整健康报告
+
+# 通过 wps_word.py 调用
+python scripts/wps_word.py meeting-minutes --file audio.wav --output 纪要.docx
+python scripts/wps_word.py com-health --check full
+```
+
 ### 其他工具
 
 ```bash
@@ -716,6 +788,7 @@ python templates/generate_templates.py --dir ./output  # 生成模板
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v4.5.0 | 2026-08-05 | 增加：会议纪要生成模块 meeting_minutes.py（ASR 转写 → LLM 摘要 → Word 生成）；增加：ASR 降级链（whisper-local → azure-speech → google-stt → template）；增加：LLM 降级链（rule-engine → external-llm → pure-template）；增加：COM 健康检查模块 com_health.py（WPS/MS COM 状态检测 + 残留进程检测 + 自动释放）；增加：6 个 CLI 子命令（transcribe/summarize/generate/batch/wps-check/ms-check/residuals/release-all/full-check）；合并：避坑指南 20+ 条 + FAQ 15 个 + 错误 ID 15 个 → 统一故障排除大章（含统一索引表）；增加：音频分段处理（默认 5 分钟/段）+ 进度回调；增加：硬件自适应（低配禁用并行转写） |
 | v4.4.0 | 2026-07-30 | 增加：长文档排版自动化模块 long_document.py（自动目录生成/页眉页脚自动化/标题编号自动化/图表索引自动化/交叉引用自动化/格式统一/批量排版）；增加：8 个 CLI 子命令（analyze/toc/header/numbering/fig-index/xref/format/all/preview）；增加：多级标题编号引擎（支持中文/阿拉伯/罗马数字三种样式）；增加：图表索引自动生成（图 1-1 xxx / 表 1-1 xxx）；增加：交叉引用验证与自动修复；增加：格式统一预设模板（论文/标书/报告三种风格）；增加：性能优化（分批处理 + 进度回调 + 单次保存） |
 | v4.3.0 | 2026-07-23 | 增加：Excel 智能分析模块 excel_analyzer.py（公式自动纠错/数据清洗辅助/透视表自动生成/数据预测/NL2Formula 自然语言转公式/硬件自适应降级）；增加：6 个 CLI 子命令（profile/fix-formulas/pivot/predict/nl2formula/clean/hardware）；优化：数据类型探测算法（数值/日期/文本自动识别）；优化：透视表智能字段推荐（基于唯一值比例+数据类型）；增加：数据质量评分体系（0-100分） |
 | v4.1.0 | 2026-07-17 | 增加：PPT智能生成深度增强模块 ppt_generator.py（多源输入/演讲者备注/动画建议/配色适配/图表推荐/排练辅助）；增加：4 大工具 CLI 子命令扩展（docx-to-ppt/generate/nl-analyze/invoice/review）；增加：配色方案自动生成引擎；增加：演讲者备注双模式（模板引擎 + 外部 LLM 可选）；优化：PPT 生成流程重构为分层架构 |
