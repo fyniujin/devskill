@@ -1,4 +1,4 @@
-## 作者仓库地址（三个仓库同步更新，您方便那个就用哪个）
+## 仓库地址（三仓同步更新，方便哪个用哪个）
 
 https://gitee.com/fyniujin_admin/devskill  
 https://github.com/fyniujin/devskill  
