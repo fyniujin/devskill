@@ -2,15 +2,16 @@
 name: kingdoc
 displayName: 金山文档 KingDoc
 slug: kingdoc
-version: 3.4.0
+version: 3.5.0
 description: >
-  金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理
-  （智能文档/文字/电子表格/演示文稿/多维表格/收集表/思维导图/流程图/附件），
-  深度直连金山文档（WPS）开放平台原生 API，覆盖腾讯文档全部能力 + 金山独有 10 项增强
+  金山文档 AI 协作助手 — 8 品类在线文档全生命周期管理
+  （文档/电子表格/演示文稿/多维表格/收集表/思维导图/流程图/附件），
+  深度直连金山文档（WPS）开放平台原生 API，覆盖腾讯文档全部能力 + 金山独有 12 项增强
   （回收站、版本历史、格式转换、纯文本提取、本地 Tesseract OCR、通知推送、Webhook、
-  批量任务、政企合规、硬件自适应性能、WPS AI 能力、协同冲突解决、文档合规检查）。文字/演示/思维导图/流程图采用"本地生成→上传覆盖"，
+  批量任务、政企合规、硬件自适应性能、WPS AI 能力、协同冲突解决、文档合规检查、
+  实时协同编辑、文档对比）。文字/演示/思维导图/流程图采用"本地生成→上传覆盖"，
   电子表格/多维表格采用 API 精细编辑。本地生成、OCR、硬件画像、WPS AI 等能力零密钥可用。
-description_zh: "金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理（深度直连 WPS 开放平台 + WPS AI 能力）"
+description_zh: "金山文档 AI 协作助手 — 8 品类在线文档全生命周期管理（深度直连 WPS 开放平台 + WPS AI 能力 + 实时协同 + 文档对比）"
 category: 办公效率
 platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
 tags: [文档处理, 表格处理, PPT生成, 多维表格, 表单收集, 思维导图, 流程图, OCR, 政企合规]
@@ -380,7 +381,67 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 ---
 
-## 12. 完整场景案例（v3.0.0 新增）
+## 12. 实时协同编辑（v3.5.0 新增，序列 CRDT 自研实现）
+
+> 多人同时编辑同一文档时经常出现冲突（A 修改了第 3 段，B 也修改了第 3 段）。
+> v3.3 冲突解决是事后 difflib 合并，本模块升级为**实时 CRDT 协同**，多人同时编辑无冲突。
+
+### 12.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.realtime.create` | 创建协同文档 | 输入 client_id → 返回文档状态 |
+| `kdoc.realtime.insert` | 插入文本 | 输入位置+文本 → 返回操作列表 |
+| `kdoc.realtime.delete` | 删除文本 | 输入位置+长度 → 返回操作列表 |
+| `kdoc.realtime.get_text` | 获取当前文本 | 输入 client_id → 返回可见文本 |
+| `kdoc.realtime.stats` | 获取统计信息 | 输入 client_id → 返回字符数/操作数 |
+
+### 12.2 核心算法：序列 CRDT
+
+- 每个字符带唯一因果 ID（lamport timestamp + client_id + 序列号）
+- 插入/删除操作满足交换律，顺序无关
+- 删除标记 tombstone（保留因果关系，不真正移除）
+- 最终一致性：所有客户端收敛到相同状态
+- 无需中央服务器协调（P2P 友好）
+
+### 12.3 工作流程
+
+```
+1) kdoc.realtime.create(client_id) → 创建协同文档
+2) 用户 A 插入：kdoc.realtime.insert("alice", 0, "Hello")
+3) 用户 B 同时插入：kdoc.realtime.insert("bob", 5, " World")
+4) 操作自动广播给所有客户端
+5) kdoc.realtime.get_text(client_id) → 获取一致文本
+```
+
+---
+
+## 13. 文档对比（v3.5.0 新增，复用 difflib 引擎）
+
+> 对应 TOP50「文档对比检测器」，两版文档差异高亮。
+> 复用 conflict_resolver.py 的 difflib 引擎，提供面向用户的对比能力。
+
+### 13.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.compare.diff` | 差异高亮 | 输入两版文本 → 返回差异行+统计+相似度 |
+| `kdoc.compare.summary` | 变更摘要 | 输入两版文本 → 返回增删改统计+关键变化 |
+| `kdoc.compare.export` | 导出报告 | 输入两版文本 → 返回 Markdown/HTML 报告 |
+
+### 13.2 工作流程
+
+```
+1) kdoc.file.content(file_id) → 获取当前版本
+2) kdoc.version.list(file_id) → 获取历史版本
+3) kdoc.compare.diff(current, history) → 差异高亮
+4) kdoc.compare.summary(current, history) → 变更摘要
+5) kdoc.compare.export(current, history, format="html") → 导出报告
+```
+
+---
+
+## 14. 完整场景案例（v3.0.0 新增）
 
 ### 场景 A：月度销售复盘（全链路）
 ```
@@ -436,6 +497,33 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 4) kdoc.compliance.classify(text) → 建议密级（如"秘密"）
 5) kdoc.compliance.format(file_path) → 格式规范检查（字体/字号/行距）
 6) 生成合规报告 → 用户确认 → 修复不合规项
+```
+
+### 场景 H：实时协同编辑（v3.5.0 新增）
+```
+1) kdoc.realtime.create("alice") → Alice 创建协同文档
+2) kdoc.realtime.insert("alice", 0, "项目计划：") → Alice 插入文本
+3) kdoc.realtime.insert("bob", 5, "第一阶段") → Bob 同时插入
+4) kdoc.realtime.get_text("alice") → Alice 看到合并后的文本
+5) kdoc.realtime.stats("alice") → 查看协同统计
+```
+
+### 场景 I：文档对比（v3.5.0 新增）
+```
+1) kdoc.file.content(file_id) → 获取当前版本
+2) kdoc.version.list(file_id) → 获取历史版本
+3) kdoc.compare.diff(current, history) → 差异高亮
+4) kdoc.compare.summary(current, history) → 变更摘要
+5) kdoc.compare.export(current, history, format="html") → 导出 HTML 报告
+```
+
+### 场景 J：8 品类智能路由（v3.5.0 新增）
+```
+1) 用户说"帮我写一份智能文档" → kdoc.category_resolve("智能文档")
+   → {category: "doc", sub_type: "smart_note", edit_method: "local_generate_upload"}
+2) 用户说"建一个销售数据表" → kdoc.category_resolve("数据表")
+   → {category: "sheet", sub_type: null, edit_method: "api_cell"}
+3) kdoc.category_list() → 列出全部 8 品类
 ```
 
 ---
@@ -590,6 +678,7 @@ python -m engine.update_check --version 3.0.0 --reminder
 
 ## 更新日志
 
+| v3.5.0 | 2026-08-08 | 增加：实时协同编辑引擎 `engine/realtime_collab.py`（序列 CRDT 自研实现，零第三方依赖）；增加：文档对比模块 `engine/doc_comparator.py`（复用 difflib，差异高亮+变更摘要+导出）；增加：品类元数据 `engine/categories.py`（9 品类精简为 8 品类，合并 doc+smart_note，子类型自动识别）；增加：MCP 工具 12 个（kdoc.realtime.* 5 个、kdoc.compare.* 3 个、kdoc.category.* 2 个、kdoc.file.* 品类路由更新）；增加：实时协同+文档对比+8 品类智能路由场景案例；优化：品类路由表从 9→8，引擎逻辑不变 |
 | v3.4.0 | 2026-07-30 | 增加：文档内容合规检查模块 `engine/compliance_check.py`（自研正则+规则引擎，零第三方依赖）；增加：敏感词扫描 `kdoc.compliance.sensitive`（内置词库+用户黑白名单）、数据泄露检测 `kdoc.compliance.leak`（手机号/身份证号/银行卡号/邮箱，Luhn+校验码验证）、格式规范检查 `kdoc.compliance.format`（DOCX/PPTX/TXT/MD）、密级自动标注 `kdoc.compliance.classify`（公开/内部/秘密/机密）；增加：合规检查 MCP 工具 4 个；增加：敏感词库 `references/sensitive_words.txt`、格式规范 `references/format_spec.md`、用户黑白名单模板；增加：政企文档合规检查场景案例 |
 | v3.3.0 | 2026-07-21 | 增加：协同编辑冲突解决模块 `engine/conflict_resolver.py`（自研 difflib 实现，零第三方依赖）；增加：冲突检测 `kdoc.conflict.detect`、智能合并 `kdoc.conflict.merge`（自动合并无冲突段 + 标注冲突段）、Git diff 可视化 `kdoc.conflict.diff`、解决模板 `kdoc.conflict.resolve`（keep_a/keep_b/manual/auto_merge）；增加：冲突解决 MCP 工具 4 个；增加：大文档 diff 分块硬件自适应处理；增加：多人协作冲突解决场景案例；优化：冲突段强制用户确认，绝不自动覆盖 |
 | v3.2.0 | 2026-07-17 | 增加：WPS AI 能力适配层（写作辅助/数据分析/PPT 生成/阅读助手），本地降级优先、自研逻辑实现、零密钥可用；增加：WPS AI 适配器 `engine/wps_ai/adapter.py`；增加：本地降级后端 `engine/wps_ai/backends/local_fallback.py`；增加：能力定义与意图映射 `engine/wps_ai/capabilities.py`；增加：WPS AI API 调研记录 `engine/wps_ai/research_notes.md`；优化：MCP Server 注册 5 个 WPS AI 工具；优化：版本号 3.0.0→3.2.0 |
