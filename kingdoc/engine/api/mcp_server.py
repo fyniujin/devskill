@@ -36,7 +36,7 @@ from engine.hardware import get_recommended_settings
 from engine.update_check import build_reminder, FEEDBACK_EMAIL
 from engine.exceptions import KingDocError
 
-APP_VERSION = "3.4.0"
+APP_VERSION = "3.5.0"
 
 # 配置路径：环境变量优先，其次 skill 根目录 config.json
 CONFIG_PATH = os.environ.get("KINGDOC_CONFIG", str(SKILL_ROOT / "config.json"))
@@ -634,6 +634,153 @@ async def kdoc_compliance_classify(text: str) -> str:
         return _to_text(result)
     except Exception as e:
         return f"[ERR] 密级标注失败：{e}"
+
+
+# ===========================================================================
+# 十三、实时协同编辑（v3.5.0 新增，序列 CRDT 自研实现）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_realtime_create(client_id: str, session_id: str = "") -> str:
+    """【免密钥】创建实时协同文档。
+
+    client_id: 当前客户端标识
+    session_id: 会话 ID（留空则自动创建）
+    本地 CRDT 引擎，零配置可用。"""
+    try:
+        from engine.realtime_collab import CRDTDocument
+        doc = CRDTDocument(client_id)
+        return _to_text({"client_id": client_id, "status": "created", "doc_id": id(doc)})
+    except Exception as e:
+        return f"[ERR] 创建协同文档失败：{e}"
+
+@mcp.tool()
+async def kdoc_realtime_insert(client_id: str, pos: int, text: str) -> str:
+    """【免密钥】在协同文档中插入文本。
+
+    client_id: 当前客户端标识
+    pos: 插入位置
+    text: 插入的文本
+    本地 CRDT 引擎，零配置可用。"""
+    try:
+        from engine.realtime_collab import CRDTDocument
+        doc = CRDTDocument(client_id)
+        ops = doc.local_insert(pos, text)
+        return _to_text({"client_id": client_id, "text": doc.get_text(), "ops_count": len(ops)})
+    except Exception as e:
+        return f"[ERR] 插入失败：{e}"
+
+@mcp.tool()
+async def kdoc_realtime_delete(client_id: str, pos: int, length: int = 1) -> str:
+    """【免密钥】在协同文档中删除文本。
+
+    client_id: 当前客户端标识
+    pos: 删除起始位置
+    length: 删除长度
+    本地 CRDT 引擎，零配置可用。"""
+    try:
+        from engine.realtime_collab import CRDTDocument
+        doc = CRDTDocument(client_id)
+        ops = doc.local_delete(pos, length)
+        return _to_text({"client_id": client_id, "text": doc.get_text(), "ops_count": len(ops)})
+    except Exception as e:
+        return f"[ERR] 删除失败：{e}"
+
+@mcp.tool()
+async def kdoc_realtime_get_text(client_id: str) -> str:
+    """【免密钥】获取协同文档当前文本。
+
+    client_id: 当前客户端标识
+    本地 CRDT 引擎，零配置可用。"""
+    try:
+        from engine.realtime_collab import CRDTDocument
+        doc = CRDTDocument(client_id)
+        return _to_text({"client_id": client_id, "text": doc.get_text()})
+    except Exception as e:
+        return f"[ERR] 获取文本失败：{e}"
+
+@mcp.tool()
+async def kdoc_realtime_stats(client_id: str) -> str:
+    """【免密钥】获取协同文档统计信息。
+
+    client_id: 当前客户端标识
+    本地 CRDT 引擎，零配置可用。"""
+    try:
+        from engine.realtime_collab import CRDTDocument
+        doc = CRDTDocument(client_id)
+        return _to_text(doc.get_stats())
+    except Exception as e:
+        return f"[ERR] 获取统计失败：{e}"
+
+
+# ===========================================================================
+# 十四、文档对比（v3.5.0 新增，复用 difflib 引擎）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_compare_diff(text_a: str, text_b: str,
+                            label_a: str = "版本A", label_b: str = "版本B") -> str:
+    """【免密钥】文档对比：两版文档差异高亮。
+
+    返回差异行列表+统计+相似度。本地 difflib 算法，零配置可用。"""
+    try:
+        from engine.doc_comparator import compare_documents
+        result = compare_documents(text_a, text_b, label_a, label_b)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 文档对比失败：{e}"
+
+@mcp.tool()
+async def kdoc_compare_summary(text_a: str, text_b: str) -> str:
+    """【免密钥】变更摘要：两版文档增删改统计+关键变化。
+
+    本地 difflib 算法，零配置可用。"""
+    try:
+        from engine.doc_comparator import change_summary
+        result = change_summary(text_a, text_b)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 变更摘要失败：{e}"
+
+@mcp.tool()
+async def kdoc_compare_export(text_a: str, text_b: str,
+                              format: str = "markdown") -> str:
+    """【免密钥】导出对比报告。
+
+    format: markdown(默认) | html
+    本地 difflib 算法，零配置可用。"""
+    try:
+        from engine.doc_comparator import export_report
+        result = export_report(text_a, text_b, format)
+        return result
+    except Exception as e:
+        return f"[ERR] 导出报告失败：{e}"
+
+
+# ===========================================================================
+# 十五、品类管理（v3.5.0 新增，8 品类 + 子类型识别）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_category_resolve(user_input: str) -> str:
+    """【免密钥】品类识别：根据用户输入自动识别文档品类（8 品类）。
+
+    返回品类 ID、名称、子类型、编辑方式。本地规则引擎，零配置可用。"""
+    try:
+        from engine.categories import resolve_category
+        result = resolve_category(user_input)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 品类识别失败：{e}"
+
+@mcp.tool()
+async def kdoc_category_list() -> str:
+    """【免密钥】列出所有可用品类（8 品类）。
+
+    本地规则引擎，零配置可用。"""
+    try:
+        from engine.categories import list_categories
+        result = list_categories()
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 获取品类列表失败：{e}"
 
 
 def main():
