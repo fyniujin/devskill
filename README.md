@@ -1,7 +1,7 @@
 ## 作者仓库地址（三个仓库同步更新，您方便那个就用哪个）
 
-https://gitee.com/fyniujin_admin/devskill
-https://github.com/fyniujin/devskill
+https://gitee.com/fyniujin_admin/devskill  
+https://github.com/fyniujin/devskill  
 https://atomgit.com/fyniujin/devskill
 
 ---
@@ -49,8 +49,6 @@ your-skill-name/
 ├── references/       # 可选 - 参考资料
 └── assets/           # 可选 - 静态资源
 ```
-
----
 
 ---
 
