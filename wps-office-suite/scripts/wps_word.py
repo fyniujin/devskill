@@ -1,5 +1,5 @@
 """
-WPS Word CLI v4.4 - 四引擎自动调用（含长文档排版）
+WPS Word CLI v4.5 - 四引擎自动调用（含会议纪要 + COM 健康检查）
 """
 import subprocess
 import json
@@ -85,6 +85,22 @@ def main():
     p.add_argument("--numbering-style", default="arabic", help="标题编号样式")
     p.add_argument("--output", default="", help="输出路径（不指定则覆盖原文件）")
 
+    # v4.5: 会议纪要子命令
+    p = sub.add_parser("meeting-minutes", help="会议纪要生成（音频→纪要→Word）")
+    p.add_argument("--file", required=True, help="音频文件路径（wav/mp3/m4a）")
+    p.add_argument("--output", default="", help="输出 Word 文件路径")
+    p.add_argument("--title", default="会议纪要", help="文档标题")
+    p.add_argument("--language", default="zh", help="语言代码")
+    p.add_argument("--asr-method", default="auto", choices=["auto", "whisper-local", "azure-speech", "google-stt", "template"])
+    p.add_argument("--summary-method", default="auto", choices=["auto", "rule-engine", "external-llm", "pure-template"])
+    p.add_argument("--segment-minutes", type=int, default=5, help="音频分段时长（分钟）")
+
+    # v4.5: COM 健康检查子命令
+    p = sub.add_parser("com-health", help="COM 健康检查（WPS/MS Office 状态检测）")
+    p.add_argument("--check", default="full", choices=["full", "wps", "ms", "residuals", "release"], help="检查类型")
+    p.add_argument("--force", action="store_true", help="强制清理（包括 COM 缓存）")
+    p.add_argument("--auto-release", action="store_true", help="检查后自动释放")
+
     args = parser.parse_args()
 
     if args.command == "create":
@@ -119,6 +135,22 @@ def main():
             "preset": args.preset,
             "numbering_style": args.numbering_style,
             "output": args.output,
+        })
+    elif args.command == "meeting-minutes":
+        r = call_worker("meeting_minutes", {
+            "file": args.file,
+            "output": args.output,
+            "title": args.title,
+            "language": args.language,
+            "asr_method": args.asr_method,
+            "summary_method": args.summary_method,
+            "segment_minutes": args.segment_minutes,
+        })
+    elif args.command == "com-health":
+        r = call_worker("com_health", {
+            "check_type": args.check,
+            "force": args.force,
+            "auto_release": args.auto_release,
         })
     else:
         r = {"ok": False, "error": "未知命令"}
