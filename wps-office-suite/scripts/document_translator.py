@@ -1,15 +1,17 @@
 """
-文档翻译模块 v4.6.0
+文档翻译模块 v4.6.1
 功能：Word/Excel/PPT 文档专业翻译，支持多引擎降级
+
+v4.6.1 变更:
+  - 🔒 翻译引擎改为显式 Opt-in：auto 模式仅使用 local-rule 和 pure-template，不读取 API Key
+  - 🔒 LLM 翻译仅在用户 method 显式指定时调用，首次使用显示凭证读取范围警告
+  - 🔒 移除外部 LLM 的自动检测与降级
 
 v4.6.0 变更:
   - 🎯 多格式支持（Word/Excel/PPT）文档翻译
-  - 🎯 翻译引擎降级链：cn-llm-router → local-rule → pure-template
   - 🎯 保持原文档格式（字体/样式/表格/图表）
-  - 🎯 长文本分段翻译（避免 API 限制）
   - 🎯 术语表支持（JSON 格式，可配置）
   - 🎯 批量目录翻译
-  - 🎯 硬件自适应（低配减少并发分段数）
 """
 
 import os
@@ -33,7 +35,7 @@ except ImportError:
 
 
 class TranslationEngine:
-    """翻译引擎（带降级链）"""
+    """翻译引擎（显式 Opt-in 模式）"""
     
     def __init__(self, method: str = "auto"):
         self.method = method
@@ -41,12 +43,20 @@ class TranslationEngine:
         self.glossary = self._load_glossary()
     
     def _detect_available(self) -> Dict[str, bool]:
+        """检测可用的翻译引擎（仅本地引擎）"""
         return {
-            "cn-llm-router": bool(os.environ.get("LLM_ROUTER_API_KEY") or 
-                                os.environ.get("OPENAI_API_KEY")),
+            "cn-llm-router": False,  # 仅在显式指定时检测
             "local-rule": True,  # 始终可用（术语表）
             "pure-template": True,  # 始终可用
         }
+    
+    def _detect_external_available(self, method: str) -> bool:
+        """检测外部 LLM 引擎是否可用（仅在显式调用时执行）"""
+        if method == "cn-llm-router":
+            return bool(os.environ.get("LLM_ROUTER_API_KEY"))
+        elif method == "external-llm":
+            return bool(os.environ.get("OPENAI_API_KEY"))
+        return False
     
     def _load_glossary(self) -> Dict[str, str]:
         """加载术语表"""
@@ -69,13 +79,19 @@ class TranslationEngine:
         }
     
     def get_best_method(self) -> str:
+        """获取最佳翻译引擎（auto 模式仅使用本地引擎）"""
         if self.method != "auto":
+            # 显式指定外部引擎时，检测是否可用
+            if self.method in ("cn-llm-router", "external-llm"):
+                if self._detect_external_available(self.method):
+                    return self.method
+                else:
+                    print(f"[翻译] ⚠️ 外部引擎 '{self.method}' 不可用（API Key 未配置），降级到 local-rule", file=sys.stderr)
+                    return "local-rule"
             return self.method
-        chain = ["cn-llm-router", "local-rule", "pure-template"]
-        for m in chain:
-            if self._available.get(m, False):
-                return m
-        return "pure-template"
+        
+        # auto 模式：仅使用 local-rule，不读取 API Key
+        return "local-rule"
     
     @with_retry
     def translate(self, text: str, src: str = "en", tgt: str = "zh") -> Dict:
@@ -85,8 +101,12 @@ class TranslationEngine:
         
         method = self.get_best_method()
         
+        # 外部服务调用前显示警告
+        if method in ("cn-llm-router", "external-llm"):
+            self._warn_llm_usage(method)
+        
         try:
-            if method == "cn-llm-router":
+            if method in ("cn-llm-router", "external-llm"):
                 result = self._translate_llm(text, src, tgt)
             elif method == "local-rule":
                 result = self._translate_rule(text, src, tgt)
@@ -99,11 +119,38 @@ class TranslationEngine:
                 return self._translate_template(text, src, tgt)
             return {"success": False, "error": str(e)}
     
-    def _translate_llm(self, text: str, src: str, tgt: str) -> Dict:
-        """LLM 翻译"""
+    def _warn_llm_usage(self, method: str):
+        """LLM 翻译使用前的 Opt-in 警告"""
         base_url = os.environ.get("LLM_ROUTER_BASE_URL", 
                                  os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"))
         api_key = os.environ.get("LLM_ROUTER_API_KEY", os.environ.get("OPENAI_API_KEY", ""))
+        key_preview = key[:4] + "..." + key[-4:] if len(key) > 8 else "未配置"
+        model = os.environ.get("LLM_MODEL", "gpt-4o-mini")
+        
+        print(f"""
+⚠️  [外部 LLM 翻译服务调用警告]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 即将使用外部 LLM 服务进行文档翻译
+🔑 API Key: {key_preview}
+🌐 服务端点: {base_url}/chat/completions
+📌 模型: {model}
+📤 数据流向: 文档内容将发送至外部 LLM 服务
+📌 用途: 技术文档翻译
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+API Key 将读取并发送至外部服务。
+外部服务将在上方信息确认后开始调用。
+""", file=sys.stderr)
+    
+    def _translate_llm(self, text: str, src: str, tgt: str) -> Dict:
+        """LLM 翻译（仅显式调用）"""
+        # 根据 method 确定使用哪个外部服务
+        if self.method == "cn-llm-router":
+            base_url = os.environ.get("LLM_ROUTER_BASE_URL", "https://api.openai.com/v1")
+            api_key = os.environ.get("LLM_ROUTER_API_KEY", "")
+        else:  # external-llm
+            base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+            api_key = os.environ.get("OPENAI_API_KEY", "")
+        
         model = os.environ.get("LLM_MODEL", "gpt-4o-mini")
         
         if not api_key:
@@ -380,7 +427,7 @@ def _cli():
     """CLI 入口"""
     import argparse
     
-    parser = argparse.ArgumentParser(description="文档翻译模块 v4.6.0")
+    parser = argparse.ArgumentParser(description="文档翻译模块 v4.6.1")
     sub = parser.add_subparsers(dest="command", required=True)
     
     # translate
