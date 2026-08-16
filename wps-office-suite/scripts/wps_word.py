@@ -1,5 +1,5 @@
 """
-WPS Word CLI v4.5 - 四引擎自动调用（含会议纪要 + COM 健康检查）
+WPS Word CLI v4.6 - 四引擎自动调用（含会议纪要 + COM 健康检查 + 文档翻译）
 """
 import subprocess
 import json
@@ -101,6 +101,16 @@ def main():
     p.add_argument("--force", action="store_true", help="强制清理（包括 COM 缓存）")
     p.add_argument("--auto-release", action="store_true", help="检查后自动释放")
 
+    # v4.6: 文档翻译子命令
+    p = sub.add_parser("translate", help="文档翻译（Word/Excel/PPT 专业翻译）")
+    p.add_argument("--file", default="", help="输入文件路径（单文件模式）")
+    p.add_argument("--output", default="", help="输出文件路径（单文件模式）")
+    p.add_argument("--source", default="", help="源语言（不指定则自动检测）")
+    p.add_argument("--target", default="zh", help="目标语言")
+    p.add_argument("--method", default="auto", choices=["auto", "cn-llm-router", "local-rule", "pure-template"], help="翻译引擎")
+    p.add_argument("--input-dir", default="", help="输入目录（批量模式）")
+    p.add_argument("--output-dir", default="", help="输出目录（批量模式）")
+
     args = parser.parse_args()
 
     if args.command == "create":
@@ -152,6 +162,17 @@ def main():
             "force": args.force,
             "auto_release": args.auto_release,
         })
+    elif args.command == "translate":
+        # v4.6: 文档翻译
+        from document_translator import DocumentTranslator
+        t = DocumentTranslator(engine_method=args.method)
+        if args.input_dir and args.output_dir:
+            r = t.batch_translate(args.input_dir, args.output_dir, args.source, args.target)
+        elif args.file and args.output:
+            r = t.translate_document(args.file, args.output, args.source, args.target)
+        else:
+            r = {"ok": False, "error": "请指定 --file/--output 或 --input-dir/--output-dir"}
+        r = {"ok": r.get("success", False), **r}
     else:
         r = {"ok": False, "error": "未知命令"}
 
