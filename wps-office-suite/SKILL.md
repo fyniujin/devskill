@@ -3,7 +3,7 @@ name: wps-office-suite
 displayName: WPS Office 全家桶
 slug: wps-office-suite
 description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v4.0新增：Word→PPT一键生成、Excel自然语言数据分析、Word合同条款审查、Excel发票OCR入账；v4.3新增：Excel深度分析（公式纠错/数据清洗/透视表/数据预测/NL2Formula）；v4.4新增：长文档排版自动化（目录/页眉页脚/标题编号/图表索引/交叉引用/格式统一）；v4.5新增：会议纪要生成（ASR转写→LLM摘要→Word）、COM健康检查（状态检测+残留进程+自动释放）；v4.6新增：Excel智能分析统一入口（6命令合并）、数据图表生成器（自动选图+生成）、文档翻译增强版（Word/Excel/PPT多格式翻译）
-version: 4.6.0
+version: 4.6.1
 category: 办公协作与生产力工具
 platforms:
   - windows
@@ -816,6 +816,7 @@ python templates/generate_templates.py --dir ./output  # 生成模板
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v4.6.1 | 2026-08-16 | 修复：ASR 引擎改为显式 Opt-in 模式（auto 仅使用本地 whisper-local，不读取外部凭证）；修复：Azure/Google STT 仅在 method 显式指定时调用，首次使用显示凭证读取范围警告；修复：LLM 翻译改为显式 Opt-in 模式（auto 仅使用 local-rule，不读取 API Key）；修复：外部 SDK 依赖（google-cloud-speech / azure-cognitiveservices-speech）补充声明至 requirements.txt |
 | v4.6.0 | 2026-08-16 | 增加：Excel 智能分析统一入口 excel-smart（6 命令合并为 1 个 --action 路由）；增加：数据图表生成器 chart_recommender.py（数据特征分析 + 智能图表推荐 + 图表嵌入 Excel）；增加：文档翻译模块 document_translator.py（Word/Excel/PPT 多格式翻译 + 多模型降级链）；增加：翻译引擎降级链（cn-llm-router → local-rule → pure-template）；增加：图表推荐规则引擎（时间序列/类别对比/相关性/多变量）；增加：硬件自适应（低配禁用复杂图表渲染）；增加：术语表支持（JSON 格式可配置） |
 | v4.5.0 | 2026-08-05 | 增加：会议纪要生成模块 meeting_minutes.py（ASR 转写 → LLM 摘要 → Word 生成）；增加：ASR 降级链（whisper-local → azure-speech → google-stt → template）；增加：LLM 降级链（rule-engine → external-llm → pure-template）；增加：COM 健康检查模块 com_health.py（WPS/MS COM 状态检测 + 残留进程检测 + 自动释放）；增加：6 个 CLI 子命令（transcribe/summarize/generate/batch/wps-check/ms-check/residuals/release-all/full-check）；合并：避坑指南 20+ 条 + FAQ 15 个 + 错误 ID 15 个 → 统一故障排除大章（含统一索引表）；增加：音频分段处理（默认 5 分钟/段）+ 进度回调；增加：硬件自适应（低配禁用并行转写） |
 | v4.4.0 | 2026-07-30 | 增加：长文档排版自动化模块 long_document.py（自动目录生成/页眉页脚自动化/标题编号自动化/图表索引自动化/交叉引用自动化/格式统一/批量排版）；增加：8 个 CLI 子命令（analyze/toc/header/numbering/fig-index/xref/format/all/preview）；增加：多级标题编号引擎（支持中文/阿拉伯/罗马数字三种样式）；增加：图表索引自动生成（图 1-1 xxx / 表 1-1 xxx）；增加：交叉引用验证与自动修复；增加：格式统一预设模板（论文/标书/报告三种风格）；增加：性能优化（分批处理 + 进度回调 + 单次保存） |
