@@ -37,7 +37,7 @@ def cmd_run(args: argparse.Namespace) -> None:
 
 
 def cmd_ask(args: argparse.Namespace) -> None:
-    """Ask a single question directly."""
+    """Ask a single question (single provider or multi-provider compare)."""
     config_path = args.config or get_default_config_path()
     config = load_config(config_path)
     router = ModelRouter(timeout=args.timeout, failover=not args.no_failover)
@@ -45,6 +45,24 @@ def cmd_ask(args: argparse.Namespace) -> None:
 
     question = args.question or input("请输入问题: ")
     msgs = [ChatMessage(role="user", content=question)]
+
+    # v1.5.0: Support --providers for multi-provider compare
+    if hasattr(args, 'providers') and args.providers and len(args.providers) >= 2:
+        try:
+            results = router.compare_models(msgs, providers=args.providers)
+            for provider, info in results.items():
+                print(f"\n### {provider}")
+                if "error" in info:
+                    print(f"  ❌ {info['error']}")
+                else:
+                    print(f"  [{info['model']}] ({info['duration_ms']}ms)")
+                    print(f"  {info['content'][:150]}...")
+        except Exception as e:
+            print(f"错误: {e}", file=sys.stderr)
+            sys.exit(1)
+        return
+
+    # Single provider mode
     try:
         resp = router.chat(msgs, provider=args.provider)
         print(f"\n[{resp.provider}/{resp.model}] ({resp.duration_ms}ms)")
@@ -53,29 +71,44 @@ def cmd_ask(args: argparse.Namespace) -> None:
         print("-" * 40)
         print(f"Tokens: prompt={resp.usage.get('prompt_tokens', '?')}, "
               f"completion={resp.usage.get('completion_tokens', '?')}")
+        # v1.5.0: Show tool_calls if present
+        if resp.tool_calls:
+            print(f"\nTool Calls:")
+            for tc in resp.tool_calls:
+                print(f"  - {tc.name}({tc.arguments})")
     except Exception as e:
         print(f"错误: {e}", file=sys.stderr)
         sys.exit(1)
 
 
-def cmd_compare(args: argparse.Namespace) -> None:
-    """Compare models."""
+def cmd_describe_image(args: argparse.Namespace) -> None:
+    """Describe an image using vision models."""
     config_path = args.config or get_default_config_path()
     config = load_config(config_path)
     router = ModelRouter(timeout=args.timeout, failover=not args.no_failover)
     router.register_all(config)
 
-    question = args.question or input("请输入问题: ")
-    msgs = [ChatMessage(role="user", content=question)]
+    image = args.image or input("请输入图片 URL/路径: ")
+    prompt = args.prompt or "请描述这张图片"
+
+    # Find adapter
+    adapter = None
+    if args.provider:
+        adapter = router.get_adapter(args.provider)
+    else:
+        available = router.list_available()
+        if available:
+            adapter = router.get_adapter(available[0])
+
+    if not adapter:
+        print("没有可用的模型提供商。", file=sys.stderr)
+        sys.exit(1)
+
     try:
-        results = router.compare_models(msgs, providers=args.providers)
-        for provider, info in results.items():
-            print(f"\n### {provider}")
-            if "error" in info:
-                print(f"  ❌ {info['error']}")
-            else:
-                print(f"  [{info['model']}] ({info['duration_ms']}ms)")
-                print(f"  {info['content'][:150]}...")
+        resp = adapter.describe_image(image, prompt, model=args.model)
+        print(f"\n[{resp.provider}/{resp.model}] ({resp.duration_ms}ms)")
+        print("-" * 40)
+        print(resp.content)
     except Exception as e:
         print(f"错误: {e}", file=sys.stderr)
         sys.exit(1)
@@ -198,17 +231,20 @@ def main() -> None:
     run_parser = subparsers.add_parser("run", help="启动 MCP 服务器 (stdio 模式)")
     run_parser.set_defaults(func=cmd_run)
 
-    # ask - single question
-    ask_parser = subparsers.add_parser("ask", help="直接提问")
+    # ask - single question or multi-provider compare
+    ask_parser = subparsers.add_parser("ask", help="直接提问（--providers 指定多家时对比）")
     ask_parser.add_argument("question", nargs="?", help="要提问的内容")
-    ask_parser.add_argument("-p", "--provider", help="指定提供商")
+    ask_parser.add_argument("-p", "--provider", help="指定提供商（单家模式）")
+    ask_parser.add_argument("--providers", nargs="+", help="对比多家提供商（指定 2 家及以上）")
     ask_parser.set_defaults(func=cmd_ask)
 
-    # compare - multi-model compare
-    cmp_parser = subparsers.add_parser("compare", help="对比多个模型回答")
-    cmp_parser.add_argument("question", nargs="?", help="要提问的内容")
-    cmp_parser.add_argument("-p", "--providers", nargs="+", help="要对比的提供商列表")
-    cmp_parser.set_defaults(func=cmd_compare)
+    # describe_image - vision model
+    img_parser = subparsers.add_parser("describe_image", help="描述图片/回答图片问题")
+    img_parser.add_argument("image", nargs="?", help="图片 URL/base64/文件路径")
+    img_parser.add_argument("--prompt", help="关于图片的问题（默认：请描述这张图片）")
+    img_parser.add_argument("-p", "--provider", help="指定提供商")
+    img_parser.add_argument("--model", help="具体模型 ID")
+    img_parser.set_defaults(func=cmd_describe_image)
 
     # status - show provider status
     status_parser = subparsers.add_parser("status", help="显示提供商状态")
