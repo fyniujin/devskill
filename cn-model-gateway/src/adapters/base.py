@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import abc
+import json
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, Generator, List, Optional
@@ -12,9 +13,19 @@ class ChatMessage:
     """A single chat message."""
     role: str          # "user" | "assistant" | "system"
     content: str
+    image: str = ""    # v1.5.0: base64 / URL / file path (empty = text-only)
 
-    def to_dict(self) -> Dict[str, str]:
-        return {"role": self.role, "content": self.content}
+    def to_dict(self) -> Dict[str, Any]:
+        d: Dict[str, Any] = {"role": self.role}
+        if self.image:
+            # Multimodal message: content is a list of content parts
+            d["content"] = [
+                {"type": "image_url", "image_url": {"url": self.image}},
+                {"type": "text", "text": self.content},
+            ]
+        else:
+            d["content"] = self.content
+        return d
 
 
 @dataclass
@@ -32,6 +43,17 @@ class ContentChunk:
 
 
 @dataclass
+class ToolCall:
+    """A single tool call from model response."""
+    id: str
+    name: str
+    arguments: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"id": self.id, "name": self.name, "arguments": self.arguments}
+
+
+@dataclass
 class ChatResponse:
     """A complete (non-streaming) chat response."""
     content: str
@@ -40,9 +62,10 @@ class ChatResponse:
     usage: Dict[str, int] = field(default_factory=dict)
     finish_reason: str = "stop"
     duration_ms: int = 0
+    tool_calls: List[ToolCall] = field(default_factory=list)  # v1.5.0
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d: Dict[str, Any] = {
             "content": self.content,
             "model": self.model,
             "provider": self.provider,
@@ -50,6 +73,9 @@ class ChatResponse:
             "finish_reason": self.finish_reason,
             "duration_ms": self.duration_ms,
         }
+        if self.tool_calls:
+            d["tool_calls"] = [tc.to_dict() for tc in self.tool_calls]
+        return d
 
 
 class BaseAdapter(abc.ABC):
@@ -85,6 +111,62 @@ class BaseAdapter(abc.ABC):
     def check_health(self) -> bool:
         """Check if the API key is valid and service is reachable."""
         ...
+
+    # --- v1.5.0: Multimodal support ---
+
+    def describe_image(self, image: str, prompt: str = "请描述这张图片",
+                       *, model: Optional[str] = None, **kwargs: Any) -> ChatResponse:
+        """Convenience method for image description.
+
+        Default implementation constructs a multimodal ChatMessage.
+        Subclasses may override with provider-specific logic.
+        """
+        msgs = [ChatMessage(role="user", content=prompt, image=image)]
+        return self.chat(msgs, model=model, **kwargs)
+
+    # --- v1.5.0: Function Calling / Tool Use ---
+
+    def format_tools(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Format tool definitions into provider-specific format.
+
+        Default: OpenAI-compatible format (list of {type:function, function:{name,description,parameters}}).
+        Subclasses may override for provider-specific differences.
+        """
+        formatted = []
+        for tool in tools:
+            formatted.append({
+                "type": "function",
+                "function": {
+                    "name": tool["name"],
+                    "description": tool.get("description", ""),
+                    "parameters": tool.get("parameters", {"type": "object", "properties": {}}),
+                },
+            })
+        return formatted
+
+    def parse_tool_calls(self, raw: Dict[str, Any]) -> List[ToolCall]:
+        """Parse tool calls from provider response.
+
+        Default: OpenAI-compatible format (choices[0].message.tool_calls).
+        Subclasses may override for provider-specific differences.
+        """
+        tool_calls = []
+        # Navigate to message.tool_calls in OpenAI format
+        message = raw.get("choices", [{}])[0].get("message", {})
+        raw_calls = message.get("tool_calls", [])
+        for tc in raw_calls:
+            func = tc.get("function", {})
+            args_str = func.get("arguments", "{}")
+            try:
+                args = json.loads(args_str) if isinstance(args_str, str) else args_str
+            except Exception:
+                args = {}
+            tool_calls.append(ToolCall(
+                id=tc.get("id", ""),
+                name=func.get("name", ""),
+                arguments=args,
+            ))
+        return tool_calls
 
     def is_available(self) -> bool:
         """Return cached availability (refreshed by health check)."""
