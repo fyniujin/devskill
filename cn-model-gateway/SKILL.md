@@ -2,8 +2,8 @@
 slug: cn-model-gateway
 displayName: 国产模型 MCP 服务器
 name: cn-model-gateway
-description: "国产大模型统一 MCP 服务器，通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline / n8n 等 18+ Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包、MiniMax、零一万物、百川智能、阶跃星辰十家模型的统一调用接口。新增 5 个非 MCP 框架适配器：LangChain Tool、AutoGPT Plugin、CrewAI Tool、Coze 插件、Dify 工具节点，实现从 MCP 生态到全 Agent 生态的扩展。内置模型性能基准测试套件（50 道题库、6 维度评分、雷达图对比、历史追踪）和 Token 价格实时追踪（价格抓取、变更通知、趋势图、成本预测）。支持工具调用（ask_model/compare_models/list_providers/health_check）、资源读取（配置/使用统计）、预置 prompt 模板（代码审查/翻译），内置统一错误映射、流式 SSE 输出、使用量统计、硬件感知并发控制。auto 模式支持能力画像排序 + 自动故障转移（超时/失败切备用）；API key 支持环境变量优先读取；SQLite 启用 WAL 模式支持多 Agent 框架并发写入。config.json 填写 api_key 即可启动，无需 GPU、不做微调、不做私有部署，只做标准 MCP 协议网关。"
-version: 1.4.0
+description: "国产大模型统一 MCP 服务器，通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline / n8n 等 18+ Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包、MiniMax、零一万物、百川智能、阶跃星辰十家模型的统一调用接口。新增 5 个非 MCP 框架适配器：LangChain Tool、AutoGPT Plugin、CrewAI Tool、Coze 插件、Dify 工具节点，实现从 MCP 生态到全 Agent 生态的扩展。内置模型性能基准测试套件（50 道题库、6 维度评分、雷达图对比、历史追踪）和 Token 价格实时追踪（价格抓取、变更通知、趋势图、成本预测）。支持工具调用（ask_model/describe_image/list_providers/health_check）、资源读取（配置/使用统计）、预置 prompt 模板（代码审查/翻译），内置统一错误映射、流式 SSE 输出、使用量统计、硬件感知并发控制。auto 模式支持能力画像排序 + 自动故障转移（超时/失败切备用）；API key 支持环境变量优先读取；SQLite 启用 WAL 模式支持多 Agent 框架并发写入；支持多模态视觉模型（Qwen-VL/GLM-4V/豆包视觉）和图片理解（describe_image）；支持 Function Calling / Tool Use（ask_model 传入 tools 参数）。config.json 填写 api_key 即可启动，无需 GPU、不做微调、不做私有部署，只做标准 MCP 协议网关。"
+version: 1.5.0
 tags: ["mcp", "llm", "deepseek", "tongyi", "zhipu", "kimi", "hunyuan", "doubao", "minimax", "lingyi", "baichuan", "stepfun", "agent", "json-rpc", "claude-code", "cursor", "model-gateway", "chinese-ai"]
 icon: "🔌"
 author: "njskills"
@@ -28,7 +28,9 @@ CN Model Gateway 是一个**纯 Python、零运行时依赖**的国产大模型�
 | 场景 | 说明 |
 |------|------|
 | 你想在 Claude Code / Cursor / Cline 里一键切换 DeepSeek / 通义 / 智谱 / Kimi / 混元 / 豆包 | ✅ 安装后在 MCP 配置里加一段，框架自动发现 |
-| 你想对比同一问题在多个模型上的回答差异 | ✅ 内置 `compare_models` 工具，同时问多家 |
+| 你想对比同一问题在多个模型上的回答差异 | ✅ `ask_model` 传入 `providers=[a,b]` 即可对比 |
+| 你想让模型描述一张图片 | ✅ `describe_image` 工具，支持 Qwen-VL/GLM-4V/豆包视觉 |
+| 你想让模型调用工具（Function Calling） | ✅ `ask_model` 传入 `tools` 参数，返回 `tool_calls` |
 | 你想统计调用量、token 消耗、各模型使用占比 | ✅ 内置 SQLite 统计 + 周报功能 |
 | 你希望错误信息是中文的、不暴露原始英文 API 报错 | ✅ 统一错误映射，全部返回中文 |
 | 你希望在低配电脑上用，不希望 AI 把你的内存吃满 | ✅ 硬件感知并发控制（自动采集 CPU/内存 → 动态限制并发数） |
@@ -88,7 +90,10 @@ python main.py ask "写一个快速排序"
 python main.py ask "写一个快速排序" -p deepseek
 
 # 对比多个模型
-python main.py compare "解释量子计算" -p deepseek tongyi zhipu
+python main.py ask "解释量子计算" --providers deepseek tongyi zhipu
+
+# 描述一张图片
+python main.py describe_image "https://example.com/photo.jpg" -p tongyi
 
 # 查看已配置模型状态
 python main.py status
@@ -122,8 +127,8 @@ print(resp.content)
 
 | 工具名 | 描述 | 关键参数 |
 |--------|------|---------|
-| `ask_model` | 向指定或自动选择的模型提问 | `question`（必填）, `provider`（可选）, `model`（可选）, `temperature`（可选） |
-| `compare_models` | 同一问题并发多家模型返回对比 | `question`（必填）, `providers`（可选列表，默认全部可用） |
+| `ask_model` | 向模型提问（单家/多家对比/Function Calling） | `question`（必填）, `provider`（可选）, `providers`（可选列表，指定 2+ 家对比）, `model`（可选）, `temperature`（可选）, `tools`（可选，Function Calling 工具定义） |
+| `describe_image` | 向视觉模型发送图片，返回描述或回答 | `image`（必填，URL/base64/文件路径）, `prompt`（可选，默认"请描述这张图片"）, `provider`（可选）, `model`（可选） |
 | `list_providers` | 列出所有已配置且可用的模型提供商 | 无 |
 | `health_check` | 检查所有已配置提供商的连通性 | 无 |
 
@@ -229,8 +234,8 @@ gh release list --repo your-org/cn-model-gateway
 
 ## 能力边界
 
-- 仅支持文本对话（chat completions），不支持图片/音频/视频理解
-- 不支持 Function Calling / Tool Use（各家实现差异大，暂不统一封装）
+- 仅支持文本对话和图片理解（v1.5.0 新增多模态），不支持音频/视频理解
+- 支持 Function Calling / Tool Use（v1.5.0 新增，通过 `tools` 参数传入）
 - 不支持本地模型推理或 GPU 部署
 - auto 模式支持故障转移（v1.4.0 新增），默认按能力画像排序 + 超时自动切备用
 - 不支持批量异步调用（single-call synchronous only）
@@ -244,6 +249,15 @@ A: 检查 config.json 格式是否正确，api_key 是否填写。运行 `python
 
 **Q: 能同时配置多个提供商让 skill 自动选择吗？**
 A: 可以。auto 模式会按能力画像（benchmark 历史评分）和连通性状态排序，选最优的。超时/失败时自动切换到下一家（可通过 `--no-failover` 关闭）。
+
+**Q: 如何对比多个模型的回答？**
+A: 在 `ask_model` 工具中传入 `providers: ["deepseek", "tongyi", "zhipu"]`（2 家及以上），会自动返回对比结果。不传 `providers` 则单家调用。
+
+**Q: 如何让模型描述一张图片？**
+A: 使用 `describe_image` 工具，传入 `image`（URL/base64/文件路径）和可选的 `prompt`。支持 Qwen-VL、GLM-4V、豆包视觉等多模态模型。
+
+**Q: 如何使用 Function Calling？**
+A: 在 `ask_model` 工具中传入 `tools` 参数（工具定义列表），模型可能会在响应中返回 `tool_calls`。你需要自行执行工具并将结果作为后续对话的输入。
 
 **Q: 各家模型的默认模型是什么？**
 A: deepseek-chat / qwen-turbo / glm-4-flash / moonshot-v1-8k / hunyuan-standard / doubao 系列。可通过 `model` 参数覆盖。
@@ -272,7 +286,7 @@ A: 完全不需要。本 skill 只做 API 网关，不进行本地推理。
 
 ## 更新日志
 
-| v1.4.0 | 2026-08-02 | 改进 auto 模式故障转移：auto_select() 从 random.choice 改为能力画像 + 健康检查有序选择；chat() 和 stream_chat() 新增自动故障转移循环，失败/超时自动切备用提供商；支持环境变量优先读取 api_key（DEEPSEEK_API_KEY / DASHSCOPE_API_KEY 等 10 个），config.json 向后兼容；SQLite 全部启用 WAL 模式（PRAGMA journal_mode=WAL），支持多 Agent 框架并发写入；新增 --timeout 和 --no-failover CLI 参数；新增 3 个故障转移+环境变量+WAL 单元测试（总计 40 tests） |
+| v1.5.0 | 2026-08-16 | 合并 MCP 工具：ask_model + compare_models → ask_model（新增可选 providers 参数，空=单家，≥2 家=对比）；新增多模态视觉支持：ChatMessage 加 image 字段 + describe_image MCP 工具 + 视觉适配器多模态 payload（Qwen-VL/GLM-4V/豆包视觉）；新增 Function Calling / Tool Use：ChatResponse 加 tool_calls 字段 + BaseAdapter 加 format_tools/parse_tool_calls 方法 + ask_model 支持 tools 参数；SKILL.md 全面更新工具列表/能力边界/FAQ | 改进 auto 模式故障转移：auto_select() 从 random.choice 改为能力画像 + 健康检查有序选择；chat() 和 stream_chat() 新增自动故障转移循环，失败/超时自动切备用提供商；支持环境变量优先读取 api_key（DEEPSEEK_API_KEY / DASHSCOPE_API_KEY 等 10 个），config.json 向后兼容；SQLite 全部启用 WAL 模式（PRAGMA journal_mode=WAL），支持多 Agent 框架并发写入；新增 --timeout 和 --no-failover CLI 参数；新增 3 个故障转移+环境变量+WAL 单元测试（总计 40 tests） |
 
 | v1.3.0 | 2026-08-01 | 新增模型性能基准测试套件（benchmark.py：50 道题库、6 维度评分、雷达图对比、历史追踪）；新增 Token 价格实时追踪（price_tracker.py：价格抓取、变更通知、趋势图、成本预测）；新增 4 个 CLI 子命令（benchmark/price/benchmark-history/price-history/cost-predict）；测试覆盖新增 8 个 benchmark + price_tracker 单元测试（总计 37 tests） |
 
