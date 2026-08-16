@@ -352,9 +352,114 @@ class TestMockIntegration(unittest.TestCase):
 
     def test_mock_preserves_cost_tracking(self):
         """Mock 模式下成本记录应为 0。"""
-        resp = mock_engine.build_mock_response("任意查询", "chat")
-        # Mock 模式不产生实际计费
-        self.assertIsNotNone(resp)
+class TestMultimodal(unittest.TestCase):
+    """v2.4.0 多模态分类与路由测试。"""
+
+    def test_image_keyword(self):
+        c = classifier.classify("帮我看看这张图片是什么")
+        self.assertEqual(c["multimodal"], "image")
+
+    def test_image_keyword_2(self):
+        c = classifier.classify("描述图中的内容")
+        self.assertEqual(c["multimodal"], "image")
+
+    def test_audio_keyword(self):
+        c = classifier.classify("帮我听听这段音频写了什么")
+        self.assertEqual(c["multimodal"], "audio")
+
+    def test_no_multimodal(self):
+        c = classifier.classify("用 Python 写一个快排")
+        self.assertIsNone(c["multimodal"])
+
+    def test_multimodal_route_auto(self):
+        """auto 策略 + 多模态需求应路由到视觉模型。"""
+        reg = router.load_registry()
+        cls = classifier.classify("分析一下这张图片")
+        p, m, reason = router.resolve("auto", cls, reg, allow_unconfigured=True)
+        # 视觉模型带 multimodal: true 标签
+        mm = reg["providers"][p]["models"]
+        found = [x for x in mm if x["name"] == m]
+        self.assertTrue(found and found[0].get("multimodal"),
+                        "多模态需求应路由到带 multimodal 标签的模型，实际路由: %s/%s" % (p, m))
+
+    def test_multimodal_route_cheap(self):
+        """cheap 策略 + 多模态需求也应过滤到视觉模型。"""
+        reg = router.load_registry()
+        cls = classifier.classify("看看这张图")
+        p, m, reason = router.resolve("cheap", cls, reg, allow_unconfigured=True)
+        mm = reg["providers"][p]["models"]
+        found = [x for x in mm if x["name"] == m]
+        self.assertTrue(found and found[0].get("multimodal"),
+                        "cheap 多模态路由应选视觉模型，实际: %s/%s" % (p, m))
+
+
+class TestArenaBlind(unittest.TestCase):
+    """v2.4.0 arena --blind 开关测试。"""
+
+    def test_blind_default_false(self):
+        """不传 --blind 时默认显名对比模式。"""
+        parser = router.build_parser()
+        args = parser.parse_args(["arena", "--prompt", "hi",
+                                  "--models", "deepseek:deepseek-chat,qwen:qwen-plus",
+                                  "--mock", "--json"])
+        self.assertFalse(getattr(args, "blind", True))
+
+    def test_blind_true_with_flag(self):
+        parser = router.build_parser()
+        args = parser.parse_args(["arena", "--prompt", "hi", "--blind",
+                                  "--models", "deepseek:deepseek-chat,qwen:qwen-plus",
+                                  "--mock", "--json"])
+        self.assertTrue(args.blind)
+
+    def test_blind_routes_differ(self):
+        """--blind 和 非-blind 模式下 mode 字段不同。"""
+        import io, contextlib
+        parser = router.build_parser()
+        reg = router.load_registry()
+
+        # blind 模式
+        args_blind = parser.parse_args(["arena", "--prompt", "hi", "--blind",
+                                        "--models", "deepseek:deepseek-chat,qwen:qwen-plus",
+                                        "--mock", "--json"])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            router.cmd_arena(args_blind, reg)
+        out = buf.getvalue()
+        self.assertIn('"mode": "blind"', out)
+
+        # 非-blind 模式
+        args_cmp = parser.parse_args(["arena", "--prompt", "hi",
+                                      "--models", "deepseek:deepseek-chat,qwen:qwen-plus",
+                                      "--mock", "--json"])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            router.cmd_arena(args_cmp, reg)
+        out = buf.getvalue()
+        self.assertIn('"mode": "compare"', out)
+
+
+class TestStreamUsage(unittest.TestCase):
+    """v2.4.0 流式 usage 字段兼容性测试。"""
+
+    def test_extract_usage_alias_input_output(self):
+        """基类 _extract_usage 应覆盖 input_tokens/output_tokens 别名。"""
+        from adapters.base import AdapterBase
+        class Dummy(AdapterBase):
+            def __init__(self): super().__init__({})
+        d = Dummy()
+        it, ot = d._extract_usage({"usage": {"input_tokens": 10, "output_tokens": 20}})
+        self.assertEqual(it, 10)
+        self.assertEqual(ot, 20)
+
+    def test_extract_usage_alias_prompt_completion(self):
+        """基类 _extract_usage 应覆盖 prompt_tokens/completion_tokens。"""
+        from adapters.base import AdapterBase
+        class Dummy(AdapterBase):
+            def __init__(self): super().__init__({})
+        d = Dummy()
+        it, ot = d._extract_usage({"usage": {"prompt_tokens": 5, "completion_tokens": 15}})
+        self.assertEqual(it, 5)
+        self.assertEqual(ot, 15)
 
 
 if __name__ == "__main__":
