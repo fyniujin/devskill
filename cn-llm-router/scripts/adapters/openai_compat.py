@@ -75,8 +75,7 @@ class OpenAICompatAdapter(AdapterBase):
                         yield text
                     u = obj.get("usage")
                     if u:
-                        it = u.get("prompt_tokens", it)
-                        ot = u.get("completion_tokens", ot)
+                        it, ot = self._extract_usage(obj)
                 # 流式结束时，若厂商未返回 usage，用文本估算兜底并标注
                 if ot == 0 and full_content:
                     ot = _estimate_tokens("".join(full_content))
