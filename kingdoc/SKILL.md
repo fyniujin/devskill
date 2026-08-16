@@ -2,17 +2,16 @@
 name: kingdoc
 displayName: 金山文档 KingDoc
 slug: kingdoc
-version: 3.5.0
+version: 3.6.0
 description: >
-  金山文档 AI 协作助手 — 8 品类在线文档全生命周期管理
-  （文档/电子表格/演示文稿/多维表格/收集表/思维导图/流程图/附件），
-  深度直连金山文档（WPS）开放平台原生 API，覆盖腾讯文档全部能力 + 金山独有 12 项增强
+  金山文档 AI 协作助手 — 7 品类在线文档全生命周期管理
+  （文档/电子表格/演示文稿/多维表格/收集表/可视化/附件），
+  深度直连金山文档（WPS）开放平台原生 API，覆盖腾讯文档全部能力 + 金山独有 14 项增强
   （回收站、版本历史、格式转换、纯文本提取、本地 Tesseract OCR、通知推送、Webhook、
   批量任务、政企合规、硬件自适应性能、WPS AI 能力、协同冲突解决、文档合规检查、
-  实时协同编辑、文档对比）。文字/演示/思维导图/流程图采用"本地生成→上传覆盖"，
+  实时协同编辑、文档对比、WPS AI 深度集成、模板市场）。文字/演示/可视化采用"本地生成→上传覆盖"，
   电子表格/多维表格采用 API 精细编辑。本地生成、OCR、硬件画像、WPS AI 等能力零密钥可用。
-description_zh: "金山文档 AI 协作助手 — 8 品类在线文档全生命周期管理（深度直连 WPS 开放平台 + WPS AI 能力 + 实时协同 + 文档对比）"
-category: 办公效率
+description_zh: "金山文档 AI 协作助手 — 7 品类在线文档全生命周期管理（深度直连 WPS 开放平台 + WPS AI 深度 + 实时协同 + 文档对比 + 模板市场）"
 platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
 tags: [文档处理, 表格处理, PPT生成, 多维表格, 表单收集, 思维导图, 流程图, OCR, 政企合规]
 license: MIT
@@ -441,7 +440,141 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 ---
 
-## 14. 完整场景案例（v3.0.0 新增）
+## 14. 可视化品类合并（v3.5.0 精简 9→8 品类，v3.6.0 进一步精简为 7 品类）
+
+> 为降低认知门槛、统一渲染管线，v3.6.0 将思维导图和流程图合并为「可视化」品类。
+
+### 14.1 合并前后对比
+
+| 合并前（v3.5.0 8 品类） | 合并后（v3.6.0 7 品类） |
+|-------------------------|-------------------------|
+| 文档 / 电子表格 / 演示文稿 / 多维表格 / 收集表 / **思维导图** / **流程图** / 附件 | 文档 / 电子表格 / 演示文稿 / 多维表格 / 收集表 / **可视化** / 附件 |
+
+### 14.2 子命令路由
+
+合并后用户仍可用原有表达方式，引擎自动识别子命令：
+
+| 用户表达 | 品类 | 子命令 |
+|---------|------|--------|
+| "画一个思维导图" | visualization | mindmap |
+| "画一个流程图" | visualization | flowchart |
+| "画个脑图" | visualization | mindmap |
+
+### 14.3 共享渲染管线
+
+```
+用户意图 → 品类路由 → visualization
+                              ↓
+                    子命令识别：mindmap 或 flowchart
+                              ↓
+                    共享 mermaid→SVG 渲染管线
+                              ↓
+                        上传为在线文档
+```
+
+### 14.4 引擎逻辑不变
+
+- 底层仍调用 `engine/local/generators.py` 的 `MindmapGenerator` / `FlowchartGenerator`
+- 渲染方式仍为 mermaid→SVG→上传覆盖
+- 仅改品类元数据（`engine/categories.py`）+ 路由表
+
+---
+
+## 15. WPS AI 深度集成（v3.2 本地降级 → v3.6 段落级 AI 操作）
+
+> v3.2 已实现全文级 AI 写作辅助（polish/expand/shorten），v3.6 升级为**段落级 AI 深度集成**。
+
+### 15.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.wps_ai.rewrite` | AI 段落改写 | formal/casual/concise/elaborate |
+| `kdoc.wps_ai.summarize` | AI 段落总结 | 提取核心要点 |
+| `kdoc.wps_ai.continue` | AI 段落续写 | 根据方向继续写作 |
+
+### 15.2 工作流程
+
+```
+1) 用户在编辑器中选中段落
+2) 触发 AI 操作（改写/总结/续写）
+3) 适配器路由到本地降级后端
+4) 返回处理结果 → 用户确认 → 替换原段落
+5) 未来 WPS AI API 开放后，切换为原生后端，无需改上层代码
+```
+
+### 15.3 后端策略
+
+```
+当前（v3.6）：本地降级占位（返回原文+提示）
+未来：WPS AI 开放 API → 升级为原生后端（实现 WpsAiDeepBackend 接口即可）
+```
+
+---
+
+## 16. 文档模板市场（v3.6.0 新增，行业模板库一键复用）
+
+> 降低文档创建门槛，提供行业模板库 + 变量替换 + 一键生成。
+
+### 16.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.template.list` | 列出所有可用模板 | 可按类别筛选 |
+| `kdoc.template.search` | 搜索模板 | 按关键词搜索 |
+| `kdoc.template.use` | 使用模板 | 变量替换生成文档 |
+| `kdoc.template.refresh` | 刷新模板仓库 | git pull |
+
+### 16.2 模板仓库结构
+
+```
+templates/
+├── meeting.md          # 会议纪要模板
+├── weekly-report.md    # 周报模板
+├── project-plan.md     # 项目计划模板
+├── contract.md         # 合同模板
+├── pitch-deck.md       # 融资路演模板
+└── ...
+```
+
+### 16.3 变量替换
+
+模板使用 `{{变量名}}` 语法，使用时传入变量字典：
+
+```yaml
+---
+name: weekly-report
+category: 工作汇报
+description: 标准周报模板
+---
+
+# {{title}}
+> 作者：{{author}} | 日期：{{date}}
+
+## 本周完成
+{{completed}}
+
+## 下周计划
+{{plan}}
+
+## 风险与风险
+{{risks}}
+```
+
+调用：`kdoc.template.use("weekly-report", {"title": "周报", "author": "张三", ...})`
+
+### 16.4 工作流程
+
+```
+1) kdoc.template.list() → 列出可用模板
+2) 用户选择模板 → kdoc.template.use(name, variables)
+3) 引擎替换变量 → 生成 Markdown → 保存到 output/
+4) 返回生成内容 + 文件路径
+5) 可选：上传为在线文档
+```
+
+---
+
+## 17. 完整场景案例（v3.0.0 新增）
 
 ### 场景 A：月度销售复盘（全链路）
 ```
@@ -517,13 +650,32 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 5) kdoc.compare.export(current, history, format="html") → 导出 HTML 报告
 ```
 
-### 场景 J：8 品类智能路由（v3.5.0 新增）
+### 场景 J：7 品类智能路由（v3.6.0 更新）
 ```
 1) 用户说"帮我写一份智能文档" → kdoc.category_resolve("智能文档")
    → {category: "doc", sub_type: "smart_note", edit_method: "local_generate_upload"}
-2) 用户说"建一个销售数据表" → kdoc.category_resolve("数据表")
-   → {category: "sheet", sub_type: null, edit_method: "api_cell"}
-3) kdoc.category_list() → 列出全部 8 品类
+2) 用户说"画一个思维导图" → kdoc.category_resolve("思维导图")
+   → {category: "visualization", sub_command: "mindmap", edit_method: "local_render_upload"}
+3) 用户说"画一个流程图" → kdoc.category_resolve("流程图")
+   → {category: "visualization", sub_command: "flowchart", edit_method: "local_render_upload"}
+4) kdoc.category_list() → 列出全部 7 品类
+```
+
+### 场景 K：WPS AI 段落改写（v3.6.0 新增）
+```
+1) 用户在编辑器中选中段落
+2) kdoc.wps_ai.rewrite(paragraph="这个方案很好，值得推广。", style="formal")
+   → 返回改写后的段落（本地降级占位，API 开放后升级为原生）
+3) 用户确认 → 替换原段落
+```
+
+### 场景 L：模板市场一键生成（v3.6.0 新增）
+```
+1) kdoc.template.list() → 列出所有可用模板
+2) kdoc.template.search("周报") → 搜索周报模板
+3) kdoc.template.use("weekly-report", {"title": "周报", "author": "张三"})
+   → 变量替换 → 生成 Markdown → 保存到 output/
+4) kdoc.file.upload(output_path) → 上传为在线文档
 ```
 
 ---
@@ -678,6 +830,7 @@ python -m engine.update_check --version 3.0.0 --reminder
 
 ## 更新日志
 
+| v3.6.0 | 2026-08-16 | 增加：文档模板市场引擎 `engine/template_marketplace.py`（git 仓库管理模板，支持 list/search/use/refresh，变量替换一键生成）；增加：WPS AI 深度集成（段落级 AI 操作：rewrite/summarize/continue，本地降级占位，API 开放后升级为原生）；增加：可视化品类合并 `engine/categories.py`（8→7 品类，合并 mindmap+flowchart→visualization，共享 mermaid 渲染管线）；增加：MCP 工具 7 个（kdoc.template.* 4 个、kdoc.wps_ai.* 3 个）；增加：可视化品类合并/WPS AI 深度集成/模板市场场景案例；优化：品类路由表从 8→7，引擎逻辑不变 |
 | v3.5.0 | 2026-08-08 | 增加：实时协同编辑引擎 `engine/realtime_collab.py`（序列 CRDT 自研实现，零第三方依赖）；增加：文档对比模块 `engine/doc_comparator.py`（复用 difflib，差异高亮+变更摘要+导出）；增加：品类元数据 `engine/categories.py`（9 品类精简为 8 品类，合并 doc+smart_note，子类型自动识别）；增加：MCP 工具 12 个（kdoc.realtime.* 5 个、kdoc.compare.* 3 个、kdoc.category.* 2 个、kdoc.file.* 品类路由更新）；增加：实时协同+文档对比+8 品类智能路由场景案例；优化：品类路由表从 9→8，引擎逻辑不变 |
 | v3.4.0 | 2026-07-30 | 增加：文档内容合规检查模块 `engine/compliance_check.py`（自研正则+规则引擎，零第三方依赖）；增加：敏感词扫描 `kdoc.compliance.sensitive`（内置词库+用户黑白名单）、数据泄露检测 `kdoc.compliance.leak`（手机号/身份证号/银行卡号/邮箱，Luhn+校验码验证）、格式规范检查 `kdoc.compliance.format`（DOCX/PPTX/TXT/MD）、密级自动标注 `kdoc.compliance.classify`（公开/内部/秘密/机密）；增加：合规检查 MCP 工具 4 个；增加：敏感词库 `references/sensitive_words.txt`、格式规范 `references/format_spec.md`、用户黑白名单模板；增加：政企文档合规检查场景案例 |
 | v3.3.0 | 2026-07-21 | 增加：协同编辑冲突解决模块 `engine/conflict_resolver.py`（自研 difflib 实现，零第三方依赖）；增加：冲突检测 `kdoc.conflict.detect`、智能合并 `kdoc.conflict.merge`（自动合并无冲突段 + 标注冲突段）、Git diff 可视化 `kdoc.conflict.diff`、解决模板 `kdoc.conflict.resolve`（keep_a/keep_b/manual/auto_merge）；增加：冲突解决 MCP 工具 4 个；增加：大文档 diff 分块硬件自适应处理；增加：多人协作冲突解决场景案例；优化：冲突段强制用户确认，绝不自动覆盖 |
