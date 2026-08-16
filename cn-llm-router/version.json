@@ -1,1 +1,1 @@
-{"version": "2.3.0", "homepage": "https://skillhub.cn/skill/cn-llm-router", "notes": "v2.3.0：优化路由准确度——静态画像(60%)+动态胜率(40%)加权，新模型上线后无需手填画像；合并 route/chat 建议模式为统一 --dry-run；优化缓存误命中——可选 sentence-transformers embedding 相似度（不装时降级 difflib）"}
+{"version": "2.4.0", "homepage": "https://skillhub.cn/skill/cn-llm-router", "notes": "v2.4.0：增加多模态路由——classifier 新增 image/audio 识别，models.yaml 新增 Qwen-VL/GLM-4V/豆包视觉；arena 新增 --blind 开关控制盲选/显名对比；流式 token 估算复用基类 _extract_usage() 统一取值"}
