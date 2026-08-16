@@ -358,3 +358,64 @@ providers:
         reason_score: 8
         code_score: 7
         long_score: 10
+
+  # v2.4 视觉模型（多模态）
+  qwen_vl:
+    display: 阿里通义 VL
+    adapter: openai_compat
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    env_hint: DASHSCOPE_API_KEY
+    default_model: qwen-vl-plus
+    models:
+      -
+        name: qwen-vl-plus
+        ctx: 128000
+        price_in: 0.8
+        price_out: 2
+        multimodal: true
+        reason_score: 7
+        code_score: 6
+        long_score: 8
+      -
+        name: qwen-vl-max
+        ctx: 128000
+        price_in: 2.4
+        price_out: 9.6
+        multimodal: true
+        reason_score: 8
+        code_score: 6
+        long_score: 8
+
+  glm_vl:
+    display: 智谱 GLM-4V
+    adapter: openai_compat
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    env_hint: ZHIPU_API_KEY
+    default_model: glm-4v-plus
+    models:
+      -
+        name: glm-4v-plus
+        ctx: 128000
+        price_in: 1
+        price_out: 1
+        multimodal: true
+        reason_score: 7
+        code_score: 5
+        long_score: 8
+
+  doubao_vl:
+    display: 字节豆包视觉
+    adapter: openai_compat
+    base_url: https://ark.cn-beijing.volces.com/api/v3
+    env_hint: ARK_API_KEY
+    default_model: doubao-vision-pro-32k
+    models:
+      -
+        name: doubao-vision-pro-32k
+        ctx: 32000
+        price_in: 0.8
+        price_out: 2
+        multimodal: true
+        reason_score: 6
+        code_score: 5
+        long_score: 6
