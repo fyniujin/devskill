@@ -273,3 +273,52 @@ class LocalFallbackBackend:
             return out
         except:
             return ""
+
+    # === v3.6.0 新增：段落级 AI 深度集成（本地降级占位） ===
+
+    def rewrite_paragraph(self, paragraph: str, style: str = "formal", **kwargs) -> Dict:
+        """AI 段落改写（本地降级：返回原文+提示）。"""
+        style_hints = {
+            "formal": "建议使用正式书面语，避免口语化表达",
+            "casual": "建议使用口语化表达，轻松自然",
+            "concise": "建议精简语句，删除冗余修饰",
+            "elaborate": "建议补充细节和说明，使内容更完整",
+        }
+        hint = style_hints.get(style, "建议调整表达方式")
+        return {
+            "original": paragraph,
+            "rewritten": paragraph,  # 降级：返回原文
+            "style": style,
+            "backend": "local",
+            "note": f"本地降级占位。WPS AI API 开放后将升级为原生。{hint}",
+        }
+
+    def summarize_paragraph(self, paragraph: str, max_length: int = 100, **kwargs) -> Dict:
+        """AI 段落总结（本地降级：返回截断原文+提示）。"""
+        truncated = paragraph[:max_length]
+        if len(paragraph) > max_length:
+            truncated += "..."
+        return {
+            "original_length": len(paragraph),
+            "summary": truncated,
+            "max_length": max_length,
+            "backend": "local",
+            "note": "本地降级占位。WPS AI API 开放后将升级为原生段落总结。",
+        }
+
+    def continue_paragraph(self, paragraph: str, direction: str = "", **kwargs) -> Dict:
+        """AI 段落续写（本地降级：返回续写方向提示）。"""
+        direction_hints = {
+            "详细说明": "可从以下角度详细说明：具体实施步骤、技术细节、注意事项",
+            "举例": "可补充实际案例或示例，使内容更具体",
+            "总结": "可进行概括性总结，提炼核心要点",
+            "对比": "可与同类方案进行对比分析",
+        }
+        hint = direction_hints.get(direction, f"可继续围绕'{direction}'方向展开论述")
+        return {
+            "original": paragraph,
+            "continuation": f"\n\n（续写方向：{direction}。{hint}）",
+            "direction": direction,
+            "backend": "local",
+            "note": "本地降级占位。WPS AI API 开放后将升级为原生段落续写。",
+        }
