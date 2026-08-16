@@ -2,9 +2,9 @@
 name: winskill
 slug: winskill
 displayName: "Windows 服务器运维工具箱"
-description: "Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控、事件日志诊断、已安装程序管理、用户会话监控、计划任务审计、文件共享审计、DNS网卡诊断、SSL证书过期检测、防火墙规则审计、服务崩溃恢复状态、系统文件修复、存储池管理、备份状态检查、Docker容器管理、K8s集群监控、自动化修复向导、性能基线与趋势分析、等保合规检查清单、远程多服务器管理。只读分析+安全确认，绝不误删文件，完全免费离线运行。"
-description_zh: "Windows 服务器运维工具箱 - 磁盘分析、清理、IIS 管理、批量操作、服务监控、更新诊断、性能监控、安全审计、注册表审计、磁盘健康、网络监控、事件日志、程序管理、会话监控、计划任务、共享审计、DNS诊断、SSL证书、防火墙审计、服务崩溃记录、系统修复、存储池、备份检查、Docker容器管理、K8s监控、自动化修复向导、性能基线与趋势分析、等保合规检查清单、远程多服务器管理。只读+确认模式，零依赖离线运行。"
-version: 3.0.0
+description: "Windows 服务器运维工具箱 - 磁盘分析、临时文件清理、IIS 站点管理、批量文件操作、服务状态监控、Windows Update 诊断、实时性能监控、安全审计、注册表启动项审计、磁盘健康检测、网络端口监控、事件日志诊断、已安装程序管理、用户会话监控、计划任务审计、文件共享审计、DNS网卡诊断、SSL证书过期检测、防火墙规则审计、服务崩溃恢复状态、系统文件修复、存储池管理、备份状态检查、Docker容器管理、K8s集群监控、自动化修复向导、性能基线与趋势分析、等保合规检查清单、远程多服务器管理、日志轮转、模块索引。只读分析+安全确认，绝不误删文件，完全免费离线运行。"
+description_zh: "Windows 服务器运维工具箱 - 磁盘分析、清理、IIS 管理、批量操作、服务监控、更新诊断、性能监控、安全审计、注册表审计、磁盘健康、网络监控、事件日志、程序管理、会话监控、计划任务、共享审计、DNS诊断、SSL证书、防火墙审计、服务崩溃记录、系统修复、存储池、备份检查、Docker容器管理、K8s监控、自动化修复向导、性能基线与趋势分析、等保合规检查清单、远程多服务器管理、日志轮转、模块索引。只读+确认模式，零依赖离线运行。"
+version: 3.1.0
 category: system-administration
 platforms:
   - windows
@@ -73,7 +73,6 @@ requires_api_key: false
 | 删除必须确认 | 先展示受影响文件，等用户说"确认清理"后才执行 |
 | 回收站优先 | 删除用 `Shell.Application` 回收站 API |
 | 只读诊断 | 所有分析命令不修改任何文件/服务/注册表 |
-| 日志记录 | 操作记录到 `C:\AdminScripts\winskill.log` |
 | 排除保护 | `pagefile.sys`、`hiberfil.sys` 等系统文件不可操作 |
 | 注册表保护 | 注册表分析只读，任何修改需双重确认 |
 | 日志读取保护 | 事件日志只读查看，不修改任何日志记录 |
@@ -81,6 +80,74 @@ requires_api_key: false
 ---
 
 ## 功能模块
+
+### 📋 日志记录与轮转
+
+```powershell
+function Write-WinskillLog {
+    param([string]$Message)
+    $logDir = "$env:USERPROFILE\.workbuddy\output\winskill"
+    $logFile = Join-Path $logDir "winskill.log"
+    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    "$timestamp $Message" | Out-File $logFile -Append -Encoding utf8
+    if (Test-Path $logFile) {
+        $size = (Get-Item $logFile).Length
+        if ($size -gt 10MB) {
+            $timestamp = Get-Date -Format "yyyyMMddHHmmss"
+            Move-Item $logFile "winskill.log.$timestamp" -Force
+        }
+    }
+    Get-ChildItem $logDir -Filter "winskill.log.*" | Where-Object {
+        $_.LastWriteTime -lt (Get-Date).AddDays(-7)
+    } | Remove-Item -Force
+}
+```
+
+### 📋 模块索引（一键列出所有可用操作）
+
+```powershell
+Write-Host "`n📋 Winskill 3.1.0 - 模块索引（共 30 个模块）"
+Write-Host ("=" * 60)
+Write-Host ("{0,-25} {1,-35}" -f "模块", "用途")
+Write-Host ("-" * 60)
+$modules = @(
+    "模块 1: 磁盘空间分析 - 扫大文件/目录占用",
+    "模块 2: 大文件重复检测 - 找重复文件",
+    "模块 3: 临时文件安全清理 - 清理临时文件",
+    "模块 4: IIS 站点管理 - IIS 站点/应用池状态",
+    "模块 5: 服务状态监控 - Windows 服务状态",
+    "模块 6: 批量文件操作 - 批量重命名/移动/复制",
+    "模块 7: 目录磁盘使用报告 - 目录大小报告",
+    "模块 8: Windows Update 服务状态 - 更新服务/缓存",
+    "模块 9: 实时性能监控 - CPU/内存/磁盘/网络",
+    "模块 10: 安全审计与日志分析 - 暴力破解/特权操作",
+    "模块 11: 注册表与启动项安全审计 - 启动项/WMI",
+    "模块 12: 磁盘健康状态检测 - SMART/坏道/温度",
+    "模块 13: 网络连接与端口监控 - 连接/端口/防火墙",
+    "模块 14: Windows 事件日志诊断 - 系统/应用日志",
+    "模块 15: 已安装程序与补丁管理 - 程序/补丁清单",
+    "模块 16: 用户会话与登录状态监控 - 会话/登录",
+    "模块 17: 计划任务审计 - 计划任务清单",
+    "模块 18: 文件共享与 SMB 审计 - 共享/权限",
+    "模块 19: DNS 解析与网卡诊断 - DNS/网卡",
+    "模块 20: SSL 证书过期检测 - 证书扫描",
+    "模块 21: 防火墙规则审计 - 规则/高危检测",
+    "模块 22: 关键服务崩溃与自动恢复 - 服务崩溃记录",
+    "模块 23: 系统文件完整性检查与修复 - SFC/DISM",
+    "模块 24: 存储池与虚拟磁盘管理 - Storage Spaces",
+    "模块 25: Windows Server Backup 状态检查 - 备份状态",
+    "模块 26: Docker / K8s 容器管理 - 容器/集群",
+    "模块 27: 自动化修复向导 - 一键修复常见问题",
+    "模块 28: 性能基线 & 趋势分析 - 趋势/告警/预测",
+    "模块 29: 安全合规检查清单 - 等保2.0/CIS",
+    "模块 30: 远程多服务器管理 - 多机批量管理"
+)
+$modules | ForEach-Object { Write-Host $_ }
+Write-Host ("=" * 60)
+Write-Host "直接对 AI 说模块名称或用途即可调用"
+```
+
 
 ## 📌 模块导航（点击直达，共 30 个模块）
 
@@ -5079,6 +5146,7 @@ Write-Host ("=" * 60)
 
 ## 更新日志
 
+| v3.1.0 | 2026-08-16 | 新增日志轮转功能（Write-WinskillLog，10MB/7天自动轮转清理）；新增模块索引命令（一键列出30个模块用途）；改进：移除废弃的 wmic 声明（已全面迁移 CIM cmdlet） |
 | v3.0.0 | 2026-08-06 | 新增性能基线与趋势分析模块（基线建立、异常偏离告警、趋势预测、瓶颈关联分析）、安全合规检查清单模块（等保2.0、CIS Benchmark、合规报告、修复建议）、远程多服务器管理模块（服务器注册、批量命令执行、统一监控面板、配置差异对比），总计30个模块，从单机工具升级为多机管理平台；修改展示方式：顶部模块导航锚点+每模块返回顶部链接 |
 | v2.0.0 | 2026-07-24 | 新增自动化修复向导模块（DNS修复、网络修复、WinUpdate修复、服务修复、磁盘清理、时间同步），总计27个模块，从诊断工具升级为修复工具 |
 | v1.9.0 | 2026-07-16 | 修复逻辑bug，新增 Docker / K8s 容器管理模块（Docker状态总览、容器资源监控、Docker健康检查、K8s集群状态、容器日志采集），总计26个模块，覆盖Windows Server容器化场景 |
