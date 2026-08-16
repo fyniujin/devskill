@@ -171,9 +171,23 @@ def resolve(strategy, classification, reg, manual_model=None, allow_unconfigured
     if not models:
         raise AdapterError("注册表中无可用模型，请检查 models.yaml")
 
+    # v2.4 多模态路由：当分类器识别到 image/audio 时，优先选带 multimodal 标签的模型
+    # 放在 cheap/quality/auto 之前，让所有策略都受益于多模态过滤
+    multimodal = cls.get("multimodal")
+    multimodal_fallback = False
+    if multimodal:
+        mm_models = [pm for pm in models if pm[1].get("multimodal")]
+        if mm_models:
+            models = mm_models
+        else:
+            multimodal_fallback = True  # 无多模态模型时回退全量，auto 分支标注
+
     if strategy == "cheap":
         best = min(models, key=lambda pm: _price(pm[1]))
-        return best[0], best[1]["name"], "cheap 策略：选择价格最低的模型"
+        reason = "cheap 策略：选择价格最低的模型"
+        if multimodal_fallback:
+            reason = "⚠️ 多模态(" + multimodal + ")需求但无支持模型，回退全量｜" + reason
+        return best[0], best[1]["name"], reason
 
     if strategy == "quality":
         # 优先带 reasoner 的，其次上下文最长的
@@ -185,12 +199,18 @@ def resolve(strategy, classification, reg, manual_model=None, allow_unconfigured
             s += (m.get("ctx", 0) or 0) / 1000.0
             return s
         best = max(models, key=qscore)
-        return best[0], best[1]["name"], "quality 策略：选择能力最强的模型"
+        reason = "quality 策略：选择能力最强的模型"
+        if multimodal_fallback:
+            reason = "⚠️ 多模态(" + multimodal + ")需求但无支持模型，回退全量｜" + reason
+        return best[0], best[1]["name"], reason
 
     # auto：任务感知（v2.1 起结合能力画像 reason_score/code_score/long_score）
-    # v2.3 起：静态画像(60%) + 动态胜率(40%) 加权（dead规则#9 自研+可选）
+    # v2.3 起：静态画像(60%) + 动态胜率(40%) 加权
+    # v2.4 起：多模态需求时已过滤候选集
     reason_bits = []
     task_type = cls["task_type"]
+    if multimodal_fallback:
+        reason_bits.append("⚠️ 多模态(" + multimodal + ")需求但无支持模型，回退全量")
     if cls["needs_reasoning"]:
         reasoner = [pm for pm in models if pm[1].get("reasoner")]
         if reasoner:
@@ -639,13 +659,15 @@ def build_parser():
     # v2.2 健康检查
     sub.add_parser("health-check", help="v2.2 检查各厂商 API 连通性")
 
-    # v2.2 模型竞技场
-    p_arena = sub.add_parser("arena", help="v2.2 模型竞技场（盲测对比多家模型）")
+    # v2.2 模型竞技场（v2.4 扩展：--blind 控制盲选/显名对比）
+    p_arena = sub.add_parser("arena", help="v2.4 多模型对比（--blind 盲选，否则显名对比）")
     p_arena.add_argument("--prompt", help="用户问题")
     p_arena.add_argument("-m", "--message", action="append")
     p_arena.add_argument("--task", help="显式任务类型")
     p_arena.add_argument("--models", default="auto",
                          help="auto=自动选 2-4 家，或指定 provider:model,provider:model")
+    p_arena.add_argument("--blind", action="store_true",
+                         help="盲选模式：隐藏模型名，投票后揭示（默认显名对比）")
     p_arena.add_argument("--json", action="store_true")
     p_arena.add_argument("--mock", action="store_true",
                          help="Mock 模式：不调真实 API，从本地预设库返回")
@@ -672,21 +694,52 @@ def cmd_mock(args, reg):
         print("  mock --list  列出所有自定义 mock 场景")
 
 
+def _run_parallel(prompt, task_type, selected, reg, mock=False, blind=True):
+    """共享并行调用辅助函数（v2.4 提取）。
+
+    返回 list of (provider, model_name, content, error)。
+    blind=True 时返回结果顺序不打乱（调用方自行打乱标号）。
+    """
+    import concurrent.futures as cf
+    from adapters import build as build_adapter
+
+    def call_one(idx, prov, model):
+        try:
+            if mock:
+                resp = mock_engine.build_mock_response(prompt, task_type)
+                return idx, prov, model["name"], resp["content"], None
+            cfg = _adapter_cfg(prov, reg)
+            adapter = build_adapter(reg["providers"][prov]["adapter"], cfg)
+            res = adapter.chat([{"role": "user", "content": prompt}],
+                               model["name"], stream=False, timeout=60)
+            return idx, prov, model["name"], res["content"], None
+        except Exception as e:
+            return idx, prov, model["name"], "", str(e)
+
+    results = [None] * len(selected)
+    with cf.ThreadPoolExecutor(max_workers=min(len(selected), 4)) as pool:
+        futures = [pool.submit(call_one, i, p, m) for i, (p, m) in enumerate(selected)]
+        for fut in cf.as_completed(futures):
+            idx, prov, mod, content, err = fut.result()
+            results[idx] = (prov, mod, content, err)
+    return results
+
+
 def cmd_arena(args, reg):
-    """模型竞技场：同一 prompt 并行发给 2-4 家模型，盲选最佳。"""
+    """多模型对比：--blind 盲选竞技（隐藏模型名投票），默认显名对比。"""
     prompt = args.prompt or " ".join(args.message or [])
     if not prompt:
         raise SystemExit("❌ 请提供 --prompt 或 -m")
     task_hint = args.task
     cls = classifier.classify(prompt, task_hint)
     task_type = cls["task_type"]
+    blind = getattr(args, "blind", False)
 
     # 选模型：auto 策略自动选 2-4 家（已配置密钥 + 可达），或用户指定
     if args.models == "auto":
         all_models = _all_models(reg, only_configured=True)
         health = health_check.check_health()
         reachable = [(p, m) for p, m in all_models if health.get(p, False)]
-        # 优先选不同厂商，受硬件并发限制（死规则#9）
         max_arena = min(4, hardware.profile().get("max_concurrency", 4))
         by_prov = {}
         for p, m in reachable:
@@ -722,68 +775,76 @@ def cmd_arena(args, reg):
     if len(selected) < 2:
         raise SystemExit("❌ 至少需要 2 家模型，请检查 --models 或密钥配置")
 
-    print("🏟️  模型竞技场 — 任务类型：%s（%s）" % (task_type, prompt[:60]))
-    print("   正在并行调用 %d 家模型...\n" % len(selected))
+    if blind:
+        print("🏟️  模型竞技场 — 任务类型：%s（%s）" % (task_type, prompt[:60]))
+        print("   正在并行调用 %d 家模型...\n" % len(selected))
+    else:
+        print("📊 多模型对比 — 任务类型：%s（%s）" % (task_type, prompt[:60]))
+        print("   正在并行调用 %d 家模型...\n" % len(selected))
 
-    # 并行调用
-    import concurrent.futures
-    from adapters import build as build_adapter
+    results = _run_parallel(prompt, task_type, selected, reg,
+                            mock=getattr(args, "mock", False), blind=blind)
 
-    def call_one(idx, prov, model):
-        try:
-            if getattr(args, "mock", False):
-                # Mock 模式：不调 API，返回预设响应
-                resp = mock_engine.build_mock_response(prompt, task_type)
-                return idx, prov, model["name"], resp["content"], None
-            cfg = _adapter_cfg(prov, reg)
-            adapter = build_adapter(reg["providers"][prov]["adapter"], cfg)
-            res = adapter.chat([{"role": "user", "content": prompt}],
-                               model["name"], stream=False, timeout=60)
-            return idx, prov, model["name"], res["content"], None
-        except Exception as e:
-            return idx, prov, model["name"], "", str(e)
-
-    results = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(selected)) as pool:
-        futures = [pool.submit(call_one, i, p, m) for i, (p, m) in enumerate(selected)]
-        for fut in concurrent.futures.as_completed(futures):
-            idx, prov, mod, content, err = fut.result()
-            results[idx] = (prov, mod, content, err)
-
-    # 打乱顺序
-    order = list(range(len(selected)))
-    random.shuffle(order)
-    labels = [chr(65 + i) for i in range(len(order))]  # A/B/C/D
-    display = []
-    for lbl, idx in zip(labels, order):
-        prov, mod, content, err = results[idx]
-        if err:
-            print("❌ [%s] %s / %s 调用失败：%s" % (lbl, prov, mod, err[:60]))
-        else:
-            display.append((lbl, prov, mod, content))
-            print("[%s] %s" % (lbl, content[:300]))
-            if len(content) > 300:
-                print("   ...（%d 字）" % len(content))
-            print()
+    if blind:
+        # 盲选模式：打乱顺序，标 A/B/C/D
+        order = list(range(len(selected)))
+        random.shuffle(order)
+        labels = [chr(65 + i) for i in range(len(order))]
+        display = []
+        for lbl, idx in zip(labels, order):
+            prov, mod, content, err = results[idx]
+            if err:
+                print("❌ [%s] %s / %s 调用失败：%s" % (lbl, prov, mod, err[:60]))
+            else:
+                display.append((lbl, prov, mod, content))
+                print("[%s] %s" % (lbl, content[:300]))
+                if len(content) > 300:
+                    print("   ...（%d 字）" % len(content))
+                print()
+    else:
+        # 显名模式：直接显示模型名 + 回答
+        display = []
+        for prov, mod, content, err in results:
+            if err:
+                print("❌ [%s / %s] 调用失败：%s" % (prov, mod, err[:60]))
+            else:
+                display.append((prov, mod, content))
+                print("[%s / %s] %s" % (prov, mod, content[:300]))
+                if len(content) > 300:
+                    print("   ...（%d 字）" % len(content))
+                print()
 
     if not display:
         if args.json:
-            print(json.dumps({"arena": {"task_type": task_type, "error": "所有模型调用均失败"}}, ensure_ascii=False))
+            mode = "blind" if blind else "compare"
+            print(json.dumps({"arena": {"task_type": task_type, "mode": mode,
+                                        "error": "所有模型调用均失败"}}, ensure_ascii=False))
             return
         raise SystemExit("❌ 所有模型调用均失败")
 
-    # 记录竞技场会话（不含投票，投票在交互后记录）
+    # 构建 JSON 记录
     session_record = {
         "task_type": task_type,
+        "mode": "blind" if blind else "compare",
         "models": [{"provider": p, "model": m} for p, m in selected],
-        "results": {lbl: {"provider": p, "model": m, "content": c[:200]}
-                   for lbl, p, m, c in display}
+        "results": {}
     }
+    if blind:
+        session_record["results"] = {lbl: {"provider": p, "model": m, "content": c[:200]}
+                                      for lbl, p, m, c in display}
+    else:
+        session_record["results"] = {("%s/%s" % (p, m)): {"provider": p, "model": m, "content": c[:200]}
+                                      for p, m, c in display}
 
-    # 盲选
+    # JSON 模式
     if args.json:
-        # JSON 模式：输出结果，不交互投票
-        print(json.dumps({"arena": session_record, "hint": "请使用 arena --vote 记录投票"}, ensure_ascii=False))
+        session_record["hint"] = "blind 模式请使用 arena --blind 交互投票" if blind else "显名对比已完成"
+        print(json.dumps({"arena": session_record}, ensure_ascii=False))
+        return
+
+    # 仅 blind 模式支持交互投票
+    if not blind:
+        print("（显名对比模式，无投票。如需盲选竞技，请加 --blind）")
         return
 
     try:
