@@ -6,7 +6,7 @@ import urllib.request
 import urllib.error
 from typing import Any, Dict, Generator, List, Optional
 
-from .base import BaseAdapter, ChatMessage, ChatResponse, ContentChunk
+from .base import BaseAdapter, ChatMessage, ChatResponse, ContentChunk, ToolCall
 
 
 # DashScope OpenAI-compatible endpoint
@@ -33,6 +33,11 @@ class TongYiAdapter(BaseAdapter):
         for key in ("temperature", "max_tokens", "top_p"):
             if key in kwargs and kwargs[key] is not None:
                 payload[key] = kwargs[key]
+        # v1.5.0: Function Calling support
+        if "tools" in kwargs and kwargs["tools"]:
+            payload["tools"] = kwargs["tools"]
+            if "tool_choice" in kwargs:
+                payload["tool_choice"] = kwargs["tool_choice"]
         return payload
 
     def chat(self, messages: List[ChatMessage], *,
@@ -57,15 +62,20 @@ class TongYiAdapter(BaseAdapter):
 
         usage = raw.get("usage", {})
         try:
-            text = raw["choices"][0]["message"]["content"]
+            message = raw["choices"][0]["message"]
+            text = message.get("content", "") or ""
         except (KeyError, IndexError) as e:
             raise RuntimeError(f"[TongYi] 解析响应失败: {raw}") from e
+
+        # v1.5.0: Parse tool calls from response
+        tool_calls = self.parse_tool_calls(raw)
 
         self._is_available = True
         return ChatResponse(
             content=text, model=m, provider=self.provider_name,
             usage=usage, finish_reason=raw.get("choices", [{}])[0].get("finish_reason", "stop"),
             duration_ms=self._now_ms() - start,
+            tool_calls=tool_calls,
         )
 
     def stream_chat(self, messages: List[ChatMessage], *,
