@@ -1,16 +1,17 @@
 """KingDoc 品类元数据模块
 
-v3.5.0 变更：9 品类精简为 8 品类
-- 合并：文字(doc) + 智能文档(smart_note) → 文档(doc)
-- 新增子类型识别：doc_category → "doc" | "smart_note"
-- 引擎逻辑不变（都是本地生成→上传覆盖），仅改品类元数据 + 路由表
+v3.6.0 变更：8 品类精简为 7 品类
+- 合并：思维导图(mindmap) + 流程图(flowchart) → 可视化(visualization)
+- 新增子命令：sub_command → "mindmap" | "flowchart"
+- 共享渲染管线：mermaid→SVG→上传
+- v3.5.0：已合并 doc+smart_note → doc
 """
 from __future__ import annotations
 
 from typing import Dict, List, Optional, Tuple
 
 
-# 8 品类元数据
+# 7 品类元数据
 CATEGORIES: Dict[str, Dict] = {
     "doc": {
         "name": "文档",
@@ -62,23 +63,14 @@ CATEGORIES: Dict[str, Dict] = {
         "edit_method": "api_config",
         "available": True,
     },
-    "mindmap": {
-        "name": "思维导图",
-        "name_en": "mindmap",
+    "visualization": {
+        "name": "可视化",
+        "name_en": "visualization",
         "doc_type": "mindmap",
-        "sub_types": [],
-        "description": "思维导图，本地渲染 SVG→上传",
+        "sub_types": ["mindmap", "flowchart"],
+        "sub_commands": ["mindmap", "flowchart"],
+        "description": "思维导图/流程图，本地渲染 SVG→上传（共享 mermaid 渲染管线）",
         "icon": "🧠",
-        "edit_method": "local_render_upload",
-        "available": True,
-    },
-    "flowchart": {
-        "name": "流程图",
-        "name_en": "flowchart",
-        "doc_type": "flowchart",
-        "sub_types": [],
-        "description": "流程图，本地渲染 SVG→上传",
-        "icon": "📈",
         "edit_method": "local_render_upload",
         "available": True,
     },
@@ -101,8 +93,7 @@ INTENT_ROUTING: Dict[str, List[str]] = {
     "ppt": ["ppt", "演示", "幻灯片", "汇报", "展示", "演示文稿"],
     "smartsheet": ["多维表格", "smartsheet", "数据库", "记录表", "数据收集"],
     "form": ["收集表", "form", "问卷", "表单", "投票", "报名"],
-    "mindmap": ["思维导图", "mindmap", "脑图", "导图", "知识图谱"],
-    "flowchart": ["流程图", "flowchart", "流程", "步骤图", "架构图"],
+    "visualization": ["思维导图", "mindmap", "脑图", "导图", "知识图谱", "流程图", "flowchart", "流程", "步骤图", "架构图", "可视化"],
     "attachment": ["附件", "attachment", "文件", "上传", "图片", "pdf"],
 }
 
@@ -110,6 +101,12 @@ INTENT_ROUTING: Dict[str, List[str]] = {
 SUBTYPE_KEYWORDS: Dict[str, List[str]] = {
     "smart_note": ["智能文档", "smart_note", "smart note", "markdown", "md"],
     "doc": ["文字", "word", "doc", "文档", "报告", "纪要", "周报", "合同"],
+}
+
+# 子命令识别关键词（用于 visualization 品类进一步识别 mindmap vs flowchart）
+SUB_COMMAND_KEYWORDS: Dict[str, List[str]] = {
+    "mindmap": ["思维导图", "mindmap", "脑图", "导图", "知识图谱"],
+    "flowchart": ["流程图", "flowchart", "流程", "步骤图", "架构图"],
 }
 
 
@@ -172,13 +169,32 @@ def detect_sub_type(category_id: str, user_input: str) -> Optional[str]:
     return "doc"  # 默认普通文档
 
 
-def route(user_input: str) -> Tuple[Optional[str], Optional[str]]:
-    """智能路由：返回 (category_id, sub_type)。"""
+def detect_sub_command(category_id: str, user_input: str) -> Optional[str]:
+    """在 visualization 品类中进一步识别子命令（mindmap / flowchart）。"""
+    if category_id != "visualization":
+        return None
+
+    if not user_input:
+        return "mindmap"  # 默认子命令
+
+    user_input_lower = user_input.lower()
+
+    for sub_cmd, keywords in SUB_COMMAND_KEYWORDS.items():
+        for kw in keywords:
+            if kw.lower() in user_input_lower:
+                return sub_cmd
+
+    return "mindmap"  # 默认思维导图
+
+
+def route(user_input: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """智能路由：返回 (category_id, sub_type, sub_command)。"""
     category_id = detect_category(user_input)
     if not category_id:
-        return (None, None)
+        return (None, None, None)
     sub_type = detect_sub_type(category_id, user_input)
-    return (category_id, sub_type)
+    sub_command = detect_sub_command(category_id, user_input)
+    return (category_id, sub_type, sub_command)
 
 
 def get_edit_method(category_id: str) -> str:
@@ -189,11 +205,13 @@ def get_edit_method(category_id: str) -> str:
     return cat.get("edit_method", "unknown")
 
 
-def get_doc_type(category_id: str, sub_type: str = "") -> str:
+def get_doc_type(category_id: str, sub_type: str = "", sub_command: str = "") -> str:
     """获取金山文档 API 对应的 doc_type。"""
     cat = CATEGORIES.get(category_id)
     if not cat:
         return "unknown"
+    if sub_command and sub_command in cat.get("sub_commands", []):
+        return sub_command
     if sub_type and sub_type in cat.get("sub_types", []):
         return sub_type
     return cat.get("doc_type", category_id)
@@ -207,7 +225,7 @@ def list_categories() -> List[Dict]:
 
 def resolve_category(user_input: str) -> Dict:
     """解析用户输入，返回完整品类信息。"""
-    category_id, sub_type = route(user_input)
+    category_id, sub_type, sub_command = route(user_input)
     if not category_id:
         return {"error": "无法识别品类", "input": user_input}
 
@@ -216,7 +234,8 @@ def resolve_category(user_input: str) -> Dict:
         "category_id": category_id,
         "category_name": cat["name"],
         "sub_type": sub_type,
+        "sub_command": sub_command,
         "edit_method": cat["edit_method"],
-        "doc_type": get_doc_type(category_id, sub_type),
+        "doc_type": get_doc_type(category_id, sub_type, sub_command),
         "description": cat["description"],
     }
