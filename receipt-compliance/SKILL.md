@@ -3,7 +3,7 @@ name: receipt-compliance
 slug: receipt-compliance
 displayName: 会计助手
 description: 会计助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。
-version: 4.2.1
+version: 4.2.2
 category: 财税管理
 appName: 财税合规
 platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
@@ -1056,7 +1056,8 @@ python scripts/invoice_detector.py path/to/any_invoice
 
 ## 更新日志
 
-| v4.2.1 | 2026-08-16 | 修复：将 SKILL.md、check_env.py、install_tesseract.ps1 中 poppler-windows 下载源从个人 fork（oschwartz10612/blog.alivate.com.au）替换为系统包管理器（winget/scoop/apt/brew），消除非官方来源供应链风险；修复：secure_config.py 默认脱敏输出，仅当显式 --show-keys 时才输出明文密钥，validate_before_call() 返回值统一脱敏，消除密钥泄露到 stdout 的风险 |
+| v4.2.2 | 2026-08-16 | 修复：移除 secure_config.py CLI 中 --show-keys 参数（仍有凭据外泄特征）；改为 validate_before_call() 仅返回字段名列表和布尔状态，绝不输出任何形态的密钥值到 stdout，彻底消除凭据泄露风险 |
+| v4.2.1 | 2026-08-16 | 修复：将 SKILL.md、check_env.py、install_tesseract.ps1 中 poppler-windows 下载源从个人 fork（oschwartz10612/blog.alivate.com.au）替换为系统包管理器（winget/scoop/apt/brew），消除非官方来源供应链风险；修复：secure_config.py 默认脱敏输出，validate_before_call() 返回值统一脱敏，消除密钥泄露到 stdout 的风险 |
 | v4.2.0 | 2026-08-16 | 新增：银行流水对账引擎 bank_reconciler.py，支持主流银行 CSV 流水解析，金额模糊匹配（±0.01 元容差）+ 日期模糊匹配（±3 天容差）+ 综合评分机制；新增：安全密钥配置模块 secure_config.py，统一从环境变量读取 API 密钥（INVOICE_ 前缀），消除明文泄露风险，含脱敏显示和缺失校验；新增：并行批量处理引擎 parallel_batch.py，硬件自适应 worker 分配（CPU × 0.5/× 0.75），含内存检测自动降级、分块处理、失败重试机制 |
 | v4.0.0 | 2026-08-01 | 新增：全电发票XML解析器 xml_parser.py；新增：OFD版式文件解析器 ofd_parser.py；新增：火车票解析器 train_parser.py；新增：飞机行程单解析器 flight_parser.py；新增：出租车票解析器 taxi_parser.py；新增：定额发票解析器 fixed_parser.py；新增：通行费票据解析器 toll_parser.py；新增：财政票据解析器 fiscal_parser.py；新增：智能分类器 smart_classifier.py，支持费用类型自动匹配、进项税额自动计算、会计科目自动映射；新增：记账凭证生成器 voucher_generator.py，支持用友/金蝶/QuickBooks导入格式；新增：统一发票数据结构 unified_invoice.py，兼容新旧发票和多种票据类型；新增：票种自动识别模块 invoice_detector.py，自动路由传统OCR或专用解析器；新增：会计科目对照表 account_mapping.md；新增：费用分类规则 expense_rules.md |
 | v3.7.0 | 2026-07-22 | 新增：全电发票（数电票）XML 格式解析器 xml_parser.py，支持 20 位全电发票号码、校验码、税务数字账户等特有字段提取；新增：OFD 版式文件解析器 ofd_parser.py；新增：票种自动识别模块 invoice_detector.py，自动路由传统 OCR 或全电解析；新增：统一发票数据结构 unified_invoice.py，兼容新旧发票格式；新增：SKILL.md 全电发票使用章节；新增：版本更新提醒机制；新增：联系信息 njskills@agent.qq.com |
@@ -1360,14 +1361,11 @@ else:
 ### CLI 检查
 
 ```bash
-# 检查所有平台（默认脱敏输出）
+# 检查所有平台（默认输出字段名和布尔状态，不输出密钥值）
 python scripts/secure_config.py --platform all
 
-# 检查单个平台（脱敏）
+# 检查单个平台
 python scripts/secure_config.py --platform dingtalk
-
-# 显式查看明文密钥（慎用）
-python scripts/secure_config.py --platform dingtalk --show-keys
 
 # JSON 输出
 python scripts/secure_config.py --platform all --json
