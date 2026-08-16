@@ -153,8 +153,7 @@ class SecureConfig:
     def validate_before_call(self, platform: str) -> Dict[str, Any]:
         """
         调用外部 API 前的配置校验
-        返回校验结果，包含是否就绪、缺失字段等信息
-        注意：返回的 config 值始终脱敏，避免密钥泄露到 stdout
+        返回校验结果，仅包含字段名和布尔状态，绝不输出密钥值
         """
         platform = platform.lower()
         result = {"ready": False, "platform": platform, "missing": []}
@@ -179,8 +178,8 @@ class SecureConfig:
             result["error"] = f"缺失配置字段: {', '.join(missing)}"
         else:
             result["ready"] = True
-            # 返回时自动脱敏，不暴露真实密钥值
-            result["config"] = {k: self._mask_value(v) for k, v in cfg.items()}
+            # 只返回字段名列表，绝不返回任何形态的密钥值
+            result["fields_configured"] = list(cfg.keys())
 
         return result
 
@@ -234,8 +233,6 @@ def main():
     parser = argparse.ArgumentParser(description="安全密钥配置检查")
     parser.add_argument("--platform", choices=["dingtalk", "wecom", "feishu", "bairong", "nuonuo", "all"],
                         default="all", help="检查指定平台的密钥配置")
-    parser.add_argument("--show-keys", action="store_true",
-                        help="显式输出明文密钥（默认脱敏，慎用）")
     parser.add_argument("--json", action="store_true", help="以 JSON 格式输出")
 
     args = parser.parse_args()
@@ -250,9 +247,6 @@ def main():
     result = {}
     for platform in platforms:
         validation = cfg.validate_before_call(platform)
-        # 默认脱敏输出；仅当显式 --show-keys 时才回退到明文
-        if not args.show_keys and validation.get("config"):
-            validation["config"] = {k: cfg._mask_value(v) for k, v in validation["config"].items()}
         result[platform] = validation
 
     if args.json:
