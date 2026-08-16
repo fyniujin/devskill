@@ -191,7 +191,8 @@ def check_poppler():
     
     print("  ⚠ Poppler 未安装（可选，用于PDF发票识别）")
     if sys.platform == "win32":
-        print("    下载地址: https://github.com/oschwartz10612/poppler-windows/releases")
+        print("    Windows: winget install poppler  或  scoop install poppler")
+        print("    （推荐通过系统包管理器安装，避免非官方来源风险）")
     else:
         print("    Ubuntu/Debian: sudo apt-get install poppler-utils")
         print("    macOS:        brew install poppler")
