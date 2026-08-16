@@ -36,7 +36,7 @@ from engine.hardware import get_recommended_settings
 from engine.update_check import build_reminder, FEEDBACK_EMAIL
 from engine.exceptions import KingDocError
 
-APP_VERSION = "3.5.0"
+APP_VERSION = "3.6.0"
 
 # 配置路径：环境变量优先，其次 skill 根目录 config.json
 CONFIG_PATH = os.environ.get("KINGDOC_CONFIG", str(SKILL_ROOT / "config.json"))
@@ -713,7 +713,108 @@ async def kdoc_realtime_stats(client_id: str) -> str:
 
 
 # ===========================================================================
-# 十四、文档对比（v3.5.0 新增，复用 difflib 引擎）
+# 十三、WPS AI 深度集成（v3.6.0 新增，段落级 AI 操作）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_wps_ai_rewrite(paragraph: str, style: str = "formal") -> str:
+    """【免密钥】AI 段落改写：将指定段落按目标风格改写。
+
+    style: formal(正式) / casual(口语) / concise(简洁) / elaborate(详细)
+    本地降级占位，WPS AI API 开放后升级为原生。"""
+    try:
+        from engine.wps_ai.adapter import get_adapter
+        result = get_adapter().rewrite_paragraph(paragraph, style)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 段落改写失败：{e}"
+
+@mcp.tool()
+async def kdoc_wps_ai_summarize(paragraph: str, max_length: int = 100) -> str:
+    """【免密钥】AI 段落总结：提取段落核心要点。
+
+    max_length: 最大摘要字数
+    本地降级占位，WPS AI API 开放后升级为原生。"""
+    try:
+        from engine.wps_ai.adapter import get_adapter
+        result = get_adapter().summarize_paragraph(paragraph, max_length)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 段落总结失败：{e}"
+
+@mcp.tool()
+async def kdoc_wps_ai_continue(paragraph: str, direction: str = "") -> str:
+    """【免密钥】AI 段落续写：根据方向继续写作。
+
+    direction: 续写方向（如"详细说明"、"举例"、"总结"）
+    本地降级占位，WPS AI API 开放后升级为原生。"""
+    try:
+        from engine.wps_ai.adapter import get_adapter
+        result = get_adapter().continue_paragraph(paragraph, direction)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 段落续写失败：{e}"
+
+
+# ===========================================================================
+# 十五、文档模板市场（v3.6.0 新增）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_template_list(category: str = "") -> str:
+    """【免密钥】列出所有可用模板。
+
+    category: 按类别筛选（可选）
+    本地模板市场，零配置可用。"""
+    try:
+        from engine.template_marketplace import list_templates
+        result = list_templates(category)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 获取模板列表失败：{e}"
+
+@mcp.tool()
+async def kdoc_template_search(keyword: str) -> str:
+    """【免密钥】搜索模板。
+
+    keyword: 搜索关键词
+    本地模板市场，零配置可用。"""
+    try:
+        from engine.template_marketplace import search_templates
+        result = search_templates(keyword)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 搜索模板失败：{e}"
+
+@mcp.tool()
+async def kdoc_template_use(name: str, variables: str = "{}") -> str:
+    """【免密钥】使用模板（变量替换）。
+
+    name: 模板名称
+    variables: JSON 格式变量，如 '{"title": "周报", "author": "张三"}'
+    本地模板市场，零配置可用。"""
+    try:
+        import json
+        from engine.template_marketplace import use_template
+        vars_dict = json.loads(variables) if variables else {}
+        result = use_template(name, vars_dict)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 使用模板失败：{e}"
+
+@mcp.tool()
+async def kdoc_template_refresh() -> str:
+    """【免密钥】刷新模板仓库（git pull）。
+
+    本地模板市场，零配置可用。"""
+    try:
+        from engine.template_marketplace import refresh_templates
+        result = refresh_templates(force=True)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 刷新模板失败：{e}"
+
+
+# ===========================================================================
+# 十六、文档对比（v3.5.0 新增，复用 difflib 引擎）
 # ===========================================================================
 @mcp.tool()
 async def kdoc_compare_diff(text_a: str, text_b: str,
