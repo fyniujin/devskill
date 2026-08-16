@@ -1,5 +1,5 @@
 """
-WPS Excel CLI v4.3 - 完整命令集（含 Excel 深度分析）
+WPS Excel CLI v4.6 - 完整命令集（含 Excel 智能分析 + 数据图表生成器）
 """
 import subprocess
 import json
@@ -129,6 +129,32 @@ def main():
     p.add_argument("--col-field", help="透视表列字段")
     p.add_argument("--agg-func", default="sum", help="透视表聚合方式")
 
+    # v4.6: Excel 智能分析统一入口（合并 6 命令为 1 个）
+    p = sub.add_parser("excel-smart", help="Excel 智能分析（统一入口，--action 路由到对应功能）")
+    p.add_argument("--file", required=True, help="Excel 文件路径")
+    p.add_argument("--action", default="profile",
+                   choices=["profile", "fix_formulas", "pivot", "predict", "nl2formula", "clean", "hardware"],
+                   help="分析动作")
+    p.add_argument("--sheet", default="Sheet1")
+    p.add_argument("--column", help="预测/分析列名")
+    p.add_argument("--method", default="auto", help="预测方法: auto/moving_avg/exponential/linear")
+    p.add_argument("--steps", type=int, default=3, help="预测步数")
+    p.add_argument("--query", help="自然语言查询（nl2formula 动作）")
+    p.add_argument("--use-llm", action="store_true", help="使用 LLM 辅助（可选）")
+    p.add_argument("--row-field", help="透视表行字段")
+    p.add_argument("--value-field", help="透视表值字段")
+    p.add_argument("--col-field", help="透视表列字段")
+    p.add_argument("--agg-func", default="sum", help="透视表聚合方式")
+
+    # v4.6: 数据图表生成器
+    p = sub.add_parser("chart-gen", help="数据图表生成器（分析数据特征→推荐图表类型→生成图表）")
+    p.add_argument("--file", required=True, help="Excel 文件路径")
+    p.add_argument("--sheet", default="Sheet1")
+    p.add_argument("--action", default="auto", choices=["analyze", "recommend", "generate", "auto"],
+                   help="图表生成动作")
+    p.add_argument("--type", default="", help="图表类型（不指定则自动推荐）")
+    p.add_argument("--output", default="", help="输出路径")
+
     args = parser.parse_args()
 
     if args.command == "create":
@@ -199,6 +225,47 @@ def main():
             "col_field": args.col_field or "",
             "agg_func": args.agg_func,
         })
+    elif args.command == "excel-smart":
+        # v4.6: 统一入口，--action 路由到对应功能
+        r = call_worker("excel_analyze", {
+            "file": args.file,
+            "task": args.action,
+            "sheet": args.sheet,
+            "column": args.column or "",
+            "method": args.method,
+            "steps": args.steps,
+            "query": args.query or "",
+            "use_llm": args.use_llm,
+            "row_field": args.row_field or "",
+            "value_field": args.value_field or "",
+            "col_field": args.col_field or "",
+            "agg_func": args.agg_func,
+        })
+    elif args.command == "chart-gen":
+        # v4.6: 数据图表生成器
+        from chart_recommender import ChartRecommender, DataAnalyzer
+        if args.action == "analyze":
+            a = DataAnalyzer(args.file, args.sheet)
+            if a.load():
+                r = {"ok": True, **a.get_profile()}
+                a.close()
+            else:
+                r = {"ok": False, "error": "加载失败"}
+        elif args.action == "recommend":
+            a = DataAnalyzer(args.file, args.sheet)
+            if a.load():
+                profile = a.get_profile()
+                cr = ChartRecommender()
+                recs = cr.recommend(profile)
+                r = {"ok": True, "recommendations": recs}
+                a.close()
+            else:
+                r = {"ok": False, "error": "加载失败"}
+        else:
+            # generate / auto
+            cr = ChartRecommender()
+            r = cr.auto_generate(args.file, args.sheet, args.output, args.type)
+            r = {"ok": r.get("success", False), **r}
     else:
         r = {"ok": False, "error": "未知命令"}
 
