@@ -1,15 +1,17 @@
 """
-会议纪要生成模块 v4.5.0
+会议纪要生成模块 v4.6.1
 功能：语音 → 转写 → 摘要 → Word 文档
+
+v4.6.1 变更:
+  - 🔒 ASR 引擎改为显式 Opt-in：auto 模式仅使用本地 whisper-local 和 template，不读取外部凭证
+  - 🔒 Azure/Google STT 仅在用户 method 显式指定时调用，首次使用显示凭证读取范围警告
+  - 🔒 移除 azure-speech 和 google-stt 的自动检测与降级
 
 v4.5.0 变更:
   - 🎯 会议纪要完整流水线（ASR 转写 → LLM 摘要 → Word 生成）
-  - 🎯 ASR 降级链：whisper-local → azure-speech → google-stt → template
-  - 🎯 LLM 降级链：rule-engine → external-llm → pure-template
   - 🎯 长音频分段处理（默认 5 分钟/段，可配置）
   - 🎯 进度回调（每段完成触发回调函数）
   - 🎯 硬件自适应（根据内存调整并发数）
-  - 🎯 批量处理模式（目录批量转写+摘要）
 """
 
 import os
@@ -138,7 +140,7 @@ class ASRTranscriber:
         self._available_methods = self._detect_available()
     
     def _detect_available(self) -> Dict[str, bool]:
-        """检测可用的 ASR 引擎"""
+        """检测可用的 ASR 引擎（仅本地引擎）"""
         available = {
             "whisper-local": False,
             "azure-speech": False,
@@ -153,39 +155,58 @@ class ASRTranscriber:
         except ImportError:
             pass
         
-        # 检测 Azure Speech SDK
-        try:
-            import azure.cognitiveservices.speech as speechsdk
-            available["azure-speech"] = True
-        except ImportError:
-            pass
-        
-        # 检测 Google STT
-        try:
-            from google.cloud import speech
-            available["google-stt"] = True
-        except ImportError:
-            pass
+        # 注意：azure-speech 和 google-stt 的可用性仅在用户显式指定 method 时检测
+        # auto 模式下不自动检测外部服务，避免读取凭证文件
         
         return available
     
+    def _detect_external_available(self, method: str) -> bool:
+        """检测外部 ASR 引擎是否可用（仅在显式调用时执行）"""
+        if method == "azure-speech":
+            try:
+                import azure.cognitiveservices.speech as speechsdk
+                key = os.environ.get("AZURE_SPEECH_KEY", "")
+                return bool(key)
+            except ImportError:
+                return False
+        elif method == "google-stt":
+            try:
+                from google.cloud import speech
+                cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+                return bool(cred_path and os.path.exists(cred_path))
+            except ImportError:
+                return False
+        return False
+    
     def get_best_method(self) -> str:
-        """根据可用性选择最佳方法"""
+        """根据可用性选择最佳方法（auto 模式仅使用本地引擎）"""
         if self.method != "auto":
+            # 显式指定外部引擎时，检测是否可用
+            if self.method in ("azure-speech", "google-stt"):
+                if self._detect_external_available(self.method):
+                    return self.method
+                else:
+                    # 外部引擎不可用，降级到 template
+                    print(f"[ASR] ⚠️ 外部引擎 '{self.method}' 不可用（SDK 未安装或凭证未配置），降级到 template", file=sys.stderr)
+                    return "template"
             return self.method
         
-        # 降级链顺序
-        chain = ["whisper-local", "azure-speech", "google-stt", "template"]
-        for m in chain:
-            if self._available_methods.get(m, False):
-                return m
+        # auto 模式：仅使用本地 whisper-local，不读取外部凭证
+        if self._available_methods.get("whisper-local", False):
+            return "whisper-local"
         return "template"
     
     @with_retry
     def transcribe(self, audio_path: str, language: str = "zh") -> Dict[str, Any]:
-        """转写音频（自动选择引擎）"""
+        """转写音频（显式 Opt-in 模式）"""
         method = self.get_best_method()
         self.progress_cb("transcribe_start", {"method": method, "file": audio_path})
+        
+        # 外部服务调用前显示警告
+        if method == "azure-speech":
+            self._warn_azure_usage()
+        elif method == "google-stt":
+            self._warn_google_usage()
         
         try:
             if method == "whisper-local":
@@ -206,6 +227,40 @@ class ASRTranscriber:
             if method != "template":
                 return self._transcribe_template(audio_path, language)
             return {"success": False, "error": f"ASR 转写失败: {str(e)}"}
+    
+    def _warn_azure_usage(self):
+        """Azure Speech 使用前的 Opt-in 警告"""
+        region = os.environ.get("AZURE_SPEECH_REGION", "eastasia")
+        key = os.environ.get("AZURE_SPEECH_KEY", "")
+        key_preview = key[:4] + "..." + key[-4:] if len(key) > 8 else "未配置"
+        print(f"""
+⚠️  [Azure Speech 服务调用警告]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 即将使用 Azure Speech 服务进行语音转写
+🔑 凭证: AZURE_SPEECH_KEY = {key_preview}
+🌐 区域: {region}
+📤 数据流向: 音频数据将发送至 https://{region}.stt.speech.microsoft.com
+📌 用途: 将音频转写为文本
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+外部服务将在上方信息确认后开始调用。
+""", file=sys.stderr)
+    
+    def _warn_google_usage(self):
+        """Google STT 使用前的 Opt-in 警告"""
+        cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+        cred_exists = os.path.exists(cred_path) if cred_path else False
+        cred_preview = f"存在 ({Path(cred_path).name})" if cred_exists else "路径不存在"
+        print(f"""
+⚠️  [Google Cloud Speech API 调用警告]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 即将使用 Google Cloud Speech API 进行语音转写
+🔑 凭证文件 (GOOGLE_APPLICATION_CREDENTIALS): {cred_preview}
+📤 数据流向: 音频数据将发送至 https://speech.googleapis.com/v1
+📌 用途: 将音频转写为文本
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+凭证文件将读取并发送至 Google Cloud 服务。
+外部服务将在上方信息确认后开始调用。
+""", file=sys.stderr)
     
     def _transcribe_whisper(self, audio_path: str, language: str) -> Dict[str, Any]:
         """本地 Whisper 转写"""
