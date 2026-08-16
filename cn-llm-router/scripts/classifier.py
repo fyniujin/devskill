@@ -5,6 +5,7 @@
 - needs_reasoning : 是否需要推理（是 → 偏好带 reasoner 的模型）
 - length_bucket: short(<4k) / mid(4k-32k) / long(>32k) 以字符粗略估算
 - budget_sensitive: 是否对价格敏感（批量 / 分类 / 抽取场景）
+- multimodal  : 是否需要多模态能力（image / audio）
 
 设计：初期用规则 + 关键词 + 长度启发式，不调用任何模型，毫秒级、可离线。
 设 confidence 阈值，低于阈值时由路由引擎回退到 quality / manual。
@@ -22,6 +23,17 @@ KEYWORD_MAP = [
     ("classify", r"分类|判断|是不是|是否属于|打标|标签|归为|鉴别|检测"),
     ("long", r"长篇|长文档|整本书|全文|论文|报告|合同全文|长文"),
 ]
+
+# v2.4 多模态关键词
+IMAGE_KEYWORDS = re.compile(
+    r"图片|图像|看看|看一下|看图|画面|照片中|这张图|那张图|视觉|"
+    r"图像识别|图片识别|ocr|看图识|描述图|解读图|图中有|图上是|"
+    r"画面上|这张图|那张图"
+)
+AUDIO_KEYWORDS = re.compile(
+    r"音频|语音|声音|听听|听一下|音频识别|语音识别|转文字|"
+    r"语音转文字|asr|识别语音|识别音频|语音分析|这段音频|这段录音"
+)
 
 REASON_HINT = re.compile(r"推理|分析|为什么|原因|推导|证明|论证|逻辑|本质|根因|复杂|深度|思考|拆解|逐步")
 LONG_CHAR_THRESHOLD = 32000   # ≈ 32k token（粗略：1 中文字≈1 token）
@@ -79,6 +91,13 @@ def classify(prompt, task_hint=None):
     else:
         confidence = 0.4
 
+    # v2.4 多模态检测：image（视觉）/ audio（音频）
+    multimodal = None
+    if IMAGE_KEYWORDS.search(text):
+        multimodal = "image"
+    elif AUDIO_KEYWORDS.search(text):
+        multimodal = "audio"
+
     return {
         "task_type": task_type,
         "needs_reasoning": needs_reasoning,
@@ -87,4 +106,5 @@ def classify(prompt, task_hint=None):
         "stream_friendly": stream_friendly,
         "confidence": confidence,
         "char_len": char_len,
+        "multimodal": multimodal,
     }
