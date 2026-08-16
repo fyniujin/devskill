@@ -31,36 +31,46 @@ class MCPServer:
 
     def _register_defaults(self) -> None:
         """Register built-in tools, resources, and prompts."""
+        # v1.5.0: ask_model + compare_models merged into ask_model
         self._tools = {
             "ask_model": {
                 "name": "ask_model",
-                "description": "向指定的国产模型提问。provider 可选: deepseek/tongyi/zhipu/kimi/hunyua"
-                            "n/doubao，留空则自动选择可用模型。",
+                "description": "向国产模型提问。providers 为空时自动选一家（带故障转移）；"
+                                "指定 2 家及以上时返回对比结果。支持 Function Calling（tools 参数）。",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "provider": {"type": "string", "description": "模型提供商名称"},
                         "question": {"type": "string", "description": "要提问的内容"},
+                        "provider": {"type": "string", "description": "模型提供商名称（可选，留空自动选择）"},
+                        "providers": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "多提供商对比列表（可选，指定 2 家及以上时返回对比）",
+                        },
                         "model": {"type": "string", "description": "具体模型 ID（可选）"},
                         "temperature": {"type": "number", "description": "温度参数 0-2（可选）"},
+                        "tools": {
+                            "type": "array",
+                            "items": {"type": "object"},
+                            "description": "Function Calling 工具定义列表（可选，指定后模型可返回 tool_calls）",
+                        },
                     },
                     "required": ["question"],
                 },
             },
-            "compare_models": {
-                "name": "compare_models",
-                "description": "向多个模型发送同一问题，返回对比结果。用于评估不同模型的回答质量。",
+            "describe_image": {
+                "name": "describe_image",
+                "description": "向视觉模型发送图片，返回图片描述或回答图片相关问题。"
+                                "支持 Qwen-VL、GLM-4V、豆包视觉等多模态模型。",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "question": {"type": "string", "description": "要提问的内容"},
-                        "providers": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "要对比的提供商列表（可选，默认全部可用）",
-                        },
+                        "image": {"type": "string", "description": "图片 URL / base64 / 文件路径"},
+                        "prompt": {"type": "string", "description": "关于图片的问题（可选，默认\"请描述这张图片\"）"},
+                        "provider": {"type": "string", "description": "模型提供商名称（可选，留空自动选择）"},
+                        "model": {"type": "string", "description": "具体模型 ID（可选）"},
                     },
-                    "required": ["question"],
+                    "required": ["image"],
                 },
             },
             "list_providers": {
@@ -126,7 +136,7 @@ class MCPServer:
                 },
                 "serverInfo": {
                     "name": "cn-model-gateway",
-                    "version": "1.0.0",
+                    "version": "1.5.0",
                     "description": "国产模型 MCP 服务器 - DeepSeek/通义/智谱/Kimi/混元/豆包一站式接入",
                 },
             })
@@ -169,31 +179,37 @@ class MCPServer:
             return self._error(req_id, ERROR_INTERNAL, f"工具调用失败: {traceback.format_exc()}")
 
     def _tool_ask_model(self, args: Dict[str, Any]) -> str:
-        provider = args.get("provider")
+        """Unified ask tool: single provider or multi-provider compare."""
         question = args.get("question", "")
         if not question:
             raise ValueError("question 不能为空")
-        msgs = [ChatMessage(role="user", content=question)]
-        kwargs = {}
+
+        # v1.5.0: Support tools parameter for Function Calling
+        tools = args.get("tools")
+        kwargs: Dict[str, Any] = {}
         if args.get("model"):
             kwargs["model"] = args["model"]
         if args.get("temperature") is not None:
             kwargs["temperature"] = args["temperature"]
-        resp = self.router.chat(msgs, provider=provider, **kwargs)
-        return (
-            f"[via {resp.provider}/{resp.model}]\n{resp.content}\n"
-            f"---\n耗时: {resp.duration_ms}ms | "
-            f"Token: prompt={resp.usage.get('prompt_tokens', '?')}, "
-            f"completion={resp.usage.get('completion_tokens', '?')}"
-        )
+        if tools:
+            kwargs["tools"] = tools
 
-    def _tool_compare_models(self, args: Dict[str, Any]) -> str:
-        question = args.get("question", "")
-        if not question:
-            raise ValueError("question 不能为空")
+        # Check if multi-provider compare mode
         providers = args.get("providers")
+        if providers and len(providers) >= 2:
+            # Multi-provider compare mode
+            return self._compare_models_internal(question, providers, **kwargs)
+
+        # Single provider mode (with failover)
+        provider = args.get("provider")
         msgs = [ChatMessage(role="user", content=question)]
-        results = self.router.compare_models(msgs, providers=providers)
+        resp = self.router.chat(msgs, provider=provider, **kwargs)
+        return self._format_response(resp)
+
+    def _compare_models_internal(self, question: str, providers: List[str], **kwargs: Any) -> str:
+        """Internal: compare multiple providers."""
+        msgs = [ChatMessage(role="user", content=question)]
+        results = self.router.compare_models(msgs, providers=providers, **kwargs)
         lines = [f"## 模型对比结果\n问题: {question}\n"]
         for provider, info in results.items():
             lines.append(f"### {provider}")
@@ -206,6 +222,51 @@ class MCPServer:
                 lines.append(f"  回答: {info['content'][:200]}...")
             lines.append("")
         return "\n".join(lines)
+
+    def _format_response(self, resp: Any) -> str:
+        """Format a ChatResponse into display string."""
+        lines = [
+            f"[via {resp.provider}/{resp.model}]\n{resp.content}\n",
+            f"---\n耗时: {resp.duration_ms}ms | ",
+            f"Token: prompt={resp.usage.get('prompt_tokens', '?')}, ",
+            f"completion={resp.usage.get('completion_tokens', '?')}",
+        ]
+        # v1.5.0: Include tool_calls if present
+        if resp.tool_calls:
+            tc_lines = ["", "### Tool Calls:"]
+            for tc in resp.tool_calls:
+                tc_lines.append(f"  - {tc.name}({tc.arguments})")
+            lines.append("\n".join(tc_lines))
+        return "".join(lines)
+
+    def _tool_describe_image(self, args: Dict[str, Any]) -> str:
+        """Describe an image using vision models."""
+        image = args.get("image", "")
+        if not image:
+            raise ValueError("image 不能为空")
+        prompt = args.get("prompt", "请描述这张图片")
+        provider = args.get("provider")
+        model = args.get("model")
+
+        # Find a vision-capable adapter
+        adapter = None
+        if provider:
+            adapter = self.router.get_adapter(provider)
+        else:
+            # Auto-select: try to find any available adapter
+            available = self.router.list_available()
+            if available:
+                adapter = self.router.get_adapter(available[0])
+
+        if not adapter:
+            return "没有可用的模型提供商。请在 config.json 中填写 api_key。"
+
+        # Use the adapter's describe_image method
+        try:
+            resp = adapter.describe_image(image, prompt, model=model)
+            return self._format_response(resp)
+        except Exception as e:
+            return f"图片描述失败: {e}"
 
     def _tool_list_providers(self, args: Dict[str, Any]) -> str:
         available = self.router.list_available()
