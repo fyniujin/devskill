@@ -44,7 +44,7 @@ except Exception:
 
 from scripts import (config, store, embeddings, retrieval, graph, deposit,
                      health, backup, legacy, setup, update_check, hardware, version,
-                     conflict_resolver, export, narrative, multimodal)
+                     conflict_resolver, export, narrative, multimodal, archive)
 
 
 # ── 子命令实现 ────────────────────────────────────────────────────────────
@@ -361,6 +361,22 @@ def cmd_conflicts(args):
     print(f"\n运行 `python cli.py conflicts --resolve <编号> --strategy <1-4>` 处理")
 
 
+def cmd_archive(args):
+    """自动归档。"""
+    if args.stats:
+        r = archive.get_archive_stats()
+        print(json.dumps(r, ensure_ascii=False, indent=2))
+    else:
+        r = archive.run_archive(dry_run=args.dry_run)
+        print(json.dumps(r, ensure_ascii=False, indent=2))
+
+
+def cmd_mcp(args):
+    """启动 MCP 服务器（跨 skill 记忆总线）。"""
+    from scripts.mcp_server import run
+    run()
+
+
 def cmd_status_overview(args):
     h = health.audit()
     print("═══════════════════════════════════════════")
@@ -385,6 +401,9 @@ def cmd_autopilot(args):
     h = health.audit()
     print(f"  · 健康度：{h['score']} / 100（陈旧 {h['stale_memories']} · "
           f"孤儿实体 {h['orphan_entities']} · 冲突事实 {h['conflicting_facts']}）")
+    # 自动归档
+    a = archive.run_archive(dry_run=False)
+    print(f"  · 自动归档：{a['archived']['hot']} 热 / {a['archived']['warm']} 温 / {a['archived']['cold']} 冷")
     cfg = config.load_config()
     if cfg.get("auto_backup"):
         b = backup.export_local()
@@ -538,11 +557,21 @@ def build_parser() -> argparse.ArgumentParser:
     mm.add_argument("--id", type=int, default=None)
     mm.set_defaults(func=cmd_multimodal)
 
+    # 归档
+    ar = sub.add_parser("archive", help="自动归档（冷热分层 + 时间衰减）")
+    ar.add_argument("--dry-run", action="store_true", help="只显示计划，不执行")
+    ar.add_argument("--stats", action="store_true", help="显示归档统计")
+    ar.set_defaults(func=cmd_archive)
+
     ov = sub.add_parser("status", help="总览")
     ov.set_defaults(func=cmd_status_overview)
 
     ap = sub.add_parser("autopilot", help="每日自动进化")
     ap.set_defaults(func=cmd_autopilot)
+
+    # MCP 服务器
+    mcp = sub.add_parser("mcp", help="启动 MCP 服务器（跨 skill 记忆总线）")
+    mcp.set_defaults(func=cmd_mcp)
 
     return p
 
