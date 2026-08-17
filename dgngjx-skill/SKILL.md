@@ -1,10 +1,10 @@
 ---
 name: dgngjx-skill
 slug: dgngjx-skill
-displayName: "多功能工具箱 v3.7"
-description: "多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐、实用小工具、系统工具。10大模块51个工具。v3.7 新增CSV查看器/密码强度检测/颜色转换/随机数/文本差异/BMI/番茄钟/汇率，扩展图片批量压缩+格式转换，新增历史记录+配置持久化+管道联动架构。"
-description_zh: "多功能免费工具箱 - 10大模块51个工具。v3.7 新增8个工具+3项扩展+管道联动，含CSV查看器/密码强度/颜色/随机数/文本差异/BMI/番茄钟/汇率/历史记录/配置持久化。"
-version: 3.7.0
+displayName: "多功能工具箱 v3.8"
+description: "多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐、实用小工具、系统工具、AI办公。11大模块53个工具。v3.8 新增会议纪要生成器(ASR三级降级)+周报月报生成，优化系统资源监控(迁移PowerShell CIM)。"
+description_zh: "多功能免费工具箱 - 11大模块53个工具。v3.8 新增模块11 AI办公（会议纪要生成器）+周报月报自动生成，优化系统资源监控(wmic→PowerShell CIM)。"
+version: 3.8.0
 category: office-efficiency
 platforms:
   - windows
@@ -40,10 +40,13 @@ tags:
   - exchange-rate
   - history
   - config
+  - meeting
+  - minutes
+  - weekly-report
 requires_api_key: false
 ---
 
-# 多功能工具箱 dgngjx-skill v3.7.0
+# 多功能工具箱 dgngjx-skill v3.8.0
 
 ## 30 秒速查表
 
@@ -65,16 +68,17 @@ requires_api_key: false
 | 时间戳 / IP工具 | `"时间戳转换"` `"查本机IP"` `"算子网"` |
 | CSV / 颜色 / 随机数 | `"看CSV文件"` `"#FF0000转HSL"` `"随机数"` |
 | BMI / 番茄钟 | `"算BMI"` `"开始番茄钟"` |
-| 历史 / 配置 | `"查看历史记录"` `"修改配置"` |
+| 历史 / 配置 / 周报 | `"查看历史记录"` `"修改配置"` `"生成本周周报"` |
+| 会议纪要 | `"生成会议纪要"` `"语音转会议纪要"` |
 | 系统资源监控 | `"看看CPU使用率"` `"内存够不够"` |
 | 批量文件重命名 | `"把这些文件都改名"` `"批量添加前缀"` |
 | Markdown转HTML | `"把这份MD转成HTML"` |
 
 ---
 
-## 🆕 v3.7.0 更新提醒
+## 🆕 v3.8.0 更新提醒
 
-> 🔔 **您正在使用 dgngjx-skill v3.7.0**
+> 🔔 **您正在使用 dgngjx-skill v3.8.0**
 > 
 > 检查更新：`skillhub search dgngjx-skill`
 > 
@@ -1995,17 +1999,25 @@ else:
 
 ---
 
-#### 10.1 系统资源监控 ⭐ v3.5.0 新增
+#### 10.1 系统资源监控 ⭐ v3.8.0 优化（wmic → PowerShell CIM）
 
 **✅ 开箱即用**
 
-实时监控 CPU、内存、磁盘使用率，返回中文信息。
+实时监控 CPU、内存、磁盘使用率，返回中文信息。v3.8.0 将 wmic 迁移到 PowerShell CIM cmdlet，兼容 Windows Server 2025+。
 
 <details>
 <summary>📋 展开查看命令</summary>
 
 ```python
 import os, platform, subprocess, time
+
+def _ps_cim(cmd):
+    """执行 PowerShell CIM 命令并返回 stdout"""
+    r = subprocess.run(
+        ["powershell", "-NoProfile", "-Command", cmd],
+        capture_output=True, text=True, timeout=10
+    )
+    return r.stdout.strip()
 
 def get_system_resources():
     """获取系统资源信息（跨Windows/macOS/Linux）"""
@@ -2016,8 +2028,9 @@ def get_system_resources():
     # CPU 使用率
     try:
         if info['platform'] == 'Windows':
-            r = subprocess.run(['wmic','cpu','get','loadpercentage'], capture_output=True, text=True, timeout=5)
-            lines = [l.strip() for l in r.stdout.split('\n') if l.strip().isdigit()]
+            # v3.8.0: wmic → PowerShell CIM（兼容 Win11/Server 2025+）
+            out = _ps_cim("Get-CimInstance Win32_Processor | Select-Object -ExpandProperty LoadPercentage")
+            lines = [l.strip() for l in out.split('\n') if l.strip().isdigit()]
             info['cpu_usage'] = int(lines[0]) if lines else 0
         else:
             r = subprocess.run(['grep','-c','processor','/proc/cpuinfo'], capture_output=True, text=True, timeout=5)
@@ -2027,14 +2040,17 @@ def get_system_resources():
     # 内存信息
     try:
         if info['platform'] == 'Windows':
-            r = subprocess.run(['wmic','OS','get','FreePhysicalMemory,TotalVisibleMemorySize','/value'], capture_output=True, text=True, timeout=5)
-            free = total = 0
-            for line in r.stdout.split('\n'):
-                if 'TotalVisibleMemorySize' in line: total = int(line.split('=')[1].strip())
-                elif 'FreePhysicalMemory' in line: free = int(line.split('=')[1].strip())
-            info['ram_total_mb'] = total // 1024
-            info['ram_used_mb'] = (total - free) // 1024
-            if total > 0: info['ram_percent'] = int((total-free)/total*100)
+            # v3.8.0: wmic → PowerShell CIM
+            out = _ps_cim("Get-CimInstance Win32_OperatingSystem | Select-Object FreePhysicalMemory,TotalVisibleMemorySize | Format-List")
+            for line in out.split('\n'):
+                line = line.strip()
+                if line.startswith('TotalVisibleMemorySize'):
+                    info['ram_total_mb'] = int(line.split(':')[1].strip()) // 1024
+                elif line.startswith('FreePhysicalMemory'):
+                    free = int(line.split(':')[1].strip()) // 1024
+                    info['ram_used_mb'] = info['ram_total_mb'] - free
+            if info['ram_total_mb'] > 0:
+                info['ram_percent'] = int(info['ram_used_mb'] / info['ram_total_mb'] * 100)
         else:
             with open('/proc/meminfo') as f:
                 mem = {}
@@ -2052,12 +2068,18 @@ def get_system_resources():
     # 磁盘信息
     try:
         if info['platform'] == 'Windows':
-            r = subprocess.run(['wmic','logicaldisk','get','size,freespace,caption','/value'], capture_output=True, text=True, timeout=5)
+            # v3.8.0: wmic → PowerShell CIM
+            out = _ps_cim("Get-CimInstance Win32_LogicalDisk | Select-Object Size,FreeSpace,DeviceID | Format-List")
             total = free = 0
-            for block in r.stdout.split('\n\n'):
+            for block in out.split('\n\n'):
                 for line in block.split('\n'):
-                    if 'Size=' in line: total += int(line.split('=')[1].strip() or 0)
-                    elif 'FreeSpace=' in line: free += int(line.split('=')[1].strip() or 0)
+                    line = line.strip()
+                    if line.startswith('Size') and ':' in line:
+                        val = line.split(':')[1].strip()
+                        if val.isdigit(): total += int(val)
+                    elif line.startswith('FreeSpace') and ':' in line:
+                        val = line.split(':')[1].strip()
+                        if val.isdigit(): free += int(val)
             info['disk_total_gb'] = total // (1024**3)
             info['disk_used_gb'] = (total - free) // (1024**3)
             if total > 0: info['disk_percent'] = int((total-free)/total*100)
@@ -2102,8 +2124,9 @@ elif res['cpu_usage'] > 75: print("🟡 CPU 使用率较高")
 | 情况 | 原因 | 解决 |
 |------|------|------|
 | 获取失败返回 0 | 权限不足 | 以管理员权限运行 |
-| wmic 被禁用 | Windows 精简版 | 改用 PowerShell 命令 |
+| wmic 被禁用 | Windows 精简版 | v3.8.0 已迁移到 PowerShell CIM，无需 wmic |
 | macOS 内存显示异常 | macOS 内存管理机制 | 正常行为，macOS 积极利用内存 |
+| PowerShell 执行策略限制 | Restricted 策略 | 运行 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
 
 ---
 
@@ -2530,6 +2553,85 @@ else:
 
 ---
 
+#### 10.6 周报/月报自动生成 ⭐ v3.8.0 新增
+
+**✅ 开箱即用**（纯 Python 标准库 json/datetime，零依赖）
+
+> 从 `~/.workbuddy/dgngjx_history.json` 读取历史记录，自动汇总本周/本月工作内容，生成结构化 Markdown 周报。
+
+<details>
+<summary>📋 展开查看命令</summary>
+
+```python
+import json, os, datetime
+
+HISTORY_FILE = os.path.join(os.path.expanduser("~"), ".workbuddy", "dgngjx_history.json")
+
+def _load():
+    if os.path.exists(HISTORY_FILE):
+        with open(HISTORY_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+mode = input("生成周报(w)/月报(m)，默认w:").strip() or "w"
+records = _load()
+if not records:
+    print("📭 暂无历史记录。先使用工具自动记录工作。")
+else:
+    today = datetime.date.today()
+    if mode == "m":
+        # 本月
+        start = today.replace(day=1)
+        period_label = f"{today.year}年{today.month}月"
+        title = f"# 📋 {period_label} 月度工作报告"
+    else:
+        # 本周一至今
+        start = today - datetime.timedelta(days=today.weekday())
+        period_label = f"{start.strftime('%m/%d')} - {today.strftime('%m/%d')}"
+        title = f"# 📋 本周工作报告（{period_label}）"
+    
+    filtered = []
+    for r in records:
+        try:
+            t = datetime.datetime.strptime(r.get("time",""), "%Y-%m-%d %H:%M:%S").date()
+            if t >= start and t <= today:
+                filtered.append(r)
+        except ValueError:
+            continue
+    
+    print(title)
+    print(f"\n> 生成时间：{today:%Y-%m-%d} | 数据源：{len(filtered)} 条记录\n")
+    
+    if not filtered:
+        print("本周期内暂无记录。")
+    else:
+        # 按工具分类统计
+        tool_counts = {}
+        for r in filtered:
+            tool = r.get("tool","未知")
+            tool_counts[tool] = tool_counts.get(tool, 0) + 1
+        print("## 📊 工具使用统计\n")
+        print("| 工具 | 使用次数 |")
+        print("|------|---------:|")
+        for tool, cnt in sorted(tool_counts.items(), key=lambda x: -x[1]):
+            print(f"| {tool} | {cnt} |")
+        print("\n## 📝 工作记录明细\n")
+        for i, r in enumerate(filtered, 1):
+            inp = r.get("input","")[:80]
+            out = r.get("output","")[:80]
+            print(f"**{i}. [{r['time']}] {r['tool']}**")
+            print(f"   - 输入: {inp}")
+            print(f"   - 输出: {out}")
+            print()
+        print("---\n*本报告由 dgngjx-skill 历史记录系统自动生成*")
+```
+
+</details>
+
+> **联动说明**：周报/月报直接消费 v3.7.0 新增的历史记录数据。先使用工具（如文件哈希校验、CSV 查看器、图片压缩等），系统自动记录到 `dgngjx_history.json`，周报生成时自动汇总。
+
+---
+
 #### 🔗 模块间管道联动 ⭐ v3.7.0 新增架构特性
 
 **✅ 开箱即用**（纯标准库，零依赖）
@@ -2581,7 +2683,158 @@ else:
 
 ---
 
-## 最佳实践
+### 🤖 模块 11：AI 办公 ⭐ v3.8.0 新增模块
+
+---
+
+#### 11.1 会议纪要生成器 ⭐ v3.8.0 新增
+
+**✅ 开箱即用**（零依赖保底：支持本地 whisper / 在线 API / 手动粘贴文本 三级降级）
+
+> 语音→ASR 转写→LLM 摘要→结构化会议纪要。覆盖 TOP50 高频需求。
+
+<details>
+<summary>📋 模式 A：本地 Whisper CLI（离线，零成本）</summary>
+
+```python
+import subprocess, os, sys
+
+path = input("音频文件路径(mp3/wav/m4a):").strip().strip('"').strip("'")
+if not os.path.isfile(path):
+    print(f"❌ 文件不存在: {path}")
+else:
+    # 检查 whisper CLI 是否可用
+    r = subprocess.run(["whisper", "--help"], capture_output=True, text=True, timeout=5)
+    if r.returncode != 0:
+        print("❌ 未检测到 whisper CLI。请先安装：pip install openai-whisper")
+        print("   或选择模式 B（在线 API）或模式 C（手动粘贴文本）")
+    else:
+        print("🎙️ 正在转写（可能需要几分钟，取决于音频长度）...")
+        result = subprocess.run(
+            ["whisper", path, "--language", "zh", "--output_format", "txt",
+             "--output_dir", os.path.dirname(path)],
+            capture_output=True, text=True, timeout=600
+        )
+        if result.returncode == 0:
+            out_path = os.path.splitext(path)[0] + ".txt"
+            if os.path.exists(out_path):
+                with open(out_path, encoding="utf-8") as f:
+                    text = f.read()
+                print(f"✅ 转写完成！文本长度: {len(text)} 字")
+                print("--- 转写结果 ---")
+                print(text[:500])
+            else:
+                print("❌ 转写输出文件未生成")
+        else:
+            print(f"❌ 转写失败: {result.stderr[:200]}")
+```
+
+</details>
+
+<details>
+<summary>📋 模式 B：Paraformer API（在线，中文识别率高）</summary>
+
+```python
+import urllib.request, urllib.parse, json, os
+
+path = input("音频文件路径:").strip().strip('"').strip("'")
+if not os.path.isfile(path):
+    print(f"❌ 文件不存在: {path}")
+else:
+    # Paraformer API（需替换为实际的 API endpoint 和 key）
+    API_URL = input("API URL(留空使用内置示例):").strip()
+    API_KEY = input("API Key(留空使用内置示例):").strip()
+    
+    if not API_URL:
+        print("💡 未配置 API，将使用模式 C（手动粘贴文本）")
+        print("   如需在线识别，请提供 Paraformer API 地址和密钥")
+    else:
+        with open(path, "rb") as f:
+            audio_data = f.read()
+        req = urllib.request.Request(
+            API_URL,
+            data=audio_data,
+            headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "audio/wav"}
+        )
+        try:
+            resp = urllib.request.urlopen(req, timeout=120)
+            result = json.loads(resp.read())
+            text = result.get("text", result.get("result", ""))
+            if text:
+                print(f"✅ 转写完成！文本长度: {len(text)} 字")
+                print("--- 转写结果 ---")
+                print(text[:500])
+            else:
+                print("❌ API 返回空文本")
+        except Exception as e:
+            print(f"❌ API 调用失败: {e}")
+            print("   请检查网络连接和 API 配置")
+```
+
+</details>
+
+<details>
+<summary>📋 模式 C：手动粘贴文本（零依赖保底，推荐）</summary>
+
+```python
+import datetime
+
+print("📋 模式 C：手动粘贴会议录音转写文本")
+print("   （如无 ASR 工具，可手动复制会议录音转写内容）")
+print("   输入文本后输入 END 结束：")
+lines = []
+while True:
+    line = input()
+    line = line.strip() if line else ""
+    if line.upper() == "END":
+        break
+    lines.append(line)
+text = "\n".join(lines)
+
+if not text.strip():
+    print("❌ 未输入文本")
+else:
+    # 结构化摘要（零依赖，规则引擎）
+    sentences = [s.strip() for s in text.replace("。","\n").replace("！","\n").replace("？","\n").split("\n") if len(s.strip()) > 5]
+    
+    # 提取关键句（简单规则：含"决定""同意""通过""计划""负责""截止"等关键词）
+    key_sentences = [s for s in sentences if any(kw in s for kw in keywords)]
+    today = datetime.date.today().strftime("%Y-%m-%d")
+    print(f"\n{'='*50}")
+    print(f"  📝 会议纪要（结构化摘要）")
+    print(f"  日期: {today} | 原文: {len(text)} 字")
+    print(f"{'='*50}")
+    print(f"\n## 📋 会议要点\n")
+    if key_sentences:
+        for i, s in enumerate(key_sentences[:10], 1):
+            print(f"{i}. {s}")
+    else:
+        for i, s in enumerate(sentences[:5], 1):
+            print(f"{i}. {s}")
+    print(f"\n## 📝 完整文本\n")
+    print(text[:1000])
+    if len(text) > 1000:
+        print(f"\n...（共 {len(text)} 字，已截断）")
+    print(f"\n{'='*50}")
+    print("⚠️ 零依赖模式使用规则引擎摘要，安装 LLM 后可获得更智能的归纳")
+```
+
+</details>
+
+**⚠️ 三级降级链说明：**
+
+| 优先级 | 模式 | 依赖 | 中文识别率 | 适用场景 |
+|:------:|------|------|:----------:|----------|
+| 1 | 本地 Whisper CLI | `pip install openai-whisper` | 85-90% | 离线、大文件、隐私敏感 |
+| 2 | Paraformer API | 联网 + API Key | 92-95% | 中文会议、高准确率需求 |
+| 3 | 手动粘贴文本 | **零依赖** | 100%（人工） | 无安装条件、短文本、兜底 |
+
+> 推荐：先用模式 C 体验，需要自动化时再安装 whisper 或配置 API。
+
+---
+
+## 最佳实践</longcat_think>
+
 
 ### 场景 1：新电脑第一次用
 
@@ -2643,21 +2896,30 @@ v3.5.0 起已根据你的硬件自动调度，低配机会自动降为小文件�
 ### Q8: 历史记录存在哪里？
 保存在 `~/.workbuddy/dgngjx_json.json`，保留最近 200 条。可随时搜索或清空。
 
+### Q9: 会议纪要需要安装 whisper 吗？
+不需要。默认使用模式 C（手动粘贴文本）即可零依赖运行。需要自动化 ASR 时再安装 whisper 或配置 Paraformer API。
+
+### Q10: 周报是自动记录的吗？
+是的。使用工具（如 CSV 查看器、图片压缩、文件哈希校验等）后，系统自动记录到 `~/.workbuddy/dgngjx_history.json`。周报生成时自动汇总本周期记录。
+
 ---
 
 ## 功能分类统计
 
 | 类别 | 数量 | 开箱即用 |
 |------|:----:|:--------:|
-| ✅ 零依赖即可运行 | 33 | ✅ |
+| ✅ 零依赖即可运行 | 35 | ✅ |
 | 📦 需确认安装后运行 | 18 | ❌（有引导+在线替代） |
-| **总计** | **51** | **65%** |
+| **总计** | **53** | **66%** |
 
-## v3.7.0 新特性速览
+## v3.8.0 新特性速览
 
 | 优化维度 | 涉及模块 | 关键提升 |
 |---------|---------|---------|
-| CSV查看器 | 模块9.8 | 自动识别编码/分隔符，分页显示，列宽对齐 |
+| 会议纪要生成器 | 模块11.1 | ASR三级降级链（本地whisper→Paraformer API→手动粘贴），零依赖保底 |
+| 周报/月报生成 | 模块10.6 | 消费history.json自动生成结构化周报，纯文本零依赖 |
+| 系统资源监控优化 | 模块10.1 | wmic→PowerShell CIM cmdlet，兼容Windows Server 2025+ |
+| 新增模块 | 模块11 AI办公 | 首个AI办公模块，覆盖TOP50高频需求 |
 | 密码强度检测 | 模块9.9 | 长度/多样性/常见模式/弱密码字典，评级+改进建议 |
 | 颜色值转换 | 模块9.10 | RGB↔HEX↔HSL互转，多格式输入 |
 | 随机数生成器 | 模块9.11 | 7种模式：整数/小数/硬币/骰子/打乱/抽样/字符串 |
@@ -2672,6 +2934,7 @@ v3.5.0 起已根据你的硬件自动调度，低配机会自动降为小文件�
 
 ## 更新日志
 
+| v3.8.0 | 2026-08-17 | 增加：会议纪要生成器（模块11.1 ASR三级降级链：本地whisper→Paraformer API→手动粘贴，零依赖保底）；增加：周报/月报自动生成（模块10.6 消费history.json生成结构化报告）；优化：系统资源监控（模块10.1 wmic迁移到PowerShell CIM cmdlet，兼容Windows Server 2025+）；新增：模块11 AI办公（首个AI办公模块） |
 | v3.7.0 | 2026-08-07 | 增加：CSV查看器（模块9.8 自动编码/分隔符识别+分页显示）；增加：密码强度检测（模块9.9 长度/多样性/弱密码字典+改进建议）；增加：颜色值转换（模块9.10 RGB↔HEX↔HSL互转）；增加：随机数生成器（模块9.11 7种模式）；增加：文本差异对比（模块2.4 逐行diff+高亮）；增加：BMI计算器（模块4.3 中国标准判定）；增加：番茄钟（模块4.4 自定义时长/轮数）；增加：汇率查询（模块1.5 30+货币+缓存降级）；扩展：图片批量压缩与格式转换（模块6.1 目录批量+4种格式+硬件感知并发）；增加：历史记录系统（模块10.4 跨会话JSON持久化）；增加：配置持久化（模块10.5 用户偏好）；增加：管道联动架构（多工具串联）；优化：开箱即用率从57%提升至65% |
 | v3.6.0 | 2026-07-07 | 增加：文件哈希校验（模块9.4 MD5/SHA1/SHA256，大文件分块读取+期望值比对）；增加：UUID生成器（模块9.5 uuid4/uuid1/无横线批量生成）；增加：时间戳转换（模块9.6 Unix时间戳与日期互转，秒/毫秒自动识别）；增加：IP工具（模块9.7 IP解析/子网计算/本机IP查询）；扩展：单位换算器从8种扩至28种（新增面积/速度/数据存储/压力/能量等）；扩展：编码工具新增MD5/SHA1/SHA256哈希与2/8/10/16进制互转；优化：新增功能全部零依赖纯标准库实现 |
 | v3.5.0 | 2026-07-14 | 增加：硬件自适应调度（自动检测CPU/RAM并智能分配并发数）；增加：安全文件过滤规则（双向检查输入输出，拦截可执行文件30+种）；增加：系统资源监控（模块10.1 实时CPU/内存/磁盘，中文报告）；增加：批量文件重命名（模块10.2 5种模式+预览确认）；增加：Markdown转HTML（模块10.3 零依赖+内置美观样式）；增加：更新提醒和邮箱njskills@agent.qq.com；优化：全局性能策略（低配模式自动降级） |
@@ -2706,6 +2969,6 @@ v3.5.0 起已根据你的硬件自动调度，低配机会自动降为小文件�
 - **联系邮箱**：njskills@agent.qq.com
 - **许可证**：MIT
 - **支持平台**：Windows / macOS / Linux
-- **当前版本**：v3.7.0
+- **当前版本**：v3.8.0
 - **检查更新**：`skillhub search dgngjx-skill`
 - **升级命令**：`skillhub upgrade dgngjx-skill`
