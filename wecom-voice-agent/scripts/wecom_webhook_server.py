@@ -26,6 +26,7 @@ import re
 import socket
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta
+from typing import Dict, Optional, List, Any
 
 # 日志格式（必须在情感分析模块之前定义 logger）
 logging.basicConfig(
@@ -88,6 +89,33 @@ try:
 except ImportError:
     COMPLIANCE_AVAILABLE = False
     logger.warning("合规模块不可用")
+
+# 通话记录子系统（v2.5 新增）
+try:
+    from call_record_subsystem import CallRecordSubsystem
+    CALL_RECORD_AVAILABLE = True
+    logger.info("通话记录子系统已加载")
+except ImportError:
+    CALL_RECORD_AVAILABLE = False
+    logger.warning("通话记录子系统不可用")
+
+# 多渠道抽象层（v2.5 新增）
+try:
+    from voice_channel import VoiceChannelFactory, StandardMessage, ChannelType
+    CHANNEL_AVAILABLE = True
+    logger.info("多渠道抽象层已加载")
+except ImportError:
+    CHANNEL_AVAILABLE = False
+    logger.warning("多渠道抽象层不可用")
+
+# 语音留言摘要（v2.5 新增）
+try:
+    from voicemail_summary import VoicemailSummarizer
+    VOICEMAIL_AVAILABLE = True
+    logger.info("语音留言摘要系统已加载")
+except ImportError:
+    VOICEMAIL_AVAILABLE = False
+    logger.warning("语音留言摘要系统不可用")
 
 # 自选导入 urllib（兼容 Python 3.x）
 try:
@@ -440,6 +468,8 @@ class PriorityRouter:
 vad_prefilter = VADPreFilter()
 priority_router = PriorityRouter()
 compliance_mgr = ComplianceManager() if COMPLIANCE_AVAILABLE else None
+call_record_subsystem = CallRecordSubsystem() if CALL_RECORD_AVAILABLE else None
+voicemail_summarizer = VoicemailSummarizer() if VOICEMAIL_AVAILABLE else None
 
 
 # ==========================================
@@ -790,7 +820,7 @@ class MessageHandler:
     
     def handle(self, callback):
         """
-        处理一条回调消息（含 VAD 过滤 v2.4、优先级队列 v2.4）
+        处理一条回调消息（含 VAD 过滤 v2.4、优先级队列 v2.4、语音留言 v2.5）
         
         Args:
             callback: dict, 回调 JSON
@@ -817,6 +847,10 @@ class MessageHandler:
             self.msgid_cache.clear()
         
         logger.info(f"收到 {msgtype} 消息, userid={userid}")
+        
+        # 语音留言处理（v2.5 新增）
+        if msgtype == "voicemail":
+            return self._handle_voicemail(callback)
         
         # 分发
         if msgtype == "voice":
@@ -896,6 +930,68 @@ class MessageHandler:
         return self._dispatch(intent, entities, content, emotion=emotion, strategy=strategy,
                               dialect=dialect_str, ticket_id=ticket_id)
     
+    def _handle_voicemail(self, callback):
+        """
+        处理语音留言（v2.5 新增）
+        
+        当用户无法接听时，语音留言自动转录并生成摘要，
+        推送给被叫方。
+        """
+        content = callback.get("voicemail", {}).get("content", "").strip()
+        caller = callback.get("from", {}).get("userid", "")
+        callee = callback.get("to", {}).get("userid", "")
+        vm_id = callback.get("msgid", "")
+        
+        logger.info(f"语音留言: caller={caller}, callee={callee}, content={content[:50]}")
+        
+        if not content:
+            return self._text_resp(
+                "收到语音留言，但内容无法识别。\n"
+                "请确认留言时长在 60 秒以内，并用普通话清晰表达。"
+            )
+        
+        # 生成语音留言摘要（v2.5 新增）
+        if VOICEMAIL_AVAILABLE and voicemail_summarizer:
+            try:
+                summary_result = voicemail_summarizer.process_voicemail(
+                    vm_id=vm_id,
+                    caller=caller,
+                    content=content,
+                    source="voicemail"
+                )
+                rendered = voicemail_summarizer.render_summary(summary_result)
+                
+                # 记录到通话记录子系统（v2.5 新增）
+                if CALL_RECORD_AVAILABLE and call_record_subsystem:
+                    try:
+                        call_record_subsystem.create_record(
+                            call_id=vm_id,
+                            caller=caller,
+                            callee=callee,
+                            direction="voicemail"
+                        )
+                        call_record_subsystem.add_transcript(vm_id, content, summary_result.get("intent", "voicemail"))
+                    except Exception as e:
+                        logger.warning(f"语音留言记录失败: {e}")
+                
+                return self._text_resp(rendered)
+            except Exception as e:
+                logger.warning(f"语音留言摘要生成失败: {e}")
+                # 降级：直接返回原始内容
+                return self._text_resp(
+                    f"📮 收到语音留言\n\n"
+                    f"来电：{caller}\n"
+                    f"内容：{content[:200]}\n\n"
+                    f"摘要生成失败，请查看原始留言内容。"
+                )
+        
+        # 降级：无摘要能力
+        return self._text_resp(
+            f"📮 收到语音留言\n\n"
+            f"来电：{caller}\n"
+            f"内容：{content[:200]}"
+        )
+
     def _analyze_emotion(self, text: str, userid: str) -> dict:
         """
         分析文本情感并记录状态（v2.2）
