@@ -1292,6 +1292,14 @@ def main():
         "--summarize", action="store_true",
         help="对搜索结果生成摘要（V1.5 新增，需配置 llm_summary.api_key）",
     )
+    parser.add_argument(
+        "--synthesize-pro", action="store_true",
+        help="Perplexity 式答案合成（V1.6 新增，抓取正文+带 citation 生成答案）",
+    )
+    parser.add_argument(
+        "--selftest-schedule", choices=["run", "status"],
+        help="定时 selftest 调度（V1.6 新增）：run=执行一次, status=查看上次结果",
+    )
 
     args = parser.parse_args()
     config = load_config(args.config)
@@ -1349,6 +1357,34 @@ def main():
                 print(f"{'':<12}{r['hint']}")
         print(f"\n可用引擎 {ok_count}/{len(report)}")
         print(f"中文分词(jieba): {'可用' if jieba_available() else '不可用，已降级为字符切分'}")
+        return
+
+    # --- V1.6 新增：定时 selftest 调度 ---
+    if args.selftest_schedule:
+        try:
+            from selftest_scheduler import SelftestScheduler
+        except ImportError:
+            from .selftest_scheduler import SelftestScheduler
+        scheduler = SelftestScheduler(config)
+        if args.selftest_schedule == "run":
+            result = scheduler.run_once()
+            if not result.get("enabled"):
+                print("selftest 调度已禁用")
+                return
+            print(f"selftest 完成: {result['ok_count']}/{result['total']} 引擎正常")
+            if result["failed"]:
+                print(f"失效引擎: {', '.join(result['failed'])}")
+            else:
+                print("所有引擎正常")
+        else:  # status
+            log_path = os.path.expanduser("~/.workbuddy/output/privacy-search-selftest.log")
+            if not os.path.exists(log_path):
+                print("尚未执行过 selftest")
+                return
+            with open(log_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            for line in lines[-20:]:
+                print(line.rstrip())
         return
 
     if not args.query:
@@ -1448,6 +1484,19 @@ def main():
             print("=" * 60)
         except Exception as e:
             print(f"\n摘要生成出错: {e}")
+
+    # --- V1.6 新增：Perplexity 式答案合成 ---
+    if args.synthesize_pro:
+        try:
+            from synthesiser import synthesize_pro
+            print("\n正在抓取正文并生成答案（Pro 模式）...")
+            answer = synthesize_pro(args.query, results, config)
+            print("\n" + "=" * 60)
+            print("答案（Pro 模式）:")
+            print(answer)
+            print("=" * 60)
+        except Exception as e:
+            print(f"\nPro 合成出错: {e}")
 
     if args.privacy_report:
         print("=" * 60)
