@@ -192,8 +192,8 @@ def validate_schema(pipeline):
         if 'fallback' in agent and agent['fallback'] not in ('retry', 'skip', 'default', 'abort'):
             warnings.append(f"{prefix} [fallback] 建议为 skip/default/abort 之一（当前值：{agent['fallback']}）")
 
-        # type 验证（task/approval/控制流五类）
-        valid_types = ('task', 'approval', 'condition', 'switch', 'for-each', 'while-loop', 'pipeline')
+        # type 验证（task/approval/控制流六类）
+        valid_types = ('task', 'approval', 'condition', 'switch', 'for-each', 'while-loop', 'pipeline', 'evaluate')
         node_type = agent.get('type', 'task')
         if 'type' in agent and node_type not in valid_types:
             warnings.append(
@@ -255,6 +255,16 @@ def validate_schema(pipeline):
             if 'outputs' in agent and not isinstance(agent['outputs'], dict):
                 errors.append(f"{prefix} pipeline 节点的 [outputs] 必须是对象")
 
+        elif node_type == 'evaluate':
+            if 'quality_expr' not in agent or not str(agent.get('quality_expr', '')).strip():
+                errors.append(f"{prefix} evaluate 节点必须提供非空 [quality_expr] 表达式")
+            if 'retry_targets' not in agent or not isinstance(agent.get('retry_targets'), list) or not agent['retry_targets']:
+                errors.append(f"{prefix} evaluate 节点必须提供非空 [retry_targets] 数组")
+            if 'max_eval_rounds' in agent:
+                me = agent['max_eval_rounds']
+                if not isinstance(me, int) or me <= 0:
+                    warnings.append(f"{prefix} evaluate 节点的 [max_eval_rounds] 建议为正整数")
+
     # 分支目标引用校验：控制流节点引用的分支节点必须存在
     branch_ref_errors = _validate_branch_refs(pipeline, agent_ids)
     errors.extend(branch_ref_errors)
@@ -288,6 +298,8 @@ def _validate_branch_refs(pipeline, agent_ids):
             _check_ids('join', agent.get('join', []))
         elif node_type == 'while-loop':
             _check_ids('loop_body', agent.get('loop_body', []))
+        elif node_type == 'evaluate':
+            _check_ids('retry_targets', agent.get('retry_targets', []))
 
     return errors
 
