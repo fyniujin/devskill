@@ -1,0 +1,22 @@
+{
+  "description": "指导案例数据库月度更新记录",
+  "version": "1.0.0",
+  "updated": "2026-07-29",
+  "next_update": "2026-08-29",
+  "update_history": [
+    {
+      "date": "2026-07-29",
+      "version": "1.0.0",
+      "added_cases": 30,
+      "removed_cases": 0,
+      "modified_cases": 0,
+      "notes": "初始版本，收录最高人民法院指导案例1-128号中涉及民商事合同的30个典型案例"
+    }
+  ],
+  "update_policy": {
+    "frequency": "monthly",
+    "source": "最高人民法院指导性案例数据库",
+    "trigger": "每月29日检查新增指导案例",
+    "reminder_days_before": 7
+  }
+}
