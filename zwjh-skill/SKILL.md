@@ -4,7 +4,7 @@ slug: zwjh-skill
 displayName: "长期记忆 / 知识图谱 会思考的进化 AI"
 description: "统一记忆底座：长期记忆 + 知识图谱 + 自动沉淀 + 检索。让 AI「记得你」，跨会话持久记忆、实体/关系图谱、语义与时间线检索、记忆健康度审计、本地备份（可接百度网盘）。纯本地、零密钥、按硬件自适应，不拖累电脑。并保留 v1.7 的根因分析/预测性维护/进化报告。"
 description_zh: "统一记忆底座：长期记忆 + 知识图谱 + 自动沉淀 + 检索。纯本地、零密钥、按硬件自适应，不拖累电脑。"
-version: 2.3.0
+version: 2.4.0
 category: ai-agent
 platforms:
   - windows
@@ -315,6 +315,70 @@ python scripts/cli.py multimodal list --type image
 
 ---
 
+### 模块 15：跨 skill 记忆总线（MCP 服务器）
+
+**做了什么**：把 zwjh-skill 的核心能力暴露为 MCP Tool，让其他 skill / Agent 直接调用，「可插拔基础设施」定位落地。
+
+- **3 个 MCP Tool**：`zwjh_query`（语义检索）/ `zwjh_deposit`（沉淀知识点）/ `zwjh_health`（健康度报告）
+- **零依赖**：纯标准库实现 MCP 协议（JSON-RPC 2.0 over stdio），不引入 `mcp` 包
+- **协议标准**：兼容 MCP 2024-11-05 规范，可与任何支持 MCP 的 Agent 集成
+
+**启动方式**：
+```bash
+python scripts/mcp_server.py
+# 或
+python scripts/cli.py mcp
+```
+
+**MCP 配置示例**（`~/.workbuddy/mcp.json`）：
+```json
+{
+  "mcpServers": {
+    "zwjh-memory": {
+      "command": "python",
+      "args": ["D:/skill/zwjh-skill/scripts/mcp_server.py"]
+    }
+  }
+}
+```
+
+---
+
+### 模块 16：自动归档策略（冷热分层）
+
+**做了什么**：按访问频率 + 时间衰减自动控制记忆膨胀，「热记忆保持、温记忆摘要、冷记忆高压缩归档」。
+
+- **热度算法**：`0.6 × ln(access_count + 1) + 0.4 × exp(-days_since_access / 30)`
+- **三层策略**：热（保持原样）/ 温（抽取式摘要，30~50% 压缩）/ 冷（仅保留事实，70~90% 压缩）
+- **自动触发**：`autopilot` 末尾自动调用，无需手动干预
+- **硬件感知**：批处理大小按 `hardware.tier` 分配
+
+**示例**：
+```bash
+python scripts/cli.py archive --dry-run    # 查看归档计划
+python scripts/cli.py archive              # 执行归档
+python scripts/cli.py archive --stats      # 查看归档统计
+```
+
+---
+
+### 模块 17：任务状态面板（Web 可视化增强）
+
+**做了什么**：在原有图谱可视化基础上，新增底部任务状态面板，autopilot 运行可观测。
+
+- **定时任务状态**：显示是否注册、频率、输出
+- **健康度评分**：实时显示当前健康度（绿/黄/红三色标识）
+- **归档统计**：热/温/冷记忆数量 + 压缩节省百分比
+- **可折叠设计**：不占用图谱空间，需要时展开
+
+**启动方式**：
+```bash
+python scripts/web_server.py
+# 浏览器打开 http://127.0.0.1:8080 → 底部任务状态面板
+```
+
+---
+
 ### 模块 10：知识图谱可视化（Web 界面）
 
 **做了什么**：在浏览器中直观探索实体关系网络，从"黑盒存储"变为"可视化探索"。
@@ -383,6 +447,7 @@ python scripts/cli.py demo
 
 ## 更新日志
 
+| v2.4.0 | 2026-08-17 | 新增：跨 skill 记忆总线（MCP 服务器，暴露 query/deposit/health 为 MCP Tool，零依赖）；新增自动归档策略（冷热分层 + 时间衰减热度分，autopilot 自动触发）；新增任务状态 Web 面板（定时任务/健康度/归档统计可视化）；新增 mcp_server.py / archive.py；新增 CLI archive / mcp 命令 |
 | v2.3.0 | 2026-08-07 | 新增：多格式导出（Markdown/JSON/Cypher/CSV/Obsidian/Logseq）与选择性筛选；新增时间线叙事生成（项目/人脉/知识成长/周期回顾）；新增多模态记忆（图片/音频/文件索引）；新增 export.py / narrative.py / multimodal.py |
 | v2.2.0 | 2026-07-29 | 新增：记忆冲突消解（冲突自动检测 + 四类分类 + 自动/手动消解策略）；新增 conflict_resolver.py；新增 CLI conflicts 命令 |
 | v2.1.0 | 2026-07-17 | 新增：知识图谱 Web 可视化（力导向图/详情面板/路径探索/时间线/子图过滤）；增加 web_server.py 零依赖内置 HTTP 服务器；增加大规模图谱分层加载与聚合；新增 REST API |
