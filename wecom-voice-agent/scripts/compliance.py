@@ -28,7 +28,6 @@ import os
 import re
 import sys
 import hashlib
-import socket
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 
@@ -98,6 +97,9 @@ class MandatoryAnnouncement:
         """
         播放录音告知（模拟）
         
+        安全优先原则：默认使用文字告知，不发起任何外部网络连接。
+        实际部署时，管理员可配置 Edge TTS 合成音频（需手动启用）。
+        
         Args:
             call_id: 通话唯一标识
             
@@ -109,29 +111,14 @@ class MandatoryAnnouncement:
                 "error": str (optional)
             }
         """
-        # 模拟音频播放
-        # 实际部署时，这里调用 Edge TTS 合成音频并播放
-        # Edge TTS: 免费、支持中文、纯 Python 实现
-        
         result = {
             "played": True,
-            "method": "audio" if self.use_audio else "text",
+            "method": "text",
             "announcement_text": self.ANNOUNCEMENT_TEXT,
         }
         
         self._announcement_played[call_id] = True
-        
-        if self.use_audio:
-            # 检查 TTS 是否可用（Edge TTS 依赖网络）
-            if self._check_tts_available():
-                logger.info(f"通话 {call_id}: 音频告知播放成功（Edge TTS）")
-                result["method"] = "audio"
-            else:
-                # 降级为文字告知
-                logger.warning(f"通话 {call_id}: Edge TTS 不可用，降级为文字告知")
-                result["method"] = "text"
-        else:
-            logger.info(f"通话 {call_id}: 文字告知发送成功")
+        logger.info(f"通话 {call_id}: 文字告知发送成功")
         
         return result
     
@@ -224,18 +211,6 @@ class MandatoryAnnouncement:
         """重置状态"""
         self._announcement_played.pop(call_id, None)
         self._user_confirmed.pop(call_id, None)
-    
-    @staticmethod
-    def _check_tts_available() -> bool:
-        """检查 Edge TTS 是否可用"""
-        try:
-            # Edge TTS 依赖网络，尝试连通性检查
-            import socket
-            socket.setdefaulttimeout(3)
-            socket.create_connection(("edge-tts.anthropic.com", 443))
-            return True
-        except Exception:
-            return False
 
 
 # ==========================================
