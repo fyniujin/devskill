@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-编排引擎入口 - 多Agent协作编排引擎 v5.1
+编排引擎入口 - 多Agent协作编排引擎 v5.2
 
 功能：统一入口，整合 DAG 验证、状态管理、执行调度、错误恢复、报告生成
 支持人工审批节点（含超时策略）、HTML 甘特图、历史执行对比、硬件自适应
 动态工作流：if-else 条件分支、switch 多路分支、for-each 动态节点、while-loop 循环
 新增：子流水线引用（pipeline 节点）、执行回放 / Time Travel（快照机制+保留策略）
 新增：统一状态恢复子系统（合并断点续传 + 快照恢复）
+新增：统一可视化命令（visualize --format md|html|both，整合报告 + 甘特图）
+新增：Self-Improving 循环（evaluate 节点，质量评估 + 自动重试）
+新增：成本追踪（节点级 token/cost 聚合，对接 cn-llm-router）
 零第三方依赖，仅使用 Python 标准库
 
 ★★★ 安全说明 ★★★
@@ -382,7 +385,7 @@ def cmd_impact(args):
 
 
 USAGE = """
-编排引擎 - 多Agent协作编排引擎 v5.0
+编排引擎 - 多Agent协作编排引擎 v5.2
 ================================
 
 用法：python orchestrator.py <command> [args]
@@ -392,8 +395,9 @@ USAGE = """
   step <state.json>                            ★☆☆ 逐步执行（获取下一个待执行节点）
   status <state.json>                          ★★☆ 查看流水线状态（只读）
   resume <state.json> [--force]                ★★☆ 断点续传（重置失败节点）
-  report <state.json> [output]                 ★★☆ 生成 Markdown 执行报告
-  gantt <state.json> [output.html]              ★★☆ 生成 HTML 甘特图（可视化时间轴）
+  visualize <state.json> [--format md|html|both] [output]  ★★★ 统一可视化（MD+HTML）
+  report <state.json> [output]                 ★★☆ 生成 Markdown 执行报告（visualize --format md 别名）
+  gantt <state.json> [output.html]              ★★☆ 生成 HTML 甘特图（visualize --format html 别名）
   validate <pipeline.json>                     ★☆  验证 DAG 结构（只读，不修改文件）
   plan <pipeline.json>                         ★☆  查看执行计划（只读，不修改文件）
   history <state.json>                         ★☆☆ 查看执行历史记录
@@ -451,6 +455,43 @@ def cmd_gantt(args):
         sys.exit(1)
     output = args[1] if len(args) > 1 else None
     pipeline_reporter.generate_html_gantt(args[0], output)
+
+
+def cmd_visualize(args):
+    """统一可视化（MD 报告 + HTML 甘特图）
+
+    安全说明：
+    - 输出文件可能包含节点输出的敏感信息
+    - 建议生成的文件妥善保管，避免泄露
+    """
+    if not args:
+        print("错误：缺少[state.json路径]")
+        print("用法：python orchestrator.py visualize <state.json> [--format md|html|both] [output]")
+        print("示例：python orchestrator.py visualize pipeline_state.json --format both")
+        print("      python orchestrator.py visualize pipeline_state.json --format md report.md")
+        print("")
+        print("⚠️ 安全提示：输出文件可能包含敏感数据，请妥善保管")
+        sys.exit(1)
+
+    state_path = args[0]
+    fmt = 'both'
+    output = None
+
+    # 解析参数
+    i = 1
+    while i < len(args):
+        if args[i] == '--format' and i + 1 < len(args):
+            fmt = args[i + 1]
+            i += 2
+        else:
+            output = args[i]
+            i += 1
+
+    if fmt not in ('md', 'html', 'both'):
+        print(f"错误：无效格式 [{fmt}]，可选：md / html / both")
+        sys.exit(1)
+
+    pipeline_reporter.generate_visualization(state_path, output, fmt)
 
 
 def cmd_history(args):
@@ -519,6 +560,7 @@ if __name__ == '__main__':
         'resume': cmd_resume,
         'report': cmd_report,
         'gantt': cmd_gantt,
+        'visualize': cmd_visualize,
         'history': cmd_history,
         'compare': cmd_compare,
         'hardware': cmd_hardware,
