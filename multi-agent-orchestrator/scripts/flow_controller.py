@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-控制流引擎 - 多Agent协作编排引擎 v5.0
+控制流引擎 - 多Agent协作编排引擎 v5.2
 
-功能：为静态 DAG 增加动态控制流能力，支持五类控制节点：
+功能：为静态 DAG 增加动态控制流能力，支持六类控制节点：
   1. condition  - if-else 条件分支（真假两路）
   2. switch     - 多路分支（按值匹配 case）
   3. for-each   - 动态节点生成（按列表长度展开子节点）
   4. while-loop - 循环 / 重试增强（条件为真则回环重跑循环体）
   5. pipeline   - 子流水线引用（调用已注册的子流水线，隔离执行）
+  6. evaluate   - Self-Improving 质量评估（质量不达标自动重试目标节点）
 
 控制节点由引擎自动求值执行（不交给 AI），执行后动态修改 state：
   - 未选中分支的节点 → 整体标记 skipped
@@ -44,8 +45,8 @@ MAX_FANOUT = 100
 # while-loop 迭代次数硬上限（即使配置更大也强制封顶，防死循环）
 MAX_ITER = 1000
 
-# 五类控制流节点类型
-CONTROL_TYPES = ('condition', 'switch', 'for-each', 'while-loop', 'pipeline')
+# 六类控制流节点类型
+CONTROL_TYPES = ('condition', 'switch', 'for-each', 'while-loop', 'pipeline', 'evaluate')
 
 
 def is_control_node(node):
@@ -520,6 +521,95 @@ def handle_pipeline(state, node_id, state_path):
 
 
 # ============================================================
+# 6. evaluate：Self-Improving 质量评估
+# ============================================================
+def handle_evaluate(state, node_id, state_path):
+    """处理 evaluate 节点（Self-Improving 质量评估 + 自动重试）。
+
+    节点配置示例：
+      {
+        "id": "quality_check",
+        "type": "evaluate",
+        "quality_expr": "nodes.review.output_data.score >= 80",
+        "retry_targets": ["draft", "review"],   # 质量不达标时重跑的节点
+        "max_eval_rounds": 3,
+        "depends_on": ["review"]
+      }
+    质量评估：
+      - quality_expr 为真 → 质量达标，节点 completed
+      - quality_expr 为假且未达上限 → 重置 retry_targets 为 pending，迭代 +1
+      - quality_expr 为假且已达上限 → 接受当前结果，节点 completed（带警告）
+    """
+    node = state['nodes'][node_id]
+    quality_expr = node.get('quality_expr')
+    retry_targets = node.get('retry_targets', [])
+    max_rounds = node.get('max_eval_rounds', 3)
+
+    if not quality_expr:
+        raise ConditionError(f"evaluate 节点 [{node_id}] 缺少 'quality_expr' 字段")
+    if not retry_targets:
+        raise ConditionError(f"evaluate 节点 [{node_id}] 缺少 'retry_targets' 字段")
+
+    max_rounds = min(int(max_rounds), MAX_ITER)
+    eval_round = node.get('eval_round', 0)
+
+    ctx = condition_evaluator.build_context_from_state(state)
+    quality_ok = condition_evaluator.evaluate_bool(quality_expr, ctx)
+
+    if quality_ok:
+        node['status'] = 'completed'
+        node['completed_at'] = state_store.get_timestamp()
+        node['output_data'] = {
+            'quality_expr': quality_expr,
+            'quality_ok': True,
+            'eval_round': eval_round,
+            'stopped_reason': '质量达标',
+        }
+        if not node.get('started_at'):
+            node['started_at'] = state_store.get_timestamp()
+        state_store.safe_write(state, state_path)
+        print(f"  ✅ evaluate [{node_id}] 质量达标（第 {eval_round} 轮）：{quality_expr}")
+        return True
+    elif eval_round < max_rounds:
+        # 质量不达标，重跑目标节点
+        new_round = eval_round + 1
+        for tid in retry_targets:
+            tnode = state['nodes'].get(tid)
+            if not tnode:
+                continue
+            tnode['status'] = 'pending'
+            tnode['started_at'] = None
+            tnode['completed_at'] = None
+            tnode['retry_count'] = 0
+            tnode['error'] = None
+            tnode['eval_round'] = new_round
+        # 评估节点自身回到 pending，等重跑完再次评估
+        node['status'] = 'pending'
+        node['started_at'] = None
+        node['completed_at'] = None
+        node['eval_round'] = new_round
+
+        state_store.safe_write(state, state_path)
+        print(f"  🔄 evaluate [{node_id}] 第 {new_round}/{max_rounds} 轮：质量不达标，重跑 {retry_targets}")
+        return True
+    else:
+        # 已达最大轮次，接受当前结果
+        node['status'] = 'completed'
+        node['completed_at'] = state_store.get_timestamp()
+        node['output_data'] = {
+            'quality_expr': quality_expr,
+            'quality_ok': False,
+            'eval_round': eval_round,
+            'stopped_reason': f'已达最大评估轮次 {max_rounds}',
+        }
+        if not node.get('started_at'):
+            node['started_at'] = state_store.get_timestamp()
+        state_store.safe_write(state, state_path)
+        print(f"  ⚠️ evaluate [{node_id}] 接受当前结果（已达最大 {max_rounds} 轮）：{quality_expr}")
+        return True
+
+
+# ============================================================
 # 统一分发入口
 # ============================================================
 _HANDLERS = {
@@ -528,6 +618,7 @@ _HANDLERS = {
     'for-each': handle_for_each,
     'while-loop': handle_while_loop,
     'pipeline': handle_pipeline,
+    'evaluate': handle_evaluate,
 }
 
 
@@ -562,7 +653,7 @@ def process_control_node(state, node_id, state_path):
 
 
 if __name__ == '__main__':
-    print("控制流引擎 - 多Agent协作编排引擎 v5.0")
+    print("控制流引擎 - 多Agent协作编排引擎 v5.2")
     print("=" * 50)
     print("此模块由 orchestrator.py 自动调用，通常无需单独运行。")
     print("")
@@ -572,6 +663,7 @@ if __name__ == '__main__':
     print("  for-each    - 动态节点生成（items / template / join）")
     print("  while-loop  - 循环重试（condition / loop_body / max_iterations）")
     print("  pipeline    - 子流水线引用（pipeline_ref / params / outputs）")
+    print("  evaluate    - Self-Improving 质量评估（quality_expr / retry_targets）")
     print("")
     print("字段说明详见 templates/pipeline_dag_template.json 与 SKILL.md")
 
