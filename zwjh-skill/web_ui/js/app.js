@@ -47,6 +47,14 @@ const API = {
         const r = await fetch('/api/neighbors/' + id + '?' + qs);
         return r.json();
     },
+    async taskStatus() {
+        const r = await fetch('/api/task-status');
+        return r.json();
+    },
+    async archiveStats() {
+        const r = await fetch('/api/archive-stats');
+        return r.json();
+    },
 };
 
 // ── ECharts 图谱渲染 ────────────────────────────────────────────────────
@@ -480,10 +488,50 @@ function bindEvents() {
     });
 }
 
+// ── 任务状态面板 ─────────────────────────────────────────────────────
+async function loadTaskStatus() {
+    try {
+        const data = await API.taskStatus();
+        // 定时任务状态
+        const setupEl = document.getElementById('setupStatus');
+        if (data.setup && data.setup.ok) {
+            setupEl.innerHTML = `<span class="ok">✅ 已注册</span><br/>${data.setup.output || ''}`;
+        } else {
+            setupEl.innerHTML = `<span class="warn">⚠️ 未注册</span><br/>${data.setup && data.setup.error ? data.setup.error : '运行 setup 命令注册'}`;
+        }
+        // 健康度
+        const healthEl = document.getElementById('healthStatus');
+        if (data.health) {
+            const score = data.health.score || 0;
+            const scoreClass = score >= 80 ? 'ok' : score >= 60 ? 'warn' : 'err';
+            healthEl.innerHTML = `<span class="${scoreClass}">${score} / 100</span> (${data.health.tier}档)<br/>记忆 ${data.health.memories} · 实体 ${data.health.entities} · 关系 ${data.health.relations}`;
+        }
+        // 归档统计
+        const archiveEl = document.getElementById('archiveStatus');
+        if (data.archive && data.archive.total_archived > 0) {
+            archiveEl.innerHTML = `已归档 ${data.archive.total_archived} 条<br/>热 ${data.archive.by_tier.hot} / 温 ${data.archive.by_tier.warm} / 冷 ${data.archive.by_tier.cold}<br/>节省 ${data.archive.saving_percent}%`;
+        } else {
+            archiveEl.innerHTML = '暂无归档数据';
+        }
+    } catch (e) {
+        console.error('任务状态加载失败:', e);
+    }
+}
+
+function toggleTaskStatus() {
+    const panel = document.getElementById('taskStatusPanel');
+    const btn = document.getElementById('btnToggleTaskStatus');
+    panel.classList.toggle('collapsed');
+    btn.textContent = panel.classList.contains('collapsed') ? '展开' : '收起';
+}
+
 // ── 启动 ─────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
     initChart();
     bindEvents();
     await fillFilterOptions();
     await loadGraph();
+    await loadTaskStatus();
+    // 绑定任务状态面板折叠
+    document.getElementById('btnToggleTaskStatus').onclick = toggleTaskStatus;
 });
