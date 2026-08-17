@@ -385,11 +385,15 @@ class TestConfigFixes(unittest.TestCase):
 # ============================================================
 
 class TestSkillMdVersion(unittest.TestCase):
-    """SKILL.md 版本号必须是 1.5.0"""
+    """SKILL.md 版本号必须与当前版本一致"""
 
-    def test_version_is_150(self):
+    def test_version_matches_current(self):
+        """版本号应与 SKILL.md 一致（当前 v1.6.0）"""
         version = get_current_version()
-        self.assertEqual(version, "1.5.0")
+        skill_md = os.path.join(os.path.dirname(__file__), '..', 'SKILL.md')
+        with open(skill_md, encoding='utf-8-sig') as f:
+            content = f.read()
+        self.assertIn(f"version: {version}", content)
 
 
 if __name__ == "__main__":
