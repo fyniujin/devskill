@@ -34,7 +34,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SKILL_DIR = os.path.dirname(SCRIPT_DIR)
 sys.path.insert(0, SKILL_DIR)
 
-from scripts import store, graph, config
+from scripts import store, graph, config, archive, health, setup
 
 # ── 大规模图谱优化阈值 ────────────────────────────────────────────────────
 CORE_IMPORTANCE = 0.7     # 默认只加载 importance > 此值的核心节点
@@ -300,6 +300,23 @@ class GraphAPI:
             "has_more": offset + batch < total,
         })
 
+    # ── 任务状态面板 ──────────────────────────────────────────────────
+    def get_task_status(self) -> tuple:
+        """获取定时任务状态 + 系统健康度。"""
+        setup_status = setup.status()
+        health_report = health.audit()
+        archive_stats = archive.get_archive_stats()
+        return self._json_response({
+            "setup": setup_status,
+            "health": health_report,
+            "archive": archive_stats,
+        })
+
+    # ── 归档统计 ──────────────────────────────────────────────────────
+    def get_archive_stats(self) -> tuple:
+        """获取归档统计。"""
+        return self._json_response(archive.get_archive_stats())
+
     # ── 实体类型列表 ─────────────────────────────────────────────────
     def get_types(self) -> tuple:
         return self._json_response({"types": config.ENTITY_TYPES})
@@ -382,6 +399,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"error": "实体 ID 必须为整数"}, 400)
                 return
             s, h, b = self.api.get_neighbors(eid, params)
+            self._send(s, h, b)
+        elif path == "/api/task-status":
+            s, h, b = self.api.get_task_status()
+            self._send(s, h, b)
+        elif path == "/api/archive-stats":
+            s, h, b = self.api.get_archive_stats()
             self._send(s, h, b)
 
         # ── 静态前端文件 ─────────────────────────────────────────────────
