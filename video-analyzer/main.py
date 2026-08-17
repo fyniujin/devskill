@@ -37,6 +37,9 @@ from core.update_notifier import UpdateNotifier
 from core.platform_adapters import PlatformRouter
 from core.editing import HighlightDetector, RedundancyDetector, TimelineGenerator, EDLExporter, SubtitleStylist, JianyingExporter
 from core.speaker_diarization.quality_scorer import QualityScorer
+from core.scene_manager import SceneManager
+from core.viral_predictor import ViralPredictor
+from core.live_analyzer import LiveAnalyzer
 
 logger = get_logger(__name__)
 
@@ -120,6 +123,12 @@ def parse_args():
                         help="导出剪映 draft.json 格式（可直接导入剪映专业版）")
     parser.add_argument("--quality-score", action="store_true",
                         help="启用说话人分离质量评分")
+    parser.add_argument("--scene-management", action="store_true",
+                        help="启用场景管理（detect→slice 一条链）")
+    parser.add_argument("--viral-predict", action="store_true",
+                        help="启用短视频爆款预测")
+    parser.add_argument("--live-analyze", action="store_true",
+                        help="启用实时直播分析（流式ASR+敏感词检测）")
     
     return parser.parse_args()
 
@@ -128,7 +137,7 @@ def print_banner():
     """打印启动横幅"""
     banner = """
 ╔══════════════════════════════════════════════════╗
-║          🎬 video-analyzer v4.1.0               ║
+║          🎬 video-analyzer v4.2.0               ║
 ║        视频分析处理 — 本地视频反编译工具         ║
 ╚══════════════════════════════════════════════════╝
     """
@@ -245,7 +254,7 @@ def main():
         # ========== 版本更新检查（非阻塞） ==========
         if not args.no_update_check:
             try:
-                notifier = UpdateNotifier(config, current_version="4.1.0")
+                notifier = UpdateNotifier(config, current_version="4.2.0")
                 update_result = notifier.check_for_updates()
                 update_msg = notifier.format_update_message(update_result)
                 if update_msg:
@@ -426,6 +435,8 @@ def main():
             platform_analysis=platform_analysis,
             platform_meta=platform_meta,
             editing_result=editing_result,
+            viral_result=viral_result,
+            live_stats=live_stats,
         )
         
         # ========== 章节切片（可选） ==========
@@ -539,6 +550,66 @@ def main():
             )
             output_paths["subtitle"] = subtitle_path
             logger.info(f"   字幕已生成: {subtitle_path}")
+        
+        # ========== 场景管理（可选，v4.2 新增） ==========
+        if args.scene_management:
+            logger.info("🎬 [场景管理] detect→slice 一条链...")
+            scene_manager = SceneManager(config)
+            scene_result = scene_manager.detect_and_slice(
+                video_path, transcript, args.output, frames_dir
+            )
+            logger.info(f"   场景管理完成: {scene_result['total_chapters']} 个章节")
+            
+            # 更新 scenes 变量供后续报告使用
+            scenes = scene_result["scenes"]
+            output_paths["scene_management"] = scene_result["output_dir"]
+        
+        # ========== 爆款预测（可选，v4.2 新增） ==========
+        viral_result = None
+        if args.viral_predict:
+            logger.info("🔥 [爆款预测] 分析爆款潜力...")
+            predictor = ViralPredictor(config)
+            viral_result = predictor.predict(
+                video_path, transcript, scenes,
+                platform_meta=platform_meta,
+                visual_data=visual_data,
+            )
+            logger.info(f"   爆款得分: {viral_result['viral_score']}/100 ({viral_result['level']})")
+            
+            # 保存预测结果
+            import json
+            viral_path = os.path.join(args.output, "viral_prediction.json")
+            os.makedirs(os.path.dirname(viral_path), exist_ok=True)
+            with open(viral_path, "w", encoding="utf-8") as f:
+                json.dump(viral_result, f, ensure_ascii=False, indent=2)
+            output_paths["viral_prediction"] = viral_path
+        
+        # ========== 实时直播分析（可选，v4.2 新增） ==========
+        live_stats = None
+        if args.live_analyze:
+            logger.info("🔴 [实时直播分析] 启动...")
+            live = LiveAnalyzer(config)
+            
+            # 启动实时分析
+            live.start(video_source=None)  # 模拟模式
+            
+            # 模拟实时输入（实际使用时应从流式 ASR 获取）
+            for seg in transcript.get("segments", []):
+                if not live._running:
+                    break
+                live.feed_segment(seg)
+                time.sleep(0.01)  # 模拟实时间隔
+            
+            # 获取统计并停止
+            live_stats = live.stop()
+            logger.info(f"   直播分析完成: {live_stats['total_segments']} 段, "
+                       f"{live_stats['total_sensitive_detected']} 次敏感词")
+            
+            # 导出敏感词日志
+            if live_stats["total_sensitive_detected"] > 0:
+                log_path = os.path.join(args.output, "live_sensitive_log.json")
+                live.export_sensitive_log(log_path)
+                output_paths["live_sensitive_log"] = log_path
         
         # ========== 说话人字幕（可选） ==========
         if diarize_result:
