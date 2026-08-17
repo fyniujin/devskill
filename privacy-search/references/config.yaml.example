@@ -157,3 +157,21 @@ update_check:
 logging:
   level: INFO
   file: "~/.workbuddy/output/privacy-search.log"
+
+# ═══════ Perplexity 式答案合成（V1.6 新增） ═══════
+synthesis:
+  enabled: true
+  provider: auto        # auto=有key调LLM，无key降级；extractive=强制抽取式
+  api_key: ""           # 智谱 GLM API Key，留空则自动降级为抽取式
+  model: glm-4-flash
+  max_sources: 5        # 最多引用几个来源
+  chunk_size: 2000      # 每个正文块的最大字符数
+  fetch_timeout: 10     # 单个页面抓取超时（秒）
+
+# ═══════ 定时 selftest 调度（V1.6 新增） ═══════
+selftest_schedule:
+  enabled: true
+  interval: daily       # daily / hourly
+  alert_channel: log    # log / webhook / both
+  webhook_url: ""       # 企业微信/webhook 地址
+  notify_on: failure    # all / failure（failure = 只在异常时通知）
