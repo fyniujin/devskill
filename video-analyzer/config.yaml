@@ -282,6 +282,36 @@ quality_scorer:
   # 重叠率权重
   overlap_weight: 0.4
 
+# ==================== 爆款预测配置 (v4.2 新增) ====================
+viral_predictor:
+  # 是否启用 LLM 增强建议（需安装 openai）
+  use_llm: false
+  # LLM 模型（可选）
+  llm_model: "gpt-4o-mini"
+  # 爆款特征权重
+  weights:
+    opening_hook: 0.20
+    content_density: 0.15
+    rhythm_score: 0.15
+    emotion_intensity: 0.15
+    hashtag_optimization: 0.10
+    duration_fit: 0.10
+    cta_detection: 0.10
+    quality_score: 0.05
+
+# ==================== 实时直播分析配置 (v4.2 新增) ====================
+live_analysis:
+  # 滑动窗口大小（秒）
+  window_size: 30
+  # 滑动步长（秒）
+  window_slide: 5
+  # 最大缓冲条数（防内存溢出）
+  max_buffer_length: 1000
+  # 告警阈值（窗口内敏感词数量）
+  alert_threshold: 3
+  # 敏感词列表（为空则使用默认）
+  sensitive_words: []
+
 # ==================== 日志配置 ====================
 logging:
   level: INFO
