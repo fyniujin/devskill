@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-状态持久化管理器 - 多Agent协作编排引擎 v5.0
+状态持久化管理器 - 多Agent协作编排引擎 v5.2
 
 功能：pipeline_state.json 的创建、读取、更新、查询 + 断点续传支持
 新增：执行历史追踪（.execution_history.json）+ 控制流节点专有字段持久化
 新增：节点完成后自动保存快照（供执行回放 / Time Travel 使用）
+新增：节点级成本追踪（token/cost 聚合，对接 cn-llm-router）
 零第三方依赖，仅使用 Python 标准库
 
 ★★★ 安全说明 ★★★
@@ -169,12 +170,16 @@ def init_state(pipeline, state_path=None):
                            'switch', 'cases', 'default',
                            'items', 'template', 'join',
                            'loop_body', 'max_iterations',
-                           'pipeline_ref', 'params', 'outputs'):
+                           'pipeline_ref', 'params', 'outputs',
+                           'quality_expr', 'retry_targets', 'max_eval_rounds'):
             if ctrl_field in agent:
                 node_state[ctrl_field] = agent[ctrl_field]
         # while-loop 迭代计数初始化
         if agent.get('type') == 'while-loop':
             node_state['iteration'] = 0
+        # evaluate 评估轮次计数初始化
+        if agent.get('type') == 'evaluate':
+            node_state['eval_round'] = 0
         # approval 节点超时策略字段
         if agent.get('type') == 'approval':
             node_state['timeout_seconds'] = agent.get('timeout_seconds', 0)
@@ -222,6 +227,9 @@ def complete_node(state_path, node_id, output_json=None):
             # 不是合法 JSON → 降级保存原始字符串
             output_data = {"raw_output": output_json}
         node['output_data'] = output_data
+        # 提取成本数据（如果有 _cost 字段）
+        if isinstance(output_data, dict) and '_cost' in output_data:
+            node['cost_data'] = output_data.pop('_cost')
     else:
         node['output_data'] = {"result": "completed"}
 
