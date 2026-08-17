@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Skill 更新检测模块 v5.0
+Skill 更新检测模块 v5.1
 异步检查 GitHub 新版本，每 7 天提醒一次
 v5.0 新增：法条数据库季度更新提醒
+v5.1 新增：指导案例数据库月度更新提醒
 """
 
 import json
@@ -246,6 +247,64 @@ def check_legal_basis_update() -> Optional[str]:
         return (
             f"法条数据库已 {db_updated} 更新，距今超过 3 个月。"
             f"建议检查最新法律法规变化（如民法典司法解释新增、公司法修订等）。"
+        )
+
+    return None
+
+
+# ===== v5.1 指导案例数据库月度更新提醒 =====
+GUIDING_CASES_DIR = Path(__file__).resolve().parent.parent / "references" / "guiding_cases"
+GUIDING_UPDATE_CHECK_PATH = Path.home() / '.contract-review' / 'guiding_update_check.json'
+GUIDING_CHECK_INTERVAL_SECONDS = 30 * 24 * 3600  # 30 天（一月）
+
+
+def check_guiding_cases_update() -> Optional[str]:
+    """
+    检查指导案例数据库是否需要月度更新
+    返回 None 表示无需提醒，返回字符串表示提醒消息
+    """
+    update_log_file = GUIDING_CASES_DIR / "update_log.json"
+    if not update_log_file.exists():
+        return None
+
+    try:
+        with open(update_log_file, encoding='utf-8') as f:
+            data = json.load(f)
+        db_version = data.get("version", "1.0.0")
+        db_updated = data.get("updated", "")
+        next_update = data.get("next_update", "")
+    except Exception:
+        return None
+
+    # 读取上次提醒记录
+    check_data = {}
+    if GUIDING_UPDATE_CHECK_PATH.exists():
+        try:
+            with open(GUIDING_UPDATE_CHECK_PATH, encoding='utf-8') as f:
+                check_data = json.load(f)
+        except Exception:
+            pass
+
+    # 检查是否需要提醒（同一版本 30 天内只提醒一次）
+    last_notified_version = check_data.get('last_notified_version', '')
+    last_notified_time = check_data.get('last_notified_time', 0)
+
+    if db_version == last_notified_version and time.time() - last_notified_time < GUIDING_CHECK_INTERVAL_SECONDS:
+        return None
+
+    # 超过 30 天提醒一次
+    if time.time() - last_notified_time >= GUIDING_CHECK_INTERVAL_SECONDS:
+        check_data['last_notified_version'] = db_version
+        check_data['last_notified_time'] = time.time()
+        try:
+            GUIDING_UPDATE_CHECK_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with open(GUIDING_UPDATE_CHECK_PATH, 'w', encoding='utf-8') as f:
+                json.dump(check_data, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+        return (
+            f"指导案例数据库已 {db_updated} 更新，距今超过 1 个月。"
+            f"建议关注最高人民法院新发布的指导性案例（下次应更新于 {next_update}）。"
         )
 
     return None
