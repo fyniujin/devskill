@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-bilingual_aligner.py v5.0
-中英文双语合同对齐引擎
-功能：段落对齐算法、版本不一致检测、优先级标注
+bilingual_aligner.py v5.1
+多语种合同对齐引擎
+功能：段落对齐算法、版本不一致检测、优先级标注、多语种术语表懒加载
 v5.0 新增：多语言合同支持（中英双语对照审查）
+v5.1 新增：日语/韩语术语表支持，多语种扩展
 """
 
 import hashlib
@@ -18,20 +19,76 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # === 路径 ===
-GLOSSARY_FILE = Path(__file__).resolve().parent.parent / "references" / "bilingual_glossary.yaml"
+REFERENCES_DIR = Path(__file__).resolve().parent.parent / "references"
+GLOSSARY_FILE = REFERENCES_DIR / "bilingual_glossary.yaml"
+JA_GLOSSARY_FILE = REFERENCES_DIR / "ja_legal_terms.yaml"
+KO_GLOSSARY_FILE = REFERENCES_DIR / "ko_legal_terms.yaml"
+
+# === 支持的语言对 ===
+SUPPORTED_LANGUAGES = {
+    "en": {
+        "name": "English",
+        "glossary": GLOSSARY_FILE,
+        "zh_field": "zh",
+        "target_field": "en",
+        "clause_patterns": [
+            (r'Article\s+(\d+)', '第{}条'),
+            (r'Section\s+(\d+)', '第{}条'),
+            (r'^(\d+)[\.、]', '第{}条'),
+        ],
+    },
+    "ja": {
+        "name": "日本語",
+        "glossary": JA_GLOSSARY_FILE,
+        "zh_field": "zh",
+        "target_field": "ja",
+        "clause_patterns": [
+            (r'第([一二三四五六七八九十百\d]+)条', '第{}条'),
+            (r'第([一二三四五六七八九十百\d]+)項', '第{}項'),
+            (r'^(\d+)[\.、]', '第{}条'),
+        ],
+    },
+    "ko": {
+        "name": "한국어",
+        "glossary": KO_GLOSSARY_FILE,
+        "zh_field": "zh",
+        "target_field": "ko",
+        "clause_patterns": [
+            (r'제([一二三四五六七八九十百\d]+)조', '제{}조'),
+            (r'제([一二三四五六七八九十百\d]+)항', '제{}항'),
+            (r'^(\d+)[\.、]', '제{}조'),
+        ],
+    },
+}
 
 
 class BilingualAligner:
-    """双语对齐引擎 — 段落匹配 + 不一致检测"""
+    """多语种对齐引擎 — 段落匹配 + 不一致检测 + 术语表懒加载"""
 
-    def __init__(self, glossary_file: Optional[Path] = None):
-        self.glossary_file = glossary_file or GLOSSARY_FILE
+    def __init__(self, target_lang: str = "en", glossary_file: Optional[Path] = None):
+        """
+        :param target_lang: 目标语言代码 ("en", "ja", "ko")
+        :param glossary_file: 自定义术语表路径（可选）
+        """
+        self.target_lang = target_lang.lower()
+        if self.target_lang not in SUPPORTED_LANGUAGES:
+            raise ValueError(f"不支持的目标语言: {target_lang}，支持: {list(SUPPORTED_LANGUAGES.keys())}")
+
+        self._lang_config = SUPPORTED_LANGUAGES[self.target_lang]
+        self.glossary_file = glossary_file or self._lang_config["glossary"]
         self._glossary: List[Dict[str, str]] = []
-        self._zh_to_en: Dict[str, str] = {}
-        self._en_to_zh: Dict[str, str] = {}
-        self._load_glossary()
+        self._zh_to_target: Dict[str, str] = {}
+        self._target_to_zh: Dict[str, str] = {}
+        self._glossary_loaded: bool = False
 
-    # ---------- 加载 ----------
+    # ---------- 加载（懒加载） ----------
+    def _ensure_glossary_loaded(self):
+        """确保术语表已加载（懒加载）"""
+        if self._glossary_loaded:
+            return
+        self._load_glossary()
+        self._glossary_loaded = True
+
     def _load_glossary(self):
         if not self.glossary_file.exists():
             logger.warning(f"术语对照表不存在: {self.glossary_file}")
@@ -41,12 +98,13 @@ class BilingualAligner:
             with open(self.glossary_file, encoding='utf-8') as f:
                 data = yaml.safe_load(f)
             self._glossary = data.get("terms", [])
+            target_field = self._lang_config["target_field"]
             for t in self._glossary:
                 zh = t.get("zh", "").strip()
-                en = t.get("en", "").strip()
-                if zh and en:
-                    self._zh_to_en[zh] = en
-                    self._en_to_zh[en.lower()] = zh
+                target = t.get(target_field, "").strip()
+                if zh and target:
+                    self._zh_to_target[zh] = target
+                    self._target_to_zh[target.lower()] = zh
             logger.debug(f"术语对照表加载成功，共 {len(self._glossary)} 条")
         except ImportError:
             logger.warning("未安装 pyyaml，无法读取术语对照表")
@@ -73,16 +131,17 @@ class BilingualAligner:
         return paragraphs
 
     def _extract_clause_id(self, text: str) -> Optional[str]:
-        """提取条款编号（归一化为阿拉伯数字，便于中英对照）"""
+        """提取条款编号（归一化为阿拉伯数字，便于多语种对照）"""
         # 匹配"第X条"、"第X款"、"Article X"、"Section X"等
-        patterns = [
+        patterns = self._lang_config.get("clause_patterns", [])
+        # 也尝试通用中文模式
+        cn_patterns = [
             (r'第([一二三四五六七八九十百\d]+)条', '第{}条'),
             (r'第([一二三四五六七八九十百\d]+)款', '第{}款'),
-            (r'Article\s+(\d+)', '第{}条'),
-            (r'Section\s+(\d+)', '第{}条'),
-            (r'^(\d+)[\.、]', '第{}条'),
         ]
-        for p, fmt in patterns:
+        all_patterns = cn_patterns + patterns
+
+        for p, fmt in all_patterns:
             m = re.search(p, text)
             if m:
                 num = m.group(1)
@@ -97,113 +156,128 @@ class BilingualAligner:
     def align_paragraphs(
         self,
         zh_paragraphs: List[Dict[str, Any]],
-        en_paragraphs: List[Dict[str, Any]],
+        target_paragraphs: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
         """
-        对齐中英文段落
-        返回对齐结果列表，每个元素包含 zh、en 和匹配分数
+        对齐中文与目标语言段落
+        返回对齐结果列表，每个元素包含 zh、target 和匹配分数
         """
+        self._ensure_glossary_loaded()
         aligned = []
-        used_en = set()
+        used_target = set()
 
         # 第一轮：按条款编号精确匹配
         zh_with_id = {p["clause_id"]: p for p in zh_paragraphs if p["clause_id"]}
-        en_with_id = {p["clause_id"]: p for p in en_paragraphs if p["clause_id"]}
+        target_with_id = {p["clause_id"]: p for p in target_paragraphs if p["clause_id"]}
 
         for clause_id, zh_p in zh_with_id.items():
-            if clause_id in en_with_id:
-                en_p = en_with_id[clause_id]
+            if clause_id in target_with_id:
+                target_p = target_with_id[clause_id]
                 aligned.append({
                     "type": "matched",
                     "clause_id": clause_id,
                     "zh": zh_p["text"],
-                    "en": en_p["text"],
+                    "target": target_p["text"],
+                    "target_lang": self.target_lang,
                     "match_score": 1.0,
                     "match_method": "clause_id",
                 })
-                used_en.add(en_p["index"])
+                used_target.add(target_p["index"])
             else:
                 aligned.append({
                     "type": "zh_only",
                     "clause_id": clause_id,
                     "zh": zh_p["text"],
-                    "en": "",
+                    "target": "",
+                    "target_lang": self.target_lang,
                     "match_score": 0,
                     "match_method": "none",
                 })
 
         # 第二轮：按顺序和相似度匹配剩余段落
         unmatched_zh = [p for p in zh_paragraphs if p["clause_id"] not in zh_with_id]
-        unmatched_en = [p for p in en_paragraphs if p["index"] not in used_en]
+        unmatched_target = [p for p in target_paragraphs if p["index"] not in used_target]
 
         # 使用位置 + 术语相似度进行匹配
         for zh_p in unmatched_zh:
             best_match = None
             best_score = 0
 
-            for en_p in unmatched_en:
-                score = self._similarity_score(zh_p["text"], en_p["text"])
+            for target_p in unmatched_target:
+                score = self._similarity_score(zh_p["text"], target_p["text"])
                 # 位置权重：越接近的位置分数越高
-                pos_weight = 1.0 - abs(zh_p["index"] - en_p["index"]) / max(len(zh_paragraphs), len(en_paragraphs))
+                pos_weight = 1.0 - abs(zh_p["index"] - target_p["index"]) / max(len(zh_paragraphs), len(target_paragraphs))
                 score = score * 0.7 + pos_weight * 0.3
 
                 if score > best_score and score > 0.3:
                     best_score = score
-                    best_match = en_p
+                    best_match = target_p
 
             if best_match:
                 aligned.append({
                     "type": "matched",
                     "clause_id": zh_p["clause_id"] or f"pos_{zh_p['index']}",
                     "zh": zh_p["text"],
-                    "en": best_match["text"],
+                    "target": best_match["text"],
+                    "target_lang": self.target_lang,
                     "match_score": round(best_score, 3),
                     "match_method": "similarity",
                 })
-                unmatched_en.remove(best_match)
+                unmatched_target.remove(best_match)
             else:
                 aligned.append({
                     "type": "zh_only",
                     "clause_id": zh_p["clause_id"] or f"pos_{zh_p['index']}",
                     "zh": zh_p["text"],
-                    "en": "",
+                    "target": "",
+                    "target_lang": self.target_lang,
                     "match_score": 0,
                     "match_method": "none",
                 })
 
-        # 英文剩余段落（中文没有的）
-        for en_p in unmatched_en:
+        # 目标语言剩余段落（中文没有的）
+        for target_p in unmatched_target:
             aligned.append({
-                "type": "en_only",
-                "clause_id": en_p["clause_id"] or f"pos_{en_p['index']}",
+                "type": "target_only",
+                "clause_id": target_p["clause_id"] or f"pos_{target_p['index']}",
                 "zh": "",
-                "en": en_p["text"],
+                "target": target_p["text"],
+                "target_lang": self.target_lang,
                 "match_score": 0,
                 "match_method": "none",
             })
 
         return aligned
 
-    def _similarity_score(self, zh_text: str, en_text: str) -> float:
-        """计算中英文段落相似度（基于术语翻译匹配）"""
-        if not zh_text or not en_text:
+    def _similarity_score(self, zh_text: str, target_text: str) -> float:
+        """计算中文与目标语言段落相似度（基于术语翻译匹配）"""
+        if not zh_text or not target_text:
             return 0.0
 
         # 统计匹配的术语数
         matched_terms = 0
-        for zh_term, en_term in self._zh_to_en.items():
-            if zh_term in zh_text and en_term.lower() in en_text.lower():
+        for zh_term, target_term in self._zh_to_target.items():
+            if zh_term in zh_text and target_term.lower() in target_text.lower():
                 matched_terms += 1
 
         # 基于术语数量计算分数
         total_terms = max(len(self._glossary), 1)
         term_score = matched_terms / total_terms
 
-        # 长度比（中文字符:英文单词 通常在 1:1.5 到 1:3 之间）
+        # 长度比
         zh_len = len(re.findall(r'[\u4e00-\u9fff]', zh_text))
-        en_len = len(re.findall(r'[a-zA-Z]+', en_text))
-        if zh_len > 0 and en_len > 0:
-            ratio = zh_len / en_len
+        # 目标语言：英文按单词，日文按假名，韩文按谚文
+        if self.target_lang == "en":
+            target_len = len(re.findall(r'[a-zA-Z]+', target_text))
+        elif self.target_lang == "ja":
+            target_len = len(re.findall(r'[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff]', target_text))
+        elif self.target_lang == "ko":
+            target_len = len(re.findall(r'[\uac00-\ud7af\u1100-\u11ff]', target_text))
+        else:
+            target_len = len(target_text)
+
+        if zh_len > 0 and target_len > 0:
+            ratio = zh_len / target_len
             # 理想比例约 1:2
             ratio_score = max(0, 1 - abs(ratio - 0.5) * 2)
         else:
@@ -216,31 +290,33 @@ class BilingualAligner:
         self,
         aligned: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
-        """检测中英文版本不一致"""
+        """检测中文与目标语言版本不一致"""
         inconsistencies = []
 
         for item in aligned:
             if item["type"] == "zh_only":
                 inconsistencies.append({
-                    "type": "missing_in_en",
+                    "type": "missing_in_target",
                     "severity": "high",
                     "clause_id": item.get("clause_id", ""),
                     "message": f"条款仅存在于中文版：{item['zh'][:50]}...",
                     "zh": item["zh"],
-                    "en": "",
+                    "target": "",
+                    "target_lang": self.target_lang,
                 })
-            elif item["type"] == "en_only":
+            elif item["type"] == "target_only":
                 inconsistencies.append({
                     "type": "missing_in_zh",
                     "severity": "high",
                     "clause_id": item.get("clause_id", ""),
-                    "message": f"条款仅存在于英文版：{item['en'][:50]}...",
+                    "message": f"条款仅存在于{self._lang_config['name']}版：{item['target'][:50]}...",
                     "zh": "",
-                    "en": item["en"],
+                    "target": item["target"],
+                    "target_lang": self.target_lang,
                 })
             elif item["type"] == "matched":
                 # 检测数值/金额/日期不一致
-                contradictions = self._detect_contradictions(item["zh"], item["en"])
+                contradictions = self._detect_contradictions(item["zh"], item["target"])
                 for c in contradictions:
                     inconsistencies.append({
                         "type": "contradiction",
@@ -248,12 +324,13 @@ class BilingualAligner:
                         "clause_id": item.get("clause_id", ""),
                         "message": c,
                         "zh": item["zh"],
-                        "en": item["en"],
+                        "target": item["target"],
+                        "target_lang": self.target_lang,
                     })
 
         return inconsistencies
 
-    def _detect_contradictions(self, zh: str, en: str) -> List[str]:
+    def _detect_contradictions(self, zh: str, target: str) -> List[str]:
         """检测具体矛盾（数值、金额、日期）"""
         contradictions = []
 
@@ -268,46 +345,53 @@ class BilingualAligner:
             return nums
 
         zh_numbers = extract_numbers(zh)
-        en_numbers = extract_numbers(en)
+        target_numbers = extract_numbers(target)
 
         # 过滤掉条款编号（如 "第1条" 中的 "1"）
-        # 从条款编号中提取数字
         zh_clause_nums = set()
-        en_clause_nums = set()
+        target_clause_nums = set()
         for m in re.findall(r'第([一二三四五六七八九十百\d]+)条', zh):
             zh_clause_nums.add(m)
-        for m in re.findall(r'Article\s+(\d+)', en):
-            en_clause_nums.add(m)
+        # 目标语言的条款编号
+        if self.target_lang == "en":
+            for m in re.findall(r'Article\s+(\d+)', target):
+                target_clause_nums.add(m)
+        elif self.target_lang == "ja":
+            for m in re.findall(r'第([一二三四五六七八九十百\d]+)条', target):
+                target_clause_nums.add(m)
+        elif self.target_lang == "ko":
+            for m in re.findall(r'제(\d+)조', target):
+                target_clause_nums.add(m)
 
         # 移除条款编号对应的数字
         zh_numbers -= zh_clause_nums
-        en_numbers -= en_clause_nums
+        target_numbers -= target_clause_nums
 
-        # 简单判断：中文有的数字英文没有，或反之
-        only_zh = zh_numbers - en_numbers
-        only_en = en_numbers - zh_numbers
+        # 简单判断：中文有的数字目标语言没有，或反之
+        only_zh = zh_numbers - target_numbers
+        only_target = target_numbers - zh_numbers
 
         # 过滤掉个位数（很可能是条款编号残留）
         only_zh = {n for n in only_zh if len(n) > 1 or int(n) > 9}
-        only_en = {n for n in only_en if len(n) > 1 or int(n) > 9}
+        only_target = {n for n in only_target if len(n) > 1 or int(n) > 9}
 
-        if only_zh or only_en:
+        if only_zh or only_target:
             contradictions.append(
-                f"数值不一致 — 中文: {', '.join(list(only_zh)[:3])} vs 英文: {', '.join(list(only_en)[:3])}"
+                f"数值不一致 — 中文: {', '.join(list(only_zh)[:3])} vs {self._lang_config['name']}: {', '.join(list(only_target)[:3])}"
             )
 
         # 提取金额（包括中英文货币符号）
         zh_amounts = set(re.findall(r'[¥￥]\s*[\d,]+', zh))
-        en_amounts = set(re.findall(r'[¥￥\$€]\s*[\d,]+', en))  # ¥ 可能同时出现在中英文
+        target_amounts = set(re.findall(r'[¥￥\$€]\s*[\d,]+', target))
         # CNY/USD 等货币代码
         zh_amounts_code = set(re.findall(r'(?:CNY|RMB)\s*[\d,]+', zh, re.IGNORECASE))
-        en_amounts_code = set(re.findall(r'(?:CNY|USD|EUR|GBP|JPY)\s*[\d,]+', en, re.IGNORECASE))
+        target_amounts_code = set(re.findall(r'(?:CNY|USD|EUR|GBP|JPY|KRW)\s*[\d,]+', target, re.IGNORECASE))
 
         # 如果两边都有金额（无论符号还是代码），不算矛盾
         has_zh_amount = bool(zh_amounts) or bool(zh_amounts_code)
-        has_en_amount = bool(en_amounts) or bool(en_amounts_code)
+        has_target_amount = bool(target_amounts) or bool(target_amounts_code)
 
-        if has_zh_amount != has_en_amount:
+        if has_zh_amount != has_target_amount:
             contradictions.append("金额标注不一致")
 
         return contradictions
@@ -320,31 +404,31 @@ class BilingualAligner:
     ) -> List[Dict[str, Any]]:
         """
         根据用户指定的优先级标注处理建议
-        :param priority: "zh" 以中文版为准 / "en" 以英文版为准 / "strict" 严格模式（所有不一致都标为高风险）
+        :param priority: "zh" 以中文版为准 / "target" 以目标语言版为准 / "strict" 严格模式
         """
         marked = []
         for inc in inconsistencies:
             inc = dict(inc)
             if priority == "zh":
                 if inc["type"] == "missing_in_zh":
-                    inc["priority_note"] = "中文版未找到对应条款，建议以英文版为准补充"
-                    inc["action"] = "review_en"
-                elif inc["type"] == "missing_in_en":
-                    inc["priority_note"] = "中文版特有条款，如需英文版包含，需补充翻译"
+                    inc["priority_note"] = f"中文版未找到对应条款，建议以{self._lang_config['name']}版为准补充"
+                    inc["action"] = "review_target"
+                elif inc["type"] == "missing_in_target":
+                    inc["priority_note"] = f"中文版特有条款，如需{self._lang_config['name']}版包含，需补充翻译"
                     inc["action"] = "optional"
                 else:
-                    inc["priority_note"] = "以中文版为准，修正英文版"
+                    inc["priority_note"] = "以中文版为准，修正目标语言版"
                     inc["action"] = "align_to_zh"
-            elif priority == "en":
-                if inc["type"] == "missing_in_en":
-                    inc["priority_note"] = "英文版未找到对应条款，建议以中文版为准补充"
+            elif priority == "target":
+                if inc["type"] == "missing_in_target":
+                    inc["priority_note"] = f"{self._lang_config['name']}版未找到对应条款，建议以中文版为准补充"
                     inc["action"] = "review_zh"
                 elif inc["type"] == "missing_in_zh":
-                    inc["priority_note"] = "英文版特有条款，如需中文版包含，需补充翻译"
+                    inc["priority_note"] = f"{self._lang_config['name']}版特有条款，如需中文版包含，需补充翻译"
                     inc["action"] = "optional"
                 else:
-                    inc["priority_note"] = "以英文版为准，修正中文版"
-                    inc["action"] = "align_to_en"
+                    inc["priority_note"] = f"以{self._lang_config['name']}版为准，修正中文版"
+                    inc["action"] = "align_to_target"
             else:  # strict
                 inc["priority_note"] = "严格模式：所有不一致需双方确认"
                 inc["action"] = "manual_review"
@@ -357,29 +441,32 @@ class BilingualAligner:
     def analyze(
         self,
         zh_text: str,
-        en_text: str,
+        target_text: str,
         priority: str = "zh",
     ) -> Dict[str, Any]:
         """完整分析流程"""
+        self._ensure_glossary_loaded()
         zh_paras = self.split_paragraphs(zh_text)
-        en_paras = self.split_paragraphs(en_text)
-        aligned = self.align_paragraphs(zh_paras, en_paras)
+        target_paras = self.split_paragraphs(target_text)
+        aligned = self.align_paragraphs(zh_paras, target_paras)
         inconsistencies = self.detect_inconsistencies(aligned)
         marked = self.mark_priority(inconsistencies, priority)
 
         # 统计
         matched = sum(1 for a in aligned if a["type"] == "matched")
         zh_only = sum(1 for a in aligned if a["type"] == "zh_only")
-        en_only = sum(1 for a in aligned if a["type"] == "en_only")
+        target_only = sum(1 for a in aligned if a["type"] == "target_only")
 
         return {
             "priority": priority,
+            "target_lang": self.target_lang,
+            "target_lang_name": self._lang_config["name"],
             "statistics": {
                 "zh_paragraphs": len(zh_paras),
-                "en_paragraphs": len(en_paras),
+                "target_paragraphs": len(target_paras),
                 "matched": matched,
                 "zh_only": zh_only,
-                "en_only": en_only,
+                "target_only": target_only,
                 "inconsistencies": len(marked),
             },
             "aligned": aligned,
@@ -388,21 +475,22 @@ class BilingualAligner:
 
     # ---------- 报告生成 ----------
     def generate_report(self, analysis: Dict[str, Any]) -> str:
-        """生成双语对照审查报告"""
+        """生成多语种对照审查报告"""
         lines = []
         stats = analysis["statistics"]
+        target_name = analysis.get("target_lang_name", self._lang_config["name"])
 
-        lines.append("# 中英文双语合同对照审查报告")
-        lines.append(f"\n优先语言：{'中文' if analysis['priority'] == 'zh' else '英文'}")
+        lines.append(f"# 中文/{target_name}双语合同对照审查报告")
+        lines.append(f"\n优先语言：{'中文' if analysis['priority'] == 'zh' else target_name}")
         lines.append("")
 
         # 摘要
         lines.append("## 摘要")
         lines.append(f"- 中文段落数：{stats['zh_paragraphs']}")
-        lines.append(f"- 英文段落数：{stats['en_paragraphs']}")
+        lines.append(f"- {target_name}段落数：{stats['target_paragraphs']}")
         lines.append(f"- 已匹配段落：{stats['matched']}")
         lines.append(f"- 仅中文存在：{stats['zh_only']}")
-        lines.append(f"- 仅英文存在：{stats['en_only']}")
+        lines.append(f"- 仅{target_name}存在：{stats['target_only']}")
         lines.append(f"- 不一致项：{stats['inconsistencies']}")
         lines.append("")
 
@@ -422,44 +510,49 @@ class BilingualAligner:
             lines.append(f"\n### {item.get('clause_id', '未编号')} [{item['type']}]")
             if item.get("zh"):
                 lines.append(f"中文：{item['zh'][:80]}")
-            if item.get("en"):
-                lines.append(f"英文：{item['en'][:80]}")
+            if item.get("target"):
+                lines.append(f"{target_name}：{item['target'][:80]}")
         lines.append("")
 
         return "\n".join(lines)
 
 
 # ---------- 便捷函数 ----------
-_default_aligner: Optional[BilingualAligner] = None
+_default_aligners: Dict[str, BilingualAligner] = {}
 
 
-def get_aligner() -> BilingualAligner:
-    """获取全局单例"""
-    global _default_aligner
-    if _default_aligner is None:
-        _default_aligner = BilingualAligner()
-    return _default_aligner
+def get_aligner(target_lang: str = "en") -> BilingualAligner:
+    """获取全局单例（按语言缓存）"""
+    if target_lang not in _default_aligners:
+        _default_aligners[target_lang] = BilingualAligner(target_lang=target_lang)
+    return _default_aligners[target_lang]
 
 
 def analyze_bilingual(
     zh_text: str,
-    en_text: str,
+    target_text: str,
+    target_lang: str = "en",
     priority: str = "zh",
 ) -> Dict[str, Any]:
     """便捷函数：分析双语合同"""
-    return get_aligner().analyze(zh_text, en_text, priority)
+    return get_aligner(target_lang).analyze(zh_text, target_text, priority)
 
 
-def generate_bilingual_report(zh_text: str, en_text: str, priority: str = "zh") -> str:
+def generate_bilingual_report(
+    zh_text: str,
+    target_text: str,
+    target_lang: str = "en",
+    priority: str = "zh",
+) -> str:
     """便捷函数：生成双语审查报告"""
-    aligner = get_aligner()
-    analysis = aligner.analyze(zh_text, en_text, priority)
+    aligner = get_aligner(target_lang)
+    analysis = aligner.analyze(zh_text, target_text, priority)
     return aligner.generate_report(analysis)
 
 
 if __name__ == "__main__":
     # 简单测试
-    aligner = BilingualAligner()
+    aligner = BilingualAligner(target_lang="en")
     print(f"术语对照表加载: {len(aligner._glossary)} 条")
 
     zh = """
@@ -482,7 +575,7 @@ Article 8 Dispute Resolution: Any dispute arising from this contract shall be su
     print(f"\n分析结果:")
     print(f"  匹配: {result['statistics']['matched']}")
     print(f"  仅中文: {result['statistics']['zh_only']}")
-    print(f"  仅英文: {result['statistics']['en_only']}")
+    print(f"  仅英文: {result['statistics']['target_only']}")
     print(f"  不一致: {result['statistics']['inconsistencies']}")
 
     report = aligner.generate_report(result)
