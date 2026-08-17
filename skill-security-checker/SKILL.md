@@ -2,8 +2,8 @@
 slug: skill-security-checker
 displayName: Skill 安全审计扫描器
 name: skill-security-checker
-description: 'Skill Security — 安全审计扫描器，帮助你快速发现 Skill 中的安全风险。静态扫描（提示注入/命令注入/SSRF/凭证外泄/路径遍历/危险函数）、依赖漏洞审计、权限审计、质量评分、动态沙箱执行扫描（Docker/Windows Sandbox）、供应链风险分析（依赖树/typo-squatting/CVE自动拉取/许可证合规）、实时恶意Skill库同步（341条指纹库100%拦截）、CVE离线缓存（7天全量+每日增量离线可用）、全局排除配置（.nosec.yml团队级统一管理）、CI/CD集成（GitHub Action/GitLab CI/SARIF/质量门禁）、JSON/HTML/SARIF 报告生成。'
-version: 3.1.0
+description: 'Skill Security — 安全审计扫描器，帮助你快速发现 Skill 中的安全风险。静态规则引擎（YAML规则包 rules/*.yaml，6 类规则可热插拔扩展）、提示注入 ML 语义检测（ONNX + 正则降级，降低绕过率）、系统级行为捕获（eBPF Linux / ETW Windows）、动态沙箱执行扫描（Docker/Windows Sandbox）、供应链风险分析、CVE 离线缓存、恶意 Skill 指纹库、全局排除配置、CI/CD 集成、JSON/HTML/SARIF 报告生成。'
+version: 3.2.0
 tags: ['security', 'audit', 'skill', 'scanner', 'code-analysis', 'vulnerability']
 icon: '🔒'
 author: 'njskills'
@@ -178,6 +178,59 @@ exclude:
 
 > ⚠️ 动态扫描为**可选功能**，需显式加 `--dynamic` 开启。若本机无 Docker / Windows Sandbox，工具会自动降级为纯静态扫描并给出提示，不会报错。
 
+### 13. 规则引擎 + YAML 规则包（新增）
+
+v3.2.0 起，6 类静态规则从硬编码重构为 YAML 规则包（`rules/*.yaml`），新增规则只需加 YAML 文件，无需修改代码。
+
+**规则包结构：**
+
+```
+scripts/rules/
+├── prompt_injection.yaml      # 提示注入规则（15 条正则）
+├── command_injection.yaml     # 命令注入规则（8 条正则）
+├── ssrf.yaml                  # SSRF/内网访问（11 条正则）
+├── credential_leak.yaml       # 凭证外泄（10 条正则）
+├── path_traversal.yaml        # 路径遍历（12 条正则）
+└── dangerous_functions.yaml   # 危险函数（11 条正则）
+```
+
+**YAML 文件格式示例：**
+```yaml
+name: prompt_injection
+display_name: 提示注入
+severity: critical
+description: 检测提示注入、越狱指令、系统提示覆盖等风险
+patterns:
+  - 'ignore previous instructions'
+  - 'system prompt override'
+  - 'jailbreak'
+suggestion: 移除提示注入或越狱指令文本；如为文档示例，请添加 # nosec 注释
+source: static
+```
+
+**扩展方式：** 在 `rules/` 目录新增 `.yaml` 文件即可，工具自动加载。零依赖 YAML 解析（自研轻量实现，不依赖 PyYAML）。
+
+### 14. eBPF/ETW 系统级行为捕获（新增）
+
+v3.2.0 在沙箱 5 维行为捕获基础上，新增内核级系统调用监控，覆盖应用层无法看到的底层行为。
+
+| 后端 | 平台 | 要求 | 捕获内容 |
+|------|------|------|---------|
+| eBPF (bcc) | Linux | root + bcc 安装 | syscall：connect/send/recv、open/write、fork/exec、chmod/chown、uname/gethostname |
+| ETW | Windows | 管理员权限 | syscall：文件操作、进程创建、网络活动 |
+| 降级模式 | 无 eBPF/ETW | 自动提示「系统级行为捕获不可用」 |
+
+### 15. 提示注入 ML 语义检测（新增）
+
+v3.2.0 引入 ML 语义模型检测提示注入，降低正则匹配的绕过率。
+
+| 检测模式 | 触发条件 | 说明 |
+|---------|---------|------|
+| ONNX 语义模型 | `~/.workbuddy/models/prompt_injection.onnx` 存在 | 本地推理，离线可用 |
+| 正则降级 | ONNX 模型不可用时自动回退 | 20 条正则规则（含中文） |
+
+**性能：** 结果缓存（1 小时 TTL）+ 模型懒加载，不拖慢扫描。
+
 ## 使用方法
 
 ### 基本用法（命令行）
@@ -212,6 +265,18 @@ python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能�
 
 # 同时启用所有高级功能
 python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --supply-chain --malicious-db --global-exclude
+
+# 启用 YAML 规则引擎（6 类规则可热插拔）
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --rule-engine
+
+# 启用 ML 提示注入语义检测（ONNX + 正则降级）
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --ml-detect
+
+# 启用 eBPF/ETW 系统级行为捕获
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --syscall-monitor
+
+# v3.2.0 全功能模式
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --rule-engine --ml-detect --syscall-monitor --malicious-db --global-exclude --supply-chain --dynamic
 ```
 
 ### 参数快查
@@ -228,6 +293,9 @@ python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能�
 | `--supply-chain` | 启用供应链风险分析 | 关闭 |
 | `--malicious-db` | 启用恶意 Skill 指纹匹配（341 条） | 关闭 |
 | `--global-exclude` | 启用 .nosec.yml 全局排除配置 | 关闭 |
+| `--rule-engine` | 启用 YAML 规则引擎（6 类规则包） | 关闭 |
+| `--syscall-monitor` | 启用 eBPF/ETW 系统级行为捕获 | 关闭 |
+| `--ml-detect` | 启用 ML 提示注入语义检测 | 关闭 |
 
 ### 在 WorkBuddy 中触发
 
@@ -354,6 +422,15 @@ A: 7 天全量缓存 + 每日增量更新。无网络环境下，工具自动使
 **Q: `.nosec.yml` 和 `# nosec` 注释有什么区别？哪个优先？**
 A: `# nosec` 是单行临时排除，`.nosec.yml` 是团队级全局配置，支持按类别、文件路径、正则模式批量排除。**过滤顺序**：`# nosec` 行级排除先应用，然后是 `.nosec.yml` 全局排除。建议团队统一使用 `.nosec.yml`，个人调试用 `# nosec`。
 
+**Q: 规则引擎和原来的静态扫描有什么区别？**
+A: 规则引擎将 6 类规则从代码硬编码重构为 YAML 文件（`rules/*.yaml`），新增规则只需添加 YAML 文件，无需修改 `--rule-engine` 开启。未开启时自动回退到原有硬编码规则，完全兼容。
+
+**Q: ML 提示注入检测需要联网吗？需要安装额外依赖吗？**
+A: 不需要联网，不需要额外依赖。ML 检测使用 ONNX Runtime（纯 CPU 推理），模型存放在 `~/.workbuddy/models/prompt_injection.onnx`。无模型时自动降级到正则规则包（含 20 条规则，含中文），零外部依赖。
+
+**Q: eBPF/ETW 系统级捕获需要什么权限？**
+A: Linux 需要 root 权限 + bcc 框架；Windows 需要管理员权限。无权限时自动降级，提示「系统级行为捕获不可用」，不影响其他扫描功能。
+
 ## 安全声明
 
 - **默认只做静态分析，不会执行被扫描的代码**（静态模式仅读取文件，不写入）
@@ -374,6 +451,7 @@ A: `# nosec` 是单行临时排除，`.nosec.yml` 是团队级全局配置，支
 
 ## 更新日志
 
+| v3.2.0 | 2026-08-17 | 增加：规则引擎模块（scripts/rules_engine.py），将 6 类静态规则从硬编码重构为 YAML 规则包（rules/*.yaml），支持热插拔扩展，新增规则只需加 YAML 文件不改代码；增加：scripts/rules/ 目录包含 6 个规则包（prompt_injection/command_injection/ssrf/credential_leak/path_traversal/dangerous_functions），共 67 条正则；增加：系统级行为捕获模块（scripts/sandbox/system_monitor.py），支持 eBPF（Linux）/ ETW（Windows）内核级 syscall 监控，无 eBPF/ETW 时自动降级；增加：ML 提示注入语义检测（scripts/sandbox/ml_detect.py），ONNX 模型优先 + 正则降级双模式，含中文规则与结果缓存；增加：scan_rule_engine()、scan_ml_prompt_injection()、scan_syscall_monitor() 三个扫描方法；增加：--rule-engine、--ml-detect、--syscall-monitor 三个 CLI 参数；增加：report meta 区新增 rule_engine / ml_detect / syscall_monitor 维度统计 |
 | v3.1.0 | 2026-08-07 | 增加：实时恶意 Skill 库同步模块，内置 341 条 SHA256 指纹实现 100% 已知恶意 skill 拦截；增加：CVE 离线缓存（7 天全量 + 每日增量），无网络环境仍可扫描依赖漏洞；增加：全局排除配置（.nosec.yml），支持按类别/文件/正则模式批量排除误报；增加：--malicious-db 和 --global-exclude 两个命令行参数；优化：add_result() 集成全局排除过滤逻辑 |
 | v3.0.0 | 2026-08-01 | 增加：供应链风险分析模块，支持依赖树扫描、typo-squatting 钓鱼包检测、维护状态评估（僵尸包识别）、许可证合规检查；增加：CVE 数据库从 26 条手动维护升级为 OSV/NVD API 自动拉取并每日缓存更新；增加：ci_templates/ 目录提供 GitHub Action 与 GitLab CI 开箱即用模板；增加：SARIF 2.1.0 格式输出支持 GitHub Code Scanning；增加：PR 自动评论扫描结果功能；增加：质量门禁机制（默认 70 分阈值阻止合并）；增加：--supply-chain 与 --format sarif 命令行参数；优化：audit.py 报告 meta 区新增 supply_chain 维度统计；优化：依赖解析器支持 requirements.txt / package.json / pyproject.toml 三种格式 |
 | v2.0.0 | 2026-07-22 | 增加：动态沙箱执行扫描模块，在 Docker 或 Windows Sandbox 隔离环境中实际运行脚本捕获运行时行为；增加：网络请求、文件读写、进程创建、环境变量读取、动态代码执行五类运行时行为捕获；增加：敏感路径访问、未知目标外联、下载并执行远程载荷、shell 进程创建、密钥环境变量读取五类异常行为标记；增加：沙箱默认断网与 --allow-domain 域名白名单机制；增加：--dynamic、--allow-domain、--sandbox-timeout 三个命令行参数；增加：无 Docker/Windows Sandbox 时自动降级为纯静态扫描并给出提示；优化：报告 meta 区展示动态扫描后端与行为统计 |
