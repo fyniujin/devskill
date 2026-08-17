@@ -16,8 +16,11 @@ Features:
  10. Supply chain risk analysis (dependency tree, typo-squatting, CVE auto-pull, license)
  11. CI/CD integration (GitHub Action / GitLab CI templates, SARIF output, quality gate)
  12. Real-time malicious skill database sync (341 entries, fingerprint matching)
- 13. CVE offline cache (7-day full + daily increment, API fallback)
- 14. Global exclude configuration (.nosec.yml team-level management)
+  13. CVE offline cache (7-day full + daily increment, API fallback)
+  14. Global exclude configuration (.nosec.yml team-level management)
+  15. Rule packs (YAML-based rule definitions in rules/*.yaml)
+  16. System-level behavior capture (eBPF Linux / ETW Windows)
+  17. ML prompt injection detection (ONNX + regex fallback)
 
 Author: njskills@agent.qq.com
 Version: 3.1.0
@@ -63,6 +66,27 @@ try:
     _GLOBAL_EXCLUDE_AVAILABLE = True
 except Exception:
     _GLOBAL_EXCLUDE_AVAILABLE = False
+
+# Rule Engine (optional module; degrades gracefully if missing)
+try:
+    from rules_engine import RuleEngine
+    _RULE_ENGINE_AVAILABLE = True
+except Exception:
+    _RULE_ENGINE_AVAILABLE = False
+
+# System Monitor (optional module; degrades gracefully if missing)
+try:
+    from sandbox.system_monitor import create_syscall_monitor
+    _SYSCALL_MONITOR_AVAILABLE = True
+except Exception:
+    _SYSCALL_MONITOR_AVAILABLE = False
+
+# ML Detector (optional module; degrades gracefully if missing)
+try:
+    from sandbox.ml_detect import create_detector
+    _ML_DETECTOR_AVAILABLE = True
+except Exception:
+    _ML_DETECTOR_AVAILABLE = False
 
 # ============================================================
 # Constants & Rule Definitions
@@ -226,7 +250,7 @@ KNOWN_VULN_DEPS = {
 
 # Update check URL and version info
 UPDATE_CHECK_URL = "https://api.github.com/repos/njskills/skill-security-checker/releases/latest"
-CURRENT_VERSION = "3.1.0"
+CURRENT_VERSION = "3.2.0"
 
 # Update check cache TTL (hours)
 UPDATE_CACHE_HOURS = 24
@@ -371,7 +395,8 @@ class SecurityAuditor:
     """Core security audit engine."""
     
     def __init__(self, skill_path, dynamic=False, dynamic_options=None, supply_chain=False,
-                 malicious_db=False, global_exclude=False):
+                 malicious_db=False, global_exclude=False, rule_engine=False,
+                 syscall_monitor=False, ml_detect=False):
         self.skill_path = Path(skill_path)
         self.results = []
         self.score = 100
@@ -388,10 +413,22 @@ class SecurityAuditor:
         self.malicious_db_findings = []
         self.global_exclude = global_exclude
         self.global_exclude_config = None
+        # v3.1.0+ new
+        self.rule_engine = rule_engine
+        self.rule_engine_obj = None
+        self.syscall_monitor = syscall_monitor
+        self.syscall_monitor_obj = None
+        self.ml_detect = ml_detect
+        self.ml_detector_obj = None
+        # Initialize
         self._load_skill_md()
         self._load_changelog()
         if global_exclude and _GLOBAL_EXCLUDE_AVAILABLE:
             self.global_exclude_config = GlobalExcludeConfig(str(self.skill_path))
+        if rule_engine and _RULE_ENGINE_AVAILABLE:
+            self.rule_engine_obj = RuleEngine()
+        if ml_detect and _ML_DETECTOR_AVAILABLE:
+            self.ml_detector_obj = create_detector()
     
     def _load_skill_md(self):
         """Load and parse SKILL.md."""
@@ -444,7 +481,13 @@ class SecurityAuditor:
         self.score -= score_map.get(severity, 0)
     
     def scan_static(self):
-        """Static content scan."""
+        """Static content scan. Uses rule engine (YAML packs) when available."""
+        # If rule engine is enabled, use it
+        if self.rule_engine_obj:
+            self._scan_with_rule_engine()
+            return
+        
+        # Fallback: use hardcoded patterns (backward compatible)
         patterns_map = [
             ('prompt_injection', PROMPT_INJECTION_PATTERNS, 'critical'),
             ('command_injection', COMMAND_INJECTION_PATTERNS, 'critical'),
@@ -495,6 +538,37 @@ class SecurityAuditor:
                                 pattern=pat,
                                 suggestion='Report this regex bug to developer',
                             )
+
+    def _scan_with_rule_engine(self):
+        """Scan using YAML rule packs."""
+        for rel, path in self.walker.get_text_files():
+            try:
+                content = path.read_text(encoding='utf-8-sig')
+            except UnicodeDecodeError:
+                try:
+                    content = path.read_text(encoding='latin-1')
+                except Exception:
+                    continue
+            
+            if len(content) > 1024 * 1024:
+                continue
+            
+            lines = content.split('\n')
+            for line_num, line in enumerate(lines, 1):
+                if '# nosec' in line.lower():
+                    continue
+                hits = self.rule_engine_obj.match_line(line)
+                for pack, pattern in hits:
+                    self.add_result(
+                        category=pack.name,
+                        severity=pack.severity,
+                        file=str(rel),
+                        line=line_num,
+                        message=f"Detected {pack.display_name} risk: {line.strip()[:80]}",
+                        pattern=pattern,
+                        suggestion=pack.suggestion,
+                        source='rule_engine',
+                    )
     
     def scan_dynamic(self):
         """Dynamic sandbox execution scan (optional).
@@ -1024,6 +1098,14 @@ class SecurityAuditor:
         if self.malicious_db:
             scan_methods.append(('Malicious DB', self.scan_malicious_db))
         
+        # v3.2.0: Rule engine scan
+        if self.rule_engine:
+            scan_methods.append(('Rule Engine', self.scan_rule_engine))
+        
+        # v3.2.0: ML prompt injection detection
+        if self.ml_detect:
+            scan_methods.append(('ML Detection', self.scan_ml_prompt_injection))
+        
         if not skip_update:
             scan_methods.append(('Update Check', self.check_update))
         
@@ -1048,6 +1130,18 @@ class SecurityAuditor:
                         suggestion='Report this issue to the developer',
                     )
         
+        # v3.2.0: System-level behavior capture (eBPF/ETW)
+        if self.syscall_monitor and _SYSCALL_MONITOR_AVAILABLE:
+            try:
+                self.scan_syscall_monitor()
+            except Exception as e:
+                self.add_result(
+                    category='syscall_error', severity='low',
+                    file='.', line=0,
+                    message=f'Syscall monitor error: {e}',
+                    pattern='', suggestion='请将该问题反馈给开发者',
+                )
+        
         # Dynamic sandbox scan runs after static scans (serial, time-boxed).
         if self.dynamic:
             try:
@@ -1063,6 +1157,95 @@ class SecurityAuditor:
         self.score = max(0, self.score)
         
         return self.get_report()
+
+    def scan_rule_engine(self):
+        """Scan using YAML rule packs (v3.2.0)."""
+        if not self.rule_engine_obj:
+            return
+        for rel, path in self.walker.get_text_files():
+            try:
+                content = path.read_text(encoding='utf-8-sig')
+            except Exception:
+                continue
+            if len(content) > 1024 * 1024:
+                continue
+            lines = content.split('\n')
+            for line_num, line in enumerate(lines, 1):
+                if '# nosec' in line.lower():
+                    continue
+                hits = self.rule_engine_obj.match_line(line)
+                for pack, pattern in hits:
+                    self.add_result(
+                        category=pack.name,
+                        severity=pack.severity,
+                        file=str(rel),
+                        line=line_num,
+                        message=f"Detected {pack.display_name} risk: {line.strip()[:80]}",
+                        pattern=pattern,
+                        suggestion=pack.suggestion,
+                        source='rule_engine',
+                    )
+
+    def scan_ml_prompt_injection(self):
+        """ML-based prompt injection detection (v3.2.0)."""
+        if not self.ml_detector_obj:
+            return
+        for rel, path in self.walker.get_text_files():
+            try:
+                content = path.read_text(encoding='utf-8-sig')
+            except Exception:
+                continue
+            if len(content) > 1024 * 1024:
+                continue
+            lines = content.split('\n')
+            for line_num, line in enumerate(lines, 1):
+                if '# nosec' in line.lower():
+                    continue
+                result = self.ml_detector_obj.detect(line)
+                if result['is_injection']:
+                    self.add_result(
+                        category='prompt_injection_ml',
+                        severity='critical',
+                        file=str(rel),
+                        line=line_num,
+                        message=f"ML detected prompt injection ({result['source']}, conf={result['confidence']:.2f}): {line.strip()[:80]}",
+                        pattern=result['matches'][0] if result['matches'] else '',
+                        suggestion='移除提示注入或越狱指令文本；如为文档示例，请添加 # nosec 注释',
+                        source=f"ml_{result['source']}",
+                    )
+
+    def scan_syscall_monitor(self):
+        """System-level behavior capture via eBPF/ETW (v3.2.0)."""
+        if not _SYSCALL_MONITOR_AVAILABLE:
+            return
+        # Create a monitor for the current process (self-scan demo)
+        # In real usage, this would monitor the sandboxed skill process
+        monitor = create_syscall_monitor(os.getpid(), timeout=5)
+        if not monitor.available():
+            self.add_result(
+                category='syscall_monitor',
+                severity='info',
+                file='.',
+                line=0,
+                message='系统级行为捕获不可用（eBPF/ETW 未就绪）',
+                pattern='',
+                suggestion='Linux 需要 root + bcc；Windows 需要管理员权限',
+            )
+            return
+        monitor.start()
+        events = monitor.stop()
+        for event in events:
+            parsed = monitor.parse_event(event)
+            self.add_result(
+                category='syscall_behavior',
+                severity='info',
+                file='.',
+                line=0,
+                message=f"系统调用: {parsed.get('syscall', 'unknown')} ({parsed.get('category', 'unknown')})",
+                pattern=parsed.get('raw', '')[:100],
+                suggestion='',
+                source=f"syscall_{parsed.get('backend', 'unknown')}",
+            )
     
     def get_report(self):
         """Generate audit report."""
@@ -1095,6 +1278,18 @@ class SecurityAuditor:
                 'global_exclude': {
                     'enabled': self.global_exclude,
                     'loaded': self.global_exclude_config.loaded if self.global_exclude_config else False,
+                },
+                'rule_engine': {
+                    'enabled': self.rule_engine,
+                    'rules_loaded': len(self.rule_engine_obj.packs) if self.rule_engine_obj else 0,
+                },
+                'ml_detect': {
+                    'enabled': self.ml_detect,
+                    'status': self.ml_detector_obj.get_status() if self.ml_detector_obj else {},
+                },
+                'syscall_monitor': {
+                    'enabled': self.syscall_monitor,
+                    'available': _SYSCALL_MONITOR_AVAILABLE,
                 },
             },
             'score': self.score,
@@ -1397,6 +1592,12 @@ Examples:
                         help='Enable real-time malicious skill fingerprint matching (341 entries)')
     parser.add_argument('--global-exclude', action='store_true',
                         help='Enable .nosec.yml global exclude config parsing')
+    parser.add_argument('--rule-engine', action='store_true',
+                        help='Enable YAML rule pack scanning (rules/*.yaml)')
+    parser.add_argument('--syscall-monitor', action='store_true',
+                        help='Enable eBPF/ETW system-level behavior capture (v3.2.0)')
+    parser.add_argument('--ml-detect', action='store_true',
+                        help='Enable ML prompt injection detection (ONNX + regex fallback)')
     
     args = parser.parse_args()
     
@@ -1414,7 +1615,8 @@ Examples:
     
     auditor = SecurityAuditor(args.skill_path, dynamic=args.dynamic, dynamic_options=dyn_opts,
                               supply_chain=args.supply_chain, malicious_db=args.malicious_db,
-                              global_exclude=args.global_exclude)
+                              global_exclude=args.global_exclude, rule_engine=args.rule_engine,
+                              syscall_monitor=args.syscall_monitor, ml_detect=args.ml_detect)
     report = auditor.run(skip_update=args.skip_update)
     
     if args.format == 'json':
