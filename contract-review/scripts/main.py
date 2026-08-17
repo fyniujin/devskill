@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """
-合同审查主入口 v4.0
+合同审查主入口 v5.1
 完整工作流：文本提取 → 结构解析 → 风险审查 → 报告生成
 新增：硬件自适应调度、历史版本对比、Word 报告生成、更新检测、危险文件拦截
+v5.0 新增：法条引用溯源、谈判辅助、双语对照
+v5.1 新增：指导案例引用溯源、金额校验引擎、多语种扩展（日/韩）
 """
 
 import json
@@ -348,6 +350,15 @@ def main():
     parser.add_argument('--align-priority', default='zh',
                         choices=['zh', 'en', 'strict'],
                         help='双语对照时以哪个版本为准（v5.0，默认 zh）')
+    # ===== v5.1 新增参数 =====
+    parser.add_argument('--guiding-cases', action='store_true',
+                        help='启用指导案例引用溯源，为风险点匹配最高法指导案例（v5.1）')
+    parser.add_argument('--align-ja', default='',
+                        help='启用中日双语对照审查，指定日语版本路径（v5.1）')
+    parser.add_argument('--align-ko', default='',
+                        help='启用中韩双语对照审查，指定韩语版本路径（v5.1）')
+    parser.add_argument('--validate-amounts', action='store_true',
+                        help='启用关键金额校验（大小写一致性+勾稽关系验证）（v5.1）')
 
     args = parser.parse_args()
     
@@ -630,6 +641,27 @@ def main():
             except Exception as e:
                 print_warning(f"法条引用溯源失败: {e}")
         
+        # ===== v5.1 指导案例引用溯源（必须在报告生成前执行） =====
+        case_cite_count = 0
+        if args.guiding_cases:
+            try:
+                from case_retriever import CaseRetriever
+                case_retriever = CaseRetriever()
+                if case_retriever.is_available:
+                    unique_risks = case_retriever.enrich_risks(unique_risks)
+                    case_cite_count = sum(1 for r in unique_risks if r.get('guiding_cases'))
+                    print_success(f"指导案例引用溯源完成，已为 {case_cite_count} 个风险点匹配指导案例")
+                    # 月度更新提醒
+                    reminder = case_retriever.check_update_reminder()
+                    if reminder:
+                        print_warning(reminder)
+                else:
+                    print_warning("指导案例数据库不可用，请确认 references/guiding_cases/ 目录存在")
+            except ImportError:
+                print_warning("指导案例检索引擎未安装，跳过指导案例引用溯源")
+            except Exception as e:
+                print_warning(f"指导案例引用溯源失败: {e}")
+
         # ===== v3.0 版本对比 =====
         diff_result = None
         if args.diff:
@@ -751,6 +783,31 @@ def main():
             except Exception as e:
                 print_warning(f"谈判辅助失败: {e}")
 
+        # ===== v5.1 关键金额校验 =====
+        amount_validation_result = None
+        if args.validate_amounts:
+            try:
+                from amount_validator import AmountValidator
+                validator = AmountValidator()
+                # 从合同文本中提取金额字段
+                amount_fields = validator.extract_amount_fields(contract_text)
+                if amount_fields:
+                    # 构建校验输入（字段名: (金额值, None)）
+                    fields_to_validate = {name: (value, None) for name, value in amount_fields.items()}
+                    amount_validation_result = validator.validate(fields_to_validate)
+                    if amount_validation_result['is_valid']:
+                        print_success(f"金额校验通过（{amount_validation_result['total_checks']} 项检查）")
+                    else:
+                        print_warning(f"金额校验发现 {amount_validation_result['failed']} 项错误")
+                        for e in amount_validation_result['errors']:
+                            print_warning(f"  - {e['field']}: {e['message']}")
+                else:
+                    print("  ℹ️  未在合同文本中识别到金额字段", flush=True)
+            except ImportError:
+                print_warning("金额校验引擎未安装，跳过金额校验")
+            except Exception as e:
+                print_warning(f"金额校验失败: {e}")
+
         # ===== v5.0 中英双语对照 =====
         align_result = None
         if args.align:
@@ -787,6 +844,65 @@ def main():
                 print_warning("双语对齐引擎未安装，跳过双语对照")
             except Exception as e:
                 print_warning(f"双语对照失败: {e}")
+
+        # ===== v5.1 多语种双语对照（日语/韩语） =====
+        align_ja_result = None
+        align_ko_result = None
+        if args.align_ja:
+            try:
+                from bilingual_aligner import BilingualAligner
+                aligner = BilingualAligner(target_lang="ja")
+                ja_path = Path(args.align_ja)
+                if ja_path.exists():
+                    from extract_text import TextExtractor
+                    ext = TextExtractor(enable_security=False)
+                    ja_text = ext.extract(str(ja_path)).get('text', '')
+                    align_ja_result = aligner.analyze(contract_text, ja_text, args.align_priority)
+                    stats_ja = align_ja_result['statistics']
+                    print_success(
+                        f"中日对照完成：匹配 {stats_ja['matched']} 段，"
+                        f"不一致 {stats_ja['inconsistencies']} 项"
+                    )
+                    # 保存双语报告
+                    ja_report_path = Path(args.output).parent if args.output else Path('.')
+                    ja_report_path = ja_report_path / 'bilingual_ja_report.md'
+                    with open(ja_report_path, 'w', encoding='utf-8') as f:
+                        f.write(aligner.generate_report(align_ja_result))
+                    print_success(f"中日对照报告已保存: {ja_report_path}")
+                else:
+                    print_warning(f"日语版本文件不存在: {args.align_ja}")
+            except ImportError:
+                print_warning("双语对齐引擎未安装，跳过中日对照")
+            except Exception as e:
+                print_warning(f"中日对照失败: {e}")
+
+        if args.align_ko:
+            try:
+                from bilingual_aligner import BilingualAligner
+                aligner = BilingualAligner(target_lang="ko")
+                ko_path = Path(args.align_ko)
+                if ko_path.exists():
+                    from extract_text import TextExtractor
+                    ext = TextExtractor(enable_security=False)
+                    ko_text = ext.extract(str(ko_path)).get('text', '')
+                    align_ko_result = aligner.analyze(contract_text, ko_text, args.align_priority)
+                    stats_ko = align_ko_result['statistics']
+                    print_success(
+                        f"中韩对照完成：匹配 {stats_ko['matched']} 段，"
+                        f"不一致 {stats_ko['inconsistencies']} 项"
+                    )
+                    # 保存双语报告
+                    ko_report_path = Path(args.output).parent if args.output else Path('.')
+                    ko_report_path = ko_report_path / 'bilingual_ko_report.md'
+                    with open(ko_report_path, 'w', encoding='utf-8') as f:
+                        f.write(aligner.generate_report(align_ko_result))
+                    print_success(f"中韩对照报告已保存: {ko_report_path}")
+                else:
+                    print_warning(f"韩语版本文件不存在: {args.align_ko}")
+            except ImportError:
+                print_warning("双语对齐引擎未安装，跳过中韩对照")
+            except Exception as e:
+                print_warning(f"中韩对照失败: {e}")
 
         elapsed = time.time() - start_time
         
