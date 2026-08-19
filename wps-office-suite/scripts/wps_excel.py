@@ -1,5 +1,5 @@
 """
-WPS Excel CLI v4.6 - 完整命令集（含 Excel 智能分析 + 数据图表生成器）
+WPS Excel CLI v4.7 - 完整命令集（含 Excel 智能分析 + 数据图表生成器 + 公式解释器）
 """
 import subprocess
 import json
@@ -47,7 +47,7 @@ def call_worker(cmd: str, args: dict) -> dict:
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="WPS Excel v3.0")
+    parser = argparse.ArgumentParser(description="WPS Excel v4.7")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("create")
@@ -154,6 +154,13 @@ def main():
                    help="图表生成动作")
     p.add_argument("--type", default="", help="图表类型（不指定则自动推荐）")
     p.add_argument("--output", default="", help="输出路径")
+
+    # v4.7: 公式解释器（反向 NL2Formula）
+    p = sub.add_parser("formula-explain", help="公式解释器（Excel公式→自然语言解释）")
+    p.add_argument("--formula", help="要解释的公式（如 =SUM(A1:A10)）")
+    p.add_argument("--file", help="Excel 文件路径（批量解释 Sheet 中所有公式）")
+    p.add_argument("--sheet", default="Sheet1")
+    p.add_argument("--cell", help="单元格地址（如 B2，需配合 --file）")
 
     args = parser.parse_args()
 
@@ -266,6 +273,23 @@ def main():
             cr = ChartRecommender()
             r = cr.auto_generate(args.file, args.sheet, args.output, args.type)
             r = {"ok": r.get("success", False), **r}
+    elif args.command == "formula-explain":
+        # v4.7: 公式解释器（反向 NL2Formula，纯本地实现）
+        from formula_explainer import FormulaExplainer
+        explainer = FormulaExplainer()
+        if args.formula:
+            # 解释单个公式
+            r = {"ok": True, "formula": args.formula, "explanation": explainer.explain(args.formula)}
+        elif args.file and args.cell:
+            # 解释指定单元格
+            result = explainer.explain_cell(args.file, args.sheet, args.cell)
+            r = {"ok": "error" not in result, **result}
+        elif args.file:
+            # 批量解释 Sheet 中所有公式
+            results = explainer.explain_file(args.file, args.sheet)
+            r = {"ok": True, "count": len(results), "formulas": results}
+        else:
+            r = {"ok": False, "error": "请指定 --formula 或 --file（可配合 --cell）"}
     else:
         r = {"ok": False, "error": "未知命令"}
 
