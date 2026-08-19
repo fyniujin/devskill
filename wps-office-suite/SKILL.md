@@ -2,8 +2,8 @@
 name: wps-office-suite
 displayName: WPS Office 全家桶
 slug: wps-office-suite
-description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v4.0新增：Word→PPT一键生成、Excel自然语言数据分析、Word合同条款审查、Excel发票OCR入账；v4.3新增：Excel深度分析（公式纠错/数据清洗/透视表/数据预测/NL2Formula）；v4.4新增：长文档排版自动化（目录/页眉页脚/标题编号/图表索引/交叉引用/格式统一）；v4.5新增：会议纪要生成（ASR转写→LLM摘要→Word）、COM健康检查（状态检测+残留进程+自动释放）；v4.6新增：Excel智能分析统一入口（6命令合并）、数据图表生成器（自动选图+生成）、文档翻译增强版（Word/Excel/PPT多格式翻译）
-version: 4.6.1
+description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v4.0新增：Word→PPT一键生成、Excel自然语言数据分析、Word合同条款审查、Excel发票OCR入账；v4.3新增：Excel深度分析（公式纠错/数据清洗/透视表/数据预测/NL2Formula）；v4.4新增：长文档排版自动化（目录/页眉页脚/标题编号/图表索引/交叉引用/格式统一）；v4.5新增：会议纪要生成（ASR转写→LLM摘要→Word）、COM健康检查（状态检测+残留进程+自动释放）；v4.6新增：Excel智能分析统一入口（6命令合并）、数据图表生成器（自动选图+生成）、文档翻译增强版（Word/Excel/PPT多格式翻译）；v4.7新增：公式解释器（反向NL2Formula，Excel公式→自然语言）、Markdown→Word/PPT转换、长文档排版统一入口（long-document --action）、长文档排版性能优化（分批处理+单次保存+进度回调）
+version: 4.7.0
 category: 办公协作与生产力工具
 platforms:
   - windows
@@ -42,7 +42,7 @@ tags:
   建议反馈邮箱: njskills@agent.qq.com
 ---
 
-# WPS Office 全家桶 v4.6.0 ✅
+# WPS Office 全家桶 v4.7.0 ✅
 
 > 🏗️ **四引擎智能识别**：自动检测用户电脑已安装的软件，按 WPS → MS Office → LibreOffice → 纯Python 顺序选择最合适的引擎
 > ✨ **纯Python模式增强**：排序、筛选、图表、公式、统计 — 跨平台全部支持
@@ -56,6 +56,9 @@ tags:
 > 🌐 **文档翻译 v4.6**：Word/Excel/PPT 专业翻译（支持多模型降级）
 > 🎙️ **会议纪要 v4.5**：音频 → ASR 转写 → LLM 摘要 → Word（支持降级链）
 > 🏥 **COM 健康检查 v4.5**：WPS/MS Office 状态检测 + 残留进程清理
+> 🧮 **公式解释器 v4.7**：Excel 公式 → 自然语言解释（反向 NL2Formula，纯本地实现）
+> 📝 **Markdown 转换 v4.7**：MD → Word/PPT（保留标题层级，纯本地实现）
+> 📑 **长文档排版 v4.7**：统一入口 long-document --action（8命令合并），性能优化（分批+单次保存+进度回调）
 > 📧 **建议反馈**：有更好建议？邮箱：[njskills@agent.qq.com](mailto:njskills@agent.qq.com)
 
 ---
@@ -650,6 +653,9 @@ python scripts/wps_word.py export --file "report.docx" --format pdf
 python scripts/wps_word.py review --file "合同.docx" --output "合同_审查版.docx"
 python scripts/wps_word.py info --file "report.docx"
 python scripts/wps_word.py engine-info
+python scripts/wps_word.py md-convert --file "README.md" --format docx --output "文档.docx"
+python scripts/wps_word.py md-convert --file "README.md" --format pptx --output "演示.pptx"
+python scripts/wps_word.py long-document --file "report.docx" --action all --preset thesis
 ```
 
 ### Excel
@@ -668,6 +674,9 @@ python scripts/wps_excel.py stats --file "Sales.xlsx" --sheet "Q1" --column "B" 
 python scripts/wps_excel.py info --file "Sales.xlsx"
 python scripts/wps_excel.py engine-info
 python scripts/wps_excel.py check-update
+python scripts/wps_excel.py formula-explain --formula "=SUM(A1:A10)"
+python scripts/wps_excel.py formula-explain --file "data.xlsx" --cell "B2"
+python scripts/wps_excel.py formula-explain --file "data.xlsx" --sheet "Sheet1"
 ```
 
 ### PPT
@@ -691,6 +700,9 @@ python scripts/wps_ppt.py engine-info
 | NL分析 | `python scripts/wps_excel.py nl-analyze --file data.xlsx --query "按月份统计销售额画趋势图"` |
 | 合同审查 | `python scripts/wps_word.py review --file contract.docx --output 审查版.docx` |
 | 发票OCR | `python scripts/wps_excel.py invoice --input 发票.pdf --output 入账台账.xlsx` |
+| 公式解释器 | `python scripts/wps_excel.py formula-explain --formula "=SUM(A1:A10)"` |
+| MD→Word/PPT | `python scripts/wps_word.py md-convert --file README.md --format docx` |
+| 长文档排版 | `python scripts/wps_word.py long-document --file report.docx --action all` |
 
 ### 🆕 v4.3 Excel 深度分析命令
 
@@ -704,18 +716,16 @@ python scripts/excel_analyzer.py clean --file data.xlsx --sheet Sheet1
 python scripts/excel_analyzer.py hardware
 ```
 
-### 🆕 v4.4 长文档排版命令
+### 🆕 v4.4 长文档排版命令（已升级为 v4.7 统一入口）
+
+> v4.7 起，长文档排版 8 个命令合并为 `wps_word.py long-document --action` 统一入口，降低记忆成本。
 
 ```bash
-python scripts/long_document.py analyze --file report.docx
-python scripts/long_document.py toc --file report.docx --max-level 3 --insert
-python scripts/long_document.py header --file report.docx --chapter-in-header --page-number
-python scripts/long_document.py numbering --file report.docx --style arabic --max-level 4
-python scripts/long_document.py fig-index --file report.docx --insert
-python scripts/long_document.py xref --file report.docx
-python scripts/long_document.py format --file report.docx --preset thesis
+# 新统一入口（推荐）
+python scripts/wps_word.py long-document --file report.docx --action all --preset thesis
+
+# 旧命令仍可通过 long_document.py 调用（兼容）
 python scripts/long_document.py all --file report.docx --preset thesis --output 排版后.docx
-python scripts/long_document.py preview --file report.docx --preset thesis
 ```
 
 ### 🆕 v4.5 会议纪要 + COM 健康命令
@@ -765,6 +775,31 @@ python scripts/document_translator.py batch --input-dir ./docs --output-dir ./tr
 python scripts/document_translator.py check                                  # 检查可用翻译引擎
 ```
 
+### 🆕 v4.7 公式解释器 + Markdown 转换 + 长文档统一入口
+
+```bash
+# 公式解释器（反向 NL2Formula，纯本地实现）
+python scripts/wps_excel.py formula-explain --formula "=SUM(A1:A10)"
+python scripts/wps_excel.py formula-explain --file data.xlsx --cell B2
+python scripts/wps_excel.py formula-explain --file data.xlsx --sheet Sheet1
+
+# Markdown → Word/PPT
+python scripts/wps_word.py md-convert --file README.md --format docx --output 文档.docx
+python scripts/wps_word.py md-convert --file README.md --format pptx --output 演示.pptx
+python scripts/wps_word.py md-convert --dir ./docs --format docx --output-dir ./output
+
+# 长文档排版统一入口（8 命令合并为 1 个 --action 路由）
+python scripts/wps_word.py long-document --file report.docx --action analyze
+python scripts/wps_word.py long-document --file report.docx --action toc --max-level 3 --insert
+python scripts/wps_word.py long-document --file report.docx --action header --chapter-in-header --page-number
+python scripts/wps_word.py long-document --file report.docx --action numbering --style arabic --max-level 4
+python scripts/wps_word.py long-document --file report.docx --action fig-index --insert
+python scripts/wps_word.py long-document --file report.docx --action xref
+python scripts/wps_word.py long-document --file report.docx --action format --preset thesis
+python scripts/wps_word.py long-document --file report.docx --action all --preset thesis --output 排版后.docx
+python scripts/wps_word.py long-document --file report.docx --action preview --preset thesis
+```
+
 ### 其他工具
 
 ```bash
@@ -795,11 +830,12 @@ python templates/generate_templates.py --dir ./output  # 生成模板
 
 ## ⚠️ 安全须知
 
-**✅ 四道防线保障安全**：
+**✅ 五道防线保障安全**：
 1. **引擎自检**：启动时自动检测可用引擎，崩溃自动重启
 2. **路径校验**：`safe_path()` 全面校验，拒绝非法路径和特殊字符
 3. **错误中文化**：所有错误 ID 提供详细中文说明和操作步骤
 4. **数据零上传**：所有处理在本地完成，不上传任何内容到互联网
+5. **显式 Opt-in**（v4.6.1 引入）：外部服务（ASR/LLM）仅在用户显式指定 method 时调用，auto 模式仅使用本地引擎
 
 **📝 注意事项**：
 - 批量操作时，桌面会创建 `WPS_Backup` 文件夹保存副本
@@ -809,6 +845,7 @@ python templates/generate_templates.py --dir ./output  # 生成模板
 - LibreOffice Headless 模式下不支持实时预览
 - Skill 每 7 天自动检查更新，不会频繁打扰
 - **模板为纯代码生成，不包含二进制文件，更安全可靠**
+- **v4.7 新增公式解释器、MD 转换均为纯本地实现，不读取外部凭证或 API Key**
 
 ---
 
@@ -816,6 +853,7 @@ python templates/generate_templates.py --dir ./output  # 生成模板
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v4.7.0 | 2026-08-17 | 增加：公式解释器 formula_explainer.py（反向 NL2Formula，Excel 公式→自然语言解释，纯本地实现，80+ 函数映射）；增加：Markdown→Word/PPT 转换器 md_converter.py（保留标题层级/表格/列表/加粗，纯本地实现）；合并：长文档排版 8 命令为 long-document 统一入口（--action 参数路由）；优化：长文档排版性能（分批处理 + 单次保存 + 进度回调，大文档不卡顿）；增加：公式解释器 CLI 子命令（formula-explain）；增加：MD 转换 CLI 子命令（md-convert）；增加：长文档排版 CLI 子命令（long-document） |
 | v4.6.1 | 2026-08-16 | 修复：ASR 引擎改为显式 Opt-in 模式（auto 仅使用本地 whisper-local，不读取外部凭证）；修复：Azure/Google STT 仅在 method 显式指定时调用，首次使用显示凭证读取范围警告；修复：LLM 翻译改为显式 Opt-in 模式（auto 仅使用 local-rule，不读取 API Key）；修复：外部 SDK 依赖（google-cloud-speech / azure-cognitiveservices-speech）补充声明至 requirements.txt |
 | v4.6.0 | 2026-08-16 | 增加：Excel 智能分析统一入口 excel-smart（6 命令合并为 1 个 --action 路由）；增加：数据图表生成器 chart_recommender.py（数据特征分析 + 智能图表推荐 + 图表嵌入 Excel）；增加：文档翻译模块 document_translator.py（Word/Excel/PPT 多格式翻译 + 多模型降级链）；增加：翻译引擎降级链（cn-llm-router → local-rule → pure-template）；增加：图表推荐规则引擎（时间序列/类别对比/相关性/多变量）；增加：硬件自适应（低配禁用复杂图表渲染）；增加：术语表支持（JSON 格式可配置） |
 | v4.5.0 | 2026-08-05 | 增加：会议纪要生成模块 meeting_minutes.py（ASR 转写 → LLM 摘要 → Word 生成）；增加：ASR 降级链（whisper-local → azure-speech → google-stt → template）；增加：LLM 降级链（rule-engine → external-llm → pure-template）；增加：COM 健康检查模块 com_health.py（WPS/MS COM 状态检测 + 残留进程检测 + 自动释放）；增加：6 个 CLI 子命令（transcribe/summarize/generate/batch/wps-check/ms-check/residuals/release-all/full-check）；合并：避坑指南 20+ 条 + FAQ 15 个 + 错误 ID 15 个 → 统一故障排除大章（含统一索引表）；增加：音频分段处理（默认 5 分钟/段）+ 进度回调；增加：硬件自适应（低配禁用并行转写） |
