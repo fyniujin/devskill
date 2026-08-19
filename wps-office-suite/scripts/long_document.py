@@ -1,5 +1,5 @@
 """
-长文档排版自动化 v4.4.0
+长文档排版自动化 v4.7.0
 ========================
 为论文、标书、报告等 50+ 页长文档提供一键排版自动化，把 2-3 小时手工排版缩短到 5 分钟。
 
@@ -1259,7 +1259,7 @@ def format_document(filepath: str, task: str, **kwargs) -> Dict:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="长文档排版自动化 v4.4.0")
+    parser = argparse.ArgumentParser(description="长文档排版自动化 v4.7.0")
     sub = parser.add_subparsers(dest="command", required=True)
 
     # analyze
