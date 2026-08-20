@@ -1,9 +1,8 @@
 """KingDoc 品类元数据模块
 
-v3.6.0 变更：8 品类精简为 7 品类
-- 合并：思维导图(mindmap) + 流程图(flowchart) → 可视化(visualization)
-- 新增子命令：sub_command → "mindmap" | "flowchart"
-- 共享渲染管线：mermaid→SVG→上传
+v3.7.0 变更：7 品类扩展为 8 品类
+- 新增：history_mgmt（历史管理，合并回收站+版本历史）
+- v3.6.0：已合并 mindmap+flowchart → visualization
 - v3.5.0：已合并 doc+smart_note → doc
 """
 from __future__ import annotations
@@ -11,7 +10,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Tuple
 
 
-# 7 品类元数据
+# 8 品类元数据
 CATEGORIES: Dict[str, Dict] = {
     "doc": {
         "name": "文档",
@@ -84,6 +83,16 @@ CATEGORIES: Dict[str, Dict] = {
         "edit_method": "upload_only",
         "available": True,
     },
+    "history_mgmt": {
+        "name": "历史管理",
+        "name_en": "history_mgmt",
+        "doc_type": "history",
+        "sub_types": ["trash", "version"],
+        "description": "回收站+版本历史统一管理（列出/恢复/彻底删除/回滚）",
+        "icon": "🕐",
+        "edit_method": "api_unified",
+        "available": True,
+    },
 }
 
 # 用户意图关键词 → 品类路由
@@ -95,6 +104,7 @@ INTENT_ROUTING: Dict[str, List[str]] = {
     "form": ["收集表", "form", "问卷", "表单", "投票", "报名"],
     "visualization": ["思维导图", "mindmap", "脑图", "导图", "知识图谱", "流程图", "flowchart", "流程", "步骤图", "架构图", "可视化"],
     "attachment": ["附件", "attachment", "文件", "上传", "图片", "pdf"],
+    "history_mgmt": ["历史管理", "回收站", "trash", "版本历史", "version", "恢复", "restore", "回滚", "历史版本", "误删", "撤销删除"],
 }
 
 # 子类型识别关键词（用于 doc 品类进一步识别 smart_note vs doc）
