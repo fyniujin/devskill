@@ -36,7 +36,7 @@ from engine.hardware import get_recommended_settings
 from engine.update_check import build_reminder, FEEDBACK_EMAIL
 from engine.exceptions import KingDocError
 
-APP_VERSION = "3.6.0"
+APP_VERSION = "3.7.0"
 
 # 配置路径：环境变量优先，其次 skill 根目录 config.json
 CONFIG_PATH = os.environ.get("KINGDOC_CONFIG", str(SKILL_ROOT / "config.json"))
@@ -854,6 +854,147 @@ async def kdoc_compare_export(text_a: str, text_b: str,
         return result
     except Exception as e:
         return f"[ERR] 导出报告失败：{e}"
+
+
+# ===========================================================================
+# 十七、多维表格视图增强（v3.7.0 新增，对标 Airtable）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_view_render(view_type: str, data: str, config: str = "") -> str:
+    """【免密钥】多维表格视图渲染：看板/日历/甘特图。
+
+    view_type: kanban / calendar / gantt
+    data: JSON 字符串，格式 {"records": [...], "fields": [...]}
+    config: JSON 字符串（可选），如 {"mode": "month"}
+
+    本地渲染引擎，零配置可用。"""
+    try:
+        import json
+        from engine.views import render_view
+        data_obj = json.loads(data)
+        config_obj = json.loads(config) if config else None
+        result = render_view(view_type, data_obj, config_obj)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 视图渲染失败：{e}"
+
+@mcp.tool()
+async def kdoc_view_list() -> str:
+    """【免密钥】列出所有可用的多维表格视图类型。
+
+    本地规则引擎，零配置可用。"""
+    return _to_text({
+        "views": [
+            {"type": "kanban", "name": "看板", "description": "按状态字段分组卡片"},
+            {"type": "calendar", "name": "日历", "description": "按日期字段月/周布局"},
+            {"type": "gantt", "name": "甘特图", "description": "时间轴+任务依赖箭头"},
+        ]
+    })
+
+
+# ===========================================================================
+# 十八、手写/公式识别 OCR（v3.7.0 新增，教育场景）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_ocr_formula(image_path: str, output_format: str = "latex") -> str:
+    """【免密钥】数学公式识别：图片 → LaTeX/MathML。
+
+    image_path: 公式图片路径
+    output_format: latex（默认）| mathml | text
+
+    本地 Tesseract + 符号映射，零配置可用。"""
+    try:
+        from engine.ocr.formula_recognizer import FormulaRecognizer
+        recognizer = FormulaRecognizer()
+        result = recognizer.recognize(image_path, output_format)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 公式识别失败：{e}"
+
+@mcp.tool()
+async def kdoc_ocr_education(image_path: str, scene: str = "auto") -> str:
+    """【免密钥】教育场景 OCR：手写公式/试卷/题目识别。
+
+    image_path: 图片路径
+    scene: auto（自动检测）| handwriting | formula | mixed
+
+    自动判断手写体/印刷公式/混合内容，零配置可用。"""
+    try:
+        from engine.ocr.education import EducationOCR
+        ocr = EducationOCR()
+        result = ocr.recognize(image_path, scene)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 教育 OCR 失败：{e}"
+
+
+# ===========================================================================
+# 十九、历史管理（v3.7.0 新增，合并回收站+版本历史）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_history_list(source: str = "trash", limit: int = 20, offset: int = 0,
+                            file_id: str = "") -> str:
+    """列出历史记录：回收站文件 或 文档历史版本。
+
+    source: trash（回收站）| version（版本历史，需传 file_id）
+    limit: 数量限制
+    offset: 分页偏移（仅 trash）
+    file_id: 文档 ID（仅 version 需要）"""
+    try:
+        from engine.history import HistoryManager
+        mgr = HistoryManager(backend=None)
+        if source == "version" and file_id:
+            result = mgr.list_versions(file_id, limit)
+        else:
+            result = mgr.list_history(source, limit, offset)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 获取历史列表失败：{e}"
+
+@mcp.tool()
+async def kdoc_history_restore(file_id: str, source: str = "trash",
+                               version: int = 0) -> str:
+    """恢复文件：从回收站还原 或 回滚到指定版本。
+
+    file_id: 文件 ID
+    source: trash | version
+    version: 版本号（仅 version 需要，≥1）"""
+    try:
+        from engine.history import HistoryManager
+        mgr = HistoryManager(backend=None)
+        result = mgr.restore(file_id, source, version)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 恢复失败：{e}"
+
+@mcp.tool()
+async def kdoc_history_destroy(file_id: str) -> str:
+    """⚠️ 危险操作（不可逆）：彻底删除回收站文件。执行前必须向用户二次确认。"""
+    try:
+        from engine.history import HistoryManager
+        mgr = HistoryManager(backend=None)
+        result = mgr.destroy(file_id)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 删除失败：{e}"
+
+
+# ===========================================================================
+# 二十、本地 OCR 升级（v3.7.0 升级提示）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_local_ocr_extract(image_path: str, lang: str = "chi_sim+eng") -> str:
+    """【免密钥】本地 OCR 提取图片文字：强制本地 Tesseract（数据不出域）。
+
+    未安装 Tesseract 给出安装指引，不调用任何外部 API。"""
+    try:
+        from engine.local.ocr import extract_text
+        res = extract_text(image_path, lang=lang)
+        if res["source"] == "none":
+            return f"[OCR 未就绪] {res['hint']}"
+        return _to_text(res)
+    except Exception as e:
+        return f"[ERR] OCR 失败：{e}"
 
 
 # ===========================================================================
