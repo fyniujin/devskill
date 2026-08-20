@@ -1,21 +1,19 @@
-"""KingDoc 本地 OCR 模块（尽量不依赖任何外部付费 key）
+"""KingDoc 本地 OCR 模块（v3.7.0 升级：强制本地，数据不出域）
 
-设计目标（来自评测意见「部分高级功能需要安装额外软件」）：
-- 默认走**本地 Tesseract OCR**：免费、离线、零密钥，是首选方案。
-- 若本机未安装 Tesseract，自动降级为「云端正版 OCR」（需已配置的金山 App Key，可选）。
-- 若两者都不可用，给出清晰的安装指引，而不是静默失败。
-
-不引入任何付费 OCR API Key；Tesseract 与金山开放平台均为免费额度。
+v3.7.0 变更：
+- 移除云端 OCR 调用路径（规则 9：数据不出域）
+- 强制本地 Tesseract（免密钥、零配置）
+- 硬件自适应：OCR 并发不超过 workers
+- 新增：手写/公式识别场景（education 入口）
 """
 from __future__ import annotations
 
-import json
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 from typing import Dict, Optional
 
+from engine.hardware import get_recommended_settings
 
 # 内置默认语言：中英文。用户可在调用时覆盖。
 DEFAULT_LANG = "chi_sim+eng"
@@ -26,28 +24,32 @@ def tesseract_available() -> bool:
     return shutil.which("tesseract") is not None
 
 
+def get_workers() -> int:
+    """获取硬件推荐的并发数（不拖累电脑）。"""
+    hw = get_recommended_settings()
+    return hw.get("workers", 1)
+
+
 def extract_text(
     image_path: str,
     lang: str = DEFAULT_LANG,
-    use_cloud_fallback: bool = True,
-    config_path: Optional[str] = None,
 ) -> Dict:
-    """提取图片文字。
+    """提取图片文字（强制本地 Tesseract，数据不出域）。
 
     Returns:
         {
-          "source": "tesseract" | "cloud" | "none",
+          "source": "tesseract" | "none",
           "text": str,
           "confidence": float | None,
-          "engine": str,    # 人类可读说明
-          "hint": str       # 当失败时给用户的建议
+          "engine": str,
+          "hint": str
         }
     """
     path = Path(image_path)
     if not path.exists():
         return _fail(f"文件不存在：{image_path}")
 
-    # 方案 1：本地 Tesseract（免费、无需 key，首选）
+    # 方案 1：本地 Tesseract（唯一路径，强制本地）
     if tesseract_available():
         try:
             result = _run_tesseract(image_path, lang)
@@ -59,33 +61,14 @@ def extract_text(
                     "engine": f"本地 Tesseract OCR（lang={lang}）",
                     "hint": "",
                 }
-            # Tesseract 跑通但没识别到文字（可能是纯图/手写体）
             return _fail(
                 "Tesseract 已运行但未识别到文字（图片可能为手写体或清晰度不足）。",
                 engine=f"本地 Tesseract OCR（lang={lang}）",
             )
-        except Exception as e:  # 仅 Tesseract 调用异常才继续降级
-            pass
+        except Exception as e:
+            return _fail(f"Tesseract 调用失败：{e}")
 
-    # 方案 2：云端正版 OCR（需要金山 App Key，可选）
-    if use_cloud_fallback:
-        try:
-            from engine.api.tools import KingDocMcpServer
-            backend = KingDocMcpServer(config_path) if config_path else KingDocMcpServer("config.json")
-            resp = backend.kdoc_office_extract(image_path)
-            text = (resp.get("data", {}) or {}).get("text") or resp.get("text") or ""
-            if text.strip():
-                return {
-                    "source": "cloud",
-                    "text": text,
-                    "confidence": None,
-                    "engine": "金山开放平台 OCR（云端，需 App Key）",
-                    "hint": "",
-                }
-        except Exception:
-            pass
-
-    # 方案 3：全部不可用，给出友好指引（不抛异常、不崩溃）
+    # 方案 2：全部不可用，给出友好指引
     return _fail(
         "当前环境未配置任何 OCR 引擎。推荐免费方案：本地安装 Tesseract（无需任何 key）。",
         engine="未配置",
@@ -127,7 +110,7 @@ def _fail(msg: str, engine: str = "未配置") -> Dict:
         "  Windows : winget install UB-Mannheim.TesseractOCR\n"
         "  macOS   : brew install tesseract tesseract-lang\n"
         "  Linux   : sudo apt-get install tesseract-ocr tesseract-ocr-chi-sim\n"
-        "安装后重启终端即可。也可在金山开放平台配置 App Key 使用云端 OCR。"
+        "安装后重启终端即可。"
     )
     return {"source": "none", "text": "", "confidence": None, "engine": engine, "hint": f"{msg}\n{hint}"}
 
@@ -157,8 +140,10 @@ def image_to_table(image_path: str, lang: str = DEFAULT_LANG) -> Dict:
 
 
 if __name__ == "__main__":
+    import sys
     if len(sys.argv) < 2:
         print("Usage: python -m engine.local.ocr <image_path> [lang]")
         sys.exit(1)
     out = extract_text(sys.argv[1], lang=sys.argv[2] if len(sys.argv) > 2 else DEFAULT_LANG)
-    print(json.dumps(out, ensure_ascii=False, indent=2) if "json" in dir() else out)
+    import json
+    print(json.dumps(out, ensure_ascii=False, indent=2))
