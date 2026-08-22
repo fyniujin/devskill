@@ -162,6 +162,54 @@ def main():
     p.add_argument("--sheet", default="Sheet1")
     p.add_argument("--cell", help="单元格地址（如 B2，需配合 --file）")
 
+    # v4.8: 纯 Python 模式增强（条件格式/数据验证/合并单元格/命名区域）
+    p = sub.add_parser("cond-format", help="条件格式（色阶/数据条/图标集/单元格规则，纯本地 openpyxl）")
+    p.add_argument("--file", required=True, help="Excel 文件路径")
+    p.add_argument("--sheet", default="Sheet1")
+    p.add_argument("--range", required=True, help="应用范围（如 A1:A100）")
+    p.add_argument("--type", required=True,
+                   choices=["color-scale", "data-bar", "icon-set", "cell-is"],
+                   help="条件格式类型")
+    p.add_argument("--operator", default="gt",
+                   choices=["gt", "lt", "eq", "geq", "leq", "between"],
+                   help="比较运算符（cell-is 类型）")
+    p.add_argument("--value", help="比较值（cell-is 类型，between 用逗号分隔如 60,90）")
+    p.add_argument("--color", default="red",
+                   choices=["red", "green", "blue", "yellow"],
+                   help="颜色（color-scale/data-bar 类型）")
+    p.add_argument("--foreground", default="", help="文本颜色（cell-is 类型）")
+
+    p = sub.add_parser("data-validation", help="数据验证（下拉列表/日期/数值范围，纯本地 openpyxl）")
+    p.add_argument("--file", required=True, help="Excel 文件路径")
+    p.add_argument("--sheet", default="Sheet1")
+    p.add_argument("--range", required=True, help="应用范围（如 B1:B100）")
+    p.add_argument("--type", required=True,
+                   choices=["list", "date", "whole", "decimal", "text-length"],
+                   help="验证类型")
+    p.add_argument("--list", default="", help="下拉选项（逗号分隔，如 '是,否'，list 类型）")
+    p.add_argument("--min", help="最小值")
+    p.add_argument("--max", help="最大值")
+    p.add_argument("--error-title", default="", help="错误提示标题")
+    p.add_argument("--error-msg", default="", help="错误提示内容")
+
+    p = sub.add_parser("merge-cells", help="合并/拆分单元格（纯本地 openpyxl）")
+    p.add_argument("--file", required=True, help="Excel 文件路径")
+    p.add_argument("--sheet", default="Sheet1")
+    p.add_argument("--range", required=True, help="范围（如 A1:D1）")
+    p.add_argument("--action", required=True,
+                   choices=["merge", "unmerge"],
+                   help="操作类型")
+    p.add_argument("--text", default="", help="合并单元格中的文本")
+
+    p = sub.add_parser("named-range", help="命名区域管理（创建/删除/列出，纯本地 openpyxl）")
+    p.add_argument("--file", required=True, help="Excel 文件路径")
+    p.add_argument("--sheet", default="Sheet1")
+    p.add_argument("--name", help="命名区域名称")
+    p.add_argument("--range", help="命名区域范围（如 A1:D100）")
+    p.add_argument("--action", required=True,
+                   choices=["create", "delete", "list"],
+                   help="操作类型")
+
     args = parser.parse_args()
 
     if args.command == "create":
@@ -290,6 +338,58 @@ def main():
             r = {"ok": True, "count": len(results), "formulas": results}
         else:
             r = {"ok": False, "error": "请指定 --formula 或 --file（可配合 --cell）"}
+    elif args.command == "cond-format":
+        # v4.8: 条件格式
+        from wps_pure_enhancements import PureEnhancements
+        enhancer = PureEnhancements()
+        r = enhancer.conditional_format(
+            filepath=args.file,
+            sheet=args.sheet,
+            range_str=args.range,
+            fmt_type=args.type,
+            operator=args.operator or "gt",
+            value=args.value or "",
+            color=args.color or "red",
+            foreground=args.foreground or "",
+        )
+    elif args.command == "data-validation":
+        # v4.8: 数据验证
+        from wps_pure_enhancements import PureEnhancements
+        enhancer = PureEnhancements()
+        list_values = [v.strip() for v in args.list.split(",") if v.strip()] if args.list else []
+        r = enhancer.data_validation(
+            filepath=args.file,
+            sheet=args.sheet,
+            range_str=args.range,
+            validation_type=args.type,
+            list_values=list_values,
+            min_val=args.min or "",
+            max_val=args.max or "",
+            error_title=args.error_title or "",
+            error_msg=args.error_msg or "",
+        )
+    elif args.command == "merge-cells":
+        # v4.8: 合并/拆分单元格
+        from wps_pure_enhancements import PureEnhancements
+        enhancer = PureEnhancements()
+        r = enhancer.merge_cells(
+            filepath=args.file,
+            sheet=args.sheet,
+            range_str=args.range,
+            action=args.action,
+            text=args.text or "",
+        )
+    elif args.command == "named-range":
+        # v4.8: 命名区域
+        from wps_pure_enhancements import PureEnhancements
+        enhancer = PureEnhancements()
+        r = enhancer.named_range(
+            filepath=args.file,
+            sheet=args.sheet,
+            name=args.name or "",
+            range_str=args.range or "",
+            action=args.action,
+        )
     else:
         r = {"ok": False, "error": "未知命令"}
 
