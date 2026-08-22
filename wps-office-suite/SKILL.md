@@ -2,8 +2,8 @@
 name: wps-office-suite
 displayName: WPS Office 全家桶
 slug: wps-office-suite
-description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v4.0新增：Word→PPT一键生成、Excel自然语言数据分析、Word合同条款审查、Excel发票OCR入账；v4.3新增：Excel深度分析（公式纠错/数据清洗/透视表/数据预测/NL2Formula）；v4.4新增：长文档排版自动化（目录/页眉页脚/标题编号/图表索引/交叉引用/格式统一）；v4.5新增：会议纪要生成（ASR转写→LLM摘要→Word）、COM健康检查（状态检测+残留进程+自动释放）；v4.6新增：Excel智能分析统一入口（6命令合并）、数据图表生成器（自动选图+生成）、文档翻译增强版（Word/Excel/PPT多格式翻译）；v4.7新增：公式解释器（反向NL2Formula，Excel公式→自然语言）、Markdown→Word/PPT转换、长文档排版统一入口（long-document --action）、长文档排版性能优化（分批处理+单次保存+进度回调）
-version: 4.7.0
+description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v4.0新增：Word→PPT一键生成、Excel自然语言数据分析、Word合同条款审查、Excel发票OCR入账；v4.3新增：Excel深度分析（公式纠错/数据清洗/透视表/数据预测/NL2Formula）；v4.4新增：长文档排版自动化（目录/页眉页脚/标题编号/图表索引/交叉引用/格式统一）；v4.5新增：会议纪要生成（ASR转写→LLM摘要→Word）、COM健康检查（状态检测+残留进程+自动释放）；v4.6新增：Excel智能分析统一入口（6命令合并）、数据图表生成器（自动选图+生成）、文档翻译增强版（Word/Excel/PPT多格式翻译）；v4.7新增：公式解释器（反向NL2Formula）、Markdown→Word/PPT、长文档排版统一入口；v4.8新增：邮件智能回复（模板+LLM个性化）、周报/月报自动生成、纯Python模式增强（条件格式/数据验证/合并单元格/命名区域）、AI统一入口wps ai --action
+version: 4.8.0
 category: 办公协作与生产力工具
 platforms:
   - windows
@@ -42,10 +42,10 @@ tags:
   建议反馈邮箱: njskills@agent.qq.com
 ---
 
-# WPS Office 全家桶 v4.7.0 ✅
+# WPS Office 全家桶 v4.8.0 ✅
 
 > 🏗️ **四引擎智能识别**：自动检测用户电脑已安装的软件，按 WPS → MS Office → LibreOffice → 纯Python 顺序选择最合适的引擎
-> ✨ **纯Python模式增强**：排序、筛选、图表、公式、统计 — 跨平台全部支持
+> ✨ **纯Python模式增强 v4.8**：排序、筛选、图表、公式、统计、条件格式、数据验证、合并单元格、命名区域 — 跨平台全部支持
 > 🔄 **自动重试**：WPS 卡住时自动重试 3 次，不用手动重启
 > ⚡ **硬件自适应**：自动检测 CPU 内存，动态调整超时和线程，不拖累电脑
 > 📚 **文档模板 + 最佳实践 + 故障排除**：代码生成3个即用模板 + 10个最佳实践案例 + 统一故障排除大章
@@ -59,6 +59,9 @@ tags:
 > 🧮 **公式解释器 v4.7**：Excel 公式 → 自然语言解释（反向 NL2Formula，纯本地实现）
 > 📝 **Markdown 转换 v4.7**：MD → Word/PPT（保留标题层级，纯本地实现）
 > 📑 **长文档排版 v4.7**：统一入口 long-document --action（8命令合并），性能优化（分批+单次保存+进度回调）
+> ✉️ **邮件智能回复 v4.8**：模板匹配 + LLM 个性化回复（纯本地，多模型降级）
+> 📊 **周报/月报生成 v4.8**：关键点 → 结构化 Word 报告（模板 + 可选 LLM 润色）
+> 🤖 **AI 统一入口 v4.8**：`wps ai --action` 统一 6 大 AI 功能入口
 > 📧 **建议反馈**：有更好建议？邮箱：[njskills@agent.qq.com](mailto:njskills@agent.qq.com)
 
 ---
@@ -117,6 +120,7 @@ python templates/generate_templates.py --dir ./output
 | **表格/图片/目录 — Word** | ✅ | ✅ | ❌ | ✅ |
 | **创建/编辑/公式/图表 — Excel** | ✅ | ✅（回退） | ✅（回退） | ✅ |
 | **排序/筛选/统计 — Excel** | ✅ | ✅（回退） | ✅（回避） | ✅ |
+| **条件格式/数据验证 — Excel** | ✅ | ✅（回退） | ❌ | ✅（v4.8 新增） |
 | **幻灯片/主题/插入 — PPT** | ✅ | ❌ | ❌ | ❌ |
 | **PPT 创建/多页 — PPT** | ✅ | ✅ | ✅（回退） | ✅ |
 
@@ -479,11 +483,12 @@ python scripts/wps_feedback.py email  # 打开邮件客户端（自动附带系�
 
 ### Q15：哪些功能在纯 Python 模式下不可用？
 
+> v4.8 新增条件格式、数据验证、合并单元格、命名区域支持，纯Python模式覆盖度显著提升。
+
 > - 添加幻灯片（add-slide）
 > - 幻灯片插入内容（insert）
 > - 幻灯片主题（theme）
 > - VBA/宏操作
-> - 条件格式
 > 
 > 替代方案：安装 WPS Office 或 MS Office 获取完整功能。
 
@@ -703,6 +708,9 @@ python scripts/wps_ppt.py engine-info
 | 公式解释器 | `python scripts/wps_excel.py formula-explain --formula "=SUM(A1:A10)"` |
 | MD→Word/PPT | `python scripts/wps_word.py md-convert --file README.md --format docx` |
 | 长文档排版 | `python scripts/wps_word.py long-document --file report.docx --action all` |
+| 邮件智能回复 | `python scripts/wps_word.py email-reply --content "已收到您的来信" --tone polite` |
+| 周报月报 | `python scripts/wps_word.py report --type weekly --points "完成A,B,C"` |
+| AI 统一入口 | `python scripts/wps_ai.py --action meeting --file audio.wav` |
 
 ### 🆕 v4.3 Excel 深度分析命令
 
@@ -800,6 +808,35 @@ python scripts/wps_word.py long-document --file report.docx --action all --prese
 python scripts/wps_word.py long-document --file report.docx --action preview --preset thesis
 ```
 
+### 🆕 v4.8 邮件智能回复 + 周报月报 + 纯Python增强 + AI统一入口
+
+```bash
+# 邮件智能回复（模板匹配 + 可选 LLM 个性化）
+python scripts/wps_word.py email-reply --content "已收到您的来信，关于项目进度..." --tone polite
+python scripts/wps_word.py email-reply --content "请查收附件" --tone formal --output 回复.docx
+python scripts/email_reply.py reply --content "谢谢" --tone friendly
+python scripts/email_reply.py batch --input-dir ./emails --output-dir ./replies
+
+# 周报/月报自动生成
+python scripts/wps_word.py report --type weekly --points "完成需求A,修复Bug B,启动项目C"
+python scripts/wps_word.py report --type monthly --points "上线v2.0,培训3场,客户拜访5家" --output 月报.docx
+python scripts/report_generator.py generate --type weekly --points "完成A,B,C" --output 周报.docx
+
+# 纯 Python 模式增强（条件格式/数据验证/合并单元格/命名区域）
+python scripts/wps_excel.py cond-format --file data.xlsx --sheet Sheet1 --range A1:A100 --type color-scale
+python scripts/wps_excel.py data-validation --file data.xlsx --sheet Sheet1 --range B1:B100 --list "是,否"
+python scripts/wps_excel.py merge-cells --file data.xlsx --sheet Sheet1 --range A1:D1
+python scripts/wps_excel.py named-range --file data.xlsx --name "销售数据" --range A1:D100
+
+# AI 统一入口（wps ai --action）
+python scripts/wps_ai.py --action email-reply --content "已收到" --tone polite
+python scripts/wps_ai.py --action report --type weekly --points "完成A,B,C"
+python scripts/wps_ai.py --action meeting --file audio.wav --output 纪要.docx
+python scripts/wps_ai.py --action contract --file 合同.docx --output 审查版.docx
+python scripts/wps_ai.py --action translate --file report.docx --output 报告_zh.docx
+python scripts/wps_ai.py --action formula --formula "=SUM(A1:A10)"
+```
+
 ### 其他工具
 
 ```bash
@@ -853,6 +890,7 @@ python templates/generate_templates.py --dir ./output  # 生成模板
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v4.8.0 | 2026-08-22 | 增加：邮件智能回复 email_reply.py（模板匹配 + 规则引擎 + 可选 LLM 个性化，纯本地实现）；增加：周报/月报自动生成 report_generator.py（关键点→结构化 Word 报告，模板 + 可选 LLM 润色）；升级：纯 Python 模式能力（条件格式/数据验证/合并单元格/命名区域，基于 openpyxl 扩展）；增加：AI 统一入口 wps ai --action（6 大 AI 功能统一入口）；增加：邮件回复 CLI 子命令（email-reply）；增加：周报月报 CLI 子命令（report）；增加：条件格式/数据验证/合并单元格/命名区域 CLI 子命令 |
 | v4.7.0 | 2026-08-17 | 增加：公式解释器 formula_explainer.py（反向 NL2Formula，Excel 公式→自然语言解释，纯本地实现，80+ 函数映射）；增加：Markdown→Word/PPT 转换器 md_converter.py（保留标题层级/表格/列表/加粗，纯本地实现）；合并：长文档排版 8 命令为 long-document 统一入口（--action 参数路由）；优化：长文档排版性能（分批处理 + 单次保存 + 进度回调，大文档不卡顿）；增加：公式解释器 CLI 子命令（formula-explain）；增加：MD 转换 CLI 子命令（md-convert）；增加：长文档排版 CLI 子命令（long-document） |
 | v4.6.1 | 2026-08-16 | 修复：ASR 引擎改为显式 Opt-in 模式（auto 仅使用本地 whisper-local，不读取外部凭证）；修复：Azure/Google STT 仅在 method 显式指定时调用，首次使用显示凭证读取范围警告；修复：LLM 翻译改为显式 Opt-in 模式（auto 仅使用 local-rule，不读取 API Key）；修复：外部 SDK 依赖（google-cloud-speech / azure-cognitiveservices-speech）补充声明至 requirements.txt |
 | v4.6.0 | 2026-08-16 | 增加：Excel 智能分析统一入口 excel-smart（6 命令合并为 1 个 --action 路由）；增加：数据图表生成器 chart_recommender.py（数据特征分析 + 智能图表推荐 + 图表嵌入 Excel）；增加：文档翻译模块 document_translator.py（Word/Excel/PPT 多格式翻译 + 多模型降级链）；增加：翻译引擎降级链（cn-llm-router → local-rule → pure-template）；增加：图表推荐规则引擎（时间序列/类别对比/相关性/多变量）；增加：硬件自适应（低配禁用复杂图表渲染）；增加：术语表支持（JSON 格式可配置） |
