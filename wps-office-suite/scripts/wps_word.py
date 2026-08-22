@@ -1,5 +1,5 @@
 """
-WPS Word CLI v4.7 - 四引擎自动调用（含会议纪要 + COM 健康检查 + 文档翻译 + MD转换）
+WPS Word CLI v4.8 - 四引擎自动调用（含会议纪要 + COM 健康检查 + 文档翻译 + MD转换 + 邮件回复 + 周报月报）
 """
 import subprocess
 import json
@@ -119,6 +119,29 @@ def main():
     p.add_argument("--input-dir", default="", help="输入目录（批量模式）")
     p.add_argument("--output-dir", default="", help="输出目录（批量模式）")
 
+    # v4.8: 邮件智能回复
+    p = sub.add_parser("email-reply", help="邮件智能回复（模板匹配 + 可选 LLM）")
+    p.add_argument("--content", required=True, help="邮件内容")
+    p.add_argument("--tone", default="friendly",
+                   choices=["friendly", "polite", "formal", "professional"],
+                   help="回复语气")
+    p.add_argument("--lang", default="zh", choices=["zh", "en"])
+    p.add_argument("--context", default="", help="上下文/历史邮件")
+    p.add_argument("--template", default="", help="自定义模板路径")
+    p.add_argument("--output", default="", help="输出回复到 Word 文档路径")
+
+    # v4.8: 周报/月报自动生成
+    p = sub.add_parser("report", help="周报/月报自动生成（关键点→Word 报告）")
+    p.add_argument("--type", required=True, choices=["weekly", "monthly"],
+                   help="报告类型")
+    p.add_argument("--points", required=True, help="关键点（逗号分隔）")
+    p.add_argument("--title", default="", help="报告标题")
+    p.add_argument("--author", default="", help="作者")
+    p.add_argument("--output", required=True, help="输出 .docx 路径")
+    p.add_argument("--tone", default="formal", choices=["formal", "casual"],
+                   help="报告语气")
+    p.add_argument("--template", default="", help="自定义报告模板路径")
+
     args = parser.parse_args()
 
     if args.command == "create":
@@ -201,6 +224,49 @@ def main():
             "numbering_style": args.numbering_style,
             "output": args.output,
         })
+    elif args.command == "email-reply":
+        # v4.8: 邮件智能回复
+        from email_reply import EmailReplier
+        replier = EmailReplier()
+        result = replier.reply(
+            content=args.content,
+            tone=args.tone,
+            lang=args.lang,
+            context=args.context,
+            template_path=args.template or "",
+        )
+        # 如果指定了 output，生成 Word 文档
+        if args.output and result.get("ok"):
+            reply_text = result.get("reply", "")
+            if reply_text:
+                try:
+                    from docx import Document
+                    from docx.shared import Pt
+                    doc = Document()
+                    doc.add_paragraph(reply_text)
+                    doc.save(args.output)
+                    result["output"] = args.output
+                except ImportError:
+                    result["docx_error"] = "python-docx 未安装，仅返回文本"
+        r = {"ok": result.get("ok", False), **result}
+    elif args.command == "report":
+        # v4.8: 周报/月报自动生成
+        from report_generator import ReportGenerator
+        gen = ReportGenerator()
+        points_list = [pt.strip() for pt in args.points.split(",") if pt.strip()]
+        if not points_list:
+            r = {"ok": False, "error": "请指定 --points（逗号分隔的关键点）"}
+        else:
+            r = gen.generate(
+                report_type=args.type,
+                points=points_list,
+                title=args.title or f"{'周' if args.type == 'weekly' else '月'}报",
+                author=args.author,
+                date="",
+                template_path=args.template or "",
+                output=args.output,
+                tone=args.tone,
+            )
     elif args.command == "md-convert":
         # v4.7: MD→Word/PPT
         from md_converter import MDConverter
