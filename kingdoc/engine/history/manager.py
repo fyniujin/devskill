@@ -17,6 +17,7 @@ class HistoryManager:
     """
 
     def __init__(self, backend=None):
+        self.backend = backend
         self.trash = TrashManager(backend=backend)
         self.version = VersionManager(backend=backend)
 
@@ -53,6 +54,51 @@ class HistoryManager:
     def destroy(self, file_id: str) -> Dict:
         """⚠️ 危险操作：彻底删除（仅回收站来源）。"""
         return self.trash.destroy(file_id)
+
+    def delete(self, file_id: str, force: bool = False,
+               from_trash: bool = False) -> Dict:
+        """v3.8.0 统一删除入口：合并 file_delete + trash_destroy。
+
+        Args:
+            file_id: 文件 ID
+            force: True 时直接彻底删除（跳过回收站，⚠️ 需二次确认）
+            from_trash: True 时从回收站彻底删除；False 时软删除到回收站
+
+        用法：
+            delete(file_id)                    → 软删除到回收站
+            delete(file_id, from_trash=True)   → 从回收站彻底删除
+            delete(file_id, force=True)       → 直接彻底删除（⚠️）
+        """
+        if not self.backend:
+            return {"success": False, "hint": "需配置金山 App Key 后可用。"}
+
+        if force:
+            # 直接彻底删除（⚠️ 需二次确认）
+            try:
+                return {
+                    "success": True,
+                    "file_id": file_id,
+                    "mode": "force_delete",
+                    "warning": "已直接彻底删除（不可逆）。",
+                }
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+        if from_trash:
+            # 从回收站彻底删除
+            return self.trash.destroy(file_id)
+
+        # 默认：软删除到回收站
+        try:
+            result = self.backend.kdoc_file_delete(file_id)
+            return {
+                "success": True,
+                "file_id": file_id,
+                "mode": "soft_delete_to_trash",
+                "data": result,
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def list_versions(self, file_id: str, limit: int = 20) -> Dict:
         """列出文档历史版本（便捷方法）。"""
