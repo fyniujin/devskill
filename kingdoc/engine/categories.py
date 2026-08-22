@@ -1,7 +1,9 @@
 """KingDoc 品类元数据模块
 
-v3.7.0 变更：7 品类扩展为 8 品类
-- 新增：history_mgmt（历史管理，合并回收站+版本历史）
+v3.8.0 变更：8 品类扩展为 9 品类
+- 新增：smart_canvas（智能画布元素级编辑，对标腾讯文档）
+- 新增：content_search（文档内容全文搜索，超越腾讯）
+- v3.7.0：新增 history_mgmt（历史管理，合并回收站+版本历史）
 - v3.6.0：已合并 mindmap+flowchart → visualization
 - v3.5.0：已合并 doc+smart_note → doc
 """
@@ -10,16 +12,26 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Tuple
 
 
-# 8 品类元数据
+# 9 品类元数据
 CATEGORIES: Dict[str, Dict] = {
     "doc": {
         "name": "文档",
         "name_en": "document",
         "doc_type": "doc",
-        "sub_types": ["doc", "smart_note"],
-        "description": "文字文档/智能文档，本地生成→上传覆盖",
+        "sub_types": ["doc", "smart_note", "smart_canvas"],
+        "description": "文字文档/智能文档/智能画布，本地生成→上传覆盖；智能画布支持元素级CRUD + Markdown追加",
         "icon": "📄",
         "edit_method": "local_generate_upload",
+        "available": True,
+    },
+    "content_search": {
+        "name": "全文搜索",
+        "name_en": "content_search",
+        "doc_type": "search",
+        "sub_types": ["content", "name"],
+        "description": "文档内容全文搜索（超越腾讯：搜内容+结果定位高亮）",
+        "icon": "🔍",
+        "edit_method": "search_api",
         "available": True,
     },
     "sheet": {
@@ -105,6 +117,8 @@ INTENT_ROUTING: Dict[str, List[str]] = {
     "visualization": ["思维导图", "mindmap", "脑图", "导图", "知识图谱", "流程图", "flowchart", "流程", "步骤图", "架构图", "可视化"],
     "attachment": ["附件", "attachment", "文件", "上传", "图片", "pdf"],
     "history_mgmt": ["历史管理", "回收站", "trash", "版本历史", "version", "恢复", "restore", "回滚", "历史版本", "误删", "撤销删除"],
+    "smart_canvas": ["智能画布", "smart_canvas", "元素编辑", "element", "元素级", "元素查询", "元素新增", "元素更新", "元素删除", "markdown追加", "增量追加", "追加内容"],
+    "content_search": ["全文搜索", "content_search", "搜内容", "搜索文档内容", "找内容", "内容搜索", "查找", "定位高亮", "搜索文档"],
 }
 
 # 子类型识别关键词（用于 doc 品类进一步识别 smart_note vs doc）
