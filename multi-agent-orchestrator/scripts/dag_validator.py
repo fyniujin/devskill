@@ -50,6 +50,18 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 # 节点 id 允许的字符
 VALID_ID_PATTERN = re.compile(r'^[a-zA-Z0-9_.-]+$')
 
+# 节点类型归组映射（7 类 → 4 类，仅认知层提示，Schema 不变）
+NODE_TYPE_GROUP = {
+    'task': '任务',
+    'approval': '人工',
+    'condition': '控制（分支）',
+    'switch': '控制（分支）',
+    'for-each': '控制（循环）',
+    'while-loop': '控制（循环）',
+    'pipeline': '复用',
+    'evaluate': '控制（评估）',
+}
+
 
 def validate_path(filepath):
     """路径安全校验：规范化路径，防止路径穿越"""
@@ -196,8 +208,9 @@ def validate_schema(pipeline):
         valid_types = ('task', 'approval', 'condition', 'switch', 'for-each', 'while-loop', 'pipeline', 'evaluate')
         node_type = agent.get('type', 'task')
         if 'type' in agent and node_type not in valid_types:
+            group = NODE_TYPE_GROUP.get(node_type, '未知')
             warnings.append(
-                f"{prefix} [type] 建议为 {'/'.join(valid_types)} 之一（当前值：{agent['type']}）"
+                f"{prefix} [type] 建议为 {'/'.join(valid_types)} 之一（当前值：{agent['type']}，归组：{group}）"
             )
 
         # 控制流节点专有字段校验
