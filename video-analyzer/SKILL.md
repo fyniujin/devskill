@@ -2,8 +2,8 @@
 slug: video-analyzer-local
 displayName: 视频分析处理
 name: video-analyzer
-description: "视频分析处理 — 本地视频反编译分析工具。将视频拆解为时间轴剧本、语音转文字、场景分析、跨模态关联和精华摘要，支持多ASR引擎切换（Whisper/Paraformer/SenseVoice）、中文NLP增强、PaddleOCR中文识别。v4.0 新增短视频平台适配（抖音/快手/B站/视频号）和自动剪辑建议（高光检测/冗余标记/EDL导出/字幕样式）。v4.1 新增tiny模型优先体验（75MB低门槛）、说话人分离质量评分、剪映draft.json导出。v4.2 新增场景管理（detect→slice一条链）、短视频爆款预测、实时直播分析（流式ASR+敏感词检测）。"
-version: 4.2.0
+description: "视频分析处理 — 本地视频反编译分析工具。将视频拆解为时间轴剧本、语音转文字、场景分析、跨模态关联和精华摘要，支持多ASR引擎切换（Whisper/Paraformer/SenseVoice）、中文NLP增强、PaddleOCR中文识别。v4.0 新增短视频平台适配（抖音/快手/B站/视频号）和自动剪辑建议（高光检测/冗余标记/EDL导出/字幕样式）。v4.1 新增tiny模型优先体验（75MB低门槛）、说话人分离质量评分、剪映draft.json导出。v4.2 新增场景管理（detect→slice一条链）、短视频爆款预测、实时直播分析（流式ASR+敏感词检测）。v4.3 新增纯音频输入（mp3/m4a/wav播客与录音）、批量队列（SQLite+硬件档位并发）、GPU自动加速（CT2 int8量化）、ASR配置统一（--asr-engine单参数）。"
+version: 4.3.0
 tags: ["video", "analysis", "transcription", "local-offline", "chinese", "asr"]
 icon: "🎬"
 author: "njskills"
@@ -320,12 +320,17 @@ A: v4.1 新增 tiny 模型优先体验（75MB），首次使用门槛从 466MB �
 
 ## 更新日志
 
-| v4.2.0 | 2026-08-17 | 合并：场景检测+章节切片为「场景管理」模块（detect→slice 一条链）；增加：短视频爆款预测（多模态特征+爆款样本对比，概率评分+改进建议）；增加：实时直播分析（流式ASR+滑动窗口+敏感词检测+实时告警）；增加：--scene-management / --viral-predict / --live-analyze 参数；优化：HTML/JSON/Markdown 报告新增爆款预测和直播分析板块 |
+| v4.3.0 | 2026-08-24 | 增加：纯音频输入（mp3/m4a/wav 播客与录音，ffmpeg 探测后直接转 16k 单声道 wav 进 ASR，跳过场景切分与 OCR，报告复用纪要版）；增加：批量队列（SQLite 任务表 + 硬件档位并发控制：low=1/mid=2/high=4，支持中断后续跑）；增加：GPU 自动加速（启动时探测 CUDA，命中则加载 Whisper CT2 int8 量化模型，失败自动回退 CPU tiny）；优化：ASR 配置统一（Whisper/Paraformer/SenseVoice 分散配置合并为 --asr-engine 单参数，auto 沿用现有自动选择逻辑）；增加：--dir / --hardware-tier / --download-ct2-model 参数 |
 
 <details>
 <summary>历史版本</summary>
 
-### v4.1.0
+### v4.2.0
+- 合并：场景检测+章节切片为「场景管理」模块（detect→slice 一条链）
+- 增加：短视频爆款预测（多模态特征+爆款样本对比，概率评分+改进建议）
+- 增加：实时直播分析（流式ASR+滑动窗口+敏感词检测+实时告警）
+- 增加：--scene-management / --viral-predict / --live-analyze 参数
+- 优化：HTML/JSON/Markdown 报告新增爆款预测和直播分析板块
 - 增加：tiny 模型优先体验（75MB 低门槛，首次使用从 466MB 降至 75MB）
 - 增加：说话人分离质量评分（声纹距离 + 重叠率，0-100 分 + 高/中/低等级）
 - 增加：剪映 draft.json 导出（可直接导入剪映专业版）
