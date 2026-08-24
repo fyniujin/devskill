@@ -1,4 +1,8 @@
-"""CLI entry point for CN Model Gateway."""
+"""CLI entry point for CN Model Gateway.
+
+v1.6.0: Added 4 new subcommands (embed, rerank, transcribe, video)
+        via shared llm_core kernel.
+"""
 from __future__ import annotations
 
 import argparse
@@ -28,7 +32,6 @@ def cmd_run(args: argparse.Namespace) -> None:
     monitor = Monitor()
     server = MCPServer(router, monitor)
 
-    # Print startup info to stderr (stdout is JSON-RPC)
     available = router.list_available()
     print(f"[cn-model-gateway] 已加载 {len(available)} 个提供商: {available}", file=sys.stderr)
     print(f"[cn-model-gateway] MCP 服务器已启动 (stdio 模式)", file=sys.stderr)
@@ -46,7 +49,6 @@ def cmd_ask(args: argparse.Namespace) -> None:
     question = args.question or input("请输入问题: ")
     msgs = [ChatMessage(role="user", content=question)]
 
-    # v1.5.0: Support --providers for multi-provider compare
     if hasattr(args, 'providers') and args.providers and len(args.providers) >= 2:
         try:
             results = router.compare_models(msgs, providers=args.providers)
@@ -62,7 +64,6 @@ def cmd_ask(args: argparse.Namespace) -> None:
             sys.exit(1)
         return
 
-    # Single provider mode
     try:
         resp = router.chat(msgs, provider=args.provider)
         print(f"\n[{resp.provider}/{resp.model}] ({resp.duration_ms}ms)")
@@ -71,7 +72,6 @@ def cmd_ask(args: argparse.Namespace) -> None:
         print("-" * 40)
         print(f"Tokens: prompt={resp.usage.get('prompt_tokens', '?')}, "
               f"completion={resp.usage.get('completion_tokens', '?')}")
-        # v1.5.0: Show tool_calls if present
         if resp.tool_calls:
             print(f"\nTool Calls:")
             for tc in resp.tool_calls:
@@ -91,7 +91,6 @@ def cmd_describe_image(args: argparse.Namespace) -> None:
     image = args.image or input("请输入图片 URL/路径: ")
     prompt = args.prompt or "请描述这张图片"
 
-    # Find adapter
     adapter = None
     if args.provider:
         adapter = router.get_adapter(args.provider)
@@ -109,6 +108,198 @@ def cmd_describe_image(args: argparse.Namespace) -> None:
         print(f"\n[{resp.provider}/{resp.model}] ({resp.duration_ms}ms)")
         print("-" * 40)
         print(resp.content)
+    except Exception as e:
+        print(f"错误: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+# --- v1.6.0: 4 new CLI subcommands ---
+
+def cmd_embed(args: argparse.Namespace) -> None:
+    """Generate text embeddings."""
+    config_path = args.config or get_default_config_path()
+    config = load_config(config_path)
+    router = ModelRouter(timeout=args.timeout, failover=not args.no_failover)
+    router.register_all(config)
+
+    texts = args.texts or []
+    if not texts:
+        # Read from stdin if not provided
+        texts = [input("请输入要嵌入的文本: ")]
+
+    adapter = None
+    if args.provider:
+        adapter = router.get_adapter(args.provider)
+    else:
+        for p in router.list_available():
+            a = router.get_adapter(p)
+            if a and hasattr(a, 'embed_text'):
+                from src.adapters.base import BaseAdapter
+                if a.embed_text.__func__ is not BaseAdapter.embed_text:
+                    adapter = a
+                    break
+        if not adapter:
+            available = router.list_available()
+            if available:
+                adapter = router.get_adapter(available[0])
+
+    if not adapter:
+        print("没有可用的模型提供商。", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        result = adapter.embed_text(texts, model=args.model)
+        print(f"\n[{result.provider}/{result.model}] ({result.duration_ms}ms)")
+        print(f"嵌入数量: {len(result.embeddings)}")
+        print(f"嵌入维度: {len(result.embeddings[0]) if result.embeddings else 0}")
+        print(f"Token: {result.usage}")
+        if args.verbose and result.embeddings:
+            print(f"\n嵌入向量 (前3个前5维):")
+            for i, emb in enumerate(result.embeddings[:3]):
+                print(f"  [{i}]: {emb[:5]}...")
+    except NotImplementedError as e:
+        print(f"不支持: {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"错误: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_rerank(args: argparse.Namespace) -> None:
+    """Rerank documents by relevance to query."""
+    config_path = args.config or get_default_config_path()
+    config = load_config(config_path)
+    router = ModelRouter(timeout=args.timeout, failover=not args.no_failover)
+    router.register_all(config)
+
+    query = args.query or input("请输入查询: ")
+    documents = args.documents or []
+    if not documents:
+        print("请输入文档（每行一个，空行结束）:")
+        while True:
+            line = input()
+            if not line:
+                break
+            documents.append(line)
+
+    adapter = None
+    if args.provider:
+        adapter = router.get_adapter(args.provider)
+    else:
+        for p in router.list_available():
+            a = router.get_adapter(p)
+            if a and hasattr(a, 'rerank'):
+                from src.adapters.base import BaseAdapter
+                if a.rerank.__func__ is not BaseAdapter.rerank:
+                    adapter = a
+                    break
+        if not adapter:
+            available = router.list_available()
+            if available:
+                adapter = router.get_adapter(available[0])
+
+    if not adapter:
+        print("没有可用的模型提供商。", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        result = adapter.rerank(query, documents, model=args.model)
+        print(f"\n[{result.provider}/{result.model}] ({result.duration_ms}ms)")
+        print(f"Token: {result.usage}\n")
+        for i, score in enumerate(result.scores):
+            doc_preview = documents[i][:60] + "..." if len(documents[i]) > 60 else documents[i]
+            print(f"  [{i+1}] {score:.4f} | {doc_preview}")
+    except NotImplementedError as e:
+        print(f"不支持: {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"错误: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_transcribe(args: argparse.Namespace) -> None:
+    """Transcribe audio to text."""
+    config_path = args.config or get_default_config_path()
+    config = load_config(config_path)
+    router = ModelRouter(timeout=args.timeout, failover=not args.no_failover)
+    router.register_all(config)
+
+    audio = args.audio or input("请输入音频文件路径/URL: ")
+
+    adapter = None
+    if args.provider:
+        adapter = router.get_adapter(args.provider)
+    else:
+        for p in router.list_available():
+            a = router.get_adapter(p)
+            if a and hasattr(a, 'audio_transcribe'):
+                from src.adapters.base import BaseAdapter
+                if a.audio_transcribe.__func__ is not BaseAdapter.audio_transcribe:
+                    adapter = a
+                    break
+        if not adapter:
+            available = router.list_available()
+            if available:
+                adapter = router.get_adapter(available[0])
+
+    if not adapter:
+        print("没有可用的模型提供商。", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        kwargs = {}
+        if args.language:
+            kwargs["language"] = args.language
+        result = adapter.audio_transcribe(audio, model=args.model, **kwargs)
+        print(f"\n[{result.provider}/{result.model}] ({result.duration_ms}ms)")
+        print(f"语言: {result.language}\n")
+        print(f"识别文本:\n{result.text}")
+    except NotImplementedError as e:
+        print(f"不支持: {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"错误: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_video(args: argparse.Namespace) -> None:
+    """Understand video content."""
+    config_path = args.config or get_default_config_path()
+    config = load_config(config_path)
+    router = ModelRouter(timeout=args.timeout, failover=not args.no_failover)
+    router.register_all(config)
+
+    video = args.video or input("请输入视频文件路径/URL: ")
+    prompt = args.prompt or "请描述这个视频的内容"
+
+    adapter = None
+    if args.provider:
+        adapter = router.get_adapter(args.provider)
+    else:
+        for p in router.list_available():
+            a = router.get_adapter(p)
+            if a and hasattr(a, 'video_understand'):
+                from src.adapters.base import BaseAdapter
+                if a.video_understand.__func__ is not BaseAdapter.video_understand:
+                    adapter = a
+                    break
+        if not adapter:
+            available = router.list_available()
+            if available:
+                adapter = router.get_adapter(available[0])
+
+    if not adapter:
+        print("没有可用的模型提供商。", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        result = adapter.video_understand(video, prompt, model=args.model)
+        print(f"\n[{result.provider}/{result.model}] ({result.duration_ms}ms)")
+        print(f"关键帧数: {result.keyframe_count}\n")
+        print(f"视频描述:\n{result.description}")
+    except NotImplementedError as e:
+        print(f"不支持: {e}", file=sys.stderr)
+        sys.exit(1)
     except Exception as e:
         print(f"错误: {e}", file=sys.stderr)
         sys.exit(1)
@@ -194,7 +385,7 @@ def cmd_price_history(args: argparse.Namespace) -> None:
     """Show price history for a provider."""
     tracker = PriceTracker()
     if not args.provider:
-        print("请指定提供商: price history -p <provider>")
+        print("请指定提供商: price-history -p <provider>")
         return
     print(tracker.generate_trend_chart(args.provider))
 
@@ -202,7 +393,6 @@ def cmd_price_history(args: argparse.Namespace) -> None:
 def cmd_cost_predict(args: argparse.Namespace) -> None:
     """Predict monthly cost based on usage."""
     tracker = PriceTracker()
-    # Example usage: 1M tokens per provider
     usage = {}
     for provider in ["deepseek", "tongyi", "zhipu", "kimi", "hunyuan", "doubao"]:
         usage[provider] = args.tokens or 1000000
@@ -245,6 +435,38 @@ def main() -> None:
     img_parser.add_argument("-p", "--provider", help="指定提供商")
     img_parser.add_argument("--model", help="具体模型 ID")
     img_parser.set_defaults(func=cmd_describe_image)
+
+    # v1.6.0: embed - text embeddings
+    embed_parser = subparsers.add_parser("embed", help="生成文本向量嵌入")
+    embed_parser.add_argument("texts", nargs="*", help="要嵌入的文本（不指定则交互输入）")
+    embed_parser.add_argument("-p", "--provider", help="指定提供商")
+    embed_parser.add_argument("--model", help="嵌入模型 ID")
+    embed_parser.add_argument("-v", "--verbose", action="store_true", help="显示完整嵌入向量")
+    embed_parser.set_defaults(func=cmd_embed)
+
+    # v1.6.0: rerank - document reranking
+    rerank_parser = subparsers.add_parser("rerank", help="按查询相关性重排序文档")
+    rerank_parser.add_argument("-q", "--query", help="查询文本")
+    rerank_parser.add_argument("-d", "--documents", nargs="*", help="待排序文档")
+    rerank_parser.add_argument("-p", "--provider", help="指定提供商")
+    rerank_parser.add_argument("--model", help="重排序模型 ID")
+    rerank_parser.set_defaults(func=cmd_rerank)
+
+    # v1.6.0: transcribe - audio transcription
+    transcribe_parser = subparsers.add_parser("transcribe", help="语音转文字")
+    transcribe_parser.add_argument("audio", nargs="?", help="音频文件路径/URL")
+    transcribe_parser.add_argument("-p", "--provider", help="指定提供商")
+    transcribe_parser.add_argument("--model", help="语音识别模型 ID")
+    transcribe_parser.add_argument("--language", help="音频语言（默认自动检测）")
+    transcribe_parser.set_defaults(func=cmd_transcribe)
+
+    # v1.6.0: video - video understanding
+    video_parser = subparsers.add_parser("video", help="理解视频内容（关键帧+视觉描述）")
+    video_parser.add_argument("video", nargs="?", help="视频文件路径/URL")
+    video_parser.add_argument("--prompt", help="描述提示（默认：请描述这个视频的内容）")
+    video_parser.add_argument("-p", "--provider", help="指定提供商")
+    video_parser.add_argument("--model", help="视觉模型 ID")
+    video_parser.set_defaults(func=cmd_video)
 
     # status - show provider status
     status_parser = subparsers.add_parser("status", help="显示提供商状态")
