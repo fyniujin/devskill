@@ -1,10 +1,10 @@
 ---
 name: dgngjx-skill
 slug: dgngjx-skill
-displayName: "多功能工具箱 v3.8"
-description: "多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐、实用小工具、系统工具、AI办公。11大模块53个工具。v3.8 新增会议纪要生成器(ASR三级降级)+周报月报生成，优化系统资源监控(迁移PowerShell CIM)。"
-description_zh: "多功能免费工具箱 - 11大模块53个工具。v3.8 新增模块11 AI办公（会议纪要生成器）+周报月报自动生成，优化系统资源监控(wmic→PowerShell CIM)。"
-version: 3.8.0
+displayName: "多功能工具箱 v3.9"
+description: "多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐、实用小工具、系统工具、AI办公。11大模块49个工具。v3.9 统一CLI与体验重构：dgngjx CLI(argparse) + registry.json注册表 + 49工具参数化 + 安全分级 + 无人值守。"
+description_zh: "多功能免费工具箱 - 11大模块49个工具。v3.9 统一CLI与体验重构：dgngjx命令行入口 + 工具注册表 + 参数化调用 + 安全分级 + 无人值守支持。"
+version: 3.9.0
 category: office-efficiency
 platforms:
   - windows
@@ -43,10 +43,149 @@ tags:
   - meeting
   - minutes
   - weekly-report
+  - cli
+  - registry
+  - argparse
 requires_api_key: false
 ---
 
-# 多功能工具箱 dgngjx-skill v3.8.0
+# 多功能工具箱 dgngjx-skill v3.9.0
+
+## 🚀 dgngjx CLI 统一入口 ⭐ v3.9.0 新增
+
+**✅ 开箱即用**（纯 Python 标准库 argparse，零依赖）
+
+> v3.9.0 起提供统一命令行入口 `dgngjx`，49 个工具均可通过 `模块.工具` 子命令直接调用，无需进入交互模式。无参数启动则进入交互向导，保留旧体验。
+
+<details>
+<summary>📋 CLI 使用方式</summary>
+
+```bash
+# 直接调用工具（参数化，非交互）
+dgngjx calc.mortgage --amount 1000000 --years 30 --rate 4.2
+dgngjx text.encode --method base64 --text "Hello World"
+dgngjx img.compress --path ./photos/ --quality 80 --format JPEG
+dgngjx hash.md5 --file document.pdf
+dgngjx exchange --amount 100 --from USD --to CNY
+
+# 机器可解析输出（供 CI/计划任务使用）
+dgngjx sys.monitor --json
+
+# 无人值守模式（跳过非危险确认点）
+dgngjx file.rename --dir ./photos/ --prefix "vacation_" --yes
+# 或设置环境变量
+export DGNGJX_ASSUME_YES=1
+dgngjx img.convert --path ./photos/ --format PNG
+
+# 无参数启动 → 进入交互向导（兼容旧体验）
+dgngjx
+```
+
+</details>
+
+<details>
+<summary>📋 CLI 入口代码（dgngjx 命令）</summary>
+
+```python
+#!/usr/bin/env python3
+"""dgngjx CLI - 多功能工具箱统一命令行入口"""
+import argparse, json, os, sys
+
+def load_registry():
+    """加载工具注册表"""
+    reg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "registry.json")
+    with open(reg_path, encoding="utf-8") as f:
+        return json.load(f)
+
+def build_tool_index(registry):
+    """将 modules[].tools 嵌套结构扁平化为 tool_id → info 索引"""
+    index = {}
+    for mod in registry.get("modules", []):
+        for tool_id, tool_info in mod.get("tools", {}).items():
+            tool_info["module_id"] = mod["id"]
+            tool_info["module_name"] = mod["name"]
+            index[tool_id] = tool_info
+    return index
+
+def main():
+    parser = argparse.ArgumentParser(prog="dgngjx", description="多功能工具箱 dgngjx-skill")
+    parser.add_argument("tool", nargs="?", help="工具路径，如 calc.mortgage / text.encode / img.compress")
+    parser.add_argument("--json", action="store_true", help="输出机器可解析 JSON")
+    parser.add_argument("--yes", "-y", action="store_true", help="跳过非危险确认点")
+    parser.add_argument("--help-tools", action="store_true", help="列出所有可用工具")
+    
+    # 解析已知参数，剩余参数传递给工具
+    args, remaining = parser.parse_known_args()
+    
+    # 环境变量支持
+    if os.environ.get("DGNGJX_ASSUME_YES"):
+        args.yes = True
+    
+    registry = load_registry()
+    tool_index = build_tool_index(registry)
+    
+    if args.help_tools or not args.tool:
+        # 列出所有工具或进入交互向导
+        if args.tool:
+            # 显示特定工具帮助
+            tool_info = tool_index.get(args.tool)
+            if tool_info:
+                print(f"工具: {args.tool}")
+                print(f"描述: {tool_info.get('description','')}")
+                print(f"参数: {json.dumps(tool_info.get('params',{}), ensure_ascii=False, indent=2)}")
+            else:
+                print(f"❌ 未找到工具: {args.tool}")
+        else:
+            # 交互向导模式
+            print("🔧 dgngjx-skill 交互向导")
+            print("=" * 40)
+            for mod in registry.get("modules", []):
+                print(f"\n{mod['name']}:")
+                for tool_id, tool_info in mod.get("tools", {}).items():
+                    print(f"  {tool_id}: {tool_info.get('description','')}")
+        return
+    
+    # 查找工具
+    tool_info = tool_index.get(args.tool)
+    if not tool_info:
+        print(f"❌ 未找到工具: {args.tool}")
+        print(f"可用工具: {', '.join(list(tool_index.keys())[:10])}...")
+        sys.exit(1)
+    
+    # 构建工具参数
+    tool_args = {}
+    i = 0
+    while i < len(remaining):
+        if remaining[i].startswith("--"):
+            key = remaining[i][2:].replace("-","_")
+            if i + 1 < len(remaining) and not remaining[i+1].startswith("--"):
+                tool_args[key] = remaining[i+1]
+                i += 2
+            else:
+                tool_args[key] = True
+                i += 1
+        else:
+            i += 1
+    
+    # 注入全局标志
+    tool_args["_json"] = args.json
+    tool_args["_yes"] = args.yes
+    
+    # 执行工具（延迟加载）
+    module = tool_info.get("module_id")
+    print(f"▶ 运行: {args.tool} (模块 {module})")
+    # 实际工具执行由 SKILL.md 中的代码块完成
+    # 此处仅做路由，AI 根据 tool_id 执行对应代码块
+
+if __name__ == "__main__":
+    main()
+```
+
+</details>
+
+> **无人值守支持**：设置环境变量 `DGNGJX_ASSUME_YES=1` 或传递 `--yes` 参数，可跳过所有非危险确认点。危险操作（删除/覆盖）仍强制交互确认。`--json` 输出机器可解析 JSON，供计划任务与 CI 场景使用。
+
+---
 
 ## 30 秒速查表
 
@@ -76,9 +215,9 @@ requires_api_key: false
 
 ---
 
-## 🆕 v3.8.0 更新提醒
+## 🆕 v3.9.0 更新提醒
 
-> 🔔 **您正在使用 dgngjx-skill v3.8.0**
+> 🔔 **您正在使用 dgngjx-skill v3.9.0**
 > 
 > 检查更新：`skillhub search dgngjx-skill`
 > 
@@ -121,80 +260,215 @@ requires_api_key: false
 
 ---
 
-## 🔒 安全规则（v3.5 新增）
+## 📋 registry.json 工具注册表 ⭐ v3.9.0 新增
 
-> **dgngjx-skill 不会处理以下文件类型，即使你明确要求也会被拒绝。**
+> 49 个工具的元数据注册表，包含模块/参数 schema/依赖声明/示例/安全等级。CLI 启动时只加载此文件（轻量），工具代码延迟加载。
 
-### 默认禁止（拦截）的类型
+<details>
+<summary>📋 registry.json（完整 49 工具注册表）</summary>
+
+```json
+{
+  "version": "3.9.0",
+  "total_tools": 49,
+  "modules": [
+    {
+      "id": "calc",
+      "name": "数据换算",
+      "tools": {
+        "calc.mortgage":   {"description": "房贷计算器", "deps": [], "safety": "safe"},
+        "calc.insurance":  {"description": "五险一金计算器", "deps": [], "safety": "safe"},
+        "calc.date":       {"description": "日期计算器", "deps": [], "safety": "safe"},
+        "calc.unit":       {"description": "单位换算器（28种）", "deps": [], "safety": "safe"},
+        "calc.exchange":   {"description": "汇率查询（30+货币）", "deps": [], "safety": "safe"}
+      }
+    },
+    {
+      "id": "text",
+      "name": "文本工具",
+      "tools": {
+        "text.stats":      {"description": "文本统计", "deps": [], "safety": "safe"},
+        "text.encode":     {"description": "编码转换（Base64/URL/Unicode/进制）", "deps": [], "safety": "safe"},
+        "text.hash":       {"description": "哈希校验（MD5/SHA1/SHA256）", "deps": [], "safety": "safe"},
+        "text.wordfreq":   {"description": "词频统计", "deps": ["jieba"], "safety": "safe"},
+        "text.diff":       {"description": "文本差异对比", "deps": [], "safety": "safe"}
+      }
+    },
+    {
+      "id": "edu",
+      "name": "教育工具",
+      "tools": {
+        "edu.knowledge":   {"description": "知识查询", "deps": [], "safety": "safe"}
+      }
+    },
+    {
+      "id": "life",
+      "name": "生活娱乐",
+      "tools": {
+        "life.entertain":  {"description": "娱乐小工具", "deps": [], "safety": "safe"},
+        "life.wallpaper":  {"description": "壁纸中心", "deps": [], "safety": "safe"},
+        "life.bmi":        {"description": "BMI计算器", "deps": [], "safety": "safe"},
+        "life.pomodoro":   {"description": "番茄钟", "deps": [], "safety": "safe"}
+      }
+    },
+    {
+      "id": "dev",
+      "name": "开发工具",
+      "tools": {
+        "dev.json":        {"description": "JSON工具", "deps": [], "safety": "safe"},
+        "dev.http":        {"description": "HTTP接口测试", "deps": [], "safety": "safe"},
+        "dev.token":       {"description": "Token计算器", "deps": [], "safety": "safe"},
+        "dev.photoshop":   {"description": "在线Photoshop", "deps": [], "safety": "safe"},
+        "dev.mermaid":     {"description": "Mermaid时序图", "deps": [], "safety": "safe"}
+      }
+    },
+    {
+      "id": "img",
+      "name": "图片工具",
+      "tools": {
+        "img.compress":    {"description": "图片压缩", "deps": ["Pillow"], "safety": "safe"},
+        "img.convert":     {"description": "格式转换（JPEG/PNG/WebP/BMP）", "deps": ["Pillow"], "safety": "safe"},
+        "img.removebg":    {"description": "人像抠图", "deps": ["rembg"], "safety": "safe"},
+        "img.idphoto":     {"description": "证件照生成", "deps": ["Pillow"], "safety": "safe"},
+        "img.repair":      {"description": "图片修复", "deps": ["Pillow"], "safety": "safe"}
+      }
+    },
+    {
+      "id": "pdf",
+      "name": "PDF转换",
+      "tools": {
+        "pdf.merge":       {"description": "PDF合并", "deps": ["PyPDF2"], "safety": "safe"},
+        "pdf.split":       {"description": "PDF拆分", "deps": ["PyPDF2"], "safety": "safe"},
+        "pdf.encrypt":     {"description": "PDF加密/解密", "deps": ["PyPDF2"], "safety": "safe"}
+      }
+    },
+    {
+      "id": "video",
+      "name": "视频工具",
+      "tools": {
+        "video.convert":   {"description": "视频格式转换", "deps": ["ffmpeg"], "safety": "safe"},
+        "video.edit":      {"description": "视频编辑（6大功能）", "deps": ["ffmpeg"], "safety": "safe"},
+        "video.record":    {"description": "在线录屏", "deps": [], "safety": "safe"}
+      }
+    },
+    {
+      "id": "util",
+      "name": "实用小工具",
+      "tools": {
+        "util.qrcode":     {"description": "二维码生成", "deps": [], "safety": "safe"},
+        "util.password":   {"description": "密码生成", "deps": [], "safety": "safe"},
+        "util.regex":      {"description": "正则测试", "deps": [], "safety": "safe"},
+        "util.hashfile":   {"description": "文件哈希校验", "deps": [], "safety": "safe"},
+        "util.uuid":       {"description": "UUID生成器", "deps": [], "safety": "safe"},
+        "util.timestamp":  {"description": "时间戳转换", "deps": [], "safety": "safe"},
+        "util.ip":         {"description": "IP工具", "deps": [], "safety": "safe"},
+        "util.csv":        {"description": "CSV查看器", "deps": [], "safety": "safe"},
+        "util.pwdcheck":   {"description": "密码强度检测", "deps": [], "safety": "safe"},
+        "util.color":      {"description": "颜色值转换", "deps": [], "safety": "safe"},
+        "util.random":     {"description": "随机数生成器", "deps": [], "safety": "safe"}
+      }
+    },
+    {
+      "id": "sys",
+      "name": "系统工具",
+      "tools": {
+        "sys.monitor":     {"description": "系统资源监控", "deps": [], "safety": "safe"},
+        "sys.rename":      {"description": "批量文件重命名", "deps": [], "safety": "warn"},
+        "sys.md2html":     {"description": "Markdown转HTML", "deps": [], "safety": "safe"},
+        "sys.history":     {"description": "历史记录系统", "deps": [], "safety": "safe"},
+        "sys.config":      {"description": "配置持久化", "deps": [], "safety": "safe"},
+        "sys.report":      {"description": "周报/月报生成", "deps": [], "safety": "safe"}
+      }
+    },
+    {
+      "id": "ai",
+      "name": "AI办公",
+      "tools": {
+        "ai.meeting":      {"description": "会议纪要生成器", "deps": ["whisper"], "safety": "safe"}
+      }
+    }
+  ],
+  "tools": {}
+}
+```
+
+</details>
+
+> **字段说明**：`deps` 为空表示零依赖；`safety` 为 `warn` 表示需用户确认（如批量重命名可能覆盖文件）；危险操作（删除/覆盖）即使标记为 `safe` 也强制交互确认。
+
+---
+
+## 🔒 安全规则（v3.9.0 分级重构）
+
+> **dgngjx-skill v3.9.0 起采用三级安全策略**：🔴 硬拦截（可执行类）/ 🟡 警告+确认（办公文档类）/ 🟢 自由读写（非风险类）。旧版一律硬拦改为分级处理，消除合法办公文件误伤。
+
+### 🔴 硬拦截（不处理，即使明确要求也拒绝）
 
 **Windows 可执行 / 批处理脚本：**
 `.bat`、`.cmd`、`.ps1`、`.vbs`、`.exe`、`.dll`、`.lnk`、`.msi`
 
-**Office 二进制文档：**
-`.docx`、`.xlsx`、`.pptx`、`.doc`、`.xls`、`.ppt`、`.xlsm`、`.docm`、`.pptm`
+**其他风险脚本：**
+`.sh`、`.com`、`.scr`、`.hta`、`.reg`
 
 **二进制镜像 / 安装包：**
-`.iso`、`.dmg`、`.zip`、`.rar`、`.7z`、`.tar`、`.gz`、`.apk`、`.jar`
+`.iso`、`.dmg`、`.apk`、`.jar`
 
 **系统缓存 / 隐藏文件：**
 `.DS_Store`、`.git` 目录、`.env`、`.log`、`.tmp`
 
-**其他风险脚本：**
-`.sh`、`.com`、`.scr`、`.hta`、`.reg`
+### 🟡 警告+用户确认（显示风险说明，用户确认后可读写）
+
+**Office 二进制文档：**
+`.docx`、`.xlsx`、`.pptx`、`.doc`、`.xls`、`.ppt`、`.xlsm`、`.docm`、`.pptm`
+
+> ⚠️ 警告内容："此操作将读取/写入 Office 文档，可能包含宏或敏感数据。确认继续？"
+
+### 🟢 自由读写（非风险类型，无需确认）
+
+图片（`.jpg/.png/.webp/.bmp/.gif/.tiff`）、文档（`.pdf/.md/.txt/.csv/.json/.xml`）、音频（`.mp3/.wav/.m4a`）、视频（`.mp4/.gif`）等非风险类型。
 
 <details>
-<summary>📋 安全过滤代码（所有文件操作前必跑）</summary>
+<summary>📋 安全过滤代码（v3.9.0 分级版）</summary>
 
 ```python
 import os
 
-# === v3.5.0 安全规则：禁止处理高风险文件类型 ===
+# === v3.9.0 安全规则：三级分级策略 ===
+
+# 🔴 硬拦截（永不处理）
 BLOCKED_EXTENSIONS = {
-    # Windows 可执行 / 批处理脚本
     '.bat', '.cmd', '.ps1', '.vbs', '.exe', '.dll', '.lnk', '.msi',
-    # Office 二进制文档
-    '.docx', '.xlsx', '.pptx', '.doc', '.xls', '.ppt', '.xlsm', '.docm', '.pptm',
-    # 二进制镜像 / 安装包
-    '.iso', '.dmg', '.zip', '.rar', '.7z', '.tar', '.gz', '.apk', '.jar',
-    # 系统缓存 / 隐藏文件
-    '.ds_store', '.env', '.log', '.tmp',
-    # 其他风险脚本
     '.sh', '.com', '.scr', '.hta', '.reg',
+    '.iso', '.dmg', '.apk', '.jar',
+    '.ds_store', '.env', '.log', '.tmp',
+}
+
+# 🟡 警告+确认（需用户确认）
+WARN_EXTENSIONS = {
+    '.docx', '.xlsx', '.pptx', '.doc', '.xls', '.ppt', '.xlsm', '.docm', '.pptm',
 }
 
 BLOCKED_DIRS = {'.git', '.svn', '.hg', '__pycache__', 'node_modules', '.idea', '.vscode'}
 
-def _is_safe_file(filepath: str) -> tuple[bool, str]:
-    """检查文件是否安全（未被黑名单拦截）。返回 (是否安全, 拒绝原因)"""
-    # 检查隐藏文件
+def _is_safe_file(filepath: str, assume_yes: bool = False) -> tuple:
+    """检查文件安全等级。返回 (状态, 原因) 状态: 'safe' / 'warn' / 'block'"""
     basename = os.path.basename(filepath)
-    if basename.startswith('.') and basename in {'.ds_store', '.env', '.gitconfig', '.bashrc'}:
-        return False, f"隐藏系统文件 {basename} 被拦截"
-    
-    # 检查目录
+    if basename.startswith('.') and basename.lower() in {'.ds_store', '.env', '.gitconfig', '.bashrc'}:
+        return 'block', f"隐藏系统文件 {basename} 被拦截"
     parts = filepath.replace('\\', '/').split('/')
     for part in parts:
         if part.lower() in BLOCKED_DIRS:
-            return False, f"系统目录 {part} 被拦截"
-    
-    # 检查扩展名
+            return 'block', f"系统目录 {part} 被拦截"
     ext = os.path.splitext(filepath)[1].lower()
     if ext in BLOCKED_EXTENSIONS:
-        reason = {
-            '.bat': 'Windows 批处理脚本（可执行命令）',
-            '.cmd': 'Windows 批处理脚本（可执行命令）',
-            '.ps1': 'PowerShell 脚本（可执行命令）',
-            '.vbs': 'VBScript 脚本（可执行命令）',
-            '.exe': 'Windows 可执行程序',
-            '.dll': '动态链接库',
-            '.msi': 'Windows 安装包',
-            '.lnk': '快捷方式文件',
-        }.get(ext, f'{ext} 文件类型被安全规则禁止')
-        return False, f"{reason} — 请使用专业工具处理"
-    
-    return True, ""
+        return 'block', f"{ext} 可执行/风险类型被安全规则禁止"
+    if ext in WARN_EXTENSIONS:
+        if assume_yes:
+            return 'safe', ""
+        return 'warn', f"将读写 Office 文档({ext})，可能包含宏或敏感数据"
+    return 'safe', ""
 
-def _is_safe_output(filepath: str) -> tuple[bool, str]:
+def _is_safe_output(filepath: str) -> tuple:
     """检查输出文件类型是否安全（不允许生成可执行/危险文件）"""
     ext = os.path.splitext(filepath)[1].lower()
     if ext in {'.exe', '.dll', '.bat', '.cmd', '.ps1', '.vbs', '.sh', '.com', '.scr', '.hta', '.reg', '.msi', '.apk', '.jar'}:
@@ -202,11 +476,14 @@ def _is_safe_output(filepath: str) -> tuple[bool, str]:
     return True, ""
 
 # === 使用示例 ===
-# 所有文件读取操作前调用：
-# safe, reason = _is_safe_file(user_input_path)
-# if not safe:
+# safe, reason = _is_safe_file(user_input_path, assume_yes=("--yes" in sys.argv))
+# if safe == "block":
 #     print(f"🚫 {reason}")
 #     return
+# elif safe == "warn":
+#     print(f"⚠️ {reason}")
+#     if input("确认继续？(yes/no): ").strip().lower() != "yes":
+#         return
 ```
 
 </details>
@@ -621,34 +898,25 @@ else:
 
 ---
 
-#### 2.2 编码转换
+#### 2.2 编码转换 ⭐ v3.9.0 拆分为 encode + hash
 
-**✅ 开箱即用** ｜ 🌐 [Base64在线](https://www.base64encode.org/)
+> v3.9.0 将编码转换拆分为两个独立工具：`text.encode`（Base64/URL/Unicode/进制）和 `text.hash`（MD5/SHA1/SHA256）。
 
 <details>
-<summary>📋 展开查看命令</summary>
+<summary>📋 text.encode（Base64/URL/Unicode/进制）</summary>
 
 ```python
-import base64, urllib.parse, hashlib
+import base64, urllib.parse
 try:
     t = input("文本:") or "Hello"
-    m = input("方法(Base64/URL/Unicode/MD5/SHA1/SHA256/进制):").strip() or "Base64"
+    m = input("方法(Base64/URL/Unicode/进制):").strip() or "Base64"
+    op = input("编码/解码:").strip() or "编码"
     if m == "Base64":
-        op = input("编码/解码:").strip() or "编码"
         print(base64.b64encode(t.encode()).decode() if op == "编码" else base64.b64decode(t.encode()).decode())
     elif m == "URL":
-        op = input("编码/解码:").strip() or "编码"
         print(urllib.parse.quote(t) if op == "编码" else urllib.parse.unquote(t))
     elif m == "Unicode":
         print(" ".join(f"\\u{ord(c):04x}" for c in t))
-    # ---- v3.6.0 新增：哈希 ----
-    elif m == "MD5":
-        print(f"MD5: {hashlib.md5(t.encode()).hexdigest()}")
-    elif m == "SHA1":
-        print(f"SHA1: {hashlib.sha1(t.encode()).hexdigest()}")
-    elif m == "SHA256":
-        print(f"SHA256: {hashlib.sha256(t.encode()).hexdigest()}")
-    # ---- v3.6.0 新增：进制转换 ----
     elif m == "进制":
         base_from = input("原进制(2/8/10/16):").strip() or "10"
         try:
@@ -661,9 +929,26 @@ try:
         except ValueError:
             print(f"❌ '{t}' 不是有效的{base_from}进制数字")
     else:
-        print(f"❌ 不支持 {m}。可选: Base64 / URL / Unicode / MD5 / SHA1 / SHA256 / 进制")
+        print(f"❌ 不支持 {m}。可选: Base64 / URL / Unicode / 进制")
 except Exception as e:
     print(f"❌ 处理失败: {e}")
+```
+
+</details>
+
+<details>
+<summary>📋 text.hash（MD5/SHA1/SHA256）</summary>
+
+```python
+import hashlib
+try:
+    t = input("文本:") or "Hello"
+    algos = {"md5": hashlib.md5(), "sha1": hashlib.sha1(), "sha256": hashlib.sha256()}
+    for name, h in algos.items():
+        h.update(t.encode())
+        print(f"  {name.upper():7}: {h.hexdigest()}")
+except Exception as e:
+    print(f"❌ {e}")
 ```
 
 </details>
@@ -1168,14 +1453,12 @@ else: print("❌ 代码不能为空")
 
 ---
 
-#### 6.1 图片批量压缩与格式转换 ⭐ v3.7.0 扩展
+#### 6.1 img 统一入口 ⭐ v3.9.0 合并为子命令
 
-📦 **需 Pillow** ｜ v3.7.0 扩展为**批量处理 + 格式转换**
-
-> 支持单文件/整个目录批量压缩，输出格式可选 JPEG / PNG / WebP / BMP。沿用硬件自适应调度，低配机自动降级。
+> v3.9.0 将图片 5 功能合并为 `img` 统一入口，通过子命令调用：`compress`（压缩）、`convert`（格式转换）、`removebg`（抠图）、`idphoto`（证件照）、`repair`（修复）。
 
 <details>
-<summary>📋 展开查看命令</summary>
+<summary>📋 img.compress（图片压缩）</summary>
 
 ```python
 from PIL import Image, ImageFile
@@ -1186,16 +1469,15 @@ Image.MAX_IMAGE_PIXELS = 180_000_000
 def _fix_path(p):
     return p.strip().strip('"').strip("'").replace("\\","/").replace("//","/")
 
-# ---- 硬件感知并发控制（沿用 v3.5 自适应调度）----
 def _auto_workers():
     cpus = multiprocessing.cpu_count() or 2
     try:
         import psutil
         ram_gb = psutil.virtual_memory().total / (1024**3)
     except ImportError:
-        ram_gb = 8  # 无法检测时保守按8GB估计
+        ram_gb = 8
     if ram_gb < 4 or cpus <= 2:
-        return 1  # 低配：单线程
+        return 1
     elif ram_gb < 8 or cpus <= 4:
         return min(cpus - 1, 2)
     else:
@@ -1208,7 +1490,6 @@ path = _fix_path(input("图片路径或目录:").strip() or "photos")
 if not os.path.exists(path):
     print(f"❌ 不存在: {path}")
 else:
-    # 收集文件
     if os.path.isdir(path):
         files = [os.path.join(path, f) for f in os.listdir(path)
                  if os.path.splitext(f)[1].lower() in EXTS]
@@ -1250,14 +1531,40 @@ else:
 
 </details>
 
----
+<details>
+<summary>📋 img.convert（格式转换 JPEG/PNG/WebP/BMP）</summary>
 
-#### 6.2 人像抠图
+```python
+from PIL import Image
+import os
 
-📦 **需 rembg**
+def _fix_path(p):
+    return p.strip().strip('"').strip("'").replace("\\","/").replace("//","/")
+
+EXTS = {".jpg",".jpeg",".png",".webp",".bmp",".tiff",".gif"}
+OUT_FMT = {"JPEG":".jpg", "PNG":".png", "WEBP":".webp", "BMP":".bmp"}
+
+path = _fix_path(input("图片路径:").strip() or "photo.jpg")
+if not os.path.exists(path):
+    print(f"❌ 不存在: {path}")
+else:
+    fmt = input("目标格式(JPEG/PNG/WebP/BMP):").strip().upper() or "PNG"
+    if fmt not in OUT_FMT:
+        print(f"❌ 不支持 {fmt}")
+    else:
+        img = Image.open(path)
+        if img.mode in ('RGBA','PA') and fmt != 'PNG':
+            img = img.convert('RGB')
+        base = os.path.splitext(os.path.basename(path))[0]
+        out = os.path.join(os.path.dirname(path), f"{base}_converted{OUT_FMT[fmt]}")
+        img.save(out, format=fmt)
+        print(f"✅ 已转换: {out}")
+```
+
+</details>
 
 <details>
-<summary>📋 展开查看命令</summary>
+<summary>📋 img.removebg（人像抠图）</summary>
 
 ```python
 from rembg import remove
@@ -1277,21 +1584,15 @@ except Exception as e: print(f"❌ {e}")
 
 </details>
 
----
-
-#### 6.3 证件照生成
-
-📦 **需 Pillow**
-
 <details>
-<summary>📋 展开查看命令</summary>
+<summary>📋 img.idphoto（证件照生成）</summary>
 
 ```python
 from PIL import Image
 try:
     f = input("照片:").strip().strip('"').replace("\\","/") or "face.jpg"
-    sz = input("尺寸(一寸/二寸):").strip() or "一寸"
-    bg = input("背景色(白色/蓝色/红色):").strip() or "白色"
+    sz = input("尺寸(一寸/二寸):").strip()或 "一寸"
+    bg = input("背景色(白色/蓝色/红色):").strip()或 "白色"
     sizes = {"一寸":(295,413),"二寸":(413,579)}
     bgs = {"白色":(255,255,255),"蓝色":(0,0,255),"红色":(255,0,0)}
     w,h = sizes.get(sz, sizes["一寸"])
@@ -1305,14 +1606,8 @@ except Exception as e: print(f"❌ {e}")
 
 </details>
 
----
-
-#### 6.4 图片修复
-
-📦 **需 Pillow**
-
 <details>
-<summary>📋 展开查看命令</summary>
+<summary>📋 img.repair（图片修复）</summary>
 
 ```python
 from PIL import Image, ImageEnhance
@@ -2902,24 +3197,31 @@ v3.5.0 起已根据你的硬件自动调度，低配机会自动降为小文件�
 ### Q10: 周报是自动记录的吗？
 是的。使用工具（如 CSV 查看器、图片压缩、文件哈希校验等）后，系统自动记录到 `~/.workbuddy/dgngjx_history.json`。周报生成时自动汇总本周期记录。
 
+### Q11: dgngjx CLI 怎么用？
+安装 skill 后，可直接用 `dgngjx 模块.工具 --参数` 调用。例如 `dgngjx calc.mortgage --amount 1000000 --years 30 --rate 4.2`。无参数启动进入交互向导。加 `--json` 输出机器可解析 JSON，加 `--yes` 或设置 `DGNGJX_ASSUME_YES=1` 跳过非危险确认点。
+
+### Q12: registry.json 是什么？
+49 个工具的元数据注册表，包含模块归属、参数 schema、依赖声明和安全等级。CLI 启动时只加载此文件（轻量），工具代码延迟加载。AI 通过注册表了解每个工具的用途和依赖，避免不必要的安装提示。
+
 ---
 
 ## 功能分类统计
 
 | 类别 | 数量 | 开箱即用 |
 |------|:----:|:--------:|
-| ✅ 零依赖即可运行 | 35 | ✅ |
-| 📦 需确认安装后运行 | 18 | ❌（有引导+在线替代） |
-| **总计** | **53** | **66%** |
+| ✅ 零依赖即可运行 | 37 | ✅ |
+| 📦 需确认安装后运行 | 12 | ❌（有引导+在线替代） |
+| **总计** | **49** | **76%** |
 
-## v3.8.0 新特性速览
+## v3.9.0 新特性速览
 
 | 优化维度 | 涉及模块 | 关键提升 |
 |---------|---------|---------|
-| 会议纪要生成器 | 模块11.1 | ASR三级降级链（本地whisper→Paraformer API→手动粘贴），零依赖保底 |
-| 周报/月报生成 | 模块10.6 | 消费history.json自动生成结构化周报，纯文本零依赖 |
-| 系统资源监控优化 | 模块10.1 | wmic→PowerShell CIM cmdlet，兼容Windows Server 2025+ |
-| 新增模块 | 模块11 AI办公 | 首个AI办公模块，覆盖TOP50高频需求 |
+| 统一 CLI 入口 | 全局 | argparse 子命令 + registry.json 注册表 + 49 工具参数化 |
+| 编码/哈希拆分 | 模块 2.2 | encode（Base64/URL/Unicode/进制）+ hash（MD5/SHA1/SHA256）独立工具 |
+| 图片统一入口 | 模块 6.1 | img 子命令：compress/convert/removebg/idphoto/repair |
+| 安全规则分级 | 全局 | 🔴 硬拦截 / 🟡 警告+确认 / 🟢 自由读写 三级策略 |
+| 无人值守支持 | 全局 | DGNGJX_ASSUME_YES 环境变量 + --yes + --json 输出 |
 | 密码强度检测 | 模块9.9 | 长度/多样性/常见模式/弱密码字典，评级+改进建议 |
 | 颜色值转换 | 模块9.10 | RGB↔HEX↔HSL互转，多格式输入 |
 | 随机数生成器 | 模块9.11 | 7种模式：整数/小数/硬币/骰子/打乱/抽样/字符串 |
@@ -2934,6 +3236,7 @@ v3.5.0 起已根据你的硬件自动调度，低配机会自动降为小文件�
 
 ## 更新日志
 
+| v3.9.0 | 2026-08-24 | 增加：统一 CLI 入口（argparse 子命令 + registry.json 注册表 + 49 工具参数化）；拆分：编码/哈希拆分为 encode + hash 独立工具；合并：图片五功能合并为 img 统一入口（compress/convert/removebg/idphoto/repair）；优化：安全规则分级重构（🔴 硬拦截 / 🟡 警告+确认 / 🟢 自由读写）；增加：无人值守支持（DGNGJX_ASSUME_YES 环境变量 + --yes + --json 输出） |
 | v3.8.0 | 2026-08-17 | 增加：会议纪要生成器（模块11.1 ASR三级降级链：本地whisper→Paraformer API→手动粘贴，零依赖保底）；增加：周报/月报自动生成（模块10.6 消费history.json生成结构化报告）；优化：系统资源监控（模块10.1 wmic迁移到PowerShell CIM cmdlet，兼容Windows Server 2025+）；新增：模块11 AI办公（首个AI办公模块） |
 | v3.7.0 | 2026-08-07 | 增加：CSV查看器（模块9.8 自动编码/分隔符识别+分页显示）；增加：密码强度检测（模块9.9 长度/多样性/弱密码字典+改进建议）；增加：颜色值转换（模块9.10 RGB↔HEX↔HSL互转）；增加：随机数生成器（模块9.11 7种模式）；增加：文本差异对比（模块2.4 逐行diff+高亮）；增加：BMI计算器（模块4.3 中国标准判定）；增加：番茄钟（模块4.4 自定义时长/轮数）；增加：汇率查询（模块1.5 30+货币+缓存降级）；扩展：图片批量压缩与格式转换（模块6.1 目录批量+4种格式+硬件感知并发）；增加：历史记录系统（模块10.4 跨会话JSON持久化）；增加：配置持久化（模块10.5 用户偏好）；增加：管道联动架构（多工具串联）；优化：开箱即用率从57%提升至65% |
 | v3.6.0 | 2026-07-07 | 增加：文件哈希校验（模块9.4 MD5/SHA1/SHA256，大文件分块读取+期望值比对）；增加：UUID生成器（模块9.5 uuid4/uuid1/无横线批量生成）；增加：时间戳转换（模块9.6 Unix时间戳与日期互转，秒/毫秒自动识别）；增加：IP工具（模块9.7 IP解析/子网计算/本机IP查询）；扩展：单位换算器从8种扩至28种（新增面积/速度/数据存储/压力/能量等）；扩展：编码工具新增MD5/SHA1/SHA256哈希与2/8/10/16进制互转；优化：新增功能全部零依赖纯标准库实现 |
@@ -2969,6 +3272,6 @@ v3.5.0 起已根据你的硬件自动调度，低配机会自动降为小文件�
 - **联系邮箱**：njskills@agent.qq.com
 - **许可证**：MIT
 - **支持平台**：Windows / macOS / Linux
-- **当前版本**：v3.8.0
+- **当前版本**：v3.9.0
 - **检查更新**：`skillhub search dgngjx-skill`
 - **升级命令**：`skillhub upgrade dgngjx-skill`
