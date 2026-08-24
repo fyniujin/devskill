@@ -1,5 +1,5 @@
 """
-文档翻译模块 v4.6.1
+文档翻译模块 v4.9.0
 功能：Word/Excel/PPT 文档专业翻译，支持多引擎降级
 
 v4.6.1 变更:
@@ -142,8 +142,18 @@ API Key 将读取并发送至外部服务。
 """, file=sys.stderr)
     
     def _translate_llm(self, text: str, src: str, tgt: str) -> Dict:
-        """LLM 翻译（仅显式调用）"""
-        # 根据 method 确定使用哪个外部服务
+        """LLM 翻译（优先 llm_bridge 桥接，降级直接 API）"""
+        # v4.9: 优先通过 llm_bridge 走 cn-llm-router（白名单探测 + subprocess）
+        try:
+            from llm_bridge import translate as bridge_translate, is_router_available, INSTALL_HINT
+            if is_router_available():
+                result = bridge_translate(text, src, tgt, timeout=60)
+                if result.get("ok"):
+                    return {"text": result["text"], "model": result.get("model", ""), "method": "cn-llm-router"}
+        except ImportError:
+            pass
+        
+        # 降级：直接调用外部 API
         if self.method == "cn-llm-router":
             base_url = os.environ.get("LLM_ROUTER_BASE_URL", "https://api.openai.com/v1")
             api_key = os.environ.get("LLM_ROUTER_API_KEY", "")
@@ -154,7 +164,7 @@ API Key 将读取并发送至外部服务。
         model = os.environ.get("LLM_MODEL", "gpt-4o-mini")
         
         if not api_key:
-            raise ValueError("未配置 API Key")
+            raise ValueError(f"未配置 API Key。{INSTALL_HINT if self.method == 'cn-llm-router' else ''}")
         
         import urllib.request
         import urllib.error
@@ -427,7 +437,7 @@ def _cli():
     """CLI 入口"""
     import argparse
     
-    parser = argparse.ArgumentParser(description="文档翻译模块 v4.6.1")
+    parser = argparse.ArgumentParser(description="文档翻译模块 v4.9.0")
     sub = parser.add_subparsers(dest="command", required=True)
     
     # translate
