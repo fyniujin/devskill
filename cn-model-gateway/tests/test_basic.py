@@ -481,5 +481,187 @@ class TestMCPToolMerge(unittest.TestCase):
         self.assertNotIn("compare_models", server._tools)
 
 
+class TestNewToolsV16(unittest.TestCase):
+    """Tests for 4 new MCP tools (v1.6.0)."""
+
+    def setUp(self):
+        self.router = ModelRouter()
+        self.monitor = Monitor()
+        self.server = MCPServer(self.router, self.monitor)
+
+    def test_embed_text_tool_exists(self):
+        """embed_text tool should be registered."""
+        self.assertIn("embed_text", self.server._tools)
+
+    def test_rerank_tool_exists(self):
+        """rerank tool should be registered."""
+        self.assertIn("rerank", self.server._tools)
+
+    def test_audio_transcribe_tool_exists(self):
+        """audio_transcribe tool should be registered."""
+        self.assertIn("audio_transcribe", self.server._tools)
+
+    def test_video_understand_tool_exists(self):
+        """video_understand tool should be registered."""
+        self.assertIn("video_understand", self.server._tools)
+
+    def test_embed_text_has_texts_param(self):
+        """embed_text tool should have texts parameter."""
+        tool = self.server._tools["embed_text"]
+        props = tool["inputSchema"]["properties"]
+        self.assertIn("texts", props)
+
+    def test_rerank_has_query_and_documents_params(self):
+        """rerank tool should have query and documents parameters."""
+        tool = self.server._tools["rerank"]
+        props = tool["inputSchema"]["properties"]
+        self.assertIn("query", props)
+        self.assertIn("documents", props)
+
+    def test_audio_transcribe_has_audio_param(self):
+        """audio_transcribe tool should have audio parameter."""
+        tool = self.server._tools["audio_transcribe"]
+        props = tool["inputSchema"]["properties"]
+        self.assertIn("audio", props)
+
+    def test_video_understand_has_video_param(self):
+        """video_understand tool should have video parameter."""
+        tool = self.server._tools["video_understand"]
+        props = tool["inputSchema"]["properties"]
+        self.assertIn("video", props)
+
+
+class TestNewToolCount(unittest.TestCase):
+    """Test that v1.6.0 has exactly 8 MCP tools."""
+
+    def test_tool_count_is_8(self):
+        """Should have 8 tools: ask_model, describe_image, embed_text, rerank, audio_transcribe, video_understand, list_providers, health_check."""
+        router = ModelRouter()
+        monitor = Monitor()
+        server = MCPServer(router, monitor)
+        req = {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
+        resp = server.handle_request(req)
+        tools = resp["result"]["tools"]
+        tool_names = {t["name"] for t in tools}
+        expected = {
+            "ask_model", "describe_image", "embed_text", "rerank",
+            "audio_transcribe", "video_understand", "list_providers", "health_check"
+        }
+        self.assertEqual(tool_names, expected)
+
+
+class TestEmbedTextBase(unittest.TestCase):
+    """Tests for embed_text on BaseAdapter (default NotImplementedError)."""
+
+    def setUp(self):
+        from src.adapters.deepseek import DeepSeekAdapter
+        self.adapter = DeepSeekAdapter(api_key="test-key")
+
+    def test_deepseek_has_embed_text(self):
+        """DeepSeek adapter should have embed_text method."""
+        self.assertTrue(hasattr(self.adapter, 'embed_text'))
+
+    def test_embed_text_not_raises_type_error(self):
+        """DeepSeek embed_text should accept list of texts."""
+        import inspect
+        sig = inspect.signature(self.adapter.embed_text)
+        params = list(sig.parameters.keys())
+        self.assertIn("texts", params)
+
+
+class TestRerankBase(unittest.TestCase):
+    """Tests for rerank on BaseAdapter."""
+
+    def setUp(self):
+        from src.adapters.zhipu import ZhiPuAdapter
+        self.adapter = ZhiPuAdapter(api_key="test-key")
+
+    def test_zhipu_has_rerank(self):
+        """ZhiPu adapter should have rerank method."""
+        self.assertTrue(hasattr(self.adapter, 'rerank'))
+
+
+class TestKernelVersion(unittest.TestCase):
+    """Tests for shared kernel version."""
+
+    def test_kernel_version_exists(self):
+        """llm_core should have __kernel_version__."""
+        from src import llm_core
+        self.assertTrue(hasattr(llm_core, '__kernel_version__'))
+
+    def test_kernel_version_matches(self):
+        """llm_core version should be 1.6.0."""
+        from src import llm_core
+        self.assertEqual(llm_core.__version__, "1.6.0")
+
+
+class TestEmbedResult(unittest.TestCase):
+    """Tests for EmbeddingResult type."""
+
+    def test_embedding_result_creation(self):
+        """EmbeddingResult should be creatable."""
+        from src.llm_core.types import EmbeddingResult
+        result = EmbeddingResult(
+            provider="deepseek",
+            model="deepseek-embedding",
+            embeddings=[[0.1, 0.2, 0.3]],
+            usage={"total_tokens": 10},
+            duration_ms=100,
+        )
+        self.assertEqual(result.provider, "deepseek")
+        self.assertEqual(len(result.embeddings), 1)
+        self.assertEqual(result.duration_ms, 100)
+
+
+class TestRerankResult(unittest.TestCase):
+    """Tests for RerankResult type."""
+
+    def test_rerank_result_creation(self):
+        """RerankResult should be creatable."""
+        from src.llm_core.types import RerankResult
+        result = RerankResult(
+            provider="zhipu",
+            model="rerank",
+            scores=[0.9, 0.5, 0.1],
+            usage={"total_tokens": 20},
+            duration_ms=200,
+        )
+        self.assertEqual(result.provider, "zhipu")
+        self.assertEqual(len(result.scores), 3)
+
+
+class TestTranscriptionResult(unittest.TestCase):
+    """Tests for TranscriptionResult type."""
+
+    def test_transcription_result_creation(self):
+        """TranscriptionResult should be creatable."""
+        from src.llm_core.types import TranscriptionResult
+        result = TranscriptionResult(
+            provider="zhipu",
+            model="glm-asr",
+            text="你好世界",
+            language="zh",
+            duration_ms=300,
+        )
+        self.assertEqual(result.text, "你好世界")
+        self.assertEqual(result.language, "zh")
+
+
+class TestVideoUnderstandingResult(unittest.TestCase):
+    """Tests for VideoUnderstandingResult type."""
+
+    def test_video_result_creation(self):
+        """VideoUnderstandingResult should be creatable."""
+        from src.llm_core.types import VideoUnderstandingResult
+        result = VideoUnderstandingResult(
+            provider="zhipu",
+            model="glm-4v",
+            description="视频展示了一只猫",
+            keyframe_count=5,
+            duration_ms=400,
+        )
+        self.assertEqual(result.keyframe_count, 5)
+
+
 if __name__ == "__main__":
     unittest.main()
