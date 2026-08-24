@@ -174,9 +174,18 @@ contract-review/
 
 ## 安装 Ollama（推荐免费方案）
 
+> ⚠️ **安全提示**：以下安装方式涉及下载远程脚本。建议先下载到本地，校验文件完整性后再执行。
+
 ```bash
-# macOS / Linux
-curl -fsSL https://ollama.ai/install.sh | sh
+# macOS / Linux（推荐方式：下载后校验再执行）
+# 1. 下载安装脚本
+curl -fsSL -o install-ollama.sh https://ollama.ai/install.sh
+# 2. 查看脚本内容，确认无异常后再执行
+cat install-ollama.sh
+# 3. 执行安装
+bash install-ollama.sh
+# 4. 清理脚本
+rm install-ollama.sh
 ollama pull qwen2.5:7b
 ollama serve
 
