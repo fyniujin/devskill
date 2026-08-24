@@ -1,5 +1,5 @@
 """
-Excel 智能分析器 v4.3.0
+Excel 智能分析器 v4.9.0
 ========================
 六大核心能力：
   1. 公式自动纠错（#REF!/#VALUE!/#DIV/0!/#N/A/#NAME?）
@@ -7,7 +7,11 @@ Excel 智能分析器 v4.3.0
   3. 透视表自动生成（智能选行/列/值字段）
   4. 数据可视化建议（基于数据特征推荐图表类型）
   5. 数据预测（移动平均/指数平滑/线性回归）
-  6. 自然语言转公式（NL → Excel 公式，规则引擎优先 + LLM 可选降级）
+  6. 自然语言转公式（NL → Excel 公式，规则引擎优先 + 多轮澄清 + LLM 可选降级）
+
+v4.9.0 变更：
+  - NL2Formula 增加 clarify.py 多轮澄清：歧义检测 → 槽位填充 → 反向验证
+  - 版本升级到 v4.9.0
 
 分层架构：
   数据探查层 (DataProfiler) → 智能解析层 (FormulaFixer/PivotRecommender/DataPredictor/NL2Formula) → 输出与可视化层
@@ -859,7 +863,10 @@ class NL2Formula:
     """
     自然语言转 Excel 公式
     规则9：规则引擎优先，外部 LLM 可选 + 降级
+    v4.9.0：增加多轮澄清（clarify.py），在规则引擎匹配前先做歧义检测和槽位填充
     """
+
+    VERSION = "v4.9.0"
 
     # 公式模板库
     FORMULA_TEMPLATES = [
@@ -953,11 +960,36 @@ class NL2Formula:
         self.filepath = filepath
         self.sheet = sheet
 
-    def convert(self, query: str, use_llm: bool = False) -> Dict:
+    def detect_ambiguity(self, query: str) -> Dict:
+        """
+        歧义检测（v4.9 新增，调用 clarify.py）
+        """
+        try:
+            from clarify import AmbiguityDetector
+            detector = AmbiguityDetector()
+            return detector.detect(query)
+        except ImportError:
+            return {"success": False, "error": "clarify 模块不可用", "ambiguities": []}
+
+    def convert(self, query: str, use_llm: bool = False, clarify: bool = False) -> Dict:
         """
         将自然语言转换为 Excel 公式
         规则9：规则引擎优先，LLM 可选 + 降级
+        v4.9：clarify=True 时先做歧义检测和槽位填充
         """
+        # v4.9: 多轮澄清（可选）
+        clarification_result = None
+        if clarify:
+            try:
+                from clarify import ClarificationLoop
+                loop = ClarificationLoop()
+                clarification_result = loop.run(query)
+                if clarification_result.get("success"):
+                    # 用澄清后的 query 替换原始 query
+                    query = clarification_result.get("clarified_query", query)
+            except ImportError:
+                pass
+
         # 规则引擎匹配
         best_match = None
         best_score = 0
@@ -979,6 +1011,7 @@ class NL2Formula:
                 "explanation": best_match["explanation"],
                 "example": best_match["example"],
                 "method": "rule_engine",
+                "clarification": clarification_result,
             }
 
         # 规则引擎无法匹配，尝试 LLM（可选）
@@ -998,6 +1031,7 @@ class NL2Formula:
                 "同比增长率", "环比增长率", "占比", "排名",
                 "条件求和", "条件计数", "查找", "四舍五入", "if判断",
             ],
+            "clarification": clarification_result,
         }
 
     def _try_llm_convert(self, query: str) -> Optional[Dict]:
@@ -1216,6 +1250,7 @@ if __name__ == "__main__":
     p_nl2f.add_argument("--file", help="Excel 文件路径（可选，用于上下文）")
     p_nl2f.add_argument("--sheet", default="Sheet1")
     p_nl2f.add_argument("--use-llm", action="store_true")
+    p_nl2f.add_argument("--clarify", action="store_true", help="启用多轮澄清（歧义检测+槽位填充）")
 
     # clean
     p_clean = sub.add_parser("clean", help="数据清洗分析")
@@ -1245,7 +1280,7 @@ if __name__ == "__main__":
     elif args.command == "nl2formula":
         result = analyze_excel(
             args.file or "", "nl2formula",
-            query=args.query, use_llm=args.use_llm,
+            query=args.query, use_llm=args.use_llm, clarify=args.clarify,
         )
     elif args.command == "clean":
         result = analyze_excel(args.file, "clean", sheet=args.sheet)
