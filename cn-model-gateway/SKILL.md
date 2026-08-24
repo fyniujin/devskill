@@ -2,9 +2,9 @@
 slug: cn-model-gateway
 displayName: 国产模型 MCP 服务器
 name: cn-model-gateway
-description: "国产大模型统一 MCP 服务器，通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline / n8n 等 18+ Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包、MiniMax、零一万物、百川智能、阶跃星辰十家模型的统一调用接口。新增 5 个非 MCP 框架适配器：LangChain Tool、AutoGPT Plugin、CrewAI Tool、Coze 插件、Dify 工具节点，实现从 MCP 生态到全 Agent 生态的扩展。内置模型性能基准测试套件（50 道题库、6 维度评分、雷达图对比、历史追踪）和 Token 价格实时追踪（价格抓取、变更通知、趋势图、成本预测）。支持工具调用（ask_model/describe_image/list_providers/health_check）、资源读取（配置/使用统计）、预置 prompt 模板（代码审查/翻译），内置统一错误映射、流式 SSE 输出、使用量统计、硬件感知并发控制。auto 模式支持能力画像排序 + 自动故障转移（超时/失败切备用）；API key 支持环境变量优先读取；SQLite 启用 WAL 模式支持多 Agent 框架并发写入；支持多模态视觉模型（Qwen-VL/GLM-4V/豆包视觉）和图片理解（describe_image）；支持 Function Calling / Tool Use（ask_model 传入 tools 参数）。config.json 填写 api_key 即可启动，无需 GPU、不做微调、不做私有部署，只做标准 MCP 协议网关。"
-version: 1.5.0
-tags: ["mcp", "llm", "deepseek", "tongyi", "zhipu", "kimi", "hunyuan", "doubao", "minimax", "lingyi", "baichuan", "stepfun", "agent", "json-rpc", "claude-code", "cursor", "model-gateway", "chinese-ai"]
+description: "国产大模型统一 MCP 服务器，通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline / n8n 等 18+ Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包、MiniMax、零一万物、百川智能、阶跃星辰十家模型的统一调用接口。新增 5 个非 MCP 框架适配器：LangChain Tool、AutoGPT Plugin、CrewAI Tool、Coze 插件、Dify 工具节点，实现从 MCP 生态到全 Agent 生态的扩展。内置模型性能基准测试套件（50 道题库、6 维度评分、雷达图对比、历史追踪）和 Token 价格实时追踪（价格抓取、变更通知、趋势图、成本预测）。支持 8 个 MCP 工具（ask_model/describe_image/embed_text/rerank/audio_transcribe/video_understand/list_providers/health_check）、资源读取（配置/使用统计）、预置 prompt 模板（代码审查/翻译），内置统一错误映射、流式 SSE 输出、使用量统计、硬件感知并发控制。auto 模式支持能力画像排序 + 自动故障转移（超时/失败切备用）；API key 支持环境变量优先读取；SQLite 启用 WAL 模式支持多 Agent 框架并发写入；支持多模态视觉模型（Qwen-VL/GLM-4V/豆包视觉）和图片理解（describe_image）；支持 Function Calling / Tool Use（ask_model 传入 tools 参数）；新增文本向量嵌入（embed_text）、文档重排序（rerank）、语音转文字（audio_transcribe）、视频理解（video_understand）四个新工具。config.json 填写 api_key 即可启动，无需 GPU、不做微调、不做私有部署，只做标准 MCP 协议网关。"
+version: 1.7.0
+tags: ["mcp", "llm", "deepseek", "tongyi", "zhipu", "kimi", "hunyuan", "doubao", "minimax", "lingyi", "baichuan", "stepfun", "agent", "json-rpc", "claude-code", "cursor", "model-gateway", "chinese-ai", "embedding", "rerank", "audio", "video"]
 icon: "🔌"
 author: "njskills"
 license: "MIT"
@@ -31,6 +31,10 @@ CN Model Gateway 是一个**纯 Python、零运行时依赖**的国产大模型�
 | 你想对比同一问题在多个模型上的回答差异 | ✅ `ask_model` 传入 `providers=[a,b]` 即可对比 |
 | 你想让模型描述一张图片 | ✅ `describe_image` 工具，支持 Qwen-VL/GLM-4V/豆包视觉 |
 | 你想让模型调用工具（Function Calling） | ✅ `ask_model` 传入 `tools` 参数，返回 `tool_calls` |
+| 你想生成文本向量嵌入 | ✅ `embed_text` 工具，支持 deepseek/zhipu/doubao/tongyi |
+| 你想对文档按相关性重排序 | ✅ `rerank` 工具，支持 zhipu 等 |
+| 你想将语音转为文字 | ✅ `audio_transcribe` 工具 |
+| 你想理解视频内容 | ✅ `video_understand` 工具（关键帧+视觉描述） |
 | 你想统计调用量、token 消耗、各模型使用占比 | ✅ 内置 SQLite 统计 + 周报功能 |
 | 你希望错误信息是中文的、不暴露原始英文 API 报错 | ✅ 统一错误映射，全部返回中文 |
 | 你希望在低配电脑上用，不希望 AI 把你的内存吃满 | ✅ 硬件感知并发控制（自动采集 CPU/内存 → 动态限制并发数） |
@@ -78,7 +82,7 @@ cp config/config.json.example config/config.json
 }
 ```
 
-启动 Agent 框架后，即可自动发现 4 个工具 + 2 个资源 + 2 个 prompt 模板。
+启动 Agent 框架后，即可自动发现 8 个工具 + 2 个资源 + 2 个 prompt 模板。
 
 ### 方式二：命令行直接提问
 
@@ -94,6 +98,18 @@ python main.py ask "解释量子计算" --providers deepseek tongyi zhipu
 
 # 描述一张图片
 python main.py describe_image "https://example.com/photo.jpg" -p tongyi
+
+# 生成文本向量嵌入
+python main.py embed "文本1" "文本2" -p deepseek
+
+# 文档重排序
+python main.py rerank -q "查询" -d "文档1" "文档2" "文档3" -p zhipu
+
+# 语音转文字
+python main.py transcribe "audio.mp3" -p zhipu
+
+# 理解视频内容
+python main.py video "video.mp4" -p zhipu
 
 # 查看已配置模型状态
 python main.py status
@@ -129,6 +145,10 @@ print(resp.content)
 |--------|------|---------|
 | `ask_model` | 向模型提问（单家/多家对比/Function Calling） | `question`（必填）, `provider`（可选）, `providers`（可选列表，指定 2+ 家对比）, `model`（可选）, `temperature`（可选）, `tools`（可选，Function Calling 工具定义） |
 | `describe_image` | 向视觉模型发送图片，返回描述或回答 | `image`（必填，URL/base64/文件路径）, `prompt`（可选，默认"请描述这张图片"）, `provider`（可选）, `model`（可选） |
+| `embed_text` | 将文本转换为向量嵌入（embedding） | `texts`（必填，文本列表）, `provider`（可选）, `model`（可选） |
+| `rerank` | 对文档列表按查询相关性重排序 | `query`（必填）, `documents`（必填，文档列表）, `provider`（可选）, `model`（可选） |
+| `audio_transcribe` | 将音频文件转换为文字（语音识别） | `audio`（必填，URL/base64/文件路径）, `provider`（可选）, `model`（可选）, `language`（可选） |
+| `video_understand` | 理解视频内容（关键帧+视觉描述） | `video`（必填，URL/文件路径）, `prompt`（可选）, `provider`（可选）, `model`（可选） |
 | `list_providers` | 列出所有已配置且可用的模型提供商 | 无 |
 | `health_check` | 检查所有已配置提供商的连通性 | 无 |
 
@@ -234,7 +254,7 @@ gh release list --repo your-org/cn-model-gateway
 
 ## 能力边界
 
-- 仅支持文本对话和图片理解（v1.5.0 新增多模态），不支持音频/视频理解
+- 支持文本对话、图片理解（v1.5.0 新增多模态）、文本向量嵌入（v1.6.0）、文档重排序（v1.6.0）、语音转文字（v1.6.0）、视频理解（v1.6.0）
 - 支持 Function Calling / Tool Use（v1.5.0 新增，通过 `tools` 参数传入）
 - 不支持本地模型推理或 GPU 部署
 - auto 模式支持故障转移（v1.4.0 新增），默认按能力画像排序 + 超时自动切备用
@@ -258,6 +278,18 @@ A: 使用 `describe_image` 工具，传入 `image`（URL/base64/文件路径）�
 
 **Q: 如何使用 Function Calling？**
 A: 在 `ask_model` 工具中传入 `tools` 参数（工具定义列表），模型可能会在响应中返回 `tool_calls`。你需要自行执行工具并将结果作为后续对话的输入。
+
+**Q: 如何生成文本向量嵌入？**
+A: 使用 `embed_text` 工具，传入 `texts` 列表。支持 deepseek（deepseek-embedding）、zhipu（embedding-2）、doubao（doubao-embedding）、tongyi（text-embedding-v2）等。
+
+**Q: 如何对文档进行重排序？**
+A: 使用 `rerank` 工具，传入 `query` 和 `documents` 列表。支持 zhipu（rerank）等提供商。
+
+**Q: 如何将语音转为文字？**
+A: 使用 `audio_transcribe` 工具，传入音频文件路径或 URL。支持 zhipu、doubao 等提供商。
+
+**Q: 如何理解视频内容？**
+A: 使用 `video_understand` 工具，传入视频文件路径或 URL。系统会自动抽取关键帧并通过视觉模型生成描述。
 
 **Q: 各家模型的默认模型是什么？**
 A: deepseek-chat / qwen-turbo / glm-4-flash / moonshot-v1-8k / hunyuan-standard / doubao 系列。可通过 `model` 参数覆盖。
@@ -286,11 +318,11 @@ A: 完全不需要。本 skill 只做 API 网关，不进行本地推理。
 
 ## 更新日志
 
-| v1.5.0 | 2026-08-16 | 合并 MCP 工具：ask_model + compare_models → ask_model（新增可选 providers 参数，空=单家，≥2 家=对比）；新增多模态视觉支持：ChatMessage 加 image 字段 + describe_image MCP 工具 + 视觉适配器多模态 payload（Qwen-VL/GLM-4V/豆包视觉）；新增 Function Calling / Tool Use：ChatResponse 加 tool_calls 字段 + BaseAdapter 加 format_tools/parse_tool_calls 方法 + ask_model 支持 tools 参数；SKILL.md 全面更新工具列表/能力边界/FAQ | 改进 auto 模式故障转移：auto_select() 从 random.choice 改为能力画像 + 健康检查有序选择；chat() 和 stream_chat() 新增自动故障转移循环，失败/超时自动切备用提供商；支持环境变量优先读取 api_key（DEEPSEEK_API_KEY / DASHSCOPE_API_KEY 等 10 个），config.json 向后兼容；SQLite 全部启用 WAL 模式（PRAGMA journal_mode=WAL），支持多 Agent 框架并发写入；新增 --timeout 和 --no-failover CLI 参数；新增 3 个故障转移+环境变量+WAL 单元测试（总计 40 tests） |
-
+| v1.7.0 | 2026-08-24 | 引入 llm-core 共享内核——adapters/cost_tracker/cache/health_check/config/yaml_simple 公共代码抽为 llm-core/ 源码目录，build_core.py 构建脚本 vendor 注入本 skill 包，生成 _core_lock.json 版本锁确保同源；build_core.py 三个子命令（inject 注入 / check 版本一致性检查 / regression 双端回归门禁）；集成 calibrate.py 能力实测校准器——跑标准题集（分类/代码/长文各 5 题）实测回填画像分数，标注来源+日期，支持全量/抽样预算配置；ernie.py 适配器精简——推荐走 OpenAI 兼容通道，原生签名路径保留作兜底
+| v1.6.0 | 2026-08-24 | 新增共享内核（llm-core monorepo）：抽取 src/llm_core/ 共享内核模块，支持 MCP 形态与 CLI 形态共用同一份 core（adapters/router/error_map/cost/cache/monitor/benchmark），构建时注入同版副本+版本锁；新增 4 个 MCP 工具：embed_text（文本向量嵌入，支持 deepseek/zhipu/doubao/tongyi）、rerank（文档重排序，支持 zhipu）、audio_transcribe（语音转文字）、video_understand（关键帧抽取+视觉模型描述→视频摘要）；BaseAdapter 新增 4 个抽象方法（embed_text/rerank/audio_transcribe/video_understand）+ 降级 NotImplementedError 机制；CLI 新增 4 个子命令（embed/rerank/transcribe/video）；SKILL.md 全面更新工具列表/能力边界/FAQ |
+| v1.5.0 | 2026-08-16 | 合并 MCP 工具：ask_model + compare_models → ask_model（新增可选 providers 参数，空=单家，≥2 家=对比）；新增多模态视觉支持：ChatMessage 加 image 字段 + describe_image MCP 工具 + 视觉适配器多模态 payload（Qwen-VL/GLM-4V/豆包视觉）；新增 Function Calling / Tool Use：ChatResponse 加 tool_calls 字段 + BaseAdapter 加 format_tools/parse_tool_calls 方法 + ask_model 支持 tools 参数；SKILL.md 全面更新工具列表/能力边界/FAQ |
+| v1.4.0 | 2026-08-16 | 改进 auto 模式故障转移：auto_select() 从 random.choice 改为能力画像 + 健康检查有序选择；chat() 和 stream_chat() 新增自动故障转移循环，失败/超时自动切备用提供商；支持环境变量优先读取 api_key（DEEPSEEK_API_KEY / DASHSCOPE_API_KEY 等 10 个），config.json 向后兼容；SQLite 全部启用 WAL 模式（PRAGMA journal_mode=WAL），支持多 Agent 框架并发写入；新增 --timeout 和 --no-failover CLI 参数；新增 3 个故障转移+环境变量+WAL 单元测试（总计 40 tests） |
 | v1.3.0 | 2026-08-01 | 新增模型性能基准测试套件（benchmark.py：50 道题库、6 维度评分、雷达图对比、历史追踪）；新增 Token 价格实时追踪（price_tracker.py：价格抓取、变更通知、趋势图、成本预测）；新增 4 个 CLI 子命令（benchmark/price/benchmark-history/price-history/cost-predict）；测试覆盖新增 8 个 benchmark + price_tracker 单元测试（总计 37 tests） |
-
 | v1.2.0 | 2026-07-24 | 新增 5 个非 MCP 框架适配器（LangChain Tool、AutoGPT Plugin、CrewAI Tool、Coze 插件、Dify 工具节点）；扩展框架适配层从 MCP 生态到全 Agent 生态；新增 frameworks 模块（5 个适配器 + 统一导出）；测试覆盖新增 11 个框架适配器单元测试（总计 29 tests） |
-
 | v1.1.0 | 2026-07-17 | 新增 4 家模型提供商（MiniMax/零一万物/百川智能/阶跃星辰）；更新 DeepSeek-V3 支持（deepseek-chat, deepseek-reasoner）；更新 Kimi 新版本（moonshot-v1-32k, moonshot-v1-128k）；扩展统一错误映射覆盖 10 家厂商；支持模型表格同步更新 |
 | v1.0.0 | 2026-07-16 | 初始版本发布，包含：MCP JSON-RPC 2.0 完整协议适配（tools/list/call + resources/list/read + prompts/list/get）；6 家国产模型适配器（DeepSeek/通义/智谱/Kimi/混元/豆包）；统一错误映射（4 种 MCP 标准错误码 + 中文 message）；流式 SSE 输出；本地 MCP 服务器 stdio 启动；内置 4 个工具（ask_model/compare_models/list_providers/health_check）；2 个 prompt 模板（code_review/translate）；使用量统计（SQLite + 周报）；硬件感知并发控制（自动采集 CPU/内存 → 动态分配并发数）；纯 Python 标准库零依赖；CLAUDE.md/Cursor/Cline 配置文件模板 |
