@@ -175,3 +175,25 @@ selftest_schedule:
   alert_channel: log    # log / webhook / both
   webhook_url: ""       # 企业微信/webhook 地址
   notify_on: failure    # all / failure（failure = 只在异常时通知）
+
+# ═══════ MCP Server（V1.7 新增） ═══════
+mcp_server:
+  # 是否启用 MCP Server 模式
+  # 启用后，运行 `python scripts/mcp_server.py` 即启动 stdio JSON-RPC 2.0 服务
+  enabled: true
+
+  # 暴露的工具列表（默认全部暴露）
+  # 可缩减为 ["search"] 或 ["search", "fetch"] 等子集
+  tools:
+    - search
+    - synthesize
+    - fetch
+
+  # 单次工具调用超时（秒）
+  # 超时后返回错误响应，不中断服务
+  timeout: 30
+
+  # 降级策略
+  # auto = LLM 不可用时自动降级为抽取式
+  # extractive = 强制抽取式（不调用 LLM）
+  degradation: auto
