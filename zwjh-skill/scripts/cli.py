@@ -44,7 +44,8 @@ except Exception:
 
 from scripts import (config, store, embeddings, retrieval, graph, deposit,
                      health, backup, legacy, setup, update_check, hardware, version,
-                     conflict_resolver, export, narrative, multimodal, archive)
+                     conflict_resolver, export, narrative, multimodal, archive,
+                     rebuild_index, embedder)
 
 
 # ── 子命令实现 ────────────────────────────────────────────────────────────
@@ -377,6 +378,18 @@ def cmd_mcp(args):
     run()
 
 
+def cmd_rebuild_index(args):
+    """重建存量记忆向量索引。"""
+    r = rebuild_index.rebuild_with_progress(batch_size=args.batch)
+    print(json.dumps(r, ensure_ascii=False, indent=2))
+
+
+def cmd_embedder_info(args):
+    """查看 embedding 模型状态。"""
+    info = embedder.get_model_info()
+    print(json.dumps(info, ensure_ascii=False, indent=2))
+
+
 def cmd_status_overview(args):
     h = health.audit()
     print("═══════════════════════════════════════════")
@@ -572,6 +585,15 @@ def build_parser() -> argparse.ArgumentParser:
     # MCP 服务器
     mcp = sub.add_parser("mcp", help="启动 MCP 服务器（跨 skill 记忆总线）")
     mcp.set_defaults(func=cmd_mcp)
+
+    # 重建索引
+    ri = sub.add_parser("rebuild-index", help="重建存量记忆向量索引")
+    ri.add_argument("--batch", type=int, default=50, help="批次大小（默认 50）")
+    ri.set_defaults(func=cmd_rebuild_index)
+
+    # Embedder 信息
+    ei = sub.add_parser("embedder-info", help="查看 embedding 模型状态")
+    ei.set_defaults(func=cmd_embedder_info)
 
     return p
 
