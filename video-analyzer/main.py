@@ -40,6 +40,9 @@ from core.speaker_diarization.quality_scorer import QualityScorer
 from core.scene_manager import SceneManager
 from core.viral_predictor import ViralPredictor
 from core.live_analyzer import LiveAnalyzer
+from core.media_probe import MediaProbe
+from core.queue_manager import QueueManager
+from core.gpu_accelerator import GPUAccelerator
 
 logger = get_logger(__name__)
 
@@ -129,6 +132,14 @@ def parse_args():
                         help="启用短视频爆款预测")
     parser.add_argument("--live-analyze", action="store_true",
                         help="启用实时直播分析（流式ASR+敏感词检测）")
+    parser.add_argument("--dir", default=None,
+                        help="批量处理目录（扫描视频文件逐个入队）")
+    parser.add_argument("--hardware-tier", default=None,
+                        choices=["low", "mid", "high"],
+                        help="硬件档位（决定批量并发数）")
+    parser.add_argument("--download-ct2-model", default=None,
+                        choices=["tiny", "small", "medium"],
+                        help="下载 Whisper CT2 量化模型")
     
     return parser.parse_args()
 
@@ -225,6 +236,15 @@ def main():
     else:
         resource_monitor = None
     
+    # ========== GPU 自动加速探测（v4.3 新增） ==========
+    gpu_accelerator = GPUAccelerator(config)
+    gpu_probe_result = gpu_accelerator.probe_cuda()
+    if gpu_probe_result["device"] == "cuda":
+        logger.info(f"🚀 GPU 加速已启用: {gpu_probe_result.get('gpu_name', 'unknown')}")
+    else:
+        logger.info("💻 GPU 不可用，使用 CPU 模式")
+        logger.info(gpu_accelerator.get_fallback_message())
+    
     # 命令行参数覆盖配置 (优先级最高)
     if args.model:
         config["whisper"]["model_name"] = args.model
@@ -268,27 +288,39 @@ def main():
         video_path = input_handler.process(args.input)
         logger.info(f"   视频路径: {video_path}")
         
-        # ========== 阶段 2: 媒体处理 ==========
-        logger.info("🔧 [2/7] 媒体处理...")
-        media = MediaProcessor(config)
-        media_info = media.get_media_info(video_path)
-        logger.info(f"   分辨率: {media_info['width']}x{media_info['height']}")
-        logger.info(f"   时长: {media_info['duration']:.1f}s")
-        logger.info(f"   帧率: {media_info['fps']:.1f}")
+        # ========== 媒体探测（v4.3 新增：纯音频支持） ==========
+        media_probe = MediaProbe(config)
+        is_pure_audio = media_probe.is_pure_audio(video_path)
         
-        # 预估处理时间
-        if not args.no_adaptive:
-            probe = HardwareProbe(config)
-            time_est = probe.estimate_processing_time(media_info['duration'], media_info)
-            logger.info(f"   ⏱️  预估处理时间: {time_est['estimated_formatted']}")
-        
-        # 提取音频
-        audio_path = media.extract_audio(video_path)
-        logger.info(f"   音频已提取: {audio_path}")
-        
-        # 提取帧序列 (根据硬件能力自动选择采样率)
-        frames_dir = media.extract_frames(video_path)
-        logger.info(f"   帧序列已提取到: {frames_dir}")
+        if is_pure_audio:
+            logger.info("🎵 检测到纯音频输入，启用音频模式...")
+            media_info = media_probe.get_media_info_for_video(video_path)
+            audio_path = media_info["audio_path"]
+            frames_dir = None
+            logger.info(f"   时长: {media_info['duration']:.1f}s")
+            logger.info(f"   音频已转换: {audio_path}")
+        else:
+            # ========== 阶段 2: 媒体处理 ==========
+            logger.info("🔧 [2/7] 媒体处理...")
+            media = MediaProcessor(config)
+            media_info = media.get_media_info(video_path)
+            logger.info(f"   分辨率: {media_info['width']}x{media_info['height']}")
+            logger.info(f"   时长: {media_info['duration']:.1f}s")
+            logger.info(f"   帧率: {media_info['fps']:.1f}")
+            
+            # 预估处理时间
+            if not args.no_adaptive:
+                probe = HardwareProbe(config)
+                time_est = probe.estimate_processing_time(media_info['duration'], media_info)
+                logger.info(f"   ⏱️  预估处理时间: {time_est['estimated_formatted']}")
+            
+            # 提取音频
+            audio_path = media.extract_audio(video_path)
+            logger.info(f"   音频已提取: {audio_path}")
+            
+            # 提取帧序列 (根据硬件能力自动选择采样率)
+            frames_dir = media.extract_frames(video_path)
+            logger.info(f"   帧序列已提取到: {frames_dir}")
         
         # ========== 阶段 3: 语音识别 ==========
         logger.info("🎙️  [3/7] 语音转文字...")
@@ -355,71 +387,83 @@ def main():
                 logger.info(f"   声纹距离: {quality_score.get('voiceprint_distance')}, 重叠率得分: {quality_score.get('overlap_ratio')}")
                 logger.info(f"   建议: {quality_score.get('suggestion')}")
         
-        # ========== 阶段 4: 场景检测 ==========
-        logger.info("🎬 [4/7] 场景检测...")
-        scene_detector = SceneDetector(config)
-        scenes = scene_detector.detect_scenes(video_path, frames_dir)
-        logger.info(f"   检测到 {len(scenes['scenes'])} 个场景")
-        
-        # 如果仅需要场景切割，到此为止
-        if args.scenes_only:
-            import json
-            output_path = os.path.join(args.output, "scenes_only.json")
-            os.makedirs(args.output, exist_ok=True)
-            with open(output_path, "w", encoding="utf-8") as f:
-                json.dump(scenes, f, ensure_ascii=False, indent=2)
-            logger.info(f"✅ 场景 JSON 已保存: {output_path}")
-            return
-        
-        # ========== 阶段 5: 视觉分析 ==========
-        logger.info("🔍 [5/7] 视觉分析...")
-        visual_analyzer = VisualAnalyzer(config)
-        visual_data = visual_analyzer.analyze(scenes, video_path)
-        logger.info(f"   视觉分析完成")
-        
-        # ✨ 中文 NLP 增强：物体标签 + 场景标签中文化
-        if nlp_enhancer:
-            from core.nlp import get_chinese_label
-            for scene_data in visual_data.get("scenes", []):
-                # 物体标签中文化
-                for obj in scene_data.get("objects", []):
-                    name = obj.get("name", "")
-                    obj["name_zh"] = get_chinese_label(name)
-                # 场景标签中文化
-                scene_types = scene_data.get("scene_types", [])
-                scene_data["scene_types_zh"] = nlp_enhancer.translate_scene_labels(scene_types)
-        
-        # ========== 阶段 6: 时空对齐与融合 ==========
-        logger.info("🔗 [6/7] 时空对齐与语义融合...")
-        
-        workers = config.get("processing", {}).get("num_workers", 4)
-        logger.info(f"   使用 {workers} 个子进程并行处理")
-        
-        alignment = AlignmentEngine(config)
-        aligned_data = alignment.align(transcript, scenes, visual_data, media_info)
-        
-        fusion = SemanticFusion(config)
-        fused_data = fusion.fuse(aligned_data)
-        logger.info(f"   融合完成")
-        
-        # ✨ 中文 NLP 增强：融合数据中的人名/地名/术语识别
-        if nlp_enhancer and nlp_enhancer.use_ner:
-            for scene in fused_data.get("scenes", []):
-                dialog = scene.get("content", {}).get("dialog", "")
-                if dialog:
-                    entities = nlp_enhancer.recognize_entities(dialog)
-                    scene["entities"] = entities
-                    terms = nlp_enhancer.detect_terminology(dialog)
-                    scene["terminology"] = terms
-        
-        # ========== 阶段 7: 精华提取与报告 ==========
-        logger.info("✨ [7/7] 精华提取与报告生成...")
-        
+        # ========== 纯音频模式跳过场景检测和视觉分析 ==========
+        scenes = None
+        visual_data = None
+        aligned_data = None
+        fused_data = None
         highlights = None
-        if not args.no_highlight:
-            extractor = HighlightExtractor(config)
-            highlights = extractor.extract(fused_data)
-            logger.info(f"   提取 {highlights.get('total_highlights', 0)} 个精华片段")
+        
+        if is_pure_audio:
+            logger.info("🎵 [音频模式] 跳过场景检测、视觉分析和 OCR")
+            # 构建纯音频的 scenes（空）
+            scenes = {"scenes": [], "total_scenes": 0}
+            visual_data = {"scenes": []}
+        else:
+            # ========== 阶段 4: 场景检测 ==========
+            logger.info("🎬 [4/7] 场景检测...")
+            scene_detector = SceneDetector(config)
+            scenes = scene_detector.detect_scenes(video_path, frames_dir)
+            logger.info(f"   检测到 {len(scenes['scenes'])} 个场景")
+            
+            # 如果仅需要场景切割，到此为止
+            if args.scenes_only:
+                import json
+                output_path = os.path.join(args.output, "scenes_only.json")
+                os.makedirs(args.output, exist_ok=True)
+                with open(output_path, "w", encoding="utf-8") as f:
+                    json.dump(scenes, f, ensure_ascii=False, indent=2)
+                logger.info(f"✅ 场景 JSON 已保存: {output_path}")
+                return
+            
+            # ========== 阶段 5: 视觉分析 ==========
+            logger.info("🔍 [5/7] 视觉分析...")
+            visual_analyzer = VisualAnalyzer(config)
+            visual_data = visual_analyzer.analyze(scenes, video_path)
+            logger.info(f"   视觉分析完成")
+            
+            # ✨ 中文 NLP 增强：物体标签 + 场景标签中文化
+            if nlp_enhancer:
+                from core.nlp import get_chinese_label
+                for scene_data in visual_data.get("scenes", []):
+                    # 物体标签中文化
+                    for obj in scene_data.get("objects", []):
+                        name = obj.get("name", "")
+                        obj["name_zh"] = get_chinese_label(name)
+                    # 场景标签中文化
+                    scene_types = scene_data.get("scene_types", [])
+                    scene_data["scene_types_zh"] = nlp_enhancer.translate_scene_labels(scene_types)
+            
+            # ========== 阶段 6: 时空对齐与融合 ==========
+            logger.info("🔗 [6/7] 时空对齐与语义融合...")
+            
+            workers = config.get("processing", {}).get("num_workers", 4)
+            logger.info(f"   使用 {workers} 个子进程并行处理")
+            
+            alignment = AlignmentEngine(config)
+            aligned_data = alignment.align(transcript, scenes, visual_data, media_info)
+            
+            fusion = SemanticFusion(config)
+            fused_data = fusion.fuse(aligned_data)
+            logger.info(f"   融合完成")
+            
+            # ✨ 中文 NLP 增强：融合数据中的人名/地名/术语识别
+            if nlp_enhancer and nlp_enhancer.use_ner:
+                for scene in fused_data.get("scenes", []):
+                    dialog = scene.get("content", {}).get("dialog", "")
+                    if dialog:
+                        entities = nlp_enhancer.recognize_entities(dialog)
+                        scene["entities"] = entities
+                        terms = nlp_enhancer.detect_terminology(dialog)
+                        scene["terminology"] = terms
+            
+            # ========== 阶段 7: 精华提取与报告 ==========
+            logger.info("✨ [7/7] 精华提取与报告生成...")
+            
+            if not args.no_highlight:
+                extractor = HighlightExtractor(config)
+                highlights = extractor.extract(fused_data)
+                logger.info(f"   提取 {highlights.get('total_highlights', 0)} 个精华片段")
         
         # 生成报告
         reporter = ReportGenerator(config)
@@ -666,5 +710,125 @@ def main():
                     pass
 
 
+def run_batch_mode(args, config):
+    """
+    批量处理模式（v4.3 新增）。
+    
+    Args:
+        args: 命令行参数
+        config: 配置
+    """
+    logger.info("📂 批量处理模式")
+    
+    # 创建队列管理器
+    queue = QueueManager(config)
+    
+    # 扫描目录
+    video_files = queue.scan_directory(args.dir)
+    
+    if not video_files:
+        logger.warning(f"目录中没有视频文件: {args.dir}")
+        return
+    
+    # 批量入队
+    task_ids = queue.enqueue_batch(video_files, args.output)
+    logger.info(f"已入队 {len(task_ids)} 个任务")
+    
+    # 确定硬件档位
+    tier = args.hardware_tier if args.hardware_tier else 'mid'
+    
+    # 定义处理函数
+    def process_task(task):
+        input_path = task["input_path"]
+        output_dir = task["output_dir"]
+        
+        if not output_dir:
+            output_dir = os.path.join(args.output, os.path.splitext(os.path.basename(input_path))[0])
+        
+        # 单文件处理逻辑（简化版）
+        from core.media_probe import MediaProbe
+        from core.media_processor import MediaProcessor
+        
+        media_probe = MediaProbe(config)
+        
+        if media_probe.is_pure_audio(input_path):
+            media_info = media_probe.get_media_info_for_video(input_path)
+            audio_path = media_info["audio_path"]
+        else:
+            media = MediaProcessor(config)
+            media_info = media.get_media_info(input_path)
+            audio_path = media.extract_audio(input_path)
+        
+        # ASR 识别
+        from core.asr import ASRRouter
+        asr_router = ASRRouter(config)
+        asr_result = asr_router.transcribe(audio_path)
+        
+        transcript = {
+            "text": asr_result.text,
+            "language": asr_result.language,
+            "duration": asr_result.duration,
+            "segments": [
+                {
+                    "id": seg.id,
+                    "start": seg.start,
+                    "end": seg.end,
+                    "text": seg.text,
+                    "confidence": seg.confidence,
+                }
+                for seg in asr_result.segments
+            ],
+        }
+        
+        # 生成报告
+        reporter = ReportGenerator(config)
+        output_paths = reporter.generate(
+            transcript=transcript,
+            scenes={"scenes": [], "total_scenes": 0},
+            visual_data={"scenes": []},
+            aligned_data={},
+            fused_data={},
+            highlights=None,
+            media_info=media_info,
+            output_dir=output_dir,
+        )
+        
+        return {"artifact_paths": output_dir, "transcript": transcript}
+    
+    # 运行批量处理
+    stats = queue.run_batch(process_task, tier=tier)
+    
+    logger.info(f"批量处理完成: {stats}")
+
+
+def run_download_ct2_model(args, config):
+    """
+    下载 CT2 模型（v4.3 新增）。
+    
+    Args:
+        args: 命令行参数
+        config: 配置
+    """
+    accelerator = GPUAccelerator(config)
+    model_name = args.download_ct2_model
+    
+    # 获取下载指引
+    instructions = accelerator.get_download_instructions(model_name)
+    print(instructions)
+
+
 if __name__ == "__main__":
-    main()
+    # 检查是否是批量模式
+    args = parse_args()
+    
+    if args.dir:
+        # 批量处理模式
+        config = load_config(args.config if os.path.exists(args.config) else None)
+        run_batch_mode(args, config)
+    elif args.download_ct2_model:
+        # 下载 CT2 模型模式
+        config = load_config(args.config if os.path.exists(args.config) else None)
+        run_download_ct2_model(args, config)
+    else:
+        # 单文件处理模式
+        main()
