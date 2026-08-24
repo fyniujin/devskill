@@ -1,1 +1,1 @@
-{"version": "2.4.0", "homepage": "https://skillhub.cn/skill/cn-llm-router", "notes": "v2.4.0：增加多模态路由——classifier 新增 image/audio 识别，models.yaml 新增 Qwen-VL/GLM-4V/豆包视觉；arena 新增 --blind 开关控制盲选/显名对比；流式 token 估算复用基类 _extract_usage() 统一取值"}
+{"version": "2.5.0", "homepage": "https://skillhub.cn/skill/cn-llm-router", "notes": "v2.5.0：增加共享内核模式（llm-core/ 源码目录 + build_core.py 构建脚本 vendor 注入双包 + _core_lock.json 版本锁 + 双端回归门禁）；增加能力实测校准器 calibrate.py（标准题集实测回填画像分数）；ernie.py 适配器精简（推荐兼容通道）；yaml_simple.py 新增 dump/dump_file 写入功能"}
