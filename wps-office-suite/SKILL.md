@@ -3,7 +3,7 @@ name: wps-office-suite
 displayName: WPS Office 全家桶
 slug: wps-office-suite
 description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v4.0新增：Word→PPT一键生成、Excel自然语言数据分析、Word合同条款审查、Excel发票OCR入账；v4.3新增：Excel深度分析（公式纠错/数据清洗/透视表/数据预测/NL2Formula）；v4.4新增：长文档排版自动化（目录/页眉页脚/标题编号/图表索引/交叉引用/格式统一）；v4.5新增：会议纪要生成（ASR转写→LLM摘要→Word）、COM健康检查（状态检测+残留进程+自动释放）；v4.6新增：Excel智能分析统一入口（6命令合并）、数据图表生成器（自动选图+生成）、文档翻译增强版（Word/Excel/PPT多格式翻译）；v4.7新增：公式解释器（反向NL2Formula）、Markdown→Word/PPT、长文档排版统一入口；v4.8新增：邮件智能回复（模板+LLM个性化）、周报/月报自动生成、纯Python模式增强（条件格式/数据验证/合并单元格/命名区域）、AI统一入口wps ai --action
-version: 4.8.0
+version: 4.9.0
 category: 办公协作与生产力工具
 platforms:
   - windows
@@ -42,7 +42,7 @@ tags:
   建议反馈邮箱: njskills@agent.qq.com
 ---
 
-# WPS Office 全家桶 v4.8.0 ✅
+# WPS Office 全家桶 v4.9.0 ✅
 
 > 🏗️ **四引擎智能识别**：自动检测用户电脑已安装的软件，按 WPS → MS Office → LibreOffice → 纯Python 顺序选择最合适的引擎
 > ✨ **纯Python模式增强 v4.8**：排序、筛选、图表、公式、统计、条件格式、数据验证、合并单元格、命名区域 — 跨平台全部支持
@@ -61,7 +61,10 @@ tags:
 > 📑 **长文档排版 v4.7**：统一入口 long-document --action（8命令合并），性能优化（分批+单次保存+进度回调）
 > ✉️ **邮件智能回复 v4.8**：模板匹配 + LLM 个性化回复（纯本地，多模型降级）
 > 📊 **周报/月报生成 v4.8**：关键点 → 结构化 Word 报告（模板 + 可选 LLM 润色）
-> 🤖 **AI 统一入口 v4.8**：`wps ai --action` 统一 6 大 AI 功能入口
+> 🤖 **AI 统一入口 v4.9**：`wps ai --action` 统一 9 大 AI 功能入口（新增续写/改写/扩写）
+> 🌉 **llm_bridge 桥接层 v4.9**：统一模型层，白名单探测 cn-llm-router，零配置多模型调用
+> 📋 **模板市场 v4.9**：50+ 内置模板（公文/合同/简历/标书/报告/会议），支持用户沉淀和分享
+> 💬 **NL2Formula 多轮澄清 v4.9**：歧义检测 → 槽位填充 → 反向验证，公式生成更精准
 > 📧 **建议反馈**：有更好建议？邮箱：[njskills@agent.qq.com](mailto:njskills@agent.qq.com)
 
 ---
@@ -808,6 +811,49 @@ python scripts/wps_word.py long-document --file report.docx --action all --prese
 python scripts/wps_word.py long-document --file report.docx --action preview --preset thesis
 ```
 
+### 🆕 v4.9.0 llm_bridge 桥接层 + AI 动作扩类 + 模板市场 + NL2Formula 多轮澄清
+
+```bash
+# ===== llm_bridge 统一模型层桥接 =====
+# 白名单探测 cn-llm-router，零配置多模型调用
+python scripts/llm_bridge.py check                          # 检查 cn-llm-router 是否可用
+python scripts/llm_bridge.py chat --prompt "你好"           # 通过 cn-llm-router 对话
+python scripts/llm_bridge.py translate "Hello" en zh         # 翻译
+python scripts/llm_bridge.py summarize "长文本..." --max-length 200  # 摘要
+python scripts/llm_bridge.py continue "未完待续..." --context "前文"  # 续写
+python scripts/llm_bridge.py rewrite "原文..." --style formal          # 改写
+python scripts/llm_bridge.py expand "要点..." --aspect detail          # 扩写
+
+# ===== wps ai 新增 3 个 AI 动作（续写/改写/扩写）=====
+python scripts/wps_ai.py --action continue --text "未完待续..." --context "前文"
+python scripts/wps_ai.py --action rewrite --text "原文..." --style formal
+python scripts/wps_ai.py --action expand --text "要点..." --aspect detail
+
+# ===== 模板市场（50+ 内置模板）=====
+python scripts/template_manager.py list                       # 列出所有模板
+python scripts/template_manager.py list --category contract  # 按分类筛选
+python scripts/template_manager.py get 合同模板               # 获取模板详情
+python scripts/template_manager.py fill 合同模板 --data '{"甲方":"张三"}' --output 合同.docx
+python scripts/template_manager.py add --source 我的文档.docx --name 自定义模板 --category other
+python scripts/template_manager.py export 合同模板 --output-dir ./exports
+python scripts/template_manager.py import ./imports/模板包
+
+# ===== NL2Formula 多轮澄清 =====
+python scripts/clarify.py detect --query "统计销售额"         # 歧义检测
+python scripts/clarify.py clarify --query "统计销售额"        # 多轮澄清+公式生成
+python scripts/clarify.py verify --formula "=SUM(A1:A10)"     # 公式反向验证
+python scripts/excel_analyzer.py nl2formula --query "统计销售额" --clarify  # 启用澄清
+
+# ===== 周报/月报 LLM 润色 =====
+python scripts/report_generator.py generate --type weekly --points "完成A,B,C" --output 周报.docx --polish
+
+# ===== 会议纪要 llm_bridge 优先摘要 =====
+python scripts/meeting_minutes.py generate --file audio.wav --output 纪要.docx --summary-method llm_bridge
+
+# ===== 文档翻译 llm_bridge 优先 =====
+python scripts/document_translator.py translate --file report.docx --output 报告_zh.docx --method llm_bridge
+```
+
 ### 🆕 v4.8 邮件智能回复 + 周报月报 + 纯Python增强 + AI统一入口
 
 ```bash
@@ -890,6 +936,7 @@ python templates/generate_templates.py --dir ./output  # 生成模板
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v4.9.0 | 2026-08-08 | 增加：llm_bridge 统一模型层桥接（白名单探测 cn-llm-router，零配置多模型调用，JSON 契约 text/model/cost）；增加：wps ai 续写/改写/扩写 3 个新 AI 动作（经 llm_bridge 路由，未装 cn-llm-router 回落自配 API + 安装提示）；增加：模板市场 template_manager.py（50+ 内置模板覆盖公文/合同/简历/标书/报告/会议，支持用户沉淀 user_templates + 导出/导入分享包）；增加：NL2Formula 多轮澄清 clarify.py（歧义检测 3 类规则 + 槽位填充 + 反向验证回路，公式生成更精准）；优化：document_translator.py 优先走 llm_bridge 后回落直接 API；优化：report_generator.py 新增 --polish 参数（经 llm_bridge 润色）；优化：meeting_minutes.py 摘要引擎优先走 llm_bridge 后回落本地规则 |
 | v4.8.0 | 2026-08-22 | 增加：邮件智能回复 email_reply.py（模板匹配 + 规则引擎 + 可选 LLM 个性化，纯本地实现）；增加：周报/月报自动生成 report_generator.py（关键点→结构化 Word 报告，模板 + 可选 LLM 润色）；升级：纯 Python 模式能力（条件格式/数据验证/合并单元格/命名区域，基于 openpyxl 扩展）；增加：AI 统一入口 wps ai --action（6 大 AI 功能统一入口）；增加：邮件回复 CLI 子命令（email-reply）；增加：周报月报 CLI 子命令（report）；增加：条件格式/数据验证/合并单元格/命名区域 CLI 子命令 |
 | v4.7.0 | 2026-08-17 | 增加：公式解释器 formula_explainer.py（反向 NL2Formula，Excel 公式→自然语言解释，纯本地实现，80+ 函数映射）；增加：Markdown→Word/PPT 转换器 md_converter.py（保留标题层级/表格/列表/加粗，纯本地实现）；合并：长文档排版 8 命令为 long-document 统一入口（--action 参数路由）；优化：长文档排版性能（分批处理 + 单次保存 + 进度回调，大文档不卡顿）；增加：公式解释器 CLI 子命令（formula-explain）；增加：MD 转换 CLI 子命令（md-convert）；增加：长文档排版 CLI 子命令（long-document） |
 | v4.6.1 | 2026-08-16 | 修复：ASR 引擎改为显式 Opt-in 模式（auto 仅使用本地 whisper-local，不读取外部凭证）；修复：Azure/Google STT 仅在 method 显式指定时调用，首次使用显示凭证读取范围警告；修复：LLM 翻译改为显式 Opt-in 模式（auto 仅使用 local-rule，不读取 API Key）；修复：外部 SDK 依赖（google-cloud-speech / azure-cognitiveservices-speech）补充声明至 requirements.txt |
