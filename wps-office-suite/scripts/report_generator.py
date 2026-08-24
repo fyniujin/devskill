@@ -1,6 +1,10 @@
 """
-报告生成器 v4.8.0
+报告生成器 v4.9.0
 功能：根据要点自动生成结构化工作报告（Word 文档）
+
+v4.9.0 变更：
+  - 新增 --polish 参数，通过 llm_bridge 走 cn-llm-router 润色报告内容
+  - 未装 cn-llm-router 时 --polish 自动跳过，不影响本地生成
 
 死规则：
   1. 纯本地实现，不依赖任何外部 API
@@ -51,7 +55,7 @@ class ReportGenerator:
     支持生成周报、月报等结构化文档，自动排版为正式 Word 格式。
     """
 
-    VERSION = "v4.8.0"
+    VERSION = "v4.9.0"
     REPORT_TYPES = {
         "weekly": {
             "label": "周报",
@@ -95,6 +99,7 @@ class ReportGenerator:
         template_path: str = "",
         output: str = "",
         tone: str = "formal",
+        polish: bool = False,
     ) -> Dict[str, Any]:
         """生成报告
 
@@ -107,6 +112,7 @@ class ReportGenerator:
             template_path: 模板文件路径（可选）
             output: 输出 .docx 路径（必填）
             tone: 语气风格，"formal" 或 "casual"（默认 formal）
+            polish: 是否通过 llm_bridge 润色内容（默认 False）
 
         Returns:
             dict: {"ok": bool, "error": str, "path": str, "content": dict}
@@ -137,6 +143,10 @@ class ReportGenerator:
             content["tone"] = tone
             content["report_type"] = report_type
 
+            # v4.9: 通过 llm_bridge 润色内容（可选）
+            if polish:
+                content = self._polish_content(content)
+
             # 生成 Word 文档
             self.progress("生成 Word 文档", 50)
             result = self._generate_docx(content, output)
@@ -161,6 +171,42 @@ class ReportGenerator:
 
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    def _polish_content(self, content: Dict[str, Any]) -> Dict[str, Any]:
+        """通过 llm_bridge 润色报告内容（可选）
+
+        Args:
+            content: 原始内容结构
+
+        Returns:
+            dict: 润色后的内容结构
+        """
+        try:
+            from llm_bridge import summarize as bridge_summarize, is_router_available, INSTALL_HINT
+            if not is_router_available():
+                content["polish_skipped"] = "cn-llm-router 未安装，跳过润色"
+                content["polish_hint"] = INSTALL_HINT
+                return content
+
+            # 拼接关键要点进行润色
+            points = content.get("sections", {}).get("work_summary", {}).get("items", [])
+            if not points:
+                return content
+
+            raw_text = "\n".join(f"- {item['text']}" for item in points)
+            result = bridge_summarize(raw_text, max_length=200, timeout=30)
+            if result.get("ok"):
+                content["polished_summary"] = result.get("text", "")
+                content["polish_model"] = result.get("model", "")
+                content["polish_method"] = "cn-llm-router"
+            else:
+                content["polish_skipped"] = result.get("error", "润色失败")
+        except ImportError:
+            content["polish_skipped"] = "llm_bridge 模块不可用"
+        except Exception as e:
+            content["polish_skipped"] = f"润色异常: {str(e)}"
+
+        return content
 
     def preview(
         self,
@@ -500,6 +546,7 @@ def main():
     p_gen.add_argument("--template", default="", help="模板文件路径（.docx 或 .json）")
     p_gen.add_argument("--output", required=True, help="输出 .docx 路径")
     p_gen.add_argument("--tone", default="formal", choices=["formal", "casual"], help="语气风格")
+    p_gen.add_argument("--polish", action="store_true", help="通过 llm_bridge 润色内容（需 cn-llm-router）")
 
     # check 子命令
     p_check = sub.add_parser("check", help="查看可用的报告类型")
@@ -531,6 +578,7 @@ def main():
                 template_path=args.template,
                 output=args.output,
                 tone=args.tone,
+                polish=args.polish,
             )
     elif args.command == "check":
         r = gen.list_types()
