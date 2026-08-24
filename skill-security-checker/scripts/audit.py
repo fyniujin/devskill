@@ -13,17 +13,20 @@ Features:
   7. Hardware-aware parallelism (auto-detect CPU/memory for concurrency)
   8. Update check with 24h caching
   9. Dynamic sandbox execution scanning (Docker / Windows Sandbox, graceful fallback)
- 10. Supply chain risk analysis (dependency tree, typo-squatting, CVE auto-pull, license)
- 11. CI/CD integration (GitHub Action / GitLab CI templates, SARIF output, quality gate)
- 12. Real-time malicious skill database sync (341 entries, fingerprint matching)
+  10. Supply chain risk analysis (dependency tree, typo-squatting, CVE auto-pull, license)
+  11. CI/CD integration (GitHub Action / GitLab CI templates, SARIF output, quality gate)
+  12. Real-time malicious skill database sync (341 entries, fingerprint matching)
   13. CVE offline cache (7-day full + daily increment, API fallback)
   14. Global exclude configuration (.nosec.yml team-level management)
   15. Rule packs (YAML-based rule definitions in rules/*.yaml)
   16. System-level behavior capture (eBPF Linux / ETW Windows)
   17. ML prompt injection detection (ONNX + regex fallback)
+  18. Taint tracking (Python AST + JS lexical, source-to-sink evidence chains)
+  19. Community rules (schema validation + source recording + signature verification)
+  20. Health check (quality + structure + permission merged into compliance module)
 
 Author: njskills@agent.qq.com
-Version: 3.1.0
+Version: 3.3.0
 """
 
 import os
@@ -87,6 +90,20 @@ try:
     _ML_DETECTOR_AVAILABLE = True
 except Exception:
     _ML_DETECTOR_AVAILABLE = False
+
+# Taint Tracker (optional module; degrades gracefully if missing)
+try:
+    from taint_tracker import TaintTracker
+    _TAINT_TRACKER_AVAILABLE = True
+except Exception:
+    _TAINT_TRACKER_AVAILABLE = False
+
+# Community Rules (optional module; degrades gracefully if missing)
+try:
+    from community_rules import CommunityRuleLoader
+    _COMMUNITY_RULES_AVAILABLE = True
+except Exception:
+    _COMMUNITY_RULES_AVAILABLE = False
 
 # ============================================================
 # Constants & Rule Definitions
@@ -250,7 +267,7 @@ KNOWN_VULN_DEPS = {
 
 # Update check URL and version info
 UPDATE_CHECK_URL = "https://api.github.com/repos/njskills/skill-security-checker/releases/latest"
-CURRENT_VERSION = "3.2.0"
+CURRENT_VERSION = "3.3.0"
 
 # Update check cache TTL (hours)
 UPDATE_CACHE_HOURS = 24
@@ -396,7 +413,8 @@ class SecurityAuditor:
     
     def __init__(self, skill_path, dynamic=False, dynamic_options=None, supply_chain=False,
                  malicious_db=False, global_exclude=False, rule_engine=False,
-                 syscall_monitor=False, ml_detect=False):
+                 syscall_monitor=False, ml_detect=False, taint_tracking=False,
+                 community_rules_path=None):
         self.skill_path = Path(skill_path)
         self.results = []
         self.score = 100
@@ -420,6 +438,10 @@ class SecurityAuditor:
         self.syscall_monitor_obj = None
         self.ml_detect = ml_detect
         self.ml_detector_obj = None
+        # v3.3.0 new
+        self.taint_tracking = taint_tracking
+        self.community_rules_path = community_rules_path
+        self.community_rules_loaded = []
         # Initialize
         self._load_skill_md()
         self._load_changelog()
@@ -429,6 +451,9 @@ class SecurityAuditor:
             self.rule_engine_obj = RuleEngine()
         if ml_detect and _ML_DETECTOR_AVAILABLE:
             self.ml_detector_obj = create_detector()
+        if community_rules_path and _COMMUNITY_RULES_AVAILABLE:
+            loader = CommunityRuleLoader(community_rules_path)
+            self.community_rules_loaded, _ = loader.load_all()
     
     def _load_skill_md(self):
         """Load and parse SKILL.md."""
@@ -829,7 +854,7 @@ class SecurityAuditor:
             return False
     
     def scan_permissions(self):
-        """Check allowed-tools for over-permissioning."""
+        """Check allowed-tools for over-permissioning (part of compliance)."""
         allowed_tools_raw = self.frontmatter.get('allowed-tools', '')
         if not allowed_tools_raw:
             return
@@ -845,7 +870,7 @@ class SecurityAuditor:
         for combo, msg in dangerous_combos:
             if all(t in allowed_tools for t in combo):
                 self.add_result(
-                    category='permission_audit',
+                    category='compliance_permission',
                     severity='high',
                     file='SKILL.md',
                     line=0,
@@ -859,7 +884,7 @@ class SecurityAuditor:
             needs_bash_keywords = ['execute', 'run', 'deploy', 'install', 'build']
             if not any(kw in desc for kw in needs_bash_keywords):
                 self.add_result(
-                    category='permission_audit',
+                    category='compliance_permission',
                     severity='medium',
                     file='SKILL.md',
                     line=0,
@@ -868,11 +893,12 @@ class SecurityAuditor:
                     suggestion='Remove Bash if unnecessary, or document usage in description',
                 )
     
-    def scan_quality(self):
-        """Check SKILL.md quality and anti-patterns."""
+    def scan_health(self):
+        """Health check: merged quality + structure (v3.3.0)."""
+        # === Quality checks (SKILL.md completeness) ===
         if not self.skill_md_content:
             self.add_result(
-                category='quality_check',
+                category='health_quality',
                 severity='critical',
                 file='SKILL.md',
                 line=0,
@@ -886,7 +912,7 @@ class SecurityAuditor:
         for field in required_fields:
             if field not in self.frontmatter:
                 self.add_result(
-                    category='quality_check',
+                    category='health_quality',
                     severity='high',
                     file='SKILL.md',
                     line=0,
@@ -899,17 +925,17 @@ class SecurityAuditor:
         if name:
             if not re.match(r'^[a-z0-9][a-z0-9-]*$', name):
                 self.add_result(
-                    category='quality_check',
+                    category='health_quality',
                     severity='medium',
                     file='SKILL.md',
                     line=0,
-                    message=f'Skill name "{name}" does not follow naming convention (should be kebab-case)',
+                    message=f'Skill name "{name}" does not follow naming convention',
                     pattern=f'name: {name}',
                     suggestion='Use only lowercase letters, numbers, and hyphens',
                 )
             if len(name) > 50:
                 self.add_result(
-                    category='quality_check',
+                    category='health_quality',
                     severity='low',
                     file='SKILL.md',
                     line=0,
@@ -922,7 +948,7 @@ class SecurityAuditor:
         if desc:
             if len(desc) < 20:
                 self.add_result(
-                    category='quality_check',
+                    category='health_quality',
                     severity='medium',
                     file='SKILL.md',
                     line=0,
@@ -932,7 +958,7 @@ class SecurityAuditor:
                 )
             if len(desc) > 1024:
                 self.add_result(
-                    category='quality_check',
+                    category='health_quality',
                     severity='low',
                     file='SKILL.md',
                     line=0,
@@ -944,7 +970,7 @@ class SecurityAuditor:
         version = self.frontmatter.get('version', '')
         if version and not re.match(r'^\d+\.\d+\.\d+', str(version)):
             self.add_result(
-                category='quality_check',
+                category='health_quality',
                 severity='low',
                 file='SKILL.md',
                 line=0,
@@ -957,7 +983,7 @@ class SecurityAuditor:
             hardcoded_paths = re.findall(r'[A-Z]:\\[^\s"\']+', self.skill_md_content)
             for p in hardcoded_paths:
                 self.add_result(
-                    category='quality_check',
+                    category='health_quality',
                     severity='medium',
                     file='SKILL.md',
                     line=0,
@@ -970,7 +996,7 @@ class SecurityAuditor:
         has_error_handling = any(kw in content_lower for kw in ['error', 'exception', 'fail', 'fallback'])
         if not has_error_handling:
             self.add_result(
-                category='quality_check',
+                category='health_quality',
                 severity='low',
                 file='SKILL.md',
                 line=0,
@@ -978,9 +1004,8 @@ class SecurityAuditor:
                 pattern='',
                 suggestion='Document error handling strategy in SKILL.md',
             )
-    
-    def scan_structure(self):
-        """Check skill directory structure."""
+        
+        # === Structure checks ===
         total_size = 0
         file_count = 0
         for rel, path in self.walker.walk():
@@ -992,7 +1017,7 @@ class SecurityAuditor:
         
         if file_count > 200:
             self.add_result(
-                category='structure_check',
+                category='health_structure',
                 severity='high',
                 file='.',
                 line=0,
@@ -1003,7 +1028,7 @@ class SecurityAuditor:
         
         if total_size > 10 * 1024 * 1024:
             self.add_result(
-                category='structure_check',
+                category='health_structure',
                 severity='high',
                 file='.',
                 line=0,
@@ -1015,7 +1040,7 @@ class SecurityAuditor:
         has_readme = any((self.skill_path / f).exists() for f in ['README.md', 'readme.md', 'README.txt'])
         if not has_readme:
             self.add_result(
-                category='structure_check',
+                category='health_structure',
                 severity='low',
                 file='.',
                 line=0,
@@ -1023,6 +1048,11 @@ class SecurityAuditor:
                 pattern='',
                 suggestion='Add README.md with usage instructions',
             )
+    
+    def scan_compliance(self):
+        """Compliance check: health + permissions unified output (v3.3.0)."""
+        self.scan_health()
+        self.scan_permissions()
     
     def check_update(self):
         """Check for new version (with caching to avoid frequent requests)."""
@@ -1087,9 +1117,7 @@ class SecurityAuditor:
         scan_methods = [
             ('Static Scan', self.scan_static),
             ('Dependency Audit', self.scan_dependencies),
-            ('Permission Audit', self.scan_permissions),
-            ('Quality Score', self.scan_quality),
-            ('Structure Check', self.scan_structure),
+            ('Compliance Check', self.scan_compliance),
         ]
 
         if self.supply_chain:
@@ -1105,6 +1133,14 @@ class SecurityAuditor:
         # v3.2.0: ML prompt injection detection
         if self.ml_detect:
             scan_methods.append(('ML Detection', self.scan_ml_prompt_injection))
+        
+        # v3.3.0: Taint tracking
+        if self.taint_tracking:
+            scan_methods.append(('Taint Tracking', self.scan_taint_tracking))
+        
+        # v3.3.0: Community rules
+        if self.community_rules_path:
+            scan_methods.append(('Community Rules', self.scan_community_rules))
         
         if not skip_update:
             scan_methods.append(('Update Check', self.check_update))
@@ -1214,6 +1250,63 @@ class SecurityAuditor:
                         source=f"ml_{result['source']}",
                     )
 
+    def scan_taint_tracking(self):
+        """Taint tracking: source-to-sink data flow analysis (v3.3.0)."""
+        if not self.taint_tracking or not _TAINT_TRACKER_AVAILABLE:
+            return
+        for rel, path in self.walker.get_text_files():
+            ext = Path(rel).suffix.lower()
+            if ext not in ('.py', '.js', '.ts', '.jsx', '.tsx', '.php', '.rb', '.java', '.go'):
+                continue
+            findings = TaintTracker(str(rel)).track_file(str(path))
+            for f in findings:
+                self.add_result(
+                    category='taint_tracking',
+                    severity=f.get('severity', 'medium'),
+                    file=f.get('filename', str(rel)),
+                    line=f.get('sink_line', 0),
+                    message=f"污点追踪: {f.get('flow_path', '')}",
+                    pattern=f.get('sink_name', ''),
+                    suggestion='验证数据流是否安全；如为误报请添加 # nosec 注释',
+                    source=f"taint_{f.get('type', 'unknown')}",
+                )
+
+    def scan_community_rules(self):
+        """Scan using community rule packs (v3.3.0)."""
+        if not self.community_rules_loaded:
+            return
+        for rel, path in self.walker.get_text_files():
+            try:
+                content = path.read_text(encoding='utf-8-sig')
+            except Exception:
+                continue
+            if len(content) > 1024 * 1024:
+                continue
+            lines = content.split('\n')
+            for line_num, line in enumerate(lines, 1):
+                if '# nosec' in line.lower():
+                    continue
+                for rule in self.community_rules_loaded:
+                    patterns = rule.get('patterns', [])
+                    severity = rule.get('severity', 'medium')
+                    name = rule.get('name', 'unknown')
+                    suggestion = rule.get('suggestion', '')
+                    for pat in patterns:
+                        try:
+                            if re.search(pat, line, re.IGNORECASE):
+                                self.add_result(
+                                    category=f"community_{name}",
+                                    severity=severity,
+                                    file=str(rel),
+                                    line=line_num,
+                                    message=f"社区规则命中 [{name}]: {line.strip()[:80]}",
+                                    pattern=pat,
+                                    suggestion=suggestion,
+                                    source='community_rule',
+                                )
+                        except re.error:
+                            continue
+
     def scan_syscall_monitor(self):
         """System-level behavior capture via eBPF/ETW (v3.2.0)."""
         if not _SYSCALL_MONITOR_AVAILABLE:
@@ -1290,6 +1383,14 @@ class SecurityAuditor:
                 'syscall_monitor': {
                     'enabled': self.syscall_monitor,
                     'available': _SYSCALL_MONITOR_AVAILABLE,
+                },
+                'taint_tracking': {
+                    'enabled': self.taint_tracking,
+                    'available': _TAINT_TRACKER_AVAILABLE,
+                },
+                'community_rules': {
+                    'enabled': bool(self.community_rules_path),
+                    'loaded': len(self.community_rules_loaded),
                 },
             },
             'score': self.score,
@@ -1598,6 +1699,10 @@ Examples:
                         help='Enable eBPF/ETW system-level behavior capture (v3.2.0)')
     parser.add_argument('--ml-detect', action='store_true',
                         help='Enable ML prompt injection detection (ONNX + regex fallback)')
+    parser.add_argument('--taint-tracking', action='store_true',
+                        help='Enable source-to-sink taint tracking (Python AST + JS lexical)')
+    parser.add_argument('--community-rules', type=str, default=None,
+                        help='Path to directory of community YAML rule packs')
     
     args = parser.parse_args()
     
@@ -1616,7 +1721,8 @@ Examples:
     auditor = SecurityAuditor(args.skill_path, dynamic=args.dynamic, dynamic_options=dyn_opts,
                               supply_chain=args.supply_chain, malicious_db=args.malicious_db,
                               global_exclude=args.global_exclude, rule_engine=args.rule_engine,
-                              syscall_monitor=args.syscall_monitor, ml_detect=args.ml_detect)
+                              syscall_monitor=args.syscall_monitor, ml_detect=args.ml_detect,
+                              taint_tracking=args.taint_tracking, community_rules_path=args.community_rules)
     report = auditor.run(skip_update=args.skip_update)
     
     if args.format == 'json':
