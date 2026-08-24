@@ -2,8 +2,8 @@
 slug: skill-security-checker
 displayName: Skill 安全审计扫描器
 name: skill-security-checker
-description: 'Skill Security — 安全审计扫描器，帮助你快速发现 Skill 中的安全风险。静态规则引擎（YAML规则包 rules/*.yaml，6 类规则可热插拔扩展）、提示注入 ML 语义检测（ONNX + 正则降级，降低绕过率）、系统级行为捕获（eBPF Linux / ETW Windows）、动态沙箱执行扫描（Docker/Windows Sandbox）、供应链风险分析、CVE 离线缓存、恶意 Skill 指纹库、全局排除配置、CI/CD 集成、JSON/HTML/SARIF 报告生成。'
-version: 3.2.0
+description: 'Skill Security — 安全审计扫描器，帮助你快速发现 Skill 中的安全风险。轻量 SAST 污点追踪（Python AST + JS 词法近似，source→sink 证据链降误报）、规则引擎（YAML 规则包热插拔扩展）、社区规则（schema 校验 + 来源记录 + 签名验证）、提示注入 ML 语义检测（ONNX + 正则降级）、系统级行为捕获（eBPF Linux / ETW Windows）、动态沙箱执行扫描、供应链风险分析、CVE 离线缓存、恶意 Skill 指纹库、健康度与合规检查（质量+结构+权限合并）、全局排除配置、CI/CD 集成、JSON/HTML/SARIF 报告生成。'
+version: 3.3.0
 tags: ['security', 'audit', 'skill', 'scanner', 'code-analysis', 'vulnerability']
 icon: '🔒'
 author: 'njskills'
@@ -231,6 +231,44 @@ v3.2.0 引入 ML 语义模型检测提示注入，降低正则匹配的绕过率
 
 **性能：** 结果缓存（1 小时 TTL）+ 模型懒加载，不拖慢扫描。
 
+### 16. 轻量 SAST 污点追踪（新增）
+
+v3.3.0 引入受限数据流分析，将告警从字符串匹配升级为 source→sink 证据链。
+
+| 语言 | 分析方式 | 覆盖 |
+|------|---------|------|
+| Python | AST 解析（import/assign/attribute/call 节点追踪） | eval/exec/os.system/subprocess/pickle/yaml.load/open/file.write |
+| JS/TS | 词法近似（变量赋值+属性访问追踪） | eval/exec/child_process/innerHTML/document.write/db.query |
+| 其他 | 降级为模式匹配，标注「分析深度: 模式匹配」 | 通用危险函数 |
+
+**source 定义：** `input()`、`sys.argv`、`os.environ`、`requests.get()`、`req.body`、`process.argv`、`document.cookie` 等用户输入/环境变量/网络响应。
+
+**降误报机制：** 模式命中但无完整 source→sink 传播链时，降为 ⚪ info 级（`taint_sink_only`），避免误报。
+
+### 17. 社区规则扩展（新增）
+
+v3.3.0 支持加载第三方 YAML 规则包，经 schema 校验后纳入扫描。
+
+| 能力 | 说明 |
+|------|------|
+| Schema 校验 | 必填字段、类型检查、正则合法性、枚举值校验 |
+| 来源记录 | 加载时自动附加 `_source`（文件路径）和 `_loaded_at`（时间戳） |
+| 签名验证 | 可选 HMAC-SHA256 签名（`# signature: <hex>` 注释），防篡改 |
+| 报告区分 | 官方规则与社区规则在报告中分开统计（`community_` 前缀） |
+
+**加载方式：** `--community-rules <目录路径>`，目录下放 `.yaml` 文件即可。
+
+### 18. 健康度与合规检查合并（新增）
+
+v3.3.0 将质量评分（SKILL.md 完整性 8 项）与结构检查（文件数/大小/README）合并为「健康度」模块统一评分，权限审计+健康度统一挂「合规性检查」一个出口。
+
+| 合并模块 | 包含 | 输出类别 |
+|---------|------|---------|
+| 健康度 | 质量评分（8 项）+ 结构检查（3 项） | `health_quality` / `health_structure` |
+| 合规性 | 健康度 + 权限审计 | `compliance_permission` + 健康度全部 |
+
+**好处：** 报告结构更清晰，旧版「质量评分」「结构检查」「权限审计」三个独立模块合并为「合规性检查」一个入口。
+
 ## 使用方法
 
 ### 基本用法（命令行）
@@ -277,6 +315,15 @@ python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能�
 
 # v3.2.0 全功能模式
 python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --rule-engine --ml-detect --syscall-monitor --malicious-db --global-exclude --supply-chain --dynamic
+
+# v3.3.0 污点追踪
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --taint-tracking
+
+# v3.3.0 社区规则
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --community-rules "D:\path\to\community-rules"
+
+# v3.3.0 全功能模式
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --taint-tracking --community-rules "D:\path\to\community-rules" --rule-engine --ml-detect --malicious-db --global-exclude --supply-chain
 ```
 
 ### 参数快查
@@ -296,6 +343,8 @@ python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能�
 | `--rule-engine` | 启用 YAML 规则引擎（6 类规则包） | 关闭 |
 | `--syscall-monitor` | 启用 eBPF/ETW 系统级行为捕获 | 关闭 |
 | `--ml-detect` | 启用 ML 提示注入语义检测 | 关闭 |
+| `--taint-tracking` | 启用污点追踪（Python AST + JS 词法，source→sink 证据链） | 关闭 |
+| `--community-rules` | 加载第三方社区规则包目录（schema 校验 + 来源记录） | 关闭 |
 
 ### 在 WorkBuddy 中触发
 
@@ -431,6 +480,15 @@ A: 不需要联网，不需要额外依赖。ML 检测使用 ONNX Runtime（纯 
 **Q: eBPF/ETW 系统级捕获需要什么权限？**
 A: Linux 需要 root 权限 + bcc 框架；Windows 需要管理员权限。无权限时自动降级，提示「系统级行为捕获不可用」，不影响其他扫描功能。
 
+**Q: 污点追踪和原来的静态扫描有什么区别？**
+A: 污点追踪在模式匹配基础上增加了数据流分析——不只看代码中是否存在危险函数，还追踪用户输入/环境变量/网络响应（source）是否流经赋值/拼接/属性访问等路径最终到达危险函数（sink）。有完整 source→sink 传播链的报高危（`taint_chain`），仅有 sink 调用但无明确 source 的降为 info 级（`taint_sink_only`），从而降低误报。
+
+**Q: 社区规则和官方规则包有什么区别？**
+A: 官方规则包（`scripts/rules/*.yaml`）内置在 Skill 目录中，由开发者维护。社区规则通过 `--community-rules <目录>` 从外部加载，每个 YAML 文件经过 schema 校验（必填字段、类型检查、正则合法性），加载后记录来源（`_source`），报告中 `community_` 前缀与官方规则分开统计。责任边界清晰。
+
+**Q: 健康度与合规检查合并后，旧版报告还能看吗？**
+A: 完全兼容。旧版的「质量评分」「结构检查」「权限审计」三个模块在 v3.3.0 中合并为「合规性检查」一个出口，输出类别从 `quality_check`/`structure_check`/`permission_audit` 统一为 `health_quality`/`health_structure`/`compliance_permission`，报告结构更清晰，不再重复。
+
 ## 安全声明
 
 - **默认只做静态分析，不会执行被扫描的代码**（静态模式仅读取文件，不写入）
@@ -451,6 +509,7 @@ A: Linux 需要 root 权限 + bcc 框架；Windows 需要管理员权限。无�
 
 ## 更新日志
 
+| v3.3.0 | 2026-08-24 | 增加：轻量 SAST 污点追踪（taint_tracker.py），Python AST + JS 词法近似，source→sink 证据链降误报（无完整链降 info）；增加：社区规则扩展（community_rules.py），第三方 YAML 规则包 schema 校验 + 来源记录 + HMAC-SHA256 签名验证，官方/社区规则报告分开统计；增加：健康度与合规检查合并（scan_health + scan_compliance），质量评分+结构检查统一为健康度模块，权限审计+健康度统一挂合规性检查出口；增加：--taint-tracking 和 --community-rules <path> 两个 CLI 参数；优化：report meta 区新增 taint_tracking / community_rules 维度统计 |
 | v3.2.0 | 2026-08-17 | 增加：规则引擎模块（scripts/rules_engine.py），将 6 类静态规则从硬编码重构为 YAML 规则包（rules/*.yaml），支持热插拔扩展，新增规则只需加 YAML 文件不改代码；增加：scripts/rules/ 目录包含 6 个规则包（prompt_injection/command_injection/ssrf/credential_leak/path_traversal/dangerous_functions），共 67 条正则；增加：系统级行为捕获模块（scripts/sandbox/system_monitor.py），支持 eBPF（Linux）/ ETW（Windows）内核级 syscall 监控，无 eBPF/ETW 时自动降级；增加：ML 提示注入语义检测（scripts/sandbox/ml_detect.py），ONNX 模型优先 + 正则降级双模式，含中文规则与结果缓存；增加：scan_rule_engine()、scan_ml_prompt_injection()、scan_syscall_monitor() 三个扫描方法；增加：--rule-engine、--ml-detect、--syscall-monitor 三个 CLI 参数；增加：report meta 区新增 rule_engine / ml_detect / syscall_monitor 维度统计 |
 | v3.1.0 | 2026-08-07 | 增加：实时恶意 Skill 库同步模块，内置 341 条 SHA256 指纹实现 100% 已知恶意 skill 拦截；增加：CVE 离线缓存（7 天全量 + 每日增量），无网络环境仍可扫描依赖漏洞；增加：全局排除配置（.nosec.yml），支持按类别/文件/正则模式批量排除误报；增加：--malicious-db 和 --global-exclude 两个命令行参数；优化：add_result() 集成全局排除过滤逻辑 |
 | v3.0.0 | 2026-08-01 | 增加：供应链风险分析模块，支持依赖树扫描、typo-squatting 钓鱼包检测、维护状态评估（僵尸包识别）、许可证合规检查；增加：CVE 数据库从 26 条手动维护升级为 OSV/NVD API 自动拉取并每日缓存更新；增加：ci_templates/ 目录提供 GitHub Action 与 GitLab CI 开箱即用模板；增加：SARIF 2.1.0 格式输出支持 GitHub Code Scanning；增加：PR 自动评论扫描结果功能；增加：质量门禁机制（默认 70 分阈值阻止合并）；增加：--supply-chain 与 --format sarif 命令行参数；优化：audit.py 报告 meta 区新增 supply_chain 维度统计；优化：依赖解析器支持 requirements.txt / package.json / pyproject.toml 三种格式 |
