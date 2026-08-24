@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-编排引擎入口 - 多Agent协作编排引擎 v5.2
+编排引擎入口 - 多Agent协作编排引擎 v5.3
 
 功能：统一入口，整合 DAG 验证、状态管理、执行调度、错误恢复、报告生成
 支持人工审批节点（含超时策略）、HTML 甘特图、历史执行对比、硬件自适应
@@ -11,6 +11,11 @@
 新增：统一可视化命令（visualize --format md|html|both，整合报告 + 甘特图）
 新增：Self-Improving 循环（evaluate 节点，质量评估 + 自动重试）
 新增：成本追踪（节点级 token/cost 聚合，对接 cn-llm-router）
+新增：官方流水线模板库（4类预置模板 + 依赖探测渲染）
+新增：任务级重试策略（节点级 retry 块 + 退避 + 降级链）
+新增：统一错误恢复命令 recover（retry/fallback/impact 三合一）
+新增：条件表达式增强（re_safe + 字符串函数）
+新增：节点类型归组（7→4类，认知层归组）
 零第三方依赖，仅使用 Python 标准库
 
 ★★★ 安全说明 ★★★
@@ -384,8 +389,35 @@ def cmd_impact(args):
     error_recovery.analyze_downstream_impact(args[0], args[1])
 
 
+def cmd_recover(args):
+    """统一错误恢复入口：retry/fallback/impact"""
+    if not args:
+        print("用法：python orchestrator.py recover <retry|fallback|impact> <state.json> <node_id> [error_msg]")
+        sys.exit(1)
+    sub = args[0]
+    if sub == 'retry':
+        if len(args) < 3:
+            print("用法：python orchestrator.py recover retry <state.json> <node_id> [error_msg]")
+            sys.exit(1)
+        error_msg = args[3] if len(args) > 3 else "未知错误"
+        error_recovery.execute_retry(args[1], args[2], error_msg)
+    elif sub == 'fallback':
+        if len(args) < 3:
+            print("用法：python orchestrator.py recover fallback <state.json> <node_id> [error_msg]")
+            sys.exit(1)
+        error_msg = args[3] if len(args) > 3 else "未知错误"
+        error_recovery.execute_fallback(args[1], args[2], error_msg)
+    elif sub == 'impact':
+        if len(args) < 3:
+            print("用法：python orchestrator.py recover impact <state.json> <node_id>")
+            sys.exit(1)
+        error_recovery.analyze_downstream_impact(args[1], args[2])
+    else:
+        print(f"未知 recover 子命令：{sub}")
+
+
 USAGE = """
-编排引擎 - 多Agent协作编排引擎 v5.2
+编排引擎 - 多Agent协作编排引擎 v5.3
 ================================
 
 用法：python orchestrator.py <command> [args]
@@ -406,6 +438,7 @@ USAGE = """
   check-update                                 ☆☆  检查是否有新版本
   snapshot <cmd> <state.json> [node_id]        ☆☆  快照管理（list/show/restore/diff）
   impact <state.json> <node_id>                ☆☆  分析下游影响（只读）
+  template <cmd> [template_file]              ☆☆  预置模板库（list/show/check/render）
 
 典型工作流：
   1. python orchestrator.py plan pipeline.json         # 查看执行计划
@@ -543,6 +576,54 @@ def cmd_snapshot(args):
         print(f"未知 snapshot 子命令：{sub}")
 
 
+def cmd_template(args):
+    """预置流水线模板库：list/show/check/render"""
+    import template_lib
+    if not args:
+        print("用法：python orchestrator.py template <list|show|check|render> [template_file]")
+        sys.exit(1)
+    sub = args[0]
+    if sub == 'list':
+        template_lib.list_templates()
+    elif sub == 'show':
+        if len(args) < 2:
+            print("错误：请指定模板文件名")
+            print("用法：python orchestrator.py template show <template_file>")
+            sys.exit(1)
+        template_lib.show_template(args[1])
+    elif sub == 'check':
+        if len(args) < 2:
+            print("错误：请指定模板文件名")
+            print("用法：python orchestrator.py template check <template_file>")
+            sys.exit(1)
+        req, opt = template_lib.check_dependencies(args[1])
+        if not req and not opt:
+            print("✅ 所有依赖均已满足")
+        else:
+            if req:
+                print(f"❌ 缺失必需依赖：{', '.join(d['skill_id'] for d in req)}")
+            if opt:
+                print(f"⚠️ 缺失可选依赖：{', '.join(d['skill_id'] for d in opt)}")
+    elif sub == 'render':
+        if len(args) < 2:
+            print("错误：请指定模板文件名")
+            print("用法：python orchestrator.py template render <template_file> [output.json]")
+            sys.exit(1)
+        output_path = args[2] if len(args) > 2 else None
+        pipeline = template_lib.render_pipeline(args[1])
+        if pipeline:
+            if output_path:
+                import json as _json
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    _json.dump(pipeline, f, ensure_ascii=False, indent=2)
+                print(f"✅ 已渲染到 {output_path}")
+            else:
+                import json as _json
+                print(_json.dumps(pipeline, ensure_ascii=False, indent=2))
+    else:
+        print(f"未知 template 子命令：{sub}")
+
+
 if __name__ == '__main__':
     if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
         print(USAGE)
@@ -567,6 +648,11 @@ if __name__ == '__main__':
         'check-update': cmd_check_update,
         'impact': cmd_impact,
         'snapshot': cmd_snapshot,
+        'template': cmd_template,
+        'recover': cmd_recover,
+        # 旧命令别名（向后兼容）
+        'retry': lambda a: cmd_recover(['retry'] + a),
+        'fallback': lambda a: cmd_recover(['fallback'] + a),
     }
 
     if cmd not in commands:
