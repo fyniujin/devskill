@@ -3,7 +3,7 @@ name: receipt-compliance
 slug: receipt-compliance
 displayName: 会计助手
 description: 会计助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。
-version: 4.2.2
+version: 4.3.0
 category: 财税管理
 appName: 财税合规
 platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
@@ -19,7 +19,7 @@ platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
 
 | 模块 | 功能 | 状态 | 输入 | 输出 |
 |------|------|------|------|------|
-| 1. 发票OCR识别 | Tesseract本地识别增值税发票及各类票据 | ✅ 直接可用 | 发票图片/PDF | 结构化JSON |
+| 1. 发票OCR识别 | 双引擎（PaddleOCR优先+Tesseract兜底），定额票先验定位，勾稽校验 | ✅ 直接可用 | 发票图片/PDF | 结构化JSON |
 | 2. 真伪查验 | 一键生成国税总局查验链接，自动打开浏览器 | ✅ 直接可用 | 发票代码/号码 | 查验链接+结果 |
 | 3. 报销单填充 | 自适应学习模板，一键填充 | ✅ 直接可用 | 发票数据+模板 | Excel文件 |
 | 4. 审批对接 | 对接钉钉/企微/飞书审批（有完整代码模板） | ⚠️ 需配置密钥 | 报销单+配置 | 审批结果 |
@@ -32,6 +32,7 @@ platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
 | 11. 银行对账 | 银行流水 CSV 解析 + 发票金额/日期模糊匹配 | ✅ 直接可用 | 流水 CSV + 发票数据 | 对账报告 |
 | 12. 安全配置 | 环境变量读取密钥，消除明文泄露 | ✅ 直接可用 | 环境变量 | 安全配置 |
 | 13. 并行批量 | 硬件自适应并行处理，速度提升 3-5 倍 | ✅ 直接可用 | 发票文件夹 | 批量结果 |
+| 14. 混拍切分 | 混拍图（一拍多票）自动检测切分，保持原图索引 | ✅ 直接可用 | 混拍图片 | 单票子图 |
 
 > ✅ = 装即用 ｜ ⚠️ = 需在 config.yaml 中配置对应API密钥
 >
@@ -1056,7 +1057,7 @@ python scripts/invoice_detector.py path/to/any_invoice
 
 ## 更新日志
 
-| v4.2.2 | 2026-08-16 | 修复：移除 secure_config.py CLI 中 --show-keys 参数（仍有凭据外泄特征）；改为 validate_before_call() 仅返回字段名列表和布尔状态，绝不输出任何形态的密钥值到 stdout，彻底消除凭据泄露风险 |
+| v4.3.0 | 2026-08-24 | 新增：PaddleOCR 双引擎降级层（ocr_engine.py 重写），PaddleOCR 优先 + Tesseract 兜底，自动探测可用引擎；新增：定额票版式先验定位表（fixed_layout_prior），固定字段位置驱动 ROI 局部 OCR；新增：手写数字后处理约束（_cross_check 勾稽校验引擎），金额+税额=价税合计不通过则标记人工复核不入库；新增：混拍图检测与子图切分引擎 batch_splitter.py，行距聚类切分 + 边界接触边框特征二次切分，保持原图-子图索引；升级：invoice_detector.py 集成 PaddleOCR 双引擎 |
 | v4.2.1 | 2026-08-16 | 修复：将 SKILL.md、check_env.py、install_tesseract.ps1 中 poppler-windows 下载源从个人 fork（oschwartz10612/blog.alivate.com.au）替换为系统包管理器（winget/scoop/apt/brew），消除非官方来源供应链风险；修复：secure_config.py 默认脱敏输出，validate_before_call() 返回值统一脱敏，消除密钥泄露到 stdout 的风险 |
 | v4.2.0 | 2026-08-16 | 新增：银行流水对账引擎 bank_reconciler.py，支持主流银行 CSV 流水解析，金额模糊匹配（±0.01 元容差）+ 日期模糊匹配（±3 天容差）+ 综合评分机制；新增：安全密钥配置模块 secure_config.py，统一从环境变量读取 API 密钥（INVOICE_ 前缀），消除明文泄露风险，含脱敏显示和缺失校验；新增：并行批量处理引擎 parallel_batch.py，硬件自适应 worker 分配（CPU × 0.5/× 0.75），含内存检测自动降级、分块处理、失败重试机制 |
 | v4.0.0 | 2026-08-01 | 新增：全电发票XML解析器 xml_parser.py；新增：OFD版式文件解析器 ofd_parser.py；新增：火车票解析器 train_parser.py；新增：飞机行程单解析器 flight_parser.py；新增：出租车票解析器 taxi_parser.py；新增：定额发票解析器 fixed_parser.py；新增：通行费票据解析器 toll_parser.py；新增：财政票据解析器 fiscal_parser.py；新增：智能分类器 smart_classifier.py，支持费用类型自动匹配、进项税额自动计算、会计科目自动映射；新增：记账凭证生成器 voucher_generator.py，支持用友/金蝶/QuickBooks导入格式；新增：统一发票数据结构 unified_invoice.py，兼容新旧发票和多种票据类型；新增：票种自动识别模块 invoice_detector.py，自动路由传统OCR或专用解析器；新增：会计科目对照表 account_mapping.md；新增：费用分类规则 expense_rules.md |
