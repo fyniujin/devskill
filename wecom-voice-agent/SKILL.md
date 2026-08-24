@@ -2,10 +2,12 @@
 slug: wecom-voice-agent
 displayName: 企业微信语音消息 Agent
 name: wecom-voice-agent
-version: 2.5.1
+version: 2.6.0
 description: >
   企业微信语音消息 AI Agent 技能，自动处理语音消息的意图识别、多轮对话与任务执行。
   支持被动接收语音消息、主动外呼、来电接线、通话纪要、合规录音、外呼调度等完整电话场景。
+  v2.6 新增：声明式意图引擎（YAML 配置 20+ 意图 + 多级澄清）、自定义意图插件（企业自有 API 声明式映射）、
+  统一会话管理（双向子系统合并）、多级 IVR 菜单引擎（YAML 配置层级菜单）、实体抽取增强（规则+消歧+复述确认）。
   当用户向企业微信机器人发送语音消息时触发。核心价值：零 API Key 依赖、硬件自适应、轻量本地处理、全流程合规。
 author: njskills
 category: 办公协作
@@ -124,7 +126,48 @@ python scripts/session_manager.py stats
 
 ---
 
-## 🪤 避坑指南（新手必看）
+## 二、架构（v2.6）
+
+```
+wecom-voice-agent/
+├── SKILL.md                  # 本文件（使用说明 + 风险 + 边界 + FAQ + 反模式）
+├── config/
+│   ├── intents.yaml          # v2.6 声明式意图注册表（20+ 意图）
+│   ├── custom_intents.yaml   # v2.6 自定义意图插件配置（企业 API 映射）
+│   └── menu.yaml             # v2.6 IVR 多级菜单配置
+├── references/
+│   ├── wecom_bot_api.md      # 企业微信机器人 API 参考
+│   └── step_by_step_setup.md # 分步部署指南
+├── scripts/
+│   ├── wecom_webhook_server.py # 主服务（回调接收+意图路由+任务执行）
+│   ├── intent_registry.py    # v2.6 声明式意图引擎（YAML 配置+多级澄清）
+│   ├── custom_intent_plugin.py # v2.6 自定义意图插件（企业自有 API 声明式映射）
+│   ├── session_unified.py    # v2.6 统一会话管理（双向子系统，合并原 scheduler+session_manager）
+│   ├── ivr_engine.py         # v2.6 多级 IVR 菜单引擎（YAML 配置+数字/名称双选）
+│   ├── entity_extractor.py   # v2.6 实体抽取增强（规则+消歧+复述确认）
+│   ├── voice_simulator.py    # 语音消息模拟器（本地调试）
+│   ├── detect_hardware.py    # 硬件检测
+│   ├── state_machine.py      # 多轮对话状态机
+│   ├── call_record_subsystem.py # v2.5 通话记录子系统（合并4脚本）
+│   ├── voice_channel.py      # v2.5 多渠道抽象层
+│   ├── voicemail_summary.py  # v2.5 语音留言摘要
+│   ├── dialect_detector.py   # v2.3 方言检测
+│   ├── ticket_manager.py     # v2.3 工单管理
+│   ├── emotion_analyzer.py   # v2.2 情感识别
+│   ├── vad_filter.py         # v2.4 VAD 语音活动检测
+│   ├── priority_queue.py     # v2.4 四级优先级队列
+│   ├── compliance.py         # v2.4 合规录音（v3.0 强制告知）
+│   ├── scheduler.py          # v2.0 外呼调度（已合并至 session_unified）
+│   ├── session_manager.py    # v2.0 会话管理（已合并至 session_unified）
+│   ├── ivr_minutes.py        # v2.0 通话纪要（已合并至 call_record_subsystem）
+│   ├── stats.py              # v2.0 统计看板（已合并至 call_record_subsystem）
+│   └── transcriber.py        # v2.0 全文转写（已合并至 call_record_subsystem）
+└── temp_sessions/             # 运行时临时目录
+```
+
+**核心数据流**：`voice.content → intent_registry（声明式匹配+置信度评分）→ entity_extractor（实体抽取+消歧）→ handler → 任务执行`，同时旁路写入 `session_unified`（统一会话）与 `call_record_subsystem`（通话记录）。
+
+**v2.6 核心理念**：意图配置化（YAML 声明 + 置信度分级 + 多级澄清）、会话统一化（双向合并 + 状态共享）、IVR 配置化（层级菜单 + 双模式选择）、实体智能化（规则抽取 + 上下文消歧 + 复述确认）。
 
 | 常见坑 | 正确做法 |
 |-------|---------|
@@ -672,9 +715,118 @@ v2.0 起外呼录音存储在本机 `~/.wecom_voice/records/`，永不外传。
 
 ## 脚本与使用指南
 
-本技能包含辅助脚本用于本地测试和调试。更多背景知识请参见 `references/wecom_bot_api.md`。
+### v2.6 新增脚本
 
-### 本地测试脚本
+#### scripts/intent_registry.py
+
+声明式意图引擎。加载 `config/intents.yaml`，实现关键词匹配、置信度计算、多级澄清策略。
+
+```bash
+# 运行自测
+python D:/skill/wecom-voice-agent/scripts/intent_registry.py
+```
+
+**特性**：
+- 20+ 意图声明式配置（query/action/system 三大类）
+- 关键词匹配 + 置信度评分（匹配多关键词有加分）
+- 多级澄清：≥0.7 直接执行、0.4-0.7 反问收窄、<0.4 转帮助
+- 新增意图只改 `config/intents.yaml`，不改代码
+- 纯标准库（yaml 可选，不可用时降级 JSON）
+
+---
+
+#### scripts/custom_intent_plugin.py
+
+自定义意图插件引擎。允许企业通过 `config/custom_intents.yaml` 将意图映射到自有 HTTP API。
+
+```bash
+# 运行自测
+python D:/skill/wecom-voice-agent/scripts/custom_intent_plugin.py
+```
+
+**特性**：
+- 声明式端点 URL、HTTP 方法、请求模板
+- 响应字段映射到话术模板（`{{field.path}}` 嵌套取值）
+- 鉴权通过环境变量读取（`auth_env` 字段指定变量名）
+- 超时/失败兜底话术
+- 纯标准库（urllib）
+
+**配置示例**（`config/custom_intents.yaml`）：
+```yaml
+intents:
+  query_order:
+    endpoint: "https://api.example.com/orders"
+    method: "GET"
+    auth_env: "ORDER_API_TOKEN"
+    timeout: 10
+    request_template:
+      order_id: "{order_id}"
+    response_template: "您的订单{{order.status}}，预计{{order.eta}}送达。"
+    fallback_text: "订单查询服务暂不可用，请稍后再试。"
+```
+
+---
+
+#### scripts/session_unified.py
+
+统一会话管理。合并原 scheduler.py（外呼调度）与 session_manager.py（被动接收）为双向子系统。
+
+```bash
+# 运行自测
+python D:/skill/wecom-voice-agent/scripts/session_unified.py
+```
+
+**特性**：
+- 统一会话表（session_id / direction / status / context）
+- 入站（inbound）/ 出站（outbound）/ 语音留言（voicemail）三向统一管理
+- 状态机复用（state_machine.py 的 CallStateMachine）
+- 记录与统计同源（call_record_subsystem.py）
+- SQLite 持久化 + 自动清理过期会话
+- 纯标准库（sqlite3 + threading）
+
+---
+
+#### scripts/ivr_engine.py
+
+多级 IVR 菜单引擎。加载 `config/menu.yaml`，支持层级菜单导航。
+
+```bash
+# 运行自测
+python D:/skill/wecom-voice-agent/scripts/ivr_engine.py
+```
+
+**特性**：
+- YAML 配置化层级菜单（根菜单 → 子菜单 → 意图触发）
+- 说数字或说名称双选择方式
+- 0 = 重复听、9 = 转人工、8 = 返回上级
+- 超时/非法输入/重试次数限制
+- 纯标准库（yaml 可选，不可用时降级 JSON）
+
+**菜单结构**（`config/menu.yaml`）：
+- 根菜单：销售咨询 / 技术支持 / 财务报销 / 订单物流 / 人工服务
+- 子菜单：每个大类下 3-4 个具体服务意图
+- 全局特殊按键：0 重复、9 转人工、8 返回
+
+---
+
+#### scripts/entity_extractor.py
+
+实体抽取增强模块。规则层 + 上下文消歧 + 复述确认。
+
+```bash
+# 运行自测
+python D:/skill/wecom-voice-agent/scripts/entity_extractor.py
+```
+
+**特性**：
+- 规则层：时间、日期、人物、地点、订单号、金额、手机号、邮箱、百分比、数量
+- 上下文消歧：代词回指（"他"→上一轮提到的人）、省略补全
+- 复述确认：格式化实体回显（"请确认：日期：XX，时间：XX..."）
+- 纯标准库（re + datetime）
+
+---
+
+### 本地测试脚本（已有）
 
 #### scripts/detect_hardware.py
 
@@ -1041,6 +1193,7 @@ records_dir: ~/.wecom_voice/records  # 录音存储路径
 
 ## 更新日志
 
+| v2.6.0 | 2026-08-24 | 重构：声明式意图引擎 intent_registry.py（intents.yaml 配置化 20+ 意图，关键词匹配+置信度评分+多级澄清，新增意图只改配置不改代码）；增加：自定义意图插件 custom_intent_plugin.py（custom_intents.yaml 声明企业自有 API 映射，请求/响应模板+鉴权环境变量+失败兜底）；增加：统一会话管理 session_unified.py（合并 scheduler.py 与 session_manager.py 为双向子系统，统一会话表/状态机/统计）；增加：多级 IVR 菜单引擎 ivr_engine.py（menu.yaml 配置化层级菜单，0 重复听/9 转人工/8 返回上级，说数字或说名称双选择）；增加：实体抽取增强 entity_extractor.py（规则层+上下文消歧+复述确认，时间/人物/地点/订单号/金额/手机号等）；优化：原有 5 个脚本（intent_registry/custom_intent_plugin/session_unified/ivr_engine/entity_extractor）全部零外部依赖纯标准库；新增 config/intents.yaml、config/custom_intents.yaml、config/menu.yaml 三个声明式配置文件 |
 | v2.5.1 | 2026-08-17 | 修复：移除 compliance.py 中对伪造域名 edge-tts.anthropic.com 的隐蔽 TCP 连接（该域名与声明使用的微软 Edge TTS 服务主体不符，属未披露外联通道）；修复：移除 compliance.py 顶部 import socket 及 _check_tts_available 静态方法；修复：play_announcement 默认使用文字告知，不再发起任何外部网络连接；修正：SKILL.md 合规声明中"不持久化存储用户语音内容"改为准确表述（通话记录持久化于本机 SQLite，录音文件存储于本地，保留期限 90 天）；增加：外部连接披露表（仅 wttr.in 天气查询 API，不含用户身份信息） |
 | v2.5.0 | 2026-08-17 | 合并：ivr_minutes.py、compliance.py、stats.py、transcriber.py 为 call_record_subsystem.py 通话记录子系统（录音+纪要+元数据+统计一体，消除4脚本分散调用）；增加：多渠道抽象层 voice_channel.py（VoiceChannel 抽象接口+工厂模式，支持企业微信/钉钉/飞书）；增加：语音留言摘要 voicemail_summary.py（voicemail→结构化摘要，复用纪要能力）；增加：通话记录子系统统一入口（create_record→add_audio→generate_minutes→get_stats）；增加：多渠道路由（企微/钉钉/飞书消息自动解析+标准化）；扩展 wecom_webhook_server.py 语音留言处理+多渠道接入；新增 call_record_subsystem.py、voice_channel.py、voicemail_summary.py 三个脚本 |
 | v2.4.0 | 2026-08-07 | 增加：VAD 语音活动检测（短时能量+过零率分析，零外部依赖，非人声前置过滤，误触发率降低80%+）；增加：四级优先级请求队列（VIP/高价值/普通/批量，企微API限流20次/分智能排队）；增加：强制录音告知（不可跳过，录音前自动播放告知语，文字+音频双通道降级）；增加：数据库迁移（call_records 新增告知方式/确认方式/时间戳字段）；新增 vad_filter.py、priority_queue.py 脚本；升级 compliance.py 至 v3.0（强制录音告知系统）；扩展 wecom_webhook_server.py VAD 前置过滤+优先级路由 |
@@ -1054,7 +1207,8 @@ records_dir: ~/.wecom_voice/records  # 录音存储路径
 | v1.0.0 | 2026-07-08 | 初始版本发布，包含企业微信语音消息回调、意图识别、多轮对话 |
 
 ### 后续规划
-- v2.6.0：群聊语音消息支持
+- v2.7.0：群聊语音消息支持
+- v2.8.0：语音声纹识别（区分不同说话人）
 - v3.0.0：多模态能力（图片+语音混合消息）+ 对接外部CRM
 
 ---
@@ -1066,3 +1220,7 @@ records_dir: ~/.wecom_voice/records  # 录音存储路径
 本技能基于 MIT 许可证开源，允许个人和商业使用，但不得声称对原始作品拥有版权。
 
 **免责声明**：本技能按"原样"提供，作者不对因使用本技能造成的任何损失承担责任。
+
+---
+
+*版本：v2.6.0 ｜ 许可：MIT ｜ 核心纯标准库、零密钥打包、可只读审计。*
