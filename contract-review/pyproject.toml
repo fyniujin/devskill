@@ -1,7 +1,7 @@
 [project]
 name = "contract-review"
-version = "5.2.0"
-description = "中文合同智能风险审查工具 v5.2.0"
+version = "5.2.1"
+description = "中文合同智能风险审查工具 v5.2.1"
 requires-python = ">=3.8"
 dependencies = [
     "pdfplumber>=0.10.0",
