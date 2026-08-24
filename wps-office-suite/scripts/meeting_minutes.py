@@ -1,6 +1,10 @@
 """
-会议纪要生成模块 v4.6.1
+会议纪要生成模块 v4.9.0
 功能：语音 → 转写 → 摘要 → Word 文档
+
+v4.9.0 变更:
+  - 新增：llm_bridge 作为摘要的优先引擎，未装 cn-llm-router 时回落本地规则
+  - 版本升级到 v4.9.0
 
 v4.6.1 变更:
   - 🔒 ASR 引擎改为显式 Opt-in：auto 模式仅使用本地 whisper-local 和 template，不读取外部凭证
@@ -400,7 +404,9 @@ class MinutesSummarizer:
     
     def _detect_available(self) -> Dict[str, bool]:
         """检测可用的摘要引擎"""
+        from llm_bridge import is_router_available
         return {
+            "llm_bridge": is_router_available(),  # v4.9: cn-llm-router 白名单探测
             "rule-engine": True,  # 始终可用（本地规则）
             "external-llm": bool(os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENAI_BASE_URL")),
             "pure-template": True,  # 始终可用
@@ -409,7 +415,7 @@ class MinutesSummarizer:
     def get_best_method(self) -> str:
         if self.method != "auto":
             return self.method
-        chain = ["rule-engine", "external-llm", "pure-template"]
+        chain = ["llm_bridge", "rule-engine", "external-llm", "pure-template"]
         for m in chain:
             if self._available.get(m, False):
                 return m
@@ -420,7 +426,9 @@ class MinutesSummarizer:
         method = self.get_best_method()
         
         try:
-            if method == "rule-engine":
+            if method == "llm_bridge":
+                result = self._summarize_llm_bridge(text, language)
+            elif method == "rule-engine":
                 result = self._summarize_rule_engine(text, language)
             elif method == "external-llm":
                 result = self._summarize_external_llm(text, language)
@@ -430,10 +438,27 @@ class MinutesSummarizer:
             return {"success": True, "method": method, **result}
         
         except Exception as e:
+            if method == "llm_bridge":
+                # llm_bridge 失败，回落到本地规则引擎
+                return self._summarize_rule_engine(text, language)
             if method != "pure-template":
                 return self._summarize_pure_template(text, language)
             return {"success": False, "error": f"摘要生成失败: {str(e)}"}
     
+    def _summarize_llm_bridge(self, text: str, language: str) -> Dict[str, Any]:
+        """通过 llm_bridge 走 cn-llm-router 生成摘要（v4.9 新增）"""
+        from llm_bridge import summarize as bridge_summarize, INSTALL_HINT
+        result = bridge_summarize(text, max_length=500, timeout=60)
+        if result.get("ok"):
+            return {
+                "summary": {"raw": result["text"]},
+                "structured": False,
+                "model": result.get("model", ""),
+                "cost": result.get("cost", ""),
+                "install_hint": INSTALL_HINT,
+            }
+        raise ValueError(result.get("error", "llm_bridge 摘要失败"))
+
     def _summarize_rule_engine(self, text: str, language: str) -> Dict[str, Any]:
         """本地规则引擎摘要（关键词提取 + 模板填充）"""
         # 提取关键信息
@@ -728,7 +753,7 @@ def _cli():
     """CLI 入口"""
     import argparse
     
-    parser = argparse.ArgumentParser(description="会议纪要生成器 v4.5.0")
+    parser = argparse.ArgumentParser(description="会议纪要生成器 v4.9.0")
     sub = parser.add_subparsers(dest="command", required=True)
     
     # transcribe 子命令
@@ -741,7 +766,7 @@ def _cli():
     # summarize 子命令
     p = sub.add_parser("summarize", help="摘要转写文本")
     p.add_argument("--file", required=True, help="转写文本文件路径")
-    p.add_argument("--method", default="auto", choices=["auto", "rule-engine", "external-llm", "pure-template"])
+    p.add_argument("--method", default="auto", choices=["auto", "llm_bridge", "rule-engine", "external-llm", "pure-template"])
     p.add_argument("--language", default="zh")
     p.add_argument("--output", default="", help="输出摘要文件路径")
     
@@ -752,7 +777,7 @@ def _cli():
     p.add_argument("--title", default="会议纪要", help="文档标题")
     p.add_argument("--language", default="zh")
     p.add_argument("--asr-method", default="auto")
-    p.add_argument("--summary-method", default="auto")
+    p.add_argument("--summary-method", default="auto", choices=["auto", "llm_bridge", "rule-engine", "external-llm", "pure-template"])
     p.add_argument("--segment-minutes", type=int, default=5)
     
     # batch 子命令
