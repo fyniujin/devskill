@@ -1,5 +1,5 @@
 # video-analyzer 配置文件
-# 视频分析处理 Skill v2.1.0
+# 视频分析处理 Skill v4.3.0
 
 # ==================== ASR 语音识别配置 (v3.5 新增) ====================
 asr:
@@ -311,6 +311,46 @@ live_analysis:
   alert_threshold: 3
   # 敏感词列表（为空则使用默认）
   sensitive_words: []
+
+# ==================== 纯音频输入配置 (v4.3 新增) ====================
+media_probe:
+  # 纯音频扩展名（这些扩展名直接走音频模式）
+  audio_extensions:
+    - .mp3
+    - .m4a
+    - .wav
+    - .flac
+    - .aac
+    - .ogg
+    - .wma
+    - .opus
+    - .amr
+    - .aiff
+    - .ape
+  # 音频转换参数
+  audio_output_sample_rate: 16000
+  audio_output_channels: 1
+
+# ==================== 批量队列配置 (v4.3 新增) ====================
+queue:
+  # 硬件档位对应的并发数
+  hardware_tiers:
+    low: 1
+    mid: 2
+    high: 4
+  # 默认硬件档位
+  default_tier: mid
+  # 数据库路径（默认在 cache_dir 下）
+  db_path: null
+
+# ==================== GPU 自动加速配置 (v4.3 新增) ====================
+gpu:
+  # 是否启用 GPU 加速
+  enabled: true
+  # CT2 模型下载基础路径
+  models_dir: models
+  # 自动回退到 CPU
+  fallback_to_cpu: true
 
 # ==================== 日志配置 ====================
 logging:
