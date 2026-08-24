@@ -382,13 +382,34 @@ class ContractLedger:
     def register_schtasks_reminder(self) -> bool:
         """
         注册 Windows 计划任务，每日扫描到期提醒
+        
+        安全增强（v5.2.1）：
+        - 打印任务名称、触发时间与影响范围
+        - 取得用户确认后再执行注册
+        - 不再自动调用，仅作为独立显式命令
         """
         try:
             script_path = Path(__file__).resolve()
             python_path = sys.executable
+            task_name = "ContractReviewReminder"
+            
+            # 打印任务详情，取得用户确认
+            print("\n" + "=" * 60)
+            print("计划任务注册确认")
+            print("=" * 60)
+            print(f"任务名称：{task_name}")
+            print(f"触发时间：每日 09:00")
+            print(f"执行命令：{python_path} {script_path} --scan-reminders")
+            print(f"影响范围：每日扫描到期合同，生成待办清单")
+            print(f"持久化：任务注册后持续执行，直到手动删除")
+            print("=" * 60)
+            
+            confirm = input("确认注册此计划任务？(yes/no): ").strip().lower()
+            if confirm not in ('yes', 'y'):
+                print("已取消注册")
+                return False
             
             # 创建计划任务 XML
-            task_name = "ContractReviewReminder"
             task_xml = f"""<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Triggers>
