@@ -50,6 +50,28 @@ def get_timestamp():
     return datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
 
 
+def get_retry_config(node):
+    """
+    获取节点的重试配置。
+
+    优先级：
+    1. 节点级 retry_config 块（v5.3 新增）
+    2. 旧全局字段（retry/fallback）向后兼容
+
+    返回 dict: {'count': int, 'backoff_base': float, 'fallback_chain': list}
+    """
+    retry_config = node.get('retry_config')
+    if retry_config:
+        return retry_config
+
+    # 旧全局策略降级
+    return {
+        'count': node.get('max_retry', 3),
+        'backoff_base': 2,
+        'fallback_chain': ['retry', node.get('fallback', 'abort')],
+    }
+
+
 def validate_path(filepath, must_exist=False):
     """路径安全校验：规范化路径，防止路径穿越
 
@@ -151,7 +173,7 @@ def init_state(pipeline, state_path=None):
         node_state = {
             "name": agent.get('name', aid),
             "role": agent.get('role', ''),
-            "type": agent.get('type', 'task'),  # task/approval/condition/switch/for-each/while-loop
+            "type": agent.get('type', 'task'),  # task/approval/condition/switch/for-each/while-loop/evaluate
             "status": "pending",       # pending → running → completed / failed / skipped
             "depends_on": agent.get('depends_on', []),
             "retry_count": 0,
@@ -165,6 +187,15 @@ def init_state(pipeline, state_path=None):
             "started_at": None,
             "completed_at": None
         }
+        # 任务级重试策略块（可选，未配置时走旧全局策略）
+        # 格式: {"count": 3, "backoff_base": 2, "fallback_chain": ["retry", "reparam", "skip"]}
+        retry_block = agent.get('retry')
+        if isinstance(retry_block, dict):
+            node_state['retry_config'] = {
+                'count': int(retry_block.get('count', 3)),
+                'backoff_base': float(retry_block.get('backoff_base', 2)),
+                'fallback_chain': retry_block.get('fallback_chain', ['retry', 'skip']),
+            }
         # 保留控制流节点的专有字段（否则动态路由时会丢失配置）
         for ctrl_field in ('condition', 'on_true', 'on_false',
                            'switch', 'cases', 'default',
