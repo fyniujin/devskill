@@ -83,20 +83,25 @@ def execute_retry(state_path, node_id, error_msg):
         print(f"  可用节点：{', '.join(state['nodes'].keys())}")
         sys.exit(1)
 
+    # 获取节点重试配置（优先节点级 retry_config，降级到旧全局策略）
+    retry_config = state_store.get_retry_config(node)
+    max_retry = retry_config['count']
+    backoff_base = retry_config['backoff_base']
+    fallback_chain = retry_config['fallback_chain']
+
     # 检查是否还有重试次数
     if not should_retry(node):
-        print(f"节点 [{node_id}] 已达最大重试次数 ({node['max_retry']})")
+        print(f"节点 [{node_id}] 已达最大重试次数 ({max_retry})")
         print(f"  自动进入降级流程...")
-        return execute_fallback(state_path, node_id, error_msg)
+        return execute_fallback(state_path, node_id, error_msg, fallback_chain)
 
     # 将节点状态重置为 pending，等待重新执行
     node['status'] = 'pending'
     node['error'] = error_msg
 
     retry_num = node['retry_count']  # 已经失败的次数
-    max_retry = node['max_retry']
     remaining = max_retry - retry_num  # 还有几次机会（本次重置后）
-    delay = 2 ** retry_num  # 第1次等2s，第2次等4s...
+    delay = backoff_base ** retry_num  # 指数退避
 
     state_store.safe_write(state, state_path)
 
@@ -119,11 +124,13 @@ def execute_retry(state_path, node_id, error_msg):
     return state
 
 
-def execute_fallback(state_path, node_id, error_msg):
+def execute_fallback(state_path, node_id, error_msg, fallback_chain=None):
     """Level 2: 降级策略
 
     在 retry 耗尽后自动执行，也可手动调用：
       python error_recovery.py fallback <state.json> <node_id> '错误描述'
+
+    fallback_chain: 降级动作链（来自节点 retry_config），默认使用旧全局 fallback
 
     ★★★ 安全提示 ★★★
     - abort 后状态文件保留，便于事后审计
@@ -136,7 +143,8 @@ def execute_fallback(state_path, node_id, error_msg):
         print(f"错误：节点 [{node_id}] 不存在")
         sys.exit(1)
 
-    fallback = node.get('fallback', 'abort')
+    # 确定降级动作：优先 fallback_chain[0]，否则旧 fallback，否则 abort
+    fallback = fallback_chain[0] if fallback_chain else node.get('fallback', 'abort')
 
     print("=" * 60)
     print(f"  ⬇️ Level 2: 降级策略 ({fallback})")
