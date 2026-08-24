@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-票种自动识别模块
+票种自动识别模块 v4.3.0
 根据文件类型、内容特征自动判断票据类型（支持10种票据）
-并路由到对应的解析器
+并路由到对应解析器；集成 PaddleOCR 双引擎和混拍图切分
 """
 
 import os
@@ -116,13 +116,32 @@ class InvoiceDetector:
         return "traditional"  # 默认传统发票
     
     def _try_ocr(self) -> str:
-        """尝试 OCR 提取文本"""
+        """尝试 OCR 提取文本（优先 Paddle，降级 Tesseract）"""
+        # 优先 PaddleOCR
+        try:
+            from paddleocr import PaddleOCR
+            ocr = PaddleOCR(use_angle_cls=True, lang='ch', show_log=False)
+            result = ocr.ocr(str(self.file_path), cls=True)
+            if result and result[0]:
+                lines = []
+                for line in result[0]:
+                    if line and len(line) >= 2:
+                        text_info = line[1]
+                        if isinstance(text_info, tuple) and len(text_info) >= 1:
+                            lines.append(text_info[0])
+                if lines:
+                    return '\n'.join(lines)
+        except ImportError:
+            pass
+        except Exception:
+            pass
+        
+        # 降级 Tesseract
         try:
             import pytesseract
             from PIL import Image
             
             if self.extension in self.TRADITIONAL_PDF_EXTENSIONS:
-                # PDF 需要转换
                 try:
                     from pdf2image import convert_from_path
                     images = convert_from_path(str(self.file_path), first_page=1, last_page=1)
@@ -131,12 +150,9 @@ class InvoiceDetector:
                 except Exception:
                     return ""
             else:
-                # 图片直接识别
                 img = Image.open(str(self.file_path))
                 return pytesseract.image_to_string(img, lang='chi_sim+eng')
-                
         except ImportError:
-            # pytesseract 或 PIL 未安装
             return ""
         except Exception:
             return ""
