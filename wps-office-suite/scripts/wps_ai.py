@@ -1,6 +1,6 @@
 """
-AI 统一入口 v4.8.0
-功能：统一 6 大 AI 功能入口，--action 路由到对应模块
+AI 统一入口 v4.9.0
+功能：统一 9 大 AI 功能入口，--action 路由到对应模块，集成 llm_bridge 统一模型层
 
 死规则合规：
   - 规则4：禁止自动发布
@@ -9,10 +9,13 @@ AI 统一入口 v4.8.0
   - 规则13：不生成禁止文件类型
   - 规则14：三轮自审
   - 规则15：沙箱模拟运行
+  - 规则16：子进程超时自动关闭（llm_bridge 子进程）
 
 安全合规：
   - auto 模式仅使用本地引擎，不读取外部凭证或 API Key
   - 外部 LLM/ASR 仅在用户显式指定 method 时调用
+  - llm_bridge 通过白名单探测 + subprocess 调用 cn-llm-router
+  - 未命中 cn-llm-router 时回落本地规则引擎 + 自配 API 降级链
 """
 import json
 import sys
@@ -40,6 +43,9 @@ def main():
             "contract",
             "translate",
             "formula",
+            "continue",
+            "rewrite",
+            "expand",
         ],
         help="AI 功能动作",
     )
@@ -103,6 +109,16 @@ def main():
     # 公式解释参数
     parser.add_argument("--cell", default="", help="单元格地址（formula 动作）")
 
+    # v4.9: 续写/改写/扩写参数
+    parser.add_argument("--text", default="", help="输入文本（continue/rewrite/expand 动作）")
+    parser.add_argument("--style", default="formal",
+                        choices=["formal", "casual", "concise", "detailed", "polite", "professional"],
+                        help="目标风格（rewrite 动作）")
+    parser.add_argument("--aspect", default="details",
+                        choices=["details", "examples", "background", "analysis"],
+                        help="扩写方向（expand 动作）")
+    # --context 已在 line 68 定义（email-reply 使用），此处不再重复
+
     args = parser.parse_args()
 
     result = {"ok": False, "error": "未知动作"}
@@ -119,6 +135,12 @@ def main():
         result = _ai_translate(args)
     elif args.action == "formula":
         result = _ai_formula(args)
+    elif args.action == "continue":
+        result = _ai_continue(args)
+    elif args.action == "rewrite":
+        result = _ai_rewrite(args)
+    elif args.action == "expand":
+        result = _ai_expand(args)
 
     print(json.dumps(result, ensure_ascii=False, default=str))
 
@@ -244,6 +266,79 @@ def _ai_formula(args) -> dict:
         return {"ok": True, "count": len(results), "formulas": results}
     else:
         return {"ok": False, "error": "请指定 --formula 或 --file（可配合 --cell）"}
+
+
+def _ai_continue(args) -> dict:
+    """续写文本（v4.9 新增，通过 llm_bridge 走 cn-llm-router）"""
+    try:
+        from llm_bridge import continue_writing, INSTALL_HINT
+    except ImportError:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from llm_bridge import continue_writing, INSTALL_HINT
+
+    if not args.text:
+        return {"ok": False, "error": "请指定 --text（要续写的文本）"}
+
+    result = continue_writing(
+        text=args.text,
+        context=args.context,
+        timeout=30,
+    )
+
+    # 如果未命中 cn-llm-router，添加安装提示
+    if result.get("source") == "fallback" and not result.get("ok"):
+        result["install_hint"] = INSTALL_HINT
+        result["message"] = "未检测到 cn-llm-router，已降级到本地规则引擎。安装后可零配置使用更多模型。"
+
+    return result
+
+
+def _ai_rewrite(args) -> dict:
+    """改写文本（v4.9 新增，通过 llm_bridge 走 cn-llm-router）"""
+    try:
+        from llm_bridge import rewrite_text, INSTALL_HINT
+    except ImportError:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from llm_bridge import rewrite_text, INSTALL_HINT
+
+    if not args.text:
+        return {"ok": False, "error": "请指定 --text（要改写的文本）"}
+
+    result = rewrite_text(
+        text=args.text,
+        style=args.style,
+        timeout=30,
+    )
+
+    if result.get("source") == "fallback" and not result.get("ok"):
+        result["install_hint"] = INSTALL_HINT
+        result["message"] = "未检测到 cn-llm-router，已降级到本地规则引擎。安装后可零配置使用更多模型。"
+
+    return result
+
+
+def _ai_expand(args) -> dict:
+    """扩写文本（v4.9 新增，通过 llm_bridge 走 cn-llm-router）"""
+    try:
+        from llm_bridge import expand_text, INSTALL_HINT
+    except ImportError:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from llm_bridge import expand_text, INSTALL_HINT
+
+    if not args.text:
+        return {"ok": False, "error": "请指定 --text（要扩写的文本）"}
+
+    result = expand_text(
+        text=args.text,
+        aspect=args.aspect,
+        timeout=30,
+    )
+
+    if result.get("source") == "fallback" and not result.get("ok"):
+        result["install_hint"] = INSTALL_HINT
+        result["message"] = "未检测到 cn-llm-router，已降级到本地规则引擎。安装后可零配置使用更多模型。"
+
+    return result
 
 
 if __name__ == "__main__":
