@@ -2,18 +2,19 @@
 name: kingdoc
 displayName: 金山文档 KingDoc
 slug: kingdoc
-version: 3.8.0
+version: 3.9.0
 description: >
   金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理
   （文档/智能画布/电子表格/演示文稿/多维表格/收集表/可视化/历史管理/全文搜索/附件），
-  深度直连金山文档（WPS）开放平台原生 API，覆盖腾讯文档全部能力 + 金山独有 16 项增强
-  （回收站、版本历史、格式转换、纯文本提取、本地 Tesseract OCR（强制本地，数据不出域）、
+  深度直连金山文档（WPS）开放平台原生 API，覆盖腾讯文档全部能力 + 金山独有 18 项增强
+  （回收站、版本历史、格式转换（全格式覆盖 jpg/png/txt）、纯文本提取、本地 Tesseract OCR（强制本地，数据不出域）、
   通知推送、Webhook、批量任务、政企合规、硬件自适应性能、WPS AI 能力、协同冲突解决、
   文档合规检查、实时协同编辑、文档对比、WPS AI 深度集成、模板市场、多维表格视图增强、
-  手写/公式识别、历史管理、智能画布元素级编辑、全文搜索）。
+  手写/公式识别、历史管理、智能画布元素级编辑、全文搜索、块级编辑、演示页替换、配额管理器）。
   文字/演示/可视化采用"本地生成→上传覆盖"，电子表格/多维表格采用 API 精细编辑。
-  智能画布支持元素级 CRUD + Markdown 增量追加。本地生成、OCR、硬件画像、WPS AI、全文搜索等能力零密钥可用。
-description_zh: "金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理（深度直连 WPS 开放平台 + 智能画布元素级编辑 + 全文搜索超越腾讯 + 16 项增强）"
+  智能画布支持元素级 CRUD + Markdown 增量追加。块级编辑实现段落级在线编辑替代整文件替换。
+  本地生成、OCR、硬件画像、WPS AI、全文搜索、块级编辑、配额管理等能力零密钥可用。
+description_zh: "金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理（深度直连 WPS 开放平台 + 智能画布元素级编辑 + 全文搜索超越腾讯 + 块级编辑段落级 + 18 项增强）"
 platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
 tags: [文档处理, 表格处理, PPT生成, 多维表格, 表单收集, 思维导图, 流程图, OCR, 政企合规]
 license: MIT
@@ -957,6 +958,7 @@ python -m engine.update_check --version 3.0.0 --reminder
 
 ## 更新日志
 
+| v3.9.0 | 2026-08-24 | 增加：块级编辑引擎 `engine/blocks.py`（段落级在线编辑，block_id CRUD，块类型映射表，未知块类型跳过不中断）；增加：演示页替换引擎 `engine/page_swap.py`（双路径自动选择：页级更新/整文件替换 + 页数校验 diff）；增加：配额管理器 `engine/quota_manager.py`（SQLite 按天计数 500 次/天 + 令牌桶限速 5 req/s + 429 指数退避 + 批量任务硬件自适应削峰）；增加：格式转换引擎 `engine/format_converter.py`（补齐 jpg/png/txt 三类目标格式，全格式覆盖 pdf/jpg/png/txt/docx/xlsx/pptx/html/md，云端优先→本地兜底失败降级链）；增加：MCP 工具 9 个（kdoc.block.* 5 个、kdoc.page_swap 1 个、kdoc.quota.* 3 个、kdoc.office.convert.enhanced 1 个）；增加：块级编辑/页替换/配额管理/格式转换场景案例；优化：SKILL.md 版本号 3.8.0→3.9.0 |
 | v3.8.0 | 2026-08-22 | 增加：智能画布元素级编辑引擎 `engine/element_engine/`（元素CRUD + Markdown追加 + 增量同步，对标腾讯文档·智能画布）；增加：空间节点管理引擎 `engine/space_tree/`（目录树查询 + 链接节点创建 + 递归删除 + 目录可视化）；增加：全文搜索引擎 `engine/content_search/`（文档内容搜索 + 结果定位高亮，超越腾讯）；增加：统一删除入口 `kdoc.file_delete_unified`（合并软删除/彻底删除/直接删除）；增加：MCP 工具 10 个（kdoc.element.* 5 个、kdoc.space.* 4 个、kdoc.content_search.* 2 个、kdoc.file_delete_unified 1 个）；增加：智能画布/空间管理/全文搜索/统一删除场景案例；优化：品类路由表从 8→9（新增 smart_canvas + content_search）；优化：history 模块新增 delete() 统一方法 |
 | v3.7.0 | 2026-08-19 | 增加：多维表格视图增强引擎 `engine/views/`（看板/日历/甘特图三种视图，对标 Airtable，本地渲染，硬件自适应）；增加：手写/公式识别 OCR `engine/ocr/`（数学公式识别 LaTeX/MathML 输出，教育场景统一入口）；增加：历史管理模块 `engine/history/`（合并回收站+版本历史，统一 history list/restore 入口）；增加：MCP 工具 6 个（kdoc.view.* 2 个、kdoc.ocr.* 2 个、kdoc.history.* 3 个）；增加：多维表格视图增强/公式识别/历史管理场景案例；优化：OCR 升级为强制本地模式，数据不出域，移除云端调用路径；优化：品类路由表从 7→8（新增 history_mgmt） |
 | v3.6.0 | 2026-08-16 | 增加：文档模板市场引擎 `engine/template_marketplace.py`（git 仓库管理模板，支持 list/search/use/refresh，变量替换一键生成）；增加：WPS AI 深度集成（段落级 AI 操作：rewrite/summarize/continue，本地降级占位，API 开放后升级为原生）；增加：可视化品类合并 `engine/categories.py`（8→7 品类，合并 mindmap+flowchart→visualization，共享 mermaid 渲染管线）；增加：MCP 工具 7 个（kdoc.template.* 4 个、kdoc.wps_ai.* 3 个）；增加：可视化品类合并/WPS AI 深度集成/模板市场场景案例；优化：品类路由表从 8→7，引擎逻辑不变 |
@@ -1040,4 +1042,171 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 ---
 
-*最后更新：2026-08-22 | v3.8.0*
+*最后更新：2026-08-24 | v3.9.0*
+
+---
+
+## 26. 块级编辑引擎（v3.9.0 新增，段落级在线编辑）
+
+> v3.8.0 实现了整文件替换和元素级编辑，v3.9.0 进一步下沉到**段落级块编辑**。
+> 以 `block_id` 为操作主键，直接修改文档中的某个段落/标题/列表/表格，无需整文件重生成。
+
+### 26.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.block.list` | 拉取文档块列表 | 返回所有块的结构化数据 |
+| `kdoc.block.replace` | 按 block_id 替换块 | 修改指定块的内容 |
+| `kdoc.block.insert` | 按 block_id 插入新块 | 在指定块前后插入 |
+| `kdoc.block.delete` | 按 block_id 删除块 | 删除指定块 |
+| `kdoc.block.move` | 按 block_id 移动块 | 调整块顺序 |
+
+### 26.2 块类型映射表
+
+| 金山 API 类型 | 内部类型 | 说明 |
+|-------------|---------|------|
+| paragraph | paragraph | 段落 |
+| heading | heading | 标题 |
+| list | list | 列表 |
+| table | table | 表格 |
+| image | image | 图片 |
+| divider | divider | 分隔线 |
+| code | code | 代码块 |
+| quote | quote | 引用 |
+| todo | todo | 待办事项 |
+| callout | callout | 提示框 |
+| equation | equation | 公式 |
+
+**未知块类型处理**：跳过并提示，绝不报错中断。
+
+### 26.3 工作流程
+
+```
+1) kdoc.block.list(file_id) → 获取块列表
+2) 用户定位要修改的 block_id
+3) kdoc.block.replace(file_id, block_id, new_content) → 替换内容
+4) 或 kdoc.block.insert(file_id, block_id, content, position="after") → 插入新块
+5) 或 kdoc.block.delete(file_id, block_id) → 删除块
+6) 或 kdoc.block.move(file_id, block_id, target_id, position) → 移动块
+```
+
+### 26.4 安全约束
+
+- 块级编辑属于「覆盖文件」操作，**必须走强制确认铁律**
+- 批量替换时自动降并发（硬件自适应）
+- 未知块类型跳过并提示，不中断流程
+
+---
+
+## 27. 演示页替换引擎（v3.9.0 新增，双路径自动选择）
+
+> 单页内容本地 python-pptx 重生成后，探测演示 API 是否支持页级更新。
+> 支持则仅覆盖该页，不支持则整文件替换并在完成后 diff 提示页数校验。
+
+### 27.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.page_swap` | 替换指定页 | 自动选择页级更新或整文件替换 |
+
+### 27.2 双路径自动选择
+
+```
+1) 探测 API 是否支持页级更新
+   ├── 支持 → 仅覆盖该页（API 调用）
+   └── 不支持 → 整文件替换（本地重生成 + 上传覆盖）
+2) 替换完成后执行页数校验 diff
+3) 返回替换结果 + 页数变化提示
+```
+
+### 27.3 安全约束
+
+- 整文件替换属于「覆盖文件」危险操作，**必须走强制确认铁律**
+- 页数校验 diff 确保替换前后页数一致
+- 页数变化时明确提示用户
+
+---
+
+## 28. 配额管理器（v3.9.0 新增，API 配额与限流）
+
+> 保护测试与生产环境，避免 API 配额耗尽导致服务中断。
+
+### 28.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.quota.check` | 检查配额状态 | 返回剩余配额、使用率 |
+| `kdoc.quota.dashboard` | 配额看板 | 配额+令牌桶+硬件+小时分布 |
+| `kdoc.quota.batch_params` | 安全批量参数 | 硬件自适应削峰建议 |
+
+### 28.2 配额三件套
+
+| 组件 | 说明 | 配置 |
+|------|------|------|
+| SQLite 按天计数 | 记录每日请求量 | 默认 500 次/天 |
+| 令牌桶限速 | 控制请求速率 | 默认 5 req/s，突发 10 |
+| 429 指数退避 | 限流时自动重试 | 最多 5 次，最大 60 秒 |
+
+### 28.3 硬件自适应削峰
+
+```
+批量任务 → 读取 hardware.py → 计算安全并发
+         → 读取配额余量 → 计算可执行任务数
+         → 令牌桶限速 → 控制请求速率
+         → 返回建议参数（workers, batch_chunk, 预估时间）
+```
+
+### 28.4 配额看板展示
+
+- 当日配额使用率（进度条）
+- 令牌桶状态（令牌数/速率/突发）
+- 小时分布图（峰值时段）
+- 硬件自适应建议
+- 推荐执行时段
+
+---
+
+## 29. 格式转换补全（v3.9.0 升级，全格式覆盖）
+
+> 补齐 jpg/png/txt 三类缺失的目标格式，全量覆盖参数校验与失败降级链。
+
+### 29.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.office.convert.enhanced` | 格式转换（增强版） | 云端优先 → 本地兜底 |
+
+### 29.2 支持的目标格式（v3.9.0 补齐后）
+
+| 格式 | 说明 | 本地兜底 |
+|------|------|---------|
+| pdf | PDF 文档 | LibreOffice |
+| jpg | JPEG 图片 | Pillow / ImageMagick |
+| png | PNG 图片 | Pillow / ImageMagick |
+| txt | 纯文本 | 直接提取 |
+| docx | Word 文档 | python-docx |
+| xlsx | Excel 表格 | openpyxl |
+| pptx | PPT 演示 | python-pptx |
+| html | HTML 文档 | 简单转换 |
+| md | Markdown | 简单转换 |
+
+### 29.3 失败降级链
+
+```
+云端转换（金山 API）
+  ↓ 失败
+本地转换（python-docx / python-pptx / LibreOffice）
+  ↓ 失败
+返回错误 + 安装指引
+```
+
+### 29.4 参数校验
+
+- 源格式与目标格式是否支持
+- 本地兜底是否可用（检查依赖）
+- 文件大小是否超限
+- 转换矩阵校验
+
+---
+
+*最后更新：2026-08-24 | v3.9.0*
