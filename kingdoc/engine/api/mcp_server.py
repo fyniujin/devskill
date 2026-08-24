@@ -36,7 +36,7 @@ from engine.hardware import get_recommended_settings
 from engine.update_check import build_reminder, FEEDBACK_EMAIL
 from engine.exceptions import KingDocError
 
-APP_VERSION = "3.8.0"
+APP_VERSION = "3.9.0"
 
 # 配置路径：环境变量优先，其次 skill 根目录 config.json
 CONFIG_PATH = os.environ.get("KINGDOC_CONFIG", str(SKILL_ROOT / "config.json"))
@@ -1243,6 +1243,190 @@ async def kdoc_category_list() -> str:
         return _to_text(result)
     except Exception as e:
         return f"[ERR] 获取品类列表失败：{e}"
+
+
+# ===========================================================================
+# 二十五、块级编辑引擎（v3.9.0 新增，段落级在线编辑）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_block_list(file_id: str) -> str:
+    """【免密钥】拉取文档块列表（段落级编辑基础）。
+
+    file_id: 文档 ID
+    本地降级模式，零配置可用。"""
+    try:
+        from engine.blocks import BlockEditor
+        editor = BlockEditor(backend=None)
+        result = editor.blocks_list(file_id)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 拉取块列表失败：{e}"
+
+@mcp.tool()
+async def kdoc_block_replace(file_id: str, block_id: str, content: str,
+                             block_type: str = "paragraph") -> str:
+    """【免密钥】按 block_id 替换块内容。
+
+    file_id: 文档 ID
+    block_id: 块 ID
+    content: 新内容
+    block_type: paragraph / heading / list / table / code / quote / divider
+    本地降级模式，零配置可用。"""
+    try:
+        from engine.blocks import BlockEditor
+        editor = BlockEditor(backend=None)
+        result = editor.block_replace(file_id, block_id, content, block_type)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 替换块失败：{e}"
+
+@mcp.tool()
+async def kdoc_block_insert(file_id: str, block_id: str, content: str,
+                            position: str = "after", block_type: str = "paragraph") -> str:
+    """【免密钥】按 block_id 插入新块。
+
+    file_id: 文档 ID
+    block_id: 参考块 ID
+    content: 新块内容
+    position: after（之后）/ before（之前）
+    block_type: paragraph / heading / list / table / code / quote / divider
+    本地降级模式，零配置可用。"""
+    try:
+        from engine.blocks import BlockEditor
+        editor = BlockEditor(backend=None)
+        result = editor.block_insert(file_id, block_id, content, position, block_type)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 插入块失败：{e}"
+
+@mcp.tool()
+async def kdoc_block_delete(file_id: str, block_id: str) -> str:
+    """【免密钥】按 block_id 删除块。
+
+    file_id: 文档 ID
+    block_id: 块 ID
+    本地降级模式，零配置可用。"""
+    try:
+        from engine.blocks import BlockEditor
+        editor = BlockEditor(backend=None)
+        result = editor.block_delete(file_id, block_id)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 删除块失败：{e}"
+
+@mcp.tool()
+async def kdoc_block_move(file_id: str, block_id: str,
+                          target_block_id: str, position: str = "after") -> str:
+    """【免密钥】按 block_id 移动块。
+
+    file_id: 文档 ID
+    block_id: 要移动的块 ID
+    target_block_id: 目标块 ID
+    position: after / before
+    本地降级模式，零配置可用。"""
+    try:
+        from engine.blocks import BlockEditor
+        editor = BlockEditor(backend=None)
+        result = editor.block_move(file_id, block_id, target_block_id, position)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 移动块失败：{e}"
+
+
+# ===========================================================================
+# 二十六、演示页替换引擎（v3.9.0 新增，双路径自动选择）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_page_swap(file_id: str, source_path: str, page_number: int,
+                         title: str = "", bullets: str = "",
+                         layout: str = "title_and_content") -> str:
+    """【免密钥】替换演示文稿中的指定页（自动选择页级更新或整文件替换）。
+
+    file_id: 在线文档 ID
+    source_path: 原始 PPTX 本地路径
+    page_number: 页码（从1开始）
+    title: 新页面标题
+    bullets: 新页面要点（每行一个）
+    layout: 页面布局（title_and_content / title_only / blank）
+    本地降级模式，零配置可用。"""
+    try:
+        from engine.page_swap import PptxPageSwapEngine
+        page_content = {
+            "title": title,
+            "bullets": [b.strip() for b in bullets.splitlines() if b.strip()],
+            "layout": layout,
+        }
+        engine = PptxPageSwapEngine(backend=None)
+        result = engine.swap_page(file_id, source_path, page_content, page_number)
+        return _to_text(result.to_dict())
+    except Exception as e:
+        return f"[ERR] 页替换失败：{e}"
+
+
+# ===========================================================================
+# 二十七、配额管理器（v3.9.0 新增，API 配额与限流）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_quota_check() -> str:
+    """【免密钥】检查当前配额状态（按天计数，500 次/天限制）。
+
+    返回剩余配额、使用率、状态。
+    本地模式，零配置可用。"""
+    try:
+        from engine.quota_manager import check_quota
+        result = check_quota()
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 配额检查失败：{e}"
+
+@mcp.tool()
+async def kdoc_quota_dashboard() -> str:
+    """【免密钥】获取配额看板（配额+令牌桶+硬件+小时分布+建议）。
+
+    本地模式，零配置可用。"""
+    try:
+        from engine.quota_manager import get_dashboard
+        result = get_dashboard()
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 获取看板失败：{e}"
+
+@mcp.tool()
+async def kdoc_quota_batch_params(total_items: int) -> str:
+    """【免密钥】计算安全的批量任务参数（硬件自适应削峰）。
+
+    total_items: 总任务数
+    返回 workers、batch_chunk、预估时间、建议。
+    本地模式，零配置可用。"""
+    try:
+        from engine.quota_manager import get_safe_batch_params
+        result = get_safe_batch_params(total_items)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 计算批量参数失败：{e}"
+
+
+# ===========================================================================
+# 二十八、格式转换引擎（v3.9.0 升级，补齐 jpg/png/txt）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_office_convert_enhanced(file_id: str, source_path: str,
+                                      target_format: str) -> str:
+    """【免密钥】格式转换（云端优先 → 本地兜底）。
+
+    file_id: 在线文档 ID
+    source_path: 源文件本地路径
+    target_format: pdf / jpg / png / txt / docx / xlsx / pptx / html / md
+
+    v3.9.0 新增：补齐 jpg/png/txt 三类目标格式，全量覆盖参数校验与失败降级链。
+    本地降级模式，零配置可用。"""
+    try:
+        from engine.format_converter import convert_file
+        result = convert_file(backend=None, file_id=file_id,
+                              source_path=source_path, target_format=target_format)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 格式转换失败：{e}"
 
 
 def main():
