@@ -122,8 +122,11 @@ def install_ollama():
     
     print("Ollama 未安装。请选择安装方式：")
     print()
-    print("1. macOS / Linux（一键安装）")
-    print("   运行: curl -fsSL https://ollama.ai/install.sh | sh")
+    print("1. macOS / Linux")
+    print("   先下载脚本到本地：curl -fsSL -o install-ollama.sh https://ollama.ai/install.sh")
+    print("   查看脚本内容确认无异常：cat install-ollama.sh")
+    print("   执行安装：bash install-ollama.sh")
+    print("   清理脚本：rm install-ollama.sh")
     print()
     print("2. Windows")
     print("   访问 https://ollama.ai/download 下载 OllamaSetup.exe")
@@ -423,14 +426,10 @@ def main():
     hw_summary = hw_detector.format_hardware_summary()
     print(f"🖥️  {hw_summary} | 等级: {hw_config['hardware_tier']}", flush=True)
     
-    # ===== v3.0 异步更新检测（不阻塞） =====
+    # ===== v5.2.1 安全更新：移除自动远程版本检查 =====
+    # 安全增强：不再在审查流程中自动拉取远程版本
+    # 更新检查仅在用户显式使用 --check-update 时执行
     update_info = None
-    try:
-        from updater import UpdateChecker
-        update_checker = UpdateChecker()
-        update_info = update_checker.check()
-    except Exception:
-        pass  # 更新检测失败不影响审查
     
     try:
         total_steps = 5
