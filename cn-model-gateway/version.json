@@ -1,0 +1,1 @@
+{"version": "1.7.0", "homepage": "https://skillhub.cn/skill/cn-model-gateway", "notes": "v1.7.0：引入 llm-core 共享内核（adapters/cost_tracker/cache/health_check/config/yaml_simple），build_core.py 构建脚本 vendor 注入 + _core_lock.json 版本锁 + regression 回归门禁；集成 calibrate.py 能力实测校准器（标准题集实测回填画像分数，支持全量/抽样预算）；ernie.py 适配器精简（推荐 OpenAI 兼容通道，原生签名路径保留兜底）"}
