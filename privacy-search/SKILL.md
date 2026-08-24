@@ -2,8 +2,8 @@
 slug: privacy-search
 displayName: 隐私搜索
 name: privacy-search
-description: "隐私优先的多引擎并行搜索 Skill，提供十大搜索引擎（百度/必应/搜狗/360/DuckDuckGo/Yandex/Startpage/Qwant/Brave/本地SearXNG）并行检索。V1.6 新增 Perplexity 式答案合成（引用+正文抓取+citation）和定时引擎失效告警，jieba 默认安装提升中文精度。支持结果缓存与搜索历史、统一 HTTP 出口（隐私头/UA池/代理/自动重试真正生效）、标准 SimHash 去重、多因子加权排序（共识度/位次/相关度/权威度/域名质量）、多套备选选择器与解析诊断、bangs 语法透传、网页正文抓取、搜索结果导出（Markdown/HTML/PDF）、LLM 摘要（智谱 GLM-4-Flash + 抽取式降级）、定时 selftest + 告警。SearXNG 本地实例双路径部署，隐私模式 normal/strict 一键切换，不污染系统 Python 环境。"
-version: 1.6.0
+description: "隐私优先的多引擎并行搜索 Skill，提供十大搜索引擎（百度/必应/搜狗/360/DuckDuckGo/Yandex/Startpage/Qwant/Brave/本地SearXNG）并行检索。V1.7 新增 MCP Server 形态（stdio JSON-RPC 2.0 暴露 search/synthesize/fetch 三工具），可被 Claude Code/Cursor/n8n 直接挂载，让搜索能力成为任何 Agent 的即插组件。V1.6 新增 Perplexity 式答案合成（引用+正文抓取+citation）和定时引擎失效告警，jieba 默认安装提升中文精度。支持结果缓存与搜索历史、统一 HTTP 出口（隐私头/UA池/代理/自动重试真正生效）、标准 SimHash 去重、多因子加权排序（共识度/位次/相关度/权威度/域名质量）、多套备选选择器与解析诊断、bangs 语法透传、网页正文抓取、搜索结果导出（Markdown/HTML/PDF）、LLM 摘要（智谱 GLM-4-Flash + 抽取式降级）、定时 selftest + 告警、MCP Server 生态桥接。SearXNG 本地实例双路径部署，隐私模式 normal/strict 一键切换，不污染系统 Python 环境。"
+version: 1.7.0
 tags: ["privacy", "search", "multi-engine", "duckduckgo", "searxng", "local-first", "simhash", "china-friendly", "export", "summary"]
 icon: "🔒"
 author: "njskills"
@@ -12,7 +12,7 @@ license: "MIT"
 
 # 隐私搜索（Privacy Search）
 
-隐私优先的多引擎并行搜索 Skill。V1.6 新增 **Perplexity 式答案合成**（引用+正文抓取+citation）和 **定时引擎失效告警**，jieba 默认安装提升中文相关度精度。V1.5 在搜索质量与隐私真实生效基础上，新增网页正文抓取、结果导出（Markdown/HTML/PDF）与 LLM 摘要（智谱 GLM-4-Flash + 抽取式降级）。
+隐私优先的多引擎并行搜索 Skill。V1.7 新增 **MCP Server 形态**（stdio JSON-RPC 2.0 暴露 search/synthesize/fetch 三工具），可被 Claude Code / Cursor / n8n 直接挂载，让搜索能力成为任何 Agent 的即插组件。V1.6 新增 Perplexity 式答案合成（引用+正文抓取+citation）和定时引擎失效告警，jieba 默认安装提升中文相关度精度。V1.5 在搜索质量与隐私真实生效基础上，新增网页正文抓取、结果导出（Markdown/HTML/PDF）与 LLM 摘要（智谱 GLM-4-Flash + 抽取式降级）。
 
 ## 环境要求
 
@@ -96,6 +96,23 @@ python -m scripts.search --selftest-schedule status
 python -m scripts.selftest_scheduler run
 python -m scripts.selftest_scheduler status
 ```
+
+### F6：MCP Server（V1.7 新增）
+
+```bash
+# 启动 MCP Server（stdio 模式）
+python -m scripts.mcp_server
+
+# 查看工具 schema
+python -m scripts.mcp_server --schema
+
+# 协议自测
+python -m scripts.mcp_server --test
+```
+
+MCP Server 暴露三个工具：`search`（多引擎并行搜索）、`synthesize`（Perplexity 式答案合成）、`fetch`（网页正文抓取）。
+
+> 详细工具 schema 与桥接文档 → [references/mcp_schema.md](references/mcp_schema.md)
 
 ### 缓存与搜索历史
 
@@ -194,13 +211,15 @@ python -m scripts.update_checker status
 | Perplexity 式合成 | 抓取正文→分块→LLM 带 citation 生成答案（Pro 模式） |
 | 定时引擎告警 | 每日/每小时自动 selftest，失效引擎主动通知 |
 | jieba 中文分词 | 默认安装，中文相关度精度提升 |
+| MCP Server | stdio JSON-RPC 2.0 服务，暴露 search/synthesize/fetch 三工具 |
+| 生态桥接 | 可被 gov-procurement/contract-review 等 skill 经 MCP 调用 |
 
 ## 不能做哪些（V1.6 限制）
 
 - ❌ **不隐藏 IP 地址**：未配置 `privacy.strict.proxy` 时搜索引擎仍可见您的 IP
 - ❌ **不保证 100% 正文抓取**：部分网站反爬严格，正文抓取可能失败
 - ❌ **不保证 LLM 摘要 100% 准确**：LLM 可能产生幻觉，建议核对来源
-- ❌ **不提供浏览器插件 / MCP Server**（V2.0+ 规划）
+- ❌ **不提供浏览器插件**（V2.0+ 规划）
 - ❌ **不保证引擎长期可解析**：搜索引擎改版后需等待选择器更新
 
 ## 风险声明
@@ -324,7 +343,7 @@ A: `pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple`
 A: 10 个：百度、必应、搜狗、360、DuckDuckGo、Yandex、Startpage、Qwant、Brave、本地 SearXNG。运行 `--list-engines` 查看完整属性。
 
 **Q: 如何在其他程序里调用？**
-A: 当前仅支持命令行，可用 `--json` 获取结构化输出。MCP Server 在 V2.0 规划中。
+A: 当前支持两种方式：① 命令行 `--json` 获取结构化输出；② MCP Server（V1.7 新增），通过 stdio JSON-RPC 2.0 暴露 search/synthesize/fetch 三工具，可被 Claude Code、Cursor、n8n 等直接挂载。详见 `references/mcp_schema.md`。
 
 **Q: Pro 模式和普通摘要的区别？**
 A: Pro 模式会抓取搜索结果正文并生成带 citation 的答案，每个论断都能追溯到来源。普通摘要（`--summarize`）只基于 snippet 生成简短总结。Pro 模式需要配置 `synthesis.api_key`，无 Key 时自动降级为抽取式摘要。
@@ -343,6 +362,15 @@ A: 在 config.yaml 的 `selftest_schedule.webhook_url` 填入企业微信/钉钉
 
 **Q: 配置项太多，哪些必须改？**
 A: 首次只需改 3 项（config.yaml 中标注 [推荐修改]）：`default_engines`、`timeout`、`default_mode`。其他保持默认。
+
+**Q: MCP Server 是什么？怎么用？**
+A: MCP Server 是 V1.7 新增的 stdio JSON-RPC 2.0 服务，把搜索/合成/抓取能力暴露为标准工具协议。运行 `python scripts/mcp_server.py` 即可启动，可被 Claude Code、Cursor、n8n 等支持 MCP 的客户端挂载。详见 `references/mcp_schema.md`。
+
+**Q: MCP Server 暴露了哪些工具？**
+A: 3 个工具：`search`（多引擎隐私搜索）、`synthesize`（Perplexity 式答案合成）、`fetch`（URL 正文抓取）。可通过 config.yaml 的 `mcp_server.tools` 缩减子集。
+
+**Q: MCP Server 超时怎么办？**
+A: 默认单次调用 30 秒，超时返回 JSON-RPC 错误响应，不中断服务。可在 config.yaml 调整 `mcp_server.timeout`。LLM 不可用时自动降级为抽取式，不影响 search/fetch 工具。
 
 ## 项目结构
 
@@ -365,11 +393,13 @@ privacy-search/
 │   ├── update_checker.py             # 更新检查（死规则 11）
 │   ├── quick_setup.py                # 一键安装
 │   ├── synthesiser.py                # F4: Perplexity 式答案合成（V1.6 新增）
-│   └── selftest_scheduler.py         # F5: 定时 selftest 告警（V1.6 新增）
+│   ├── selftest_scheduler.py         # F5: 定时 selftest 告警（V1.6 新增）
+│   └── mcp_server.py                 # F6: MCP Server stdio JSON-RPC 2.0（V1.7 新增）
 ├── references/
 │   ├── config.yaml.example           # 配置模板（含推荐配置标注）
 │   ├── engines.md                    # 引擎适配器文档
 │   ├── engines_zh.md                 # 国内引擎与降级策略
+│   ├── mcp_schema.md                 # MCP 工具 Schema 文档（V1.7 新增）
 │   └── QUICK_START.md                # 快速上手
 └── tests/
     ├── test_search.py                # 搜索基础测试
@@ -377,6 +407,7 @@ privacy-search/
     ├── test_search_v12.py            # 缓存/排序/日志测试
     ├── test_search_v15.py            # V1.5 新模块测试
     ├── test_search_v16.py            # V1.6 新模块测试
+    ├── test_mcp_server.py            # MCP Server 协议与工具测试（V1.7 新增）
     ├── test_searxng.py               # SearXNG 管理测试
     ├── test_privacy.py               # 隐私模式测试
     └── test_update_checker.py        # 更新检查测试
@@ -384,6 +415,7 @@ privacy-search/
 
 ## 更新日志
 
+| v1.7.0 | 2026-08-28 | 增加：MCP Server 形态（stdio JSON-RPC 2.0 暴露 search/synthesize/fetch 三工具）；增加：生态桥接文档（references/mcp_schema.md）；增加：MCP Server 配置段（config.yaml） |
 | v1.6.0 | 2026-08-17 | 增加：Perplexity 式答案合成（抓取正文→分块→LLM 带 citation 生成答案）；增加：定时 selftest 调度+引擎失效告警（每日/每小时，支持 webhook）；调整：jieba 从可选改为默认安装，中文相关度精度提升；优化：无 API Key 时 Pro 模式自动降级为抽取式摘要+来源列表 |
 | v1.5.0 | 2026-08-07 | 增加：网页正文抓取模块（trafilatura/boilerpy3/正则三层降级）；增加：搜索结果导出（Markdown/HTML/PDF，PDF 有降级方案）；增加：LLM 摘要（智谱 GLM-4-Flash + 抽取式降级）；增加：引擎统计与动态降级（按历史成功率选引擎）；增加：UA 池可配置化（config.yaml 追加）；增加：TF-IDF 相关度算法（jieba 分词 + 余弦相似度）；增加：降级引擎列表可配置；优化：域名质量表扩展（+30 常用中文站点）；优化：SearXNG Secret 持久化（重启不失效）；优化：request_delay 默认值与示例文件一致（1.0-5.0）；优化：update_check 接入 search.py 启动检查；修复：github_url 占位符替换为 njskills；修复：引擎改版 mock 回归测试 |
 | v1.1.0 | 2026-07-19 | 增加4个国内可用备选引擎（Yandex/Startpage/Qwant/Brave）；strict模式自动降级与故障转移；增强错误分类（网络/配置/引擎三类）；增加10+FAQ与常见错误反模式对照；增加normal/strict模式搜索输出示例；增加5分钟快速上手指南QUICK_START.md；增加一键安装脚本quick_setup.py |
