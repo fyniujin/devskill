@@ -67,6 +67,32 @@ _CMP_OPS = {
     ast.NotIn: lambda a, b: a not in b,
 }
 
+# 允许的白名单函数（禁止关键字参数，只允许位置参数）
+_WHITELISTED_FUNCTIONS = {
+    # 基础类型转换
+    'len': len, 'str': str, 'int': int, 'float': float, 'bool': bool,
+    'list': list, 'tuple': tuple, 'dict': dict, 'set': set,
+    'abs': abs, 'min': min, 'max': max, 'sum': sum, 'round': round,
+    'sorted': sorted, 'reversed': reversed, 'enumerate': enumerate, 'zip': zip,
+    # 字符串操作（安全子集）
+    'contains': lambda s, sub: sub in s,
+    'startswith': lambda s, prefix: s.startswith(prefix),
+    'endswith': lambda s, suffix: s.endswith(suffix),
+    'split': lambda s, sep=None, maxsplit=-1: s.split(sep, maxsplit) if sep else s.split(),
+    'join': lambda sep, iterable: sep.join(iterable),
+    'strip': lambda s, chars=None: s.strip(chars),
+    'lower': lambda s: s.lower(),
+    'upper': lambda s: s.upper(),
+    'replace': lambda s, old, new, count=-1: s.replace(old, new, count),
+}
+
+# 允许的白名单正则函数（安全子集，禁止 re.compile/re.sub 等危险操作）
+_WHITELISTED_RE_FUNCTIONS = {
+    'match': lambda pattern, string: bool(__import__('re').match(pattern, string)),
+    'search': lambda pattern, string: bool(__import__('re').search(pattern, string)),
+    'findall': lambda pattern, string: __import__('re').findall(pattern, string),
+}
+
 # 允许的二元算术运算符（用于 score * 2 > 100 这类简单运算）
 _BIN_OPS = {
     ast.Add: operator.add,
@@ -240,11 +266,42 @@ def _eval_node(node, context):
     if isinstance(node, ast.Tuple):
         return tuple(_eval_node(e, context) for e in node.elts)
 
-    # 其余节点类型（Call/Lambda/Comprehension/...）一律拒绝
+    # 白名单函数调用（仅允许无关键字参数的位置参数调用）
+    if isinstance(node, ast.Call):
+        if node.keywords:
+            raise ConditionError(
+                "不支持关键字参数调用，请使用位置参数\n"
+                "  安全限制：禁止 **kwargs 等关键字参数传递"
+            )
+        func_node = node.func
+        if not isinstance(func_node, ast.Name):
+            raise ConditionError(
+                "不支持的方法调用形式（仅允许简单函数名调用）"
+            )
+        func_name = func_node.id
+
+        # 合并白名单函数与正则函数
+        all_funcs = {**_WHITELISTED_FUNCTIONS, **_WHITELISTED_RE_FUNCTIONS}
+        if func_name not in all_funcs:
+            raise ConditionError(
+                f"不支持的函数调用：{func_name}\n"
+                f"  允许的函数：{'/'.join(sorted(all_funcs.keys()))}"
+            )
+
+        # 参数数量限制（最多 5 个）
+        if len(node.args) > 5:
+            raise ConditionError(
+                f"函数 {func_name} 参数过多（最多 5 个，当前 {len(node.args)} 个）"
+            )
+
+        args = [_eval_node(arg, context) for arg in node.args]
+        return all_funcs[func_name](*args)
+
+    # 其余节点类型（Lambda/Comprehension/...）一律拒绝
     raise ConditionError(
         f"不支持的表达式元素：{type(node).__name__}\n"
-        f"  安全限制：禁止函数调用、lambda、推导式等，只允许"
-        f"取值/比较/逻辑/算术运算"
+        f"  安全限制：禁止 lambda、推导式等，只允许"
+        f"取值/比较/逻辑/算术运算/白名单函数调用"
     )
 
 
