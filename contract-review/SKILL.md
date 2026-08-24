@@ -2,7 +2,7 @@
 name: contract-review
 slug: workbuddy-contract-review
 displayName: AI 法律合同审查
-version: 5.2.0
+version: 5.2.1
 category: 法律合规
 platforms: [WorkBuddy, QClaw, ima]
 tags: [合同审查, 法律, 风险识别, 合规检查, 中文合同, contract, legal, review]
@@ -362,11 +362,20 @@ python scripts/main.py --first-time
 2. **Ollama（本地模型）**：自动检测 `http://localhost:11434`
 3. **本地 LLM 服务**：自动检测 LM Studio / vLLM 等（端口 1234/8080/5000）
 
-### 一键安装 Ollama
+### 安装 Ollama
+
+> ⚠️ **安全提示**：以下安装方式涉及下载远程脚本。建议先下载到本地，校验文件完整性后再执行。
 
 ```bash
-# macOS / Linux
-curl -fsSL https://ollama.ai/install.sh | sh
+# macOS / Linux（推荐方式：下载后校验再执行）
+# 1. 下载安装脚本
+curl -fsSL -o install-ollama.sh https://ollama.ai/install.sh
+# 2. 查看脚本内容，确认无异常后再执行
+cat install-ollama.sh
+# 3. 执行安装
+bash install-ollama.sh
+# 4. 清理脚本
+rm install-ollama.sh
 ollama pull qwen2.5:7b
 
 # Windows
@@ -629,6 +638,7 @@ python scripts/main.py <合同文件> [选项]
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v5.2.1 | 2026-08-24 | 修复：移除自动远程版本检查逻辑（updater.py 不再在审查流程中自动拉取远程 SKILL.md，改为仅在用户显式使用 --check-update 时以固定 commit 拉取并校验 SHA-256 哈希）；修复：Windows 计划任务注册移出自动模式（contract_ledger.py register_schtasks_reminder 改为独立显式命令，执行前打印任务名称、触发时间与影响范围，取得用户确认后再执行）；修复：删除 curl 管道执行远程安装脚本指引（SKILL.md 和 README.md 改为下载到本地后人工校验再执行，main.py 同步更新）；修复：移除 main.py 中自动调用 UpdateChecker 的代码（审查流程不再发起远程请求） |
 | v5.2.0 | 2026-07-29 | 增加：合同台账与履约提醒引擎 contract_ledger.py（SQLite 台账自动抽取回填、到期前 30/7/1 天提醒、Windows 计划任务注册、企微 webhook 推送）；增加：档案库全文检索引擎 archive_search.py（char/bigram 倒排索引、BM25 召回、多维过滤、命中高亮）；增加：统一检索引擎 unified_retriever.py（合并 legal_retriever 与 clause_matcher，共享分词/TF-IDF/BM25 基础设施，法条索引+条款索引双索引统一搜索）；增加：风险趋势对比分析引擎 risk_trend.py（多合同聚合视图、风险类型频次按月分布、红级条款占比变化、同一对方历史风险复发标记、matplotlib 可选出图）；增加：类案要点库与判决倾向参考引擎 case_law_retriever.py（内置 30 个最高法指导案例要点、按争议条款类型输出法院倾向摘要、支持用户导入自整理案例 JSON 增库）；增加：类案要点库数据库 case_law_db.json（30 个民商事合同类指导案例，覆盖买卖/借款/公司/建设工程/知识产权/劳动等 20 个类别）；增加：命令行参数 --ledger（启用合同台账）、--ledger-list（列出台账记录）、--ledger-remind（手动触发履约提醒）、--archive-search（档案库全文检索）、--archive-filter（档案库检索过滤）、--risk-trend（风险趋势对比分析）、--case-law（启用类案要点库）、--case-search（类案搜索）、--case-import（导入用户案例）；更新：SKILL.md 版本号升至 5.2.0；更新：pyproject.toml 版本号升至 5.2.0 |
 | v5.1.0 | 2026-07-29 | 增加：指导案例引用溯源（为审查结论附带最高人民法院指导性案例引用，增强说服力）；增加：指导案例数据库（30 个民商事合同类指导案例，覆盖买卖/借款/公司/建设工程/知识产权/劳动等 20 个类别）；增加：指导案例检索引擎 case_retriever.py（关键词+标签自动匹配案例、案例全文展开查看、月度更新提醒）；增加：指导案例数据库月度更新提醒（每月检查一次最高法新发布的指导性案例）；增加：关键金额校验引擎 amount_validator.py（金额大小写一致性验证、勾稽关系自动验证）；增加：金额字段自动提取与校验（从合同文本中自动识别金额字段并验证一致性）；增加：多语种扩展（日语/韩语术语对照表各 200+ 组，覆盖通用法律/公司/劳动/建设工程/知识产权/金融/争议解决/房地产/动词/国际贸易）；增加：中日双语对照审查（bilingual_aligner 扩展支持 ja 目标语言）；增加：中韩双语对照审查（bilingual_aligner 扩展支持 ko 目标语言）；增加：命令行参数 --guiding-cases（启用指导案例引用溯源）、--align-ja <路径>（启用中日对照）、--align-ko <路径>（启用中韩对照）、--validate-amounts（启用关键金额校验）；更新：bilingual_aligner.py 重构为多语种架构（术语表懒加载、按语言缓存单例、条款编号归一化支持日韩）；更新：updater.py 扩展指导案例数据库月度更新检查；增加：新脚本 case_retriever.py、amount_validator.py；增加：新术语表 ja_legal_terms.yaml、ko_legal_terms.yaml | 增加：法条引用溯源（为每个审查结论附带具体法律条文引用，增强专业可信度）；增加：民法典合同编核心条文数据库（60 条高频引用条款）；增加：公司法核心条文数据库（40 条高频引用条款）；增加：司法解释精选数据库（30 条高频引用司法解释）；增加：法条检索引擎 legal_retriever.py（关键词自动匹配法条、法条全文展开查看）；增加：法条数据库季度更新提醒（每 3 个月检查一次法律法规变化）；增加：合同谈判辅助引擎 negotiation_analyzer.py（多轮修改差异分析、必争/可让步条款识别）；增加：谈判准备文档生成（.md/.docx：谈判目标/底线条款/让步方案/替代方案）；增加：谈判策略库（13 项条款策略：违约金/知识产权/付款节点/竞业限制/工程价款等）；增加：中英文双语合同对齐引擎 bilingual_aligner.py（段落对齐算法、版本不一致检测）；增加：中英法律术语对照表（200+ 组高频术语，含通用法律/公司/劳动/建设工程/知识产权等）；增加：双语对照审查报告（匹配段落、缺失条款、措辞矛盾、优先级标注）；增加：命令行参数 --legal-base（启用法条引用溯源）、--negotiate <目录>（启用谈判辅助）、--align <路径>（启用双语对照）、--align-priority zh|en|strict（指定优先语言）；更新：updater.py 扩展法条数据库版本检查；增加：新脚本 legal_retriever.py、negotiation_analyzer.py、bilingual_aligner.py |
 | v4.0.0 | 2026-07-29 | 增加：标准条款库 275 条（覆盖主体/条款/金额/履行/争议/合规/知识产权/保密/终止/违约责任 10 大类，含问题版本、推荐措辞、法律依据、实务提示）；增加：条款匹配引擎（风险点自动检索条款库，报告直出建议替换文本）；增加：一键修订稿生成（红色删除线标原文、绿色下划线标推荐条款、灰色批注标修订理由，支持全文就地标记与修订清单两种模式）；增加：医疗行业专项规则 62 条与术语表、18 个典型案例；增加：建筑工程行业专项规则 62 条与术语表、18 个典型案例；增加：跨境电商行业专项规则 60 条与术语表、24 个典型案例；增加：互联网软件行业专项规则 60 条与术语表、20 个典型案例；增加：命令行参数 --industry、--revise、--revise-output、--revise-format、--full-revision、--list-industries、--no-clause-match；优化：规则引擎支持按行业懒加载专项规则并缓存；优化：LLM 审查按行业追加专项审查视角；优化：风险原文片段按句子边界截取，提升修订定位准确度；优化：版本号统一从 SKILL.md 读取；增加：命令行参数速查表，统一文档与实现的参数口径；增加：--no-llm 与 --industry 同时使用时的行业规则生效范围提示；优化：合同金额识别支持万元、亿元量级换算与美元币种判定；优化：《民法典》必备条款检查改为语义同义词族匹配，覆盖工程概况、服务内容、交付期等表述；优化：七项法定必备条款采用确定性映射直取基础条款；优化：正则型规则的原文片段统一按句子边界截取；修复：Word 报告生成器依赖导入方式，改为模块级延迟导入供全部方法共享；修复：危险文件拦截模块常量引用，统一为 _BLOCKED_SYSTEM_EXT；修复：LLM 系统提示词审查视角占位符填充逻辑；修复：严重等级在规则引擎与报告层之间统一归一化，风险统计、评分与分组口径保持一致；修复：命令行横幅版本号改为从 SKILL.md 动态读取 |
@@ -707,6 +717,6 @@ python scripts/main.py <合同文件> [选项]
 
 ---
 
-**版本**：v5.2.0
+**版本**：v5.2.1
 **更新日期**：2026-07-29
 **适用平台**：WorkBuddy / QClaw / ima
