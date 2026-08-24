@@ -1,10 +1,19 @@
-"""文心（百度 ERNIE）适配器：自研 OAuth2 鉴权 + 标准 chat 端点，零依赖。
+"""文心（百度 ERNIE）适配器：推荐走 OpenAI 兼容通道，保留原生 OAuth2 兜底。
 
-支持两种模式（自动选择）：
-1) Qianfan OpenAI 兼容端点（ERNIE_OPENAI_KEY）：走 Bearer，逻辑同 openai_compat。
-2) 经典 OAuth2（ERNIE_API_KEY=AK + ERNIE_SECRET_KEY=SK）：先取 access_token，再带 token 调 chat。
+v2.5 精简：ernie 实际走 openai_compat 兼容通道，本类保留为薄封装。
+- 优先走 Qianfan OpenAI 兼容端点（ERNIE_OPENAI_KEY）→ 直接委托 OpenAICompatAdapter
+- 兜底走经典 OAuth2（ERNIE_API_KEY=AK + ERNIE_SECRET_KEY=SK）→ 原生签名路径
+- 推荐用户配置 ERNIE_OPENAI_KEY，原生路径仅作向后兼容
 
-密钥仅从环境变量读取，不落盘。
+models.yaml 中 ernie 可配置为：
+  ernie:
+    display: 百度文心
+    adapter: openai_compat      # ← 推荐：走兼容通道
+    base_url: https://qianfan.baidubce.com/v2
+    env_hint: ERNIE_OPENAI_KEY
+    ...
+
+如需使用原生 OAuth2 路径，在 config 中保留 adapter: ernie 即可。
 """
 
 import json
@@ -19,18 +28,19 @@ class ErnieAdapter(AdapterBase):
     def chat(self, messages, model, stream=False, timeout=60):
         openai_key = self.cfg.get("api_key_openai")
         if openai_key:
-            # 模式 1：OpenAI 兼容
+            # 推荐路径：委托 OpenAICompatAdapter（零额外代码）
             sub = OpenAICompatAdapter({
                 "base_url": self.cfg.get("base_url_openai") or "https://qianfan.baidubce.com/v2",
                 "api_key": openai_key,
             })
             return sub.chat(messages, model, stream=stream, timeout=timeout)
 
+        # 兼容路径：原生 OAuth2（仅作兜底，不推荐新用户使用）
         ak = self.cfg.get("ak")
         sk = self.cfg.get("sk")
         if not (ak and sk):
             raise AdapterError(
-                "未检测到文心密钥。请设置 ERNIE_OPENAI_KEY（Qianfan 兼容），"
+                "未检测到文心密钥。推荐设置 ERNIE_OPENAI_KEY（Qianfan 兼容），"
                 "或同时设置 ERNIE_API_KEY(AK) 与 ERNIE_SECRET_KEY(SK)。"
             )
         token = self._get_token(ak, sk, timeout)
@@ -40,7 +50,6 @@ class ErnieAdapter(AdapterBase):
         url = endpoint.rstrip("/") + "?access_token=" + token
 
         headers = {"Content-Type": "application/json"}
-        # 文心消息结构兼容 OpenAI messages
         payload = {"messages": messages, "stream": bool(stream)}
         if model:
             payload["model"] = model
