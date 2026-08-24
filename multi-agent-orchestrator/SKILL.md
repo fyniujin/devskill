@@ -2,8 +2,8 @@
 name: multi-agent-pro
 slug: multi-agent-pro
 displayName: 多Agent协作编排引擎
-description: 支持多Agent流水线编排（采集→分析→报告），基于DAG调度实现跨技能状态共享、错误重断点续传、执行报告生成、HTML甘特图可视化、人工审批节点（含超时策略）、历史执行对比、硬件自适应参数和版本更新提醒。v5.2新增统一可视化命令（visualize --format md|html|both）、Self-Improving循环（evaluate节点质量评估+自动重试）、节点级成本追踪（token/cost聚合）。AI即编排器，脚本提供基础设施。
-version: 5.2.0
+description: 支持多Agent流水线编排（采集→分析→报告），基于DAG调度实现跨技能状态共享、错误重断点续传、执行报告生成、HTML甘特图可视化、人工审批节点（含超时策略）、历史执行对比、硬件自适应参数和版本更新提醒。v5.3新增官方流水线模板库（4类预置模板+依赖探测）、任务级重试策略（节点级retry块+退避+降级链）、节点类型归组（7→4类认知归组）、错误恢复命令合并（recover统一入口）、条件表达式增强（re_safe+字符串函数）。AI即编排器，脚本提供基础设施。
+version: 5.3.0
 category: developer-tools
 platforms:
   - windows
@@ -819,10 +819,184 @@ A: 不会。硬件检测仅读取系统信息（CPU核数、内存大小），�
 
 ---
 
+---
+
+### 模块 18：官方流水线模板库 🆕
+
+**功能**：预置 4 类高频流水线模板，让引擎价值被直接看见。每个模板元数据声明建议安装的外部 skill，运行时探测依赖是否就绪，缺失则标灰提示安装链接。
+
+**触发词**：`预置模板`、`政采日报`、`视频分析`、`周报生成`、`巡检汇总`
+
+**预置模板列表**：
+
+| 模板 | 文件 | 分类 | 描述 |
+|------|------|------|------|
+| 政采日报 | `templates/gov_procurement_daily.json` | 数据加工 | 政采信息抓取→筛选→分析→风控审核→日报生成 |
+| 视频批量分析 | `templates/video_batch_analysis.json` | 内容生成 | 视频加载→关键帧提取→画面分析→摘要生成 |
+| 周报生成 | `templates/weekly_report_gen.json` | 分析汇总 | 执行记录汇总→成本分析→TL审核→周报排版 |
+| 巡检汇总 | `templates/inspection_summary.json` | 监控预警 | 巡检项发现→状态检查→异常分析→运维审核→巡检报告 |
+
+**模板元数据示例**：
+
+```json
+{
+  "name": "政采日报",
+  "description": "...",
+  "category": "data-processing",
+  "dependencies": [
+    {
+      "skill_id": "tencent-docs",
+      "install_link": "https://skillhub.cn/skill/tencent-docs",
+      "description": "腾讯文档（用于日报内容协作）",
+      "required": false
+    }
+  ],
+  "pipeline": { ... }
+}
+```
+
+**可运行命令**：
+
+```bash
+# 列出所有预置模板
+python orchestrator.py template list
+
+# 显示模板详情 + 依赖状态
+python orchestrator.py template show gov_procurement_daily.json
+
+# 检查依赖是否满足
+python orchestrator.py template check gov_procurement_daily.json
+
+# 渲染为可执行 pipeline.json
+python orchestrator.py template render gov_procurement_daily.json my_pipeline.json
+```
+
+**探测渲染规则**：
+- 依赖已安装 → ✅ 正常显示
+- 依赖缺失 + `required: true` → ⚠️ 对应节点标灰 + 显示安装链接
+- 依赖缺失 + `required: false` → ⚠️ 提示安装链接但不阻塞执行
+
+**安全说明**：仅提示安装，不自动下载/安装/隐式依赖，保持单包合规。
+
+---
+
+### 模块 19：任务级重试策略 🆕
+
+**功能**：节点 schema 新增 `retry` 块，支持任务级重试策略配置。未配置的节点保持旧全局策略，完全向后兼容。
+
+**触发词**：`节点重试`、`退避策略`、`降级链`、`retry 块`
+
+**retry 块配置**：
+
+```json
+{
+  "id": "node_a",
+  "retry": {
+    "count": 5,
+    "backoff_base": 2,
+    "fallback_chain": ["retry", "reparam", "skip"]
+  }
+}
+```
+
+| 字段 | 说明 | 默认值 |
+|------|------|--------|
+| `count` | 最大重试次数 | 3 |
+| `backoff_base` | 指数退避基数（第 N 次等待 = base^N 秒） | 2 |
+| `fallback_chain` | 降级动作链（按顺序执行） | `["retry", "skip"]` |
+
+**降级动作**：
+- `retry`：重置为 pending，等待重新执行
+- `reparam`：换参数重试（保留 intermediate 输出供参考）
+- `skip`：跳过此节点，下游收到 `output_data={"skipped": true}`
+- `abort`：中止流水线
+
+**向后兼容**：未配置 `retry` 块的节点走旧全局策略（`retry` 字段 / `fallback` 字段）。
+
+---
+
+### 模块 20：节点类型归组（认知层） 🆕
+
+**功能**：7 种节点类型在文档、帮助、校验错误中归为 4 类，降低认知负担。DAG Schema 完全不变，旧流水线零迁移。
+
+| 归组 | 包含的 type | 说明 |
+|------|-----------|------|
+| **任务** | `task` | 普通 AI 执行节点 |
+| **控制** | `condition` / `switch` | 条件分支 / 多路分支 |
+| **控制** | `for-each` / `while-loop` | 动态循环 / 条件循环 |
+| **控制** | `evaluate` | 质量评估 + 自动重试 |
+| **人工** | `approval` | 人工确认节点 |
+| **复用** | `pipeline` | 子流水线引用 |
+
+**实现原则**：归组只动认知层（文档/提示/校验错误信息），不动 DAG Schema。
+
+---
+
+### 模块 21：统一错误恢复命令 🆕
+
+**功能**：将 `retry/fallback/impact` 三个独立子命令合并为 `recover` 带子命令。旧命令向后兼容（自动映射到 recover）。
+
+**触发词**：`错误恢复`、`重试`、`降级`、`影响分析`
+
+**可运行命令**：
+
+```bash
+# 统一入口（推荐）
+python orchestrator.py recover retry state.json node_a '网络超时'
+python orchestrator.py recover fallback state.json node_a '网络超时'
+python orchestrator.py recover impact state.json node_a
+
+# 旧命令（保持可用，自动映射到 recover）
+python orchestrator.py retry state.json node_a '网络超时'
+python orchestrator.py fallback state.json node_a '网络超时'
+python orchestrator.py impact state.json node_a
+```
+
+**安全说明**：旧命令可用但推荐迁移到新入口，减少命令面。
+
+---
+
+### 模块 22：条件表达式增强 🆕
+
+**功能**：AST 白名单求值器新增正则匹配（re_safe 子集）与字符串操作函数，白名单机制不变，长度与嵌套上限沿用。
+
+**触发词**：`正则匹配`、`contains`、`startswith`、`split`
+
+**新增字符串函数**：
+
+| 函数 | 说明 | 示例 |
+|------|------|------|
+| `contains(s, sub)` | 包含检查 | `contains(nodes.a.output_data.text, "ERROR")` |
+| `startswith(s, prefix)` | 前缀检查 | `startswith(nodes.a.output_data.status, "run")` |
+| `endswith(s, suffix)` | 后缀检查 | `endswith(nodes.a.output_data.file, ".json")` |
+| `split(s, sep)` | 分割 | `len(split(nodes.a.output_data.tags, ",")) > 3` |
+| `join(sep, iterable)` | 连接 | `join(", ", nodes.a.output_data.items)` |
+| `strip(s)` | 去空白 | `strip(nodes.a.output_data.name) == "test"` |
+| `lower(s)` | 转小写 | `lower(nodes.a.output_data.env) == "prod"` |
+| `upper(s)` | 转大写 | `upper(nodes.a.output_data.level) == "HIGH"` |
+| `replace(s, old, new)` | 替换 | `replace(nodes.a.output_data.text, "a", "b")` |
+
+**新增正则函数（re_safe 子集）**：
+
+| 函数 | 说明 | 示例 |
+|------|------|------|
+| `match(pattern, string)` | 匹配开头 | `match("ERR-\\d+", nodes.a.output_data.code)` |
+| `search(pattern, string)` | 搜索 | `search("[A-Z]{3}", nodes.a.output_data.text)` |
+| `findall(pattern, string)` | 全部匹配 | `findall("\\d+", nodes.a.output_data.version)` |
+
+**安全限制**：
+- 禁止关键字参数（`re.sub` 等）
+- 正则仅允许 match/search/findall，禁止 `re.compile`、`re.sub` 等
+- 函数参数最多 5 个
+- 表达式长度上限 1000 字符，嵌套上限 50 层
+
+---
+
 ## 更新日志
 
 | 版本 | 日期 | 更新内容 |
 |------|------|---------|
+| v5.3.0 | 2026-08-24 | 增加：官方流水线模板库（4类预置模板：政采日报/视频分析/周报/巡检），模板元数据声明依赖 skill，运行时探测缺失则标灰+安装链接，单包合规不自动安装；增加：任务级重试策略（节点级 retry 块：count/backoff_base/fallback_chain），未配置走旧全局策略向后兼容；增加：节点类型归组（7类→4类：任务/控制/人工/复用），仅认知层文档归组 Schema 零变更；增加：统一错误恢复命令 recover（retry/fallback/impact 三合一），旧命令向后兼容；增加：条件表达式增强（re_safe 正则子集 + contains/startswith/split/join 等字符串函数），AST 白名单机制不变 |
 | v5.2.0 | 2026-08-07 | 增加：统一可视化命令 visualize（--format md|html|both），整合执行报告与甘特图为单一入口，消除 report/gantt 命令重复代码；增加：evaluate 控制流节点（Self-Improving 循环），支持质量表达式评估 + 自动重试目标节点 + 最大轮次限制；增加：节点级成本追踪（cost_data 字段），在 complete_node 自动提取 _cost 字段，报告展示总 token/费用/节点分布；增加：HTML 甘特图费用概览区块，展示总消耗与节点成本分布；优化：dag_validator 校验 evaluate 节点字段与 retry_targets 引用完整性；优化：flow_controller 扩展 evaluate 类型调度，复用 while-loop 迭代模式；优化：state_store 持久化 quality_expr/retry_targets/max_eval_rounds 控制流字段 |
 | v5.1.0 | 2026-08-07 | 增加：统一状态恢复子系统 state_recovery，合并断点续传与快照恢复为单一入口，消除两套独立恢复代码；增加：快照保留策略（SNAPSHOT_MAX_AGE_DAYS=7天 / SNAPSHOT_MAX_COUNT=100次 / SNAPSHOT_MAX_SIZE_MB=100MB），按时间+数量+大小三维度自动淘汰旧快照；增加：审批节点超时策略（timeout_seconds + timeout_action），支持超时自动通过/拒绝，避免无人值守场景阻塞；增加：恢复前自动创建检查点（.recovery_checkpoints/），防止误操作不可逆；优化：dag_validator 校验 approval 节点 timeout_seconds 与 timeout_action 字段合法性 |
 | v5.0.0 | 2026-07-13 | 增加：pipeline 子流水线节点，支持将已注册流水线作为模块嵌套到父流水线并实现上下文隔离；增加：pipeline_registry 子流水线注册表，支持注册/列出/查看/校验子流水线；增加：snapshot_store 快照存储机制，首个快照存完整数据后续只存增量 diff；增加：snapshot 子命令（list/show/restore/diff），支持从任意历史节点恢复下游重跑的 Time Travel 执行回放；增加：sub_pipeline_template 与 parent_pipeline_template 示例模板展示子流水线注册与引用；优化：flow_controller 扩展 pipeline 类型调度，自动加载子流水线并注入参数映射输出；优化：state_store 节点完成自动保存快照，持久化 pipeline_ref/params/outputs 控制流字段；优化：dag_validator 校验 pipeline 节点字段与 pipeline_ref 引用完整性 |
