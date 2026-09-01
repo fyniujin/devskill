@@ -36,7 +36,7 @@ from engine.hardware import get_recommended_settings
 from engine.update_check import build_reminder, FEEDBACK_EMAIL
 from engine.exceptions import KingDocError
 
-APP_VERSION = "3.9.0"
+APP_VERSION = "4.0.0"
 
 # 配置路径：环境变量优先，其次 skill 根目录 config.json
 CONFIG_PATH = os.environ.get("KINGDOC_CONFIG", str(SKILL_ROOT / "config.json"))
@@ -1427,6 +1427,211 @@ async def kdoc_office_convert_enhanced(file_id: str, source_path: str,
         return _to_text(result)
     except Exception as e:
         return f"[ERR] 格式转换失败：{e}"
+
+
+# ===========================================================================
+# 二十九、本地桥接引擎（v4.0 新增，wps-office-suite 双向互通）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_bridge_status() -> str:
+    """【免密钥】获取桥接状态（wps-office-suite 安装状态、映射数量）。
+
+    本地模式，零配置可用。"""
+    try:
+        from engine.local_bridge import get_local_bridge
+        bridge = get_local_bridge(backend=None)
+        result = bridge.get_status()
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 获取桥接状态失败：{e}"
+
+@mcp.tool()
+async def kdoc_bridge_download(file_id: str, file_name: str = "",
+                              file_type: str = "doc") -> str:
+    """【免密钥】下行：拉取云端文档到本地临时目录。
+
+    file_id: 文档 ID
+    file_name: 文件名
+    file_type: doc / sheet / ppt
+    本地降级模式，零配置可用。"""
+    try:
+        from engine.local_bridge import get_local_bridge
+        bridge = get_local_bridge(backend=None)
+        result = bridge.downstream_download(file_id, file_name, file_type)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 下载失败：{e}"
+
+@mcp.tool()
+async def kdoc_bridge_process(file_id: str, action: str,
+                             params: str = "") -> str:
+    """【免密钥】下行：调用 wps 脚本处理本地文档。
+
+    file_id: 文档 ID
+    action: analyze / convert / format / extract
+    params: JSON 字符串（可选）
+    本地降级模式，零配置可用。"""
+    try:
+        import json
+        from engine.local_bridge import get_local_bridge
+        bridge = get_local_bridge(backend=None)
+        params_obj = json.loads(params) if params else None
+        result = bridge.downstream_process(file_id, action, params_obj)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 处理失败：{e}"
+
+@mcp.tool()
+async def kdoc_bridge_upload(file_id: str, local_path: str = "") -> str:
+    """【免密钥】上行：将本地文件上传覆盖云端。
+
+    file_id: 文档 ID
+    local_path: 本地文件路径（空则使用映射中的路径）
+    本地降级模式，零配置可用。"""
+    try:
+        from engine.local_bridge import get_local_bridge
+        bridge = get_local_bridge(backend=None)
+        result = bridge.downstream_upload(file_id, local_path)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 上传失败：{e}"
+
+@mcp.tool()
+async def kdoc_bridge_sync(file_id: str = "") -> str:
+    """【免密钥】上行：同步本地文件到云端（检查 mtime 变化）。
+
+    file_id: 文档 ID（空则同步所有变化的文档）
+    本地降级模式，零配置可用。"""
+    try:
+        from engine.local_bridge import get_local_bridge
+        bridge = get_local_bridge(backend=None)
+        if file_id:
+            result = bridge.upstream_sync(file_id)
+        else:
+            result = bridge.upstream_sync_all()
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 同步失败：{e}"
+
+
+# ===========================================================================
+# 三十、记忆桥接引擎（v4.0 新增，zwjh 记忆库打通）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_memory_status() -> str:
+    """【免密钥】获取记忆桥接状态（zwjh 安装状态、待迁移事件数）。
+
+    本地模式，零配置可用。"""
+    try:
+        from engine.memory_bridge import get_memory_bridge
+        bridge = get_memory_bridge(backend=None)
+        result = bridge.get_status()
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 获取记忆桥接状态失败：{e}"
+
+@mcp.tool()
+async def kdoc_memory_deposit(event_type: str, doc_id: str,
+                              file_name: str = "", action_details: str = "") -> str:
+    """【免密钥】发送文档关键事件到 zwjh 长期记忆。
+
+    event_type: create / edit / share / delete
+    doc_id: 文档 ID
+    file_name: 文件名
+    action_details: JSON 字符串（可选）
+    本地模式，零配置可用。"""
+    try:
+        import json
+        from engine.memory_bridge import get_memory_bridge
+        bridge = get_memory_bridge(backend=None)
+        details = json.loads(action_details) if action_details else None
+        result = bridge.deposit_event(event_type, doc_id, file_name, details)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 事件写入失败：{e}"
+
+@mcp.tool()
+async def kdoc_memory_migrate() -> str:
+    """【免密钥】一次性导入所有待迁移事件到 zwjh。
+
+    本地模式，零配置可用。"""
+    try:
+        from engine.memory_bridge import get_memory_bridge
+        bridge = get_memory_bridge(backend=None)
+        result = bridge.migrate_pending_events()
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 迁移失败：{e}"
+
+
+# ===========================================================================
+# 三十一、表单答卷收集统计（v4.0 新增，云端数据本地智能加工）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_form_analyze(form_id: str, limit: int = 100) -> str:
+    """【免密钥】分析表单答卷（按题统计、交叉分析、未填名单）。
+
+    form_id: 表单 ID
+    limit: 答卷数量限制
+    本地降级模式，零配置可用。"""
+    try:
+        from engine.form_analytics import FormAnalyticsEngine
+        engine = FormAnalyticsEngine(backend=None)
+        result = engine.analyze(form_id, limit)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 分析失败：{e}"
+
+@mcp.tool()
+async def kdoc_form_export(form_id: str, format: str = "csv",
+                          output_path: str = "") -> str:
+    """【免密钥】导出答卷（CSV / Excel）。
+
+    form_id: 表单 ID
+    format: csv / xlsx
+    output_path: 输出路径（空则使用临时目录）
+    本地降级模式，零配置可用。"""
+    try:
+        from engine.form_analytics import FormAnalyticsEngine
+        engine = FormAnalyticsEngine(backend=None)
+        if format == "csv":
+            result = engine.export_to_csv(form_id, output_path)
+        elif format == "xlsx":
+            result = engine.export_to_excel(form_id, output_path)
+        else:
+            result = {"success": False, "error": f"不支持的格式: {format}"}
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 导出失败：{e}"
+
+@mcp.tool()
+async def kdoc_form_chart_data(form_id: str) -> str:
+    """【免密钥】生成图表数据（供前端渲染）。
+
+    form_id: 表单 ID
+    本地降级模式，零配置可用。"""
+    try:
+        from engine.form_analytics import FormAnalyticsEngine
+        engine = FormAnalyticsEngine(backend=None)
+        result = engine.generate_chart_data(form_id)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 生成图表数据失败：{e}"
+
+@mcp.tool()
+async def kdoc_form_write_to_doc(form_id: str, target_doc_id: str) -> str:
+    """【免密钥】将统计结果写回智能文档表格。
+
+    form_id: 表单 ID
+    target_doc_id: 目标智能文档 ID
+    本地降级模式，零配置可用。"""
+    try:
+        from engine.form_analytics import FormAnalyticsEngine
+        engine = FormAnalyticsEngine(backend=None)
+        result = engine.write_to_smart_doc(form_id, target_doc_id)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 写回失败：{e}"
 
 
 def main():
