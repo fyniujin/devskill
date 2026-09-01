@@ -2,18 +2,20 @@
 name: kingdoc
 displayName: 金山文档 KingDoc
 slug: kingdoc
-version: 3.9.0
+version: 4.0.0
 description: >
   金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理
   （文档/智能画布/电子表格/演示文稿/多维表格/收集表/可视化/历史管理/全文搜索/附件），
-  深度直连金山文档（WPS）开放平台原生 API，覆盖腾讯文档全部能力 + 金山独有 18 项增强
+  深度直连金山文档（WPS）开放平台原生 API，覆盖腾讯文档全部能力 + 金山独有 21 项增强
   （回收站、版本历史、格式转换（全格式覆盖 jpg/png/txt）、纯文本提取、本地 Tesseract OCR（强制本地，数据不出域）、
   通知推送、Webhook、批量任务、政企合规、硬件自适应性能、WPS AI 能力、协同冲突解决、
   文档合规检查、实时协同编辑、文档对比、WPS AI 深度集成、模板市场、多维表格视图增强、
-  手写/公式识别、历史管理、智能画布元素级编辑、全文搜索、块级编辑、演示页替换、配额管理器）。
+  手写/公式识别、历史管理、智能画布元素级编辑、全文搜索、块级编辑、演示页替换、配额管理器、
+  wps-office-suite 双向桥接、zwjh 记忆库打通、表单答卷收集统计）。
   文字/演示/可视化采用"本地生成→上传覆盖"，电子表格/多维表格采用 API 精细编辑。
   智能画布支持元素级 CRUD + Markdown 增量追加。块级编辑实现段落级在线编辑替代整文件替换。
-  本地生成、OCR、硬件画像、WPS AI、全文搜索、块级编辑、配额管理等能力零密钥可用。
+  v4.0 生态互通：wps-office-suite 双向桥接（本地文件↔云端文档）、zwjh 记忆库打通（文档关键事件写入长期记忆）、表单答卷收集统计。
+  本地生成、OCR、硬件画像、WPS AI、全文搜索、块级编辑、配额管理、桥接等能力零密钥可用。
 description_zh: "金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理（深度直连 WPS 开放平台 + 智能画布元素级编辑 + 全文搜索超越腾讯 + 块级编辑段落级 + 18 项增强）"
 platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
 tags: [文档处理, 表格处理, PPT生成, 多维表格, 表单收集, 思维导图, 流程图, OCR, 政企合规]
@@ -958,6 +960,7 @@ python -m engine.update_check --version 3.0.0 --reminder
 
 ## 更新日志
 
+| v4.0.0 | 2026-08-31 | 增加：本地桥接引擎 `engine/local_bridge.py`（wps-office-suite 双向互通：白名单探测 + SQLite 映射表 + 下行拉取/处理/覆盖 + 上行 mtime 监听同步 + JSON 契约 + 子进程超时自动关闭）；增加：记忆桥接引擎 `engine/memory_bridge.py`（zwjh 记忆库打通：白名单探测 + stdio JSON-RPC 调用 deposit + 关键事件写入长期记忆 + 未安装→本地待迁移日志 + 一次性导入）；增加：表单答卷收集统计 `engine/form_analytics.py`（答卷列表/内容接口 + 按题统计 + 交叉分析 + 未填名单 + 图表生成 + 导出 CSV/Excel + 写回智能文档）；增加：MCP 工具 12 个（kdoc.bridge.* 5 个、kdoc.memory.* 3 个、kdoc.form.* 4 个）；增加：桥接/记忆/表单场景案例；优化：SKILL.md 版本号 3.9.0→4.0.0；优化：description 增强到 21 项增强 |
 | v3.9.0 | 2026-08-24 | 增加：块级编辑引擎 `engine/blocks.py`（段落级在线编辑，block_id CRUD，块类型映射表，未知块类型跳过不中断）；增加：演示页替换引擎 `engine/page_swap.py`（双路径自动选择：页级更新/整文件替换 + 页数校验 diff）；增加：配额管理器 `engine/quota_manager.py`（SQLite 按天计数 500 次/天 + 令牌桶限速 5 req/s + 429 指数退避 + 批量任务硬件自适应削峰）；增加：格式转换引擎 `engine/format_converter.py`（补齐 jpg/png/txt 三类目标格式，全格式覆盖 pdf/jpg/png/txt/docx/xlsx/pptx/html/md，云端优先→本地兜底失败降级链）；增加：MCP 工具 9 个（kdoc.block.* 5 个、kdoc.page_swap 1 个、kdoc.quota.* 3 个、kdoc.office.convert.enhanced 1 个）；增加：块级编辑/页替换/配额管理/格式转换场景案例；优化：SKILL.md 版本号 3.8.0→3.9.0 |
 | v3.8.0 | 2026-08-22 | 增加：智能画布元素级编辑引擎 `engine/element_engine/`（元素CRUD + Markdown追加 + 增量同步，对标腾讯文档·智能画布）；增加：空间节点管理引擎 `engine/space_tree/`（目录树查询 + 链接节点创建 + 递归删除 + 目录可视化）；增加：全文搜索引擎 `engine/content_search/`（文档内容搜索 + 结果定位高亮，超越腾讯）；增加：统一删除入口 `kdoc.file_delete_unified`（合并软删除/彻底删除/直接删除）；增加：MCP 工具 10 个（kdoc.element.* 5 个、kdoc.space.* 4 个、kdoc.content_search.* 2 个、kdoc.file_delete_unified 1 个）；增加：智能画布/空间管理/全文搜索/统一删除场景案例；优化：品类路由表从 8→9（新增 smart_canvas + content_search）；优化：history 模块新增 delete() 统一方法 |
 | v3.7.0 | 2026-08-19 | 增加：多维表格视图增强引擎 `engine/views/`（看板/日历/甘特图三种视图，对标 Airtable，本地渲染，硬件自适应）；增加：手写/公式识别 OCR `engine/ocr/`（数学公式识别 LaTeX/MathML 输出，教育场景统一入口）；增加：历史管理模块 `engine/history/`（合并回收站+版本历史，统一 history list/restore 入口）；增加：MCP 工具 6 个（kdoc.view.* 2 个、kdoc.ocr.* 2 个、kdoc.history.* 3 个）；增加：多维表格视图增强/公式识别/历史管理场景案例；优化：OCR 升级为强制本地模式，数据不出域，移除云端调用路径；优化：品类路由表从 7→8（新增 history_mgmt） |
@@ -1042,7 +1045,7 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 ---
 
-*最后更新：2026-08-24 | v3.9.0*
+*最后更新：2026-08-31 | v4.0.0*
 
 ---
 
@@ -1209,4 +1212,109 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 ---
 
-*最后更新：2026-08-24 | v3.9.0*
+## 30. 本地桥接引擎（v4.0 新增，wps-office-suite 双向互通）
+
+> 与 wps-office-suite 双向互通：白名单探测安装路径 + SQLite 映射表 + 子进程 JSON 契约。
+> 下行：云端→本地→wps 处理→回传覆盖；上行：mtime 监听→上传同步。
+
+### 30.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.bridge.status` | 桥接状态 | wps 安装状态、映射数量 |
+| `kdoc.bridge.download` | 下行：拉取云端文档 | 下载到本地临时目录 |
+| `kdoc.bridge.process` | 下行：wps 处理 | subprocess 调 wps 脚本 |
+| `kdoc.bridge.upload` | 上行：上传覆盖 | 本地文件覆盖云端 |
+| `kdoc.bridge.sync` | 上行：同步 | mtime 变化自动同步 |
+
+### 30.2 双向互通流程
+
+```
+下行（云端→本地→wps→云端）：
+  kdoc.bridge.download → 拉取到临时目录
+  kdoc.bridge.process → subprocess 调 wps 脚本（JSON 契约）
+  kdoc.bridge.upload → 回传覆盖云端
+
+上行（本地变化→云端）：
+  监听映射表 mtime → 变化后自动上传同步
+```
+
+### 30.3 JSON 契约格式
+
+```json
+{
+  "action": "analyze|convert|format|extract",
+  "input": "/path/to/local/file",
+  "output": "/path/to/output",
+  "params": {}
+}
+```
+
+### 30.4 安全约束
+
+- 子进程超时自动关闭（120 秒）
+- 白名单探测，不扫描全盘
+- 未安装 wps：入口隐藏，云端功能不受影响
+
+---
+
+## 31. 记忆桥接引擎（v4.0 新增，zwjh 记忆库打通）
+
+> 文档关键事件（创建/重要编辑/分享）经 zwjh MCP 总线写入长期记忆。
+> 用户问 zwjh 上周改了什么文档时可答。
+
+### 31.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.memory.status` | 记忆桥接状态 | zwjh 安装状态、待迁移事件数 |
+| `kdoc.memory.deposit` | 发送事件 | 写入 zwjh 或待迁移日志 |
+| `kdoc.memory.migrate` | 一次性导入 | 待迁移事件批量写入 zwjh |
+
+### 31.2 工作流程
+
+```
+文档事件 → deposit_event()
+         ├── zwjh 已安装 → stdio JSON-RPC 调用 deposit → 写入长期记忆
+         └── zwjh 未安装 → 写入本地待迁移日志 → 未来安装后 migrate 一次性导入
+```
+
+### 31.3 安全约束
+
+- 子进程超时自动关闭（30 秒）
+- 不打包 zwjh 代码，仅走标准 MCP stdio 协议
+- 未安装 zwjh：事件写本地，不丢失
+
+---
+
+## 32. 表单答卷收集统计（v4.0 新增，云端数据本地智能加工）
+
+> 拉取答卷自动聚合（按题统计、交叉分析、未填名单），结果写回智能文档表格并生成图表页。
+
+### 32.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.form.analyze` | 分析答卷 | 按题统计 + 交叉分析 + 未填名单 |
+| `kdoc.form.export` | 导出答卷 | CSV / Excel |
+| `kdoc.form.chart_data` | 图表数据 | 供前端渲染 |
+| `kdoc.form.write_to_doc` | 写回智能文档 | 统计结果写入表格 |
+
+### 32.2 分析能力
+
+| 能力 | 说明 |
+|------|------|
+| 按题统计 | 选择题分布、数值题均值/最大/最小、文本题字数 |
+| 交叉分析 | 两两选择题关联分析 |
+| 未填名单 | 找出未填题的答卷 |
+| 图表生成 | 自动生成图表数据（饼图/柱状图/直方图） |
+
+### 32.3 安全约束
+
+- 硬件自适应：批量拉取时分块处理
+- 导出文件不落地敏感目录
+- 写回智能文档需用户确认
+
+---
+
+*最后更新：2026-08-31 | v4.0.0*
