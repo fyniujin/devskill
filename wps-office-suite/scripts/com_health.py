@@ -1,6 +1,13 @@
 """
-COM 健康检查模块 v4.5.0
+COM 健康检查模块 v5.0.0
 功能：WPS/MS Office COM 对象状态检测、残留进程检测、自动释放
+      三步自愈：regsvr32重注册 → WPS修复安装（需确认）→ 手动指引
+      每步结果记录日志
+
+v5.0.0 变更：
+  - 新增：三步自愈能力（regsvr32 → 修复安装 → 手动指引）
+  - 新增：self-heal 子命令
+  - 新增：自愈日志记录到 SQLite
 
 v4.5.0 变更:
   - 🎯 COM 对象状态检测（WPS + MS Office 双引擎）
@@ -355,12 +362,256 @@ class COMHealthChecker:
             "timestamp": datetime.now().isoformat(),
         }
 
+    def self_heal(self, auto_confirm: bool = False) -> Dict[str, Any]:
+        """
+        三步自愈（v5.0 新增）
+        
+        步骤：
+        1. regsvr32 重注册 WPS 组件
+        2. 调用 WPS 安装目录的修复安装程序（需用户确认）
+        3. 给出手动修复指引
+        
+        Args:
+            auto_confirm: 是否自动确认（跳过用户确认）
+            
+        Returns:
+            dict: 自愈结果
+        """
+        heal_log = []
+        step1_ok = False
+        step2_ok = False
+        
+        # 先执行 release-all
+        self.release_all_com(force=True)
+        heal_log.append({"step": 0, "action": "release_all", "ok": True, "message": "已释放所有COM对象和残留进程"})
+        
+        # 步骤1：regsvr32 重注册 WPS 组件
+        step1_result = self._step1_regsvr32()
+        heal_log.append(step1_result)
+        if step1_result.get("ok"):
+            step1_ok = True
+        
+        # 步骤2：WPS 修复安装（需用户确认）
+        if not step1_ok or not auto_confirm:
+            step2_result = self._step2_repair_install(auto_confirm=auto_confirm)
+            heal_log.append(step2_result)
+            if step2_result.get("ok"):
+                step2_ok = True
+        
+        # 步骤3：手动修复指引
+        if not step1_ok and not step2_ok:
+            step3_result = self._step3_manual_guide()
+            heal_log.append(step3_result)
+        
+        # 记录自愈日志到 SQLite
+        self._log_self_heal(heal_log)
+        
+        return {
+            "ok": step1_ok or step2_ok,
+            "step1_regsvr32": step1_ok,
+            "step2_repair_install": step2_ok,
+            "log": heal_log,
+            "message": "自愈完成" if (step1_ok or step2_ok) else "自愈失败，请参考手动指引"
+        }
+
+    def _step1_regsvr32(self) -> Dict[str, Any]:
+        """步骤1：regsvr32 重注册 WPS 组件"""
+        if not self.is_windows:
+            return {"step": 1, "ok": False, "message": "非Windows系统，跳过regsvr32"}
+        
+        # 常见 WPS DLL 路径
+        wps_dlls = [
+            "kso.dll",
+            "wps.dll",
+            "et.dll",
+            "wpp.dll",
+        ]
+        
+        # 尝试在 WPS 安装目录中查找
+        wps_path = self._get_wps_install_path()
+        registered = []
+        failed = []
+        
+        if wps_path:
+            for dll in wps_dlls:
+                dll_path = Path(wps_path) / dll
+                if dll_path.exists():
+                    try:
+                        proc = subprocess.Popen(
+                            ["regsvr32", "/s", str(dll_path)],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE
+                        )
+                        try:
+                            proc.communicate(timeout=10)
+                            if proc.returncode == 0:
+                                registered.append(dll)
+                            else:
+                                failed.append(dll)
+                        except subprocess.TimeoutExpired:
+                            proc.kill()
+                            failed.append(dll)
+                    except Exception:
+                        failed.append(dll)
+        
+        if registered:
+            return {
+                "step": 1,
+                "ok": True,
+                "message": f"regsvr32 重注册成功: {', '.join(registered)}",
+                "registered": registered,
+                "failed": failed
+            }
+        else:
+            return {
+                "step": 1,
+                "ok": False,
+                "message": "regsvr32 未找到可注册的WPS组件",
+                "hint": "WPS可能未安装或路径不在默认位置"
+            }
+
+    def _step2_repair_install(self, auto_confirm: bool = False) -> Dict[str, Any]:
+        """步骤2：调用 WPS 安装目录的修复安装程序"""
+        if not self.is_windows:
+            return {"step": 2, "ok": False, "message": "非Windows系统，跳过修复安装"}
+        
+        wps_path = self._get_wps_install_path()
+        if not wps_path:
+            return {"step": 2, "ok": False, "message": "未找到WPS安装目录"}
+        
+        # 查找修复安装程序
+        repair_exes = [
+            Path(wps_path) / "wps.exe",
+            Path(wps_path) / "ksomisc.exe",
+            Path(wps_path) / "repair.exe",
+        ]
+        
+        repair_exe = None
+        for exe in repair_exes:
+            if exe.exists():
+                repair_exe = exe
+                break
+        
+        if not repair_exe:
+            return {"step": 2, "ok": False, "message": "未找到WPS修复安装程序"}
+        
+        # 需要用户确认
+        if not auto_confirm:
+            print(f"\n⚠️  即将运行 WPS 修复安装程序: {repair_exe}")
+            print("   此操作可能需要管理员权限，并可能重启WPS。")
+            try:
+                answer = input("   是否继续？[y/N]: ").strip().lower()
+                if answer != "y":
+                    return {"step": 2, "ok": False, "message": "用户取消修复安装"}
+            except Exception:
+                return {"step": 2, "ok": False, "message": "用户取消修复安装"}
+        
+        try:
+            proc = subprocess.Popen(
+                [str(repair_exe), "/repair"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+            try:
+                proc.communicate(timeout=60)
+                if proc.returncode == 0:
+                    return {"step": 2, "ok": True, "message": "WPS修复安装完成"}
+                else:
+                    return {"step": 2, "ok": False, "message": f"修复安装返回码: {proc.returncode}"}
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                return {"step": 2, "ok": False, "message": "修复安装超时"}
+        except Exception as e:
+            return {"step": 2, "ok": False, "message": f"修复安装失败: {str(e)}"}
+
+    def _step3_manual_guide(self) -> Dict[str, Any]:
+        """步骤3：手动修复指引"""
+        guide = """
+╔══════════════════════════════════════════════════════════════╗
+║                  COM 手动修复指引                            ║
+╠══════════════════════════════════════════════════════════════╣
+║ 如果自动修复失败，请按以下步骤手动修复：                      ║
+║                                                              ║
+║ 1. 关闭所有 WPS/MS Office 程序                               ║
+║ 2. 打开任务管理器，结束以下进程：                             ║
+║    - kwps.exe, wps.exe, wpscloudsvr.exe                     ║
+║    - WINWORD.exe, EXCEL.exe, POWERPNT.exe                   ║
+║ 3. 以管理员身份运行命令提示符，执行：                         ║
+║    regsvr32 /u "C:\\Program Files\\WPS Office\\kso.dll"      ║
+║    regsvr32 "C:\\Program Files\\WPS Office\\kso.dll"         ║
+║ 4. 重启电脑                                                  ║
+║ 5. 重新安装 WPS Office（如果以上步骤无效）                    ║
+║                                                              ║
+║ 联系反馈：njskills@agent.qq.com                              ║
+╚══════════════════════════════════════════════════════════════╝
+"""
+        return {"step": 3, "ok": False, "message": "请参考手动修复指引", "guide": guide}
+
+    def _get_wps_install_path(self) -> Optional[str]:
+        """获取 WPS 安装路径"""
+        if not self.is_windows:
+            return None
+        
+        # 常见安装路径
+        possible_paths = [
+            r"C:\Program Files\WPS Office",
+            r"C:\Program Files (x86)\WPS Office",
+            os.path.expandvars(r"%LOCALAPPDATA%\Kingsoft\WPS Office"),
+        ]
+        
+        # 从注册表读取
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Kingsoft\WPS Office") as key:
+                install_path = winreg.QueryValueEx(key, "InstallPath")[0]
+                if install_path:
+                    possible_paths.insert(0, install_path)
+        except Exception:
+            pass
+        
+        for path in possible_paths:
+            if Path(path).exists():
+                return path
+        
+        return None
+
+    def _log_self_heal(self, log: List[Dict]):
+        """记录自愈日志到 SQLite"""
+        try:
+            db_path = Path(__file__).parent / "wps_stats.db"
+            import sqlite3
+            with sqlite3.connect(str(db_path)) as conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS self_heal_log (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        timestamp TEXT NOT NULL,
+                        step INTEGER NOT NULL,
+                        action TEXT NOT NULL,
+                        ok INTEGER DEFAULT 0,
+                        message TEXT DEFAULT ''
+                    )
+                """)
+                for entry in log:
+                    conn.execute("""
+                        INSERT INTO self_heal_log (timestamp, step, action, ok, message)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (
+                        datetime.now().isoformat(),
+                        entry.get("step", 0),
+                        entry.get("action", entry.get("message", "")),
+                        1 if entry.get("ok") else 0,
+                        entry.get("message", "")
+                    ))
+                conn.commit()
+        except Exception:
+            pass
+
 
 def _cli():
     """CLI 入口"""
     import argparse
     
-    parser = argparse.ArgumentParser(description="COM 健康检查 v4.5.0")
+    parser = argparse.ArgumentParser(description="COM 健康检查 v5.0.0")
     sub = parser.add_subparsers(dest="command", required=True)
     
     # wps-check
@@ -383,6 +634,10 @@ def _cli():
     p.add_argument("--auto-release", action="store_true", help="检查后自动释放")
     p.add_argument("--json", action="store_true", help="JSON 格式输出")
     
+    # self-heal (v5.0 新增)
+    p = sub.add_parser("self-heal", help="三步自愈（regsvr32→修复安装→手动指引）")
+    p.add_argument("--yes", action="store_true", help="自动确认（跳过用户确认）")
+    
     args = parser.parse_args()
     checker = COMHealthChecker(auto_release=getattr(args, "auto_release", False))
     
@@ -400,6 +655,10 @@ def _cli():
     
     elif args.command == "release-all":
         result = checker.release_all_com(force=args.force)
+        print(json.dumps(result, ensure_ascii=False, default=str))
+    
+    elif args.command == "self-heal":
+        result = checker.self_heal(auto_confirm=args.yes)
         print(json.dumps(result, ensure_ascii=False, default=str))
     
     elif args.command == "full-check":
