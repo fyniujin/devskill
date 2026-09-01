@@ -2,8 +2,8 @@
 name: wps-office-suite
 displayName: WPS Office 全家桶
 slug: wps-office-suite
-description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v4.0新增：Word→PPT一键生成、Excel自然语言数据分析、Word合同条款审查、Excel发票OCR入账；v4.3新增：Excel深度分析（公式纠错/数据清洗/透视表/数据预测/NL2Formula）；v4.4新增：长文档排版自动化（目录/页眉页脚/标题编号/图表索引/交叉引用/格式统一）；v4.5新增：会议纪要生成（ASR转写→LLM摘要→Word）、COM健康检查（状态检测+残留进程+自动释放）；v4.6新增：Excel智能分析统一入口（6命令合并）、数据图表生成器（自动选图+生成）、文档翻译增强版（Word/Excel/PPT多格式翻译）；v4.7新增：公式解释器（反向NL2Formula）、Markdown→Word/PPT、长文档排版统一入口；v4.8新增：邮件智能回复（模板+LLM个性化）、周报/月报自动生成、纯Python模式增强（条件格式/数据验证/合并单元格/命名区域）、AI统一入口wps ai --action
-version: 4.9.0
+description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v5.0新增：定时任务注册管理（schtasks/crontab）、目录轮询监听（YAML规则+大文件分片）、使用统计与稳定性中心（SQLite埋点+引擎健康+引擎偏好）、COM三步自愈（regsvr32→修复安装→手动指引）、对话式数据查询（NL2SQL式意图解析+查询计划+连续追问）、multi-agent编排引擎桥接（白名单探测+流水线模板注册）
+version: 5.0.0
 category: 办公协作与生产力工具
 platforms:
   - windows
@@ -42,7 +42,7 @@ tags:
   建议反馈邮箱: njskills@agent.qq.com
 ---
 
-# WPS Office 全家桶 v4.9.0 ✅
+# WPS Office 全家桶 v5.0.0 ✅
 
 > 🏗️ **四引擎智能识别**：自动检测用户电脑已安装的软件，按 WPS → MS Office → LibreOffice → 纯Python 顺序选择最合适的引擎
 > ✨ **纯Python模式增强 v4.8**：排序、筛选、图表、公式、统计、条件格式、数据验证、合并单元格、命名区域 — 跨平台全部支持
@@ -65,6 +65,12 @@ tags:
 > 🌉 **llm_bridge 桥接层 v4.9**：统一模型层，白名单探测 cn-llm-router，零配置多模型调用
 > 📋 **模板市场 v4.9**：50+ 内置模板（公文/合同/简历/标书/报告/会议），支持用户沉淀和分享
 > 💬 **NL2Formula 多轮澄清 v4.9**：歧义检测 → 槽位填充 → 反向验证，公式生成更精准
+> ⏰ **定时任务 v5.0**：schtasks/crontab 注册管理，周报/月报/数据刷新一键定时
+> 👁️ **目录监听 v5.0**：轮询监听 + YAML规则 + 大文件自动分片 + LibreOffice并发控制
+> 📊 **稳定性中心 v5.0**：SQLite埋点统计 + 引擎健康度 + 全局engine-info + 引擎偏好配置
+> 🏥 **COM自愈 v5.0**：三步自愈（regsvr32 → 修复安装 → 手动指引），每步记录日志
+> 💬 **对话式查询 v5.0**：NL2SQL式意图解析 + 查询计划生成 + 连续追问，Top20关键词模板降级
+> 🔗 **编排引擎桥接 v5.0**：白名单探测 multi-agent-orchestrator，命中注册流水线模板，未装本地串行降级
 > 📧 **建议反馈**：有更好建议？邮箱：[njskills@agent.qq.com](mailto:njskills@agent.qq.com)
 
 ---
@@ -883,6 +889,52 @@ python scripts/wps_ai.py --action translate --file report.docx --output 报告_z
 python scripts/wps_ai.py --action formula --formula "=SUM(A1:A10)"
 ```
 
+### 🆕 v5.0 自动化流水线与稳定性中心
+
+```bash
+# ===== 定时任务 =====
+python scripts/schedule_register.py register --task weekly_report   # 注册周报定时任务（需确认）
+python scripts/schedule_register.py register --task monthly_report  # 注册月报定时任务
+python scripts/schedule_register.py register --task data_refresh   # 注册数据刷新定时任务
+python scripts/schedule_register.py list                           # 列出已注册任务
+python scripts/schedule_register.py cancel --task weekly_report    # 取消任务
+python scripts/schedule_register.py enable --task weekly_report    # 启用/禁用任务
+python scripts/schedule_register.py predefined                     # 查看预定义任务
+
+# ===== 目录监听 =====
+python scripts/watch.py watch --dir ./input --rules watch_rules.yaml  # 启动监听
+python scripts/watch.py scan --dir ./input --rules watch_rules.yaml   # 单次扫描
+python scripts/watch.py rules --dump                                 # 导出默认规则
+python scripts/watch.py init --dir ./input                            # 初始化规则文件
+
+# ===== 稳定性中心（统计+引擎健康+引擎偏好）=====
+python scripts/usage_stats.py stats --period daily    # 日报表
+python scripts/usage_stats.py stats --period weekly   # 周报表
+python scripts/usage_stats.py health                  # 引擎健康度报告
+python scripts/usage_stats.py engine-info             # 全局引擎信息（合并3脚本）
+python scripts/usage_stats.py preference --mode auto  # 引擎偏好：自动模式
+python scripts/usage_stats.py preference --mode fixed --engine wps  # 固定WPS引擎
+python scripts/usage_stats.py log --action create --engine wps --duration 2.5  # 手动埋点
+python scripts/usage_stats.py reset --yes             # 重置统计数据
+
+# ===== COM 三步自愈 =====
+python scripts/com_health.py self-heal                # 交互式三步自愈
+python scripts/com_health.py self-heal --yes          # 自动确认（跳过修复安装确认）
+
+# ===== 对话式数据查询 =====
+python scripts/nl2sql_engine.py query --file data.xlsx --query "销售额总和是多少"
+python scripts/nl2sql_engine.py query --file data.xlsx --query "按部门分组统计平均工资"
+python scripts/nl2sql_engine.py interactive --file data.xlsx  # 交互式连续追问
+python scripts/nl2sql_engine.py history                  # 查看查询历史
+
+# ===== 编排引擎桥接 =====
+python scripts/pipeline_bridge.py register            # 注册WPS流水线模板
+python scripts/pipeline_bridge.py register --dry-run  # 预览注册内容
+python scripts/pipeline_bridge.py unregister          # 注销模板
+python scripts/pipeline_bridge.py status              # 查看桥接状态
+python scripts/pipeline_bridge.py list                # 列出所有流水线模板
+```
+
 ### 其他工具
 
 ```bash
@@ -936,6 +988,7 @@ python templates/generate_templates.py --dir ./output  # 生成模板
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v5.0.0 | 2026-08-16 | 增加：定时任务注册管理 schedule_register.py（schtasks/crontab 双平台，4个预定义任务，注册前展示命令确认，list/cancel/enable管理）；增加：目录轮询监听 watch.py（轮询间隔3秒无内核依赖，YAML规则表匹配，>50MB自动分片并行处理+合并输出，LibreOffice并发池控制）；增加：使用统计与稳定性中心 usage_stats.py（SQLite埋点：操作数/耗时/引擎命中/失败降级/重试成功率，stats日/周报表+引擎健康度，全局engine-info合并3脚本，引擎偏好优先级配置）；增加：COM三步自愈 com_health.py self-heal子命令（regsvr32重注册→WPS修复安装[用户确认]→手动指引，每步记录SQLite日志）；增加：对话式数据查询 nl2sql_engine.py（意图解析器+查询计划生成器+pandas执行器+对话上下文，Top20关键词模板覆盖sum/avg/max/min/count/filter/groupby/sort/topn/yoy/mom等，无LLM降级）；增加：multi-agent编排引擎桥接 pipeline_bridge.py（白名单探测multi-agent-orchestrator，命中注册5条WPS流水线模板，未装降级watch.py本地串行，同一套规则表两种执行路径） |
 | v4.9.0 | 2026-08-08 | 增加：llm_bridge 统一模型层桥接（白名单探测 cn-llm-router，零配置多模型调用，JSON 契约 text/model/cost）；增加：wps ai 续写/改写/扩写 3 个新 AI 动作（经 llm_bridge 路由，未装 cn-llm-router 回落自配 API + 安装提示）；增加：模板市场 template_manager.py（50+ 内置模板覆盖公文/合同/简历/标书/报告/会议，支持用户沉淀 user_templates + 导出/导入分享包）；增加：NL2Formula 多轮澄清 clarify.py（歧义检测 3 类规则 + 槽位填充 + 反向验证回路，公式生成更精准）；优化：document_translator.py 优先走 llm_bridge 后回落直接 API；优化：report_generator.py 新增 --polish 参数（经 llm_bridge 润色）；优化：meeting_minutes.py 摘要引擎优先走 llm_bridge 后回落本地规则 |
 | v4.8.0 | 2026-08-22 | 增加：邮件智能回复 email_reply.py（模板匹配 + 规则引擎 + 可选 LLM 个性化，纯本地实现）；增加：周报/月报自动生成 report_generator.py（关键点→结构化 Word 报告，模板 + 可选 LLM 润色）；升级：纯 Python 模式能力（条件格式/数据验证/合并单元格/命名区域，基于 openpyxl 扩展）；增加：AI 统一入口 wps ai --action（6 大 AI 功能统一入口）；增加：邮件回复 CLI 子命令（email-reply）；增加：周报月报 CLI 子命令（report）；增加：条件格式/数据验证/合并单元格/命名区域 CLI 子命令 |
 | v4.7.0 | 2026-08-17 | 增加：公式解释器 formula_explainer.py（反向 NL2Formula，Excel 公式→自然语言解释，纯本地实现，80+ 函数映射）；增加：Markdown→Word/PPT 转换器 md_converter.py（保留标题层级/表格/列表/加粗，纯本地实现）；合并：长文档排版 8 命令为 long-document 统一入口（--action 参数路由）；优化：长文档排版性能（分批处理 + 单次保存 + 进度回调，大文档不卡顿）；增加：公式解释器 CLI 子命令（formula-explain）；增加：MD 转换 CLI 子命令（md-convert）；增加：长文档排版 CLI 子命令（long-document） |
