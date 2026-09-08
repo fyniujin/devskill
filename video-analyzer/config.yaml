@@ -1,5 +1,5 @@
 # video-analyzer 配置文件
-# 视频分析处理 Skill v4.3.0
+# 视频分析处理 Skill v4.4.0
 
 # ==================== ASR 语音识别配置 (v3.5 新增) ====================
 asr:
@@ -351,6 +351,57 @@ gpu:
   models_dir: models
   # 自动回退到 CPU
   fallback_to_cpu: true
+
+# ==================== 一键成片配置 (v4.4 新增) ====================
+auto_editor:
+  # ffmpeg 路径
+  ffmpeg_path: ffmpeg
+  ffprobe_path: ffprobe
+  # 临时目录
+  temp_dir: .temp/auto_editor
+  # 输出目录
+  output_dir: output
+
+# ==================== 封面帧选取配置 (v4.4 新增) ====================
+cover:
+  # ffmpeg 路径
+  ffmpeg_path: ffmpeg
+  ffprobe_path: ffprobe
+  # 输出目录
+  output_dir: output/covers
+  temp_dir: .temp/covers
+  # 评分权重
+  sharpness_weight: 0.35
+  face_weight: 0.30
+  composition_weight: 0.20
+  brightness_weight: 0.15
+  # 采样间隔（秒）
+  sample_interval: 2.0
+
+# ==================== 字幕翻译配置 (v4.4 新增) ====================
+translator:
+  # cn-llm-router 路径（null 则自动搜索）
+  router_path: null
+  # 输出目录
+  output_dir: output/subtitles
+  temp_dir: .temp/translator
+  # 术语表路径
+  glossary_path: null
+  # 批量大小
+  batch_size: 10
+  # 超时（秒）
+  timeout: 120
+
+# ==================== BGM 识别配置 (v4.4 新增) ====================
+bgm:
+  # fpcalc/chromaprint 路径
+  fpcalc_path: fpcalc
+  chromaprint_path: fpcalc
+  # 本地参考库路径
+  library_path: null
+  temp_dir: .temp/bgm
+  # 匹配阈值
+  match_threshold: 0.7
 
 # ==================== 日志配置 ====================
 logging:
