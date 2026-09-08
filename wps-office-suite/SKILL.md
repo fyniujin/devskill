@@ -2,8 +2,8 @@
 name: wps-office-suite
 displayName: WPS Office 全家桶
 slug: wps-office-suite
-description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v5.0新增：定时任务注册管理（schtasks/crontab）、目录轮询监听（YAML规则+大文件分片）、使用统计与稳定性中心（SQLite埋点+引擎健康+引擎偏好）、COM三步自愈（regsvr32→修复安装→手动指引）、对话式数据查询（NL2SQL式意图解析+查询计划+连续追问）、multi-agent编排引擎桥接（白名单探测+流水线模板注册）
-version: 5.0.0
+description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v5.1新增：kingdoc云端桥接（白名单探测+配置预检+subprocess上传+差异检查）、条件格式/数据验证跨引擎IO（JSON中间格式保真往返）、会议纪要三段式要素化（待办清单+决策记录+风险异议）+说话人标注（MFCC聚类）
+version: 5.1.0
 category: 办公协作与生产力工具
 platforms:
   - windows
@@ -71,6 +71,9 @@ tags:
 > 🏥 **COM自愈 v5.0**：三步自愈（regsvr32 → 修复安装 → 手动指引），每步记录日志
 > 💬 **对话式查询 v5.0**：NL2SQL式意图解析 + 查询计划生成 + 连续追问，Top20关键词模板降级
 > 🔗 **编排引擎桥接 v5.0**：白名单探测 multi-agent-orchestrator，命中注册流水线模板，未装本地串行降级
+> ☁️ **kingdoc 桥接 v5.1**：白名单探测+配置预检+subprocess 上传金山文档，difflib 差异检查
+> 🔄 **跨引擎 IO v5.1**：条件格式/数据验证 JSON 中间格式，WPS↔纯 Python 保真往返
+> 📋 **纪要要素化 v5.1**：三段式结构（待办清单+决策记录+风险异议）+ 说话人标注
 > 📧 **建议反馈**：有更好建议？邮箱：[njskills@agent.qq.com](mailto:njskills@agent.qq.com)
 
 ---
@@ -935,6 +938,30 @@ python scripts/pipeline_bridge.py status              # 查看桥接状态
 python scripts/pipeline_bridge.py list                # 列出所有流水线模板
 ```
 
+### 🆕 v5.1 在线协同打通（桥接 kingdoc）
+
+```bash
+# ===== kingdoc 桥接 =====
+python scripts/kingdoc_bridge.py status                           # 检查 kingdoc 安装状态
+python scripts/kingdoc_bridge.py upload --file report.docx        # 上传文件到金山文档
+python scripts/kingdoc_bridge.py upload --file report.docx --folder-id xxx  # 指定文件夹
+python scripts/kingdoc_bridge.py diff --file report.docx --doc-id xxx      # 检查本地与云端差异
+
+# ===== 条件格式 IO =====
+python scripts/conditional_format_io.py extract --file data.xlsx              # 提取条件格式为 JSON
+python scripts/conditional_format_io.py extract --file data.xlsx --sheet Sheet1 --output rules.json
+python scripts/conditional_format_io.py apply --file data.xlsx --json-file rules.json  # 应用条件格式
+
+# ===== 数据验证 IO =====
+python scripts/validation_io.py extract --file data.xlsx              # 提取数据验证为 JSON
+python scripts/validation_io.py apply --file data.xlsx --json-file rules.json  # 应用数据验证
+
+# ===== 会议纪要 v5.1 三段式 =====
+python scripts/meeting_minutes.py generate --file audio.wav --output 纪要.docx --diarize --num-speakers 3
+python scripts/meeting_minutes.py diarize --file audio.wav --num-speakers 3  # 独立说话人标注
+python scripts/meeting_minutes.py generate --file audio.wav --no-diarize     # 禁用说话人标注
+```
+
 ### 其他工具
 
 ```bash
@@ -988,6 +1015,7 @@ python templates/generate_templates.py --dir ./output  # 生成模板
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v5.1.0 | 2026-09-08 | 增加：kingdoc 云端桥接 kingdoc_bridge.py（白名单探测+配置预检+subprocess JSON 契约上传+ difflib 差异检查，未安装/未配置隐藏入口+可选装提示）；增加：条件格式跨引擎 IO conditional_format_io.py（色阶/数据条/公式条件→JSON 中间格式，跨引擎保真往返 WPS↔纯Python）；增加：数据验证跨引擎 IO validation_io.py（下拉/数值区间/日期→JSON 中间格式，跨引擎保真往返）；优化：meeting_minutes.py 升级为 v5.1 三段式要素化纪要（待办清单+决策记录+风险异议，每节独立页眉）；增加：说话人标注 SpeakerDiarization（MFCC 聚类或显式报名，独立 diarize 子命令）；增加：--diarize/--no-diarize 参数控制说话人标注；增加：--num-speakers 参数指定说话人数 |
 | v5.0.0 | 2026-08-16 | 增加：定时任务注册管理 schedule_register.py（schtasks/crontab 双平台，4个预定义任务，注册前展示命令确认，list/cancel/enable管理）；增加：目录轮询监听 watch.py（轮询间隔3秒无内核依赖，YAML规则表匹配，>50MB自动分片并行处理+合并输出，LibreOffice并发池控制）；增加：使用统计与稳定性中心 usage_stats.py（SQLite埋点：操作数/耗时/引擎命中/失败降级/重试成功率，stats日/周报表+引擎健康度，全局engine-info合并3脚本，引擎偏好优先级配置）；增加：COM三步自愈 com_health.py self-heal子命令（regsvr32重注册→WPS修复安装[用户确认]→手动指引，每步记录SQLite日志）；增加：对话式数据查询 nl2sql_engine.py（意图解析器+查询计划生成器+pandas执行器+对话上下文，Top20关键词模板覆盖sum/avg/max/min/count/filter/groupby/sort/topn/yoy/mom等，无LLM降级）；增加：multi-agent编排引擎桥接 pipeline_bridge.py（白名单探测multi-agent-orchestrator，命中注册5条WPS流水线模板，未装降级watch.py本地串行，同一套规则表两种执行路径） |
 | v4.9.0 | 2026-08-08 | 增加：llm_bridge 统一模型层桥接（白名单探测 cn-llm-router，零配置多模型调用，JSON 契约 text/model/cost）；增加：wps ai 续写/改写/扩写 3 个新 AI 动作（经 llm_bridge 路由，未装 cn-llm-router 回落自配 API + 安装提示）；增加：模板市场 template_manager.py（50+ 内置模板覆盖公文/合同/简历/标书/报告/会议，支持用户沉淀 user_templates + 导出/导入分享包）；增加：NL2Formula 多轮澄清 clarify.py（歧义检测 3 类规则 + 槽位填充 + 反向验证回路，公式生成更精准）；优化：document_translator.py 优先走 llm_bridge 后回落直接 API；优化：report_generator.py 新增 --polish 参数（经 llm_bridge 润色）；优化：meeting_minutes.py 摘要引擎优先走 llm_bridge 后回落本地规则 |
 | v4.8.0 | 2026-08-22 | 增加：邮件智能回复 email_reply.py（模板匹配 + 规则引擎 + 可选 LLM 个性化，纯本地实现）；增加：周报/月报自动生成 report_generator.py（关键点→结构化 Word 报告，模板 + 可选 LLM 润色）；升级：纯 Python 模式能力（条件格式/数据验证/合并单元格/命名区域，基于 openpyxl 扩展）；增加：AI 统一入口 wps ai --action（6 大 AI 功能统一入口）；增加：邮件回复 CLI 子命令（email-reply）；增加：周报月报 CLI 子命令（report）；增加：条件格式/数据验证/合并单元格/命名区域 CLI 子命令 |
