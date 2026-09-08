@@ -34,6 +34,10 @@ class ReportGenerator:
         editing_result=None,
         viral_result=None,
         live_stats=None,
+        auto_edit_result=None,
+        cover_result=None,
+        translate_result=None,
+        bgm_result=None,
     ) -> Dict[str, str]:
         """
         生成所有格式的报告文件。
@@ -61,7 +65,8 @@ class ReportGenerator:
                 transcript, scenes, visual_data, aligned_data,
                 fused_data, highlights, media_info, output_dir, assets_dir,
                 platform_analysis, platform_meta, editing_result,
-                viral_result, live_stats
+                viral_result, live_stats, auto_edit_result, cover_result,
+                translate_result, bgm_result
             )
             output_paths["html"] = html_path
         
@@ -70,7 +75,8 @@ class ReportGenerator:
                 transcript, scenes, visual_data, aligned_data,
                 fused_data, highlights, media_info, output_dir,
                 platform_analysis, platform_meta, editing_result,
-                viral_result, live_stats
+                viral_result, live_stats, auto_edit_result, cover_result,
+                translate_result, bgm_result
             )
             output_paths["json"] = json_path
         
@@ -79,7 +85,8 @@ class ReportGenerator:
                 transcript, scenes, visual_data, aligned_data,
                 fused_data, highlights, media_info, output_dir,
                 platform_analysis, platform_meta, editing_result,
-                viral_result, live_stats
+                viral_result, live_stats, auto_edit_result, cover_result,
+                translate_result, bgm_result
             )
             output_paths["md"] = md_path
         
@@ -101,13 +108,18 @@ class ReportGenerator:
         editing_result=None,
         viral_result=None,
         live_stats=None,
+        auto_edit_result=None,
+        cover_result=None,
+        translate_result=None,
+        bgm_result=None,
     ) -> str:
         """生成交互式 HTML 报告"""
         
         html_content = self._build_html_document(
             transcript, scenes, fused_data, highlights, media_info, aligned_data,
             platform_analysis, platform_meta, editing_result,
-            viral_result, live_stats
+            viral_result, live_stats, auto_edit_result, cover_result,
+            translate_result, bgm_result
         )
         
         output_path = os.path.join(output_dir, "report.html")
@@ -130,6 +142,10 @@ class ReportGenerator:
         editing_result=None,
         viral_result=None,
         live_stats=None,
+        auto_edit_result=None,
+        cover_result=None,
+        translate_result=None,
+        bgm_result=None,
     ) -> str:
         """构建完整 HTML 文档"""
         
@@ -176,6 +192,18 @@ class ReportGenerator:
         
         # 构建实时直播分析 HTML
         live_html = self._build_live_html(live_stats)
+        
+        # 构建一键成片 HTML（v4.4 新增）
+        auto_edit_html = self._build_auto_edit_html(auto_edit_result)
+        
+        # 构建封面帧选取 HTML（v4.4 新增）
+        cover_html = self._build_cover_html(cover_result)
+        
+        # 构建字幕翻译 HTML（v4.4 新增）
+        translate_html = self._build_translate_html(translate_result)
+        
+        # 构建 BGM 识别 HTML（v4.4 新增）
+        bgm_html = self._build_bgm_html(bgm_result)
         
         return f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -345,6 +373,14 @@ class ReportGenerator:
         {viral_html}
 
         {live_html}
+
+        {auto_edit_html}
+
+        {cover_html}
+
+        {translate_html}
+
+        {bgm_html}
 
         <div class="footer">
             video-analyzer · 视频分析处理 Skill<br>
@@ -670,6 +706,183 @@ class ReportGenerator:
         </div>
         """
 
+    def _build_auto_edit_html(self, auto_edit_result=None) -> str:
+        """构建一键成片 HTML（v4.4 新增）"""
+        if not auto_edit_result:
+            return ""
+
+        output_path = auto_edit_result.get("output_path", "")
+        duration = auto_edit_result.get("duration", 0)
+        clips_used = auto_edit_result.get("clips_used", 0)
+        warnings_list = auto_edit_result.get("warnings", [])
+        bgm_suggestion = auto_edit_result.get("bgm_suggestion")
+
+        warnings_html = ""
+        if warnings_list:
+            warnings_html = "<h3>⚠️ 警告</h3><ul style='color:#f39c12'>" + "".join(f"<li>{w}</li>" for w in warnings_list) + "</ul>"
+
+        bgm_html_block = ""
+        if bgm_suggestion:
+            suggestions = bgm_suggestion.get("suggestions", [])
+            bgm_html_block = f"""
+            <h3>🎵 BGM 建议（{bgm_suggestion.get('mood', '未知')}）</h3>
+            <div class="metrics-grid">
+                {''.join(f'<div class="metric-item"><div class="metric-value" style="font-size:14px">{s.get("name","")}</div><div class="metric-label">{s.get("source","")} · {s.get("bpm","")}BPM</div></div>' for s in suggestions)}
+            </div>
+            """
+
+        package_dir = auto_edit_result.get("platform_package", "")
+        edl_map = auto_edit_result.get("edl_map", "")
+
+        return f"""
+        <div class="card">
+            <h2>🎬 一键成片</h2>
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <div class="metric-value">{clips_used}</div>
+                    <div class="metric-label">使用片段</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value">{self._format_time(duration)}</div>
+                    <div class="metric-label">成片时长</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value">{'✅' if output_path else '❌'}</div>
+                    <div class="metric-label">成片状态</div>
+                </div>
+            </div>
+            {bgm_html_block}
+            {warnings_html}
+            <h3>输出文件</h3>
+            <div style="font-size:12px; color:#888;">
+                <div>📹 成片: {output_path or '无'}</div>
+                <div>📋 EDL映射: {edl_map or '无'}</div>
+                <div>📦 平台包: {package_dir or '无'}</div>
+            </div>
+        </div>
+        """
+
+    def _build_cover_html(self, cover_result=None) -> str:
+        """构建封面帧选取 HTML（v4.4 新增）"""
+        if not cover_result:
+            return ""
+
+        candidates = cover_result.get("candidates", [])
+        total = cover_result.get("total_candidates", 0)
+
+        if not candidates:
+            return ""
+
+        items_html = []
+        for i, c in enumerate(candidates):
+            reasons = "、".join(c.get("reasons", []))
+            items_html.append(f"""
+            <div class="highlight-item">
+                <span class="highlight-score">Top{i+1} ({c.get("score", 0):.2f})</span>
+                <strong>{c.get("timestamp", 0):.1f}s</strong>
+                <div style="margin-top:4px; font-size:12px;">原因: {reasons}</div>
+                <div style="margin-top:4px; font-size:11px; color:#666;">{c.get("path", "")}</div>
+            </div>
+            """)
+
+        return f"""
+        <div class="card">
+            <h2>🖼️ 封面帧智能选取</h2>
+            <p style="color:#888; margin-bottom:12px;">从 {total} 个候选帧中选出 Top{len(candidates)}</p>
+            {"".join(items_html)}
+        </div>
+        """
+
+    def _build_translate_html(self, translate_result=None) -> str:
+        """构建字幕翻译 HTML（v4.4 新增）"""
+        if not translate_result:
+            return ""
+
+        output_path = translate_result.get("output_path", "")
+        translated = translate_result.get("translated_count", 0)
+        skipped = translate_result.get("skipped_count", 0)
+        lang = translate_result.get("lang", "")
+        fmt = translate_result.get("format", "")
+        warnings_list = translate_result.get("warnings", [])
+        used_fallback = translate_result.get("used_fallback", False)
+
+        warnings_html = ""
+        if warnings_list:
+            warnings_html = "<h3>⚠️ 警告</h3><ul style='color:#f39c12'>" + "".join(f"<li>{w}</li>" for w in warnings_list) + "</ul>"
+
+        status = "✅" if output_path else "❌"
+        if used_fallback:
+            status = "⚠️"
+
+        return f"""
+        <div class="card">
+            <h2>🌐 字幕翻译 ({lang})</h2>
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <div class="metric-value">{translated}</div>
+                    <div class="metric-label">已翻译</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value">{skipped}</div>
+                    <div class="metric-label">已跳过</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value">{status}</div>
+                    <div class="metric-label">状态</div>
+                </div>
+            </div>
+            <p style="color:#888; margin-top:8px;">格式: {fmt} | 输出: {output_path or '无'}</p>
+            {warnings_html}
+        </div>
+        """
+
+    def _build_bgm_html(self, bgm_result=None) -> str:
+        """构建 BGM 识别 HTML（v4.4 新增）"""
+        if not bgm_result:
+            return ""
+
+        identified = bgm_result.get("identified", False)
+        bgm_name = bgm_result.get("bgm_name", "")
+        confidence = bgm_result.get("confidence", 0)
+        copyright_risk = bgm_result.get("copyright_risk", "unknown")
+        risk_reason = bgm_result.get("risk_reason", "")
+        warnings_list = bgm_result.get("warnings", [])
+
+        risk_colors = {"low": "#27ae60", "medium": "#f39c12", "high": "#e94560", "unknown": "#888"}
+        risk_color = risk_colors.get(copyright_risk, "#888")
+
+        warnings_html = ""
+        if warnings_list:
+            warnings_html = "<h3>⚠️ 警告</h3><ul style='color:#f39c12'>" + "".join(f"<li>{w}</li>" for w in warnings_list) + "</ul>"
+
+        status = "✅ 已识别" if identified else "❌ 未识别"
+
+        return f"""
+        <div class="card">
+            <h2>🎵 BGM 识别</h2>
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <div class="metric-value">{status}</div>
+                    <div class="metric-label">识别状态</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" style="font-size:14px">{bgm_name or '未知'}</div>
+                    <div class="metric-label">BGM名称</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value">{confidence:.0%}</div>
+                    <div class="metric-label">置信度</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" style="color:{risk_color}">{copyright_risk}</div>
+                    <div class="metric-label">版权风险</div>
+                </div>
+            </div>
+            {f'<p style="margin-top:8px;">{risk_reason}</p>' if risk_reason else ''}
+            {warnings_html}
+        </div>
+        """
+
     def _build_editing_html(self, editing_result=None) -> str:
         """构建剪辑建议 HTML"""
         if not editing_result:
@@ -773,7 +986,7 @@ class ReportGenerator:
         data = {
             "meta": {
                 "generator": "video-analyzer",
-                "version": "4.2.0",
+                "version": "4.4.0",
                 "generated_at": datetime.now().isoformat(),
             },
             "media_info": media_info,
