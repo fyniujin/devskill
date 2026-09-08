@@ -2,7 +2,7 @@
 name: kingdoc
 displayName: 金山文档 KingDoc
 slug: kingdoc
-version: 4.0.0
+version: 4.1.0
 description: >
   金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理
   （文档/智能画布/电子表格/演示文稿/多维表格/收集表/可视化/历史管理/全文搜索/附件），
@@ -11,11 +11,16 @@ description: >
   通知推送、Webhook、批量任务、政企合规、硬件自适应性能、WPS AI 能力、协同冲突解决、
   文档合规检查、实时协同编辑、文档对比、WPS AI 深度集成、模板市场、多维表格视图增强、
   手写/公式识别、历史管理、智能画布元素级编辑、全文搜索、块级编辑、演示页替换、配额管理器、
-  wps-office-suite 双向桥接、zwjh 记忆库打通、表单答卷收集统计）。
+  wps-office-suite 双向桥接、zwjh 记忆库打通、表单答卷收集统计、AirScript 在线自动化、多维表格字段自动化、
+  看板/甘特图视图渲染、CRDT 表格扩展（单元格级无冲突协作）、Excel/CSV 双向导入导出（四类字段序列化）、
+  Webhook 与通知中心（三通道分发 + 签名校验 + SQLite 去重））。
   文字/演示/可视化采用"本地生成→上传覆盖"，电子表格/多维表格采用 API 精细编辑。
   智能画布支持元素级 CRUD + Markdown 增量追加。块级编辑实现段落级在线编辑替代整文件替换。
-  v4.0 生态互通：wps-office-suite 双向桥接（本地文件↔云端文档）、zwjh 记忆库打通（文档关键事件写入长期记忆）、表单答卷收集统计。
-  本地生成、OCR、硬件画像、WPS AI、全文搜索、块级编辑、配额管理、桥接等能力零密钥可用。
+  v4.1 多维表格深化与在线自动化：AirScript 脚本引擎（自然语言→脚本生成→预检→确认→在线执行）、
+  多维表格字段自动化（公式/关联/汇总字段）、视图渲染（matplotlib 看板柱图 + mermaid 甘特时间线）、
+  CRDT 表格扩展（单元格级操作日志 + 向量时钟冲突标记）、Excel/CSV 双向 I/O（date/link/select/person 四类字段序列化）、
+  Webhook 通知中心（新增/修改/删除事件订阅 + 金山协作/企微/钉钉三通道）。
+  本地生成、OCR、硬件画像、WPS AI、全文搜索、块级编辑、配额管理、桥接、AirScript、视图渲染、CRDT、数据 I/O、Webhook 等能力零密钥可用。
 description_zh: "金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理（深度直连 WPS 开放平台 + 智能画布元素级编辑 + 全文搜索超越腾讯 + 块级编辑段落级 + 18 项增强）"
 platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
 tags: [文档处理, 表格处理, PPT生成, 多维表格, 表单收集, 思维导图, 流程图, OCR, 政企合规]
@@ -960,6 +965,7 @@ python -m engine.update_check --version 3.0.0 --reminder
 
 ## 更新日志
 
+| v4.1.0 | 2026-09-08 | 增加：AirScript 在线自动化引擎 `engine/airscript.py`（自然语言→脚本生成→预检（危险操作拦截）→用户确认→在线执行；能力域：定时通知/数据汇总/表格批量操作/字段计算；SQLite 执行历史+待确认队列）；增加：多维表格字段自动化引擎 `engine/dbf_auto.py`（公式字段/关联字段/汇总字段创建与批量填充，16 种字段类型，硬件自适应削峰）；增加：视图渲染引擎 `engine/view_render.py`（看板 matplotlib 柱图 + 甘特 mermaid 时间线，硬件自适应渲染并发）；增加：CRDT 表格扩展引擎 `engine/crdt_table.py`（单元格级操作日志 + 向量时钟，冲突时保留双方并标记，支持电子表格/多维表格/智能文档）；增加：Excel/CSV 双向导入导出引擎 `engine/bidata_io.py`（openpyxl 读写，date/link/select/person 四类字段序列化规则文档化，配额削峰）；增加：Webhook 与通知中心引擎 `engine/webhook_center.py`（新增/修改/删除事件订阅，HMAC 签名校验 + SQLite 去重队列，金山协作/企微/钉钉三通道分发，zwjh 记忆桥接）；增加：MCP 工具 24 个（kdoc.airscript.* 7 个、kdoc.dbf.* 5 个、kdoc.view.* 3 个、kdoc.crdt_table.* 6 个、kdoc.bidata.* 5 个、kdoc.webhook.* 8 个）；增加：AirScript/多维表格/视图渲染/CRDT/Webhook 场景案例；优化：SKILL.md 版本号 4.0.0→4.1.0；优化：description 增强到 24 项增强 |
 | v4.0.0 | 2026-08-31 | 增加：本地桥接引擎 `engine/local_bridge.py`（wps-office-suite 双向互通：白名单探测 + SQLite 映射表 + 下行拉取/处理/覆盖 + 上行 mtime 监听同步 + JSON 契约 + 子进程超时自动关闭）；增加：记忆桥接引擎 `engine/memory_bridge.py`（zwjh 记忆库打通：白名单探测 + stdio JSON-RPC 调用 deposit + 关键事件写入长期记忆 + 未安装→本地待迁移日志 + 一次性导入）；增加：表单答卷收集统计 `engine/form_analytics.py`（答卷列表/内容接口 + 按题统计 + 交叉分析 + 未填名单 + 图表生成 + 导出 CSV/Excel + 写回智能文档）；增加：MCP 工具 12 个（kdoc.bridge.* 5 个、kdoc.memory.* 3 个、kdoc.form.* 4 个）；增加：桥接/记忆/表单场景案例；优化：SKILL.md 版本号 3.9.0→4.0.0；优化：description 增强到 21 项增强 |
 | v3.9.0 | 2026-08-24 | 增加：块级编辑引擎 `engine/blocks.py`（段落级在线编辑，block_id CRUD，块类型映射表，未知块类型跳过不中断）；增加：演示页替换引擎 `engine/page_swap.py`（双路径自动选择：页级更新/整文件替换 + 页数校验 diff）；增加：配额管理器 `engine/quota_manager.py`（SQLite 按天计数 500 次/天 + 令牌桶限速 5 req/s + 429 指数退避 + 批量任务硬件自适应削峰）；增加：格式转换引擎 `engine/format_converter.py`（补齐 jpg/png/txt 三类目标格式，全格式覆盖 pdf/jpg/png/txt/docx/xlsx/pptx/html/md，云端优先→本地兜底失败降级链）；增加：MCP 工具 9 个（kdoc.block.* 5 个、kdoc.page_swap 1 个、kdoc.quota.* 3 个、kdoc.office.convert.enhanced 1 个）；增加：块级编辑/页替换/配额管理/格式转换场景案例；优化：SKILL.md 版本号 3.8.0→3.9.0 |
 | v3.8.0 | 2026-08-22 | 增加：智能画布元素级编辑引擎 `engine/element_engine/`（元素CRUD + Markdown追加 + 增量同步，对标腾讯文档·智能画布）；增加：空间节点管理引擎 `engine/space_tree/`（目录树查询 + 链接节点创建 + 递归删除 + 目录可视化）；增加：全文搜索引擎 `engine/content_search/`（文档内容搜索 + 结果定位高亮，超越腾讯）；增加：统一删除入口 `kdoc.file_delete_unified`（合并软删除/彻底删除/直接删除）；增加：MCP 工具 10 个（kdoc.element.* 5 个、kdoc.space.* 4 个、kdoc.content_search.* 2 个、kdoc.file_delete_unified 1 个）；增加：智能画布/空间管理/全文搜索/统一删除场景案例；优化：品类路由表从 8→9（新增 smart_canvas + content_search）；优化：history 模块新增 delete() 统一方法 |
@@ -1317,4 +1323,155 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 ---
 
-*最后更新：2026-08-31 | v4.0.0*
+## 33. AirScript 在线自动化（v4.1.0 新增，自然语言→脚本→确认→执行）
+
+> 封装金山开放平台 AirScript 脚本创建/执行接口，是在线侧的自动化补全。
+> 自然语言意图 → 脚本生成（本地规则引擎模板，无需外部 LLM）→ 预检（危险操作拦截）→ 用户确认 → 在线执行。
+
+### 33.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.airscript.list_capabilities` | 列出能力域 | 定时通知/数据汇总/表格批量操作/字段计算 |
+| `kdoc.airscript.generate` | 生成脚本 | 根据能力域和参数生成 AirScript |
+| `kdoc.airscript.precheck` | 脚本预检 | 扫描 DELETE/OVERWRITE/DROP 等危险操作 |
+| `kdoc.airscript.submit` | 提交确认 | 提交脚本等待用户确认 |
+| `kdoc.airscript.execute` | 执行脚本 | 用户确认后在线执行 |
+| `kdoc.airscript.history` | 执行历史 | 查看已执行脚本记录 |
+| `kdoc.airscript.pending` | 待确认列表 | 查看待确认脚本 |
+
+### 33.2 安全阀机制
+
+```
+自然语言意图 → 脚本生成 → 预检扫描
+                              ├── 安全 → 用户确认 → 执行
+                              └── 危险 → 拦截 + 二次确认
+                                           ├── 用户同意 → 执行
+                                           └── 用户取消 → 终止
+```
+
+### 33.3 危险操作关键词
+
+DELETE / DROP / TRUNCATE / OVERWRITE / REPLACE / REMOVE / CLEAR / UPDATE_ALL / BATCH_DELETE
+
+---
+
+## 34. 多维表格字段自动化（v4.1.0 新增，公式/关联/汇总字段）
+
+> 字段层支持公式字段/关联字段/汇总字段的创建与批量填充，走 et/dbt/form API 记录级接口。
+
+### 34.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.dbf.list_field_types` | 列出字段类型 | 16 种类型 |
+| `kdoc.dbf.list_formula_templates` | 公式模板 | SUM/AVG/COUNT/IF/CONCAT 等 |
+| `kdoc.dbf.create_field` | 创建字段 | 公式/关联/汇总/基础字段 |
+| `kdoc.dbf.batch_fill` | 批量填充 | 硬件自适应削峰 |
+| `kdoc.dbf.history` | 操作历史 | 查看操作记录 |
+
+### 34.2 字段类型
+
+text / number / select / multi_select / date / person / link / formula / relation / rollup / checkbox / url / email / phone / currency / percent
+
+---
+
+## 35. 视图渲染引擎（v4.1.0 新增，看板/甘特图）
+
+> 视图层本地渲染看板（matplotlib 柱图）与甘特（mermaid 时间线）两种视图导出图片。
+
+### 35.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.view.render_kanban` | 渲染看板 | matplotlib 柱图 |
+| `kdoc.view.render_gantt` | 渲染甘特图 | mermaid 时间线 |
+| `kdoc.view.render_advanced` | 高级渲染 | 直接传入数据渲染 |
+
+### 35.2 硬件自适应
+
+- 渲染并发不超过 hardware.py 的 workers
+- 大数据集自动分页
+
+---
+
+## 36. CRDT 表格扩展（v4.1.0 新增，单元格级无冲突协作）
+
+> 把序列 CRDT 协同从智能文档扩展到电子表格与多维表格。
+> 单元格级操作日志 + 向量时钟，冲突时保留双方并标记。
+
+### 36.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.crdt_table.create` | 创建会话 | 指定品类和客户端 |
+| `kdoc.crdt_table.set_cell` | 设置单元格 | 单元格级操作日志 |
+| `kdoc.crdt_table.get_cell` | 获取单元格 | 含冲突信息 |
+| `kdoc.crdt_table.resolve` | 解决冲突 | 选择保留的值 |
+| `kdoc.crdt_table.get_conflicts` | 获取冲突 | 所有冲突单元格 |
+| `kdoc.crdt_table.state` | 表格状态 | 完整状态 |
+
+### 36.2 冲突解决策略
+
+- 并发操作 → 保留双方修改 → 标记冲突单元格
+- 用户选择保留值 → 解决冲突
+
+---
+
+## 37. Excel/CSV 双向导入导出（v4.1.0 新增，四类字段序列化）
+
+> openpyxl 读写与字段类型映射约定，导入走批量记录创建（复用配额管理器削峰），导出支持视图级筛选快照。
+
+### 37.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.bidata.get_field_rules` | 字段规则 | date/link/select/person 序列化规则 |
+| `kdoc.bidata.import_csv` | 导入 CSV | 硬件自适应削峰 |
+| `kdoc.bidata.import_excel` | 导入 Excel | openpyxl 读写 |
+| `kdoc.bidata.export_csv` | 导出 CSV | 视图级筛选快照 |
+| `kdoc.bidata.export_excel` | 导出 Excel | 视图级筛选快照 |
+
+### 37.2 四类字段序列化规则
+
+| 类型 | 序列化方式 |
+|------|-----------|
+| date | ISO 8601 字符串 (YYYY-MM-DD) |
+| link | JSON {url, title} |
+| select | 逗号分隔字符串 |
+| person | JSON {name, email} |
+
+---
+
+## 38. Webhook 与通知中心（v4.1.0 新增，三通道分发）
+
+> 订阅记录新增/修改/删除三类事件，签名校验 + SQLite 去重队列，通知通道整合金山协作消息/企微/钉钉三路。
+
+### 38.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.webhook.list_events` | 事件类型 | 5 种事件 |
+| `kdoc.webhook.list_channels` | 通知通道 | 3 种通道 |
+| `kdoc.webhook.subscribe` | 订阅事件 | 签名校验 |
+| `kdoc.webhook.unsubscribe` | 取消订阅 | — |
+| `kdoc.webhook.list_subscriptions` | 列出订阅 | — |
+| `kdoc.webhook.process_event` | 处理事件 | 签名校验+去重+分发 |
+| `kdoc.webhook.history` | 事件历史 | — |
+| `kdoc.webhook.statistics` | 统计信息 | — |
+
+### 38.2 通知通道
+
+- 金山协作消息（kdocs）
+- 企业微信（wecom）
+- 钉钉（dingtalk）
+
+### 38.3 安全机制
+
+- HMAC 签名校验
+- SQLite 去重队列（事件哈希去重）
+- 事件可触发写入 zwjh 记忆（桥接存在时）
+
+---
+
+*最后更新：2026-09-08 | v4.1.0*
