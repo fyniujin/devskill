@@ -3,7 +3,7 @@ name: receipt-compliance
 slug: receipt-compliance
 displayName: 会计助手
 description: 会计助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。
-version: 4.3.0
+version: 4.4.0
 category: 财税管理
 appName: 财税合规
 platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
@@ -33,6 +33,11 @@ platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
 | 12. 安全配置 | 环境变量读取密钥，消除明文泄露 | ✅ 直接可用 | 环境变量 | 安全配置 |
 | 13. 并行批量 | 硬件自适应并行处理，速度提升 3-5 倍 | ✅ 直接可用 | 发票文件夹 | 批量结果 |
 | 14. 混拍切分 | 混拍图（一拍多票）自动检测切分，保持原图索引 | ✅ 直接可用 | 混拍图片 | 单票子图 |
+| 15. 进销项台账 | SQLite 台账 + 月度统计，税负率趋势/供应商集中度/异常波动 | ✅ 直接可用 | 票据解析结果 | Excel 月度附件 |
+| 16. 认证期日历 | 认证期限取数 + 30/7 天两档提醒 + CSV 导出 | ✅ 直接可用 | 台账 | 到期清单 |
+| 17. 异常检测 | 轻量 Isolation Forest，金额/间隔/供应商三维打分 | ✅ 直接可用 | 票据列表 | 二级预警+触发维度 |
+| 18. 合规管理出口 | 规则预警 + 归档四性检测合并为一次执行 | ✅ 直接可用 | 票据 + 文件 | 统一合规报告 |
+| 19. 审批连接器 | 钉钉/企微/飞书统一接口（发送/查状态/回调验签） | ⚠️ 需配置密钥 | 报销单+配置 | 审批结果 |
 
 > ✅ = 装即用 ｜ ⚠️ = 需在 config.yaml 中配置对应API密钥
 >
@@ -1055,9 +1060,151 @@ python scripts/invoice_detector.py path/to/any_invoice
 
 > ⚠️ **注意**：税务数字账户对接以企业自主配置为原则，本 Skill 提供标准接口框架，企业需根据实际税局接口规范自行实现具体调用逻辑。
 
+## 台账与合规管理（v4.4.0）
+
+### 15. 进销项台账与月度统计
+
+把散落的票据识别结果沉淀成可分析的资产。数据库默认落在 `~/.workbuddy/output/receipt_ledger.db`，不写入 Skill 仓库。
+
+```bash
+# 导入票据解析结果（进项）
+python scripts/ledger_db.py --import-json result.json --direction input
+
+# 导入销项（用于税负率与进销项匹配）
+python scripts/ledger_db.py --import-json output.json --direction output
+
+# 输出四类报表视图
+python scripts/ledger_db.py --report
+
+# 导出 Excel 月度附件（未装 openpyxl 时自动降级 CSV）
+python scripts/ledger_db.py --export-excel
+```
+
+四类报表视图：
+
+| 视图 | 说明 | 用途 |
+|------|------|------|
+| 月度汇总 | 按月份 × 进销项汇总张数/金额/税额 | 月度结账底稿 |
+| 税负率趋势 | 税负率 = (销项税额 − 进项税额) ÷ 不含税销售额 | 异常波动自查 |
+| 供应商集中度 | Top N 供应商金额占比 + Top1 占比环比变化 | 依赖度风险 |
+| 异常波动 | 月度金额 z-score，默认 ±2.5 标注 | 收入异常自查 |
+
+### 16. 到期与认证期日历
+
+```bash
+# 全电发票自动推算认证期限（开票日期 + 窗口，默认 360 天）
+python scripts/cert_calendar.py --ensure-deadlines
+
+# 纸票手工补录
+python scripts/cert_calendar.py --set-deadline 12345678 2027-03-31
+
+# 扫描到期（30 天 / 7 天两档 + 已过期）
+python scripts/cert_calendar.py --scan
+
+# 导出 CSV 供日历软件二次提醒
+python scripts/cert_calendar.py --scan --export-csv
+
+# 注册每日 09:00 自动扫描（Windows schtasks，不生成任何 .bat/.ps1）
+python scripts/cert_calendar.py --register
+python scripts/cert_calendar.py --status
+python scripts/cert_calendar.py --unregister
+```
+
+> 说明：自 2020-03-01 起增值税专用发票已取消 360 天认证确认期限，此处窗口仅作企业内部「勾选所属期」管理提醒，可在 `references/risk_rules_config.yaml` 的 `certification.window_days` 调整。
+
+### 17. 异常检测（轻量 Isolation Forest）
+
+在 5 类规则预警之上叠加一层无监督检测，纯 numpy 实现，无需 sklearn；numpy 缺失时自动降级纯 Python。
+
+```bash
+# 从台账直接读
+python scripts/anomaly_detector.py ~/.workbuddy/output/receipt_ledger.db --db --top 20
+
+# 或从票据 JSON
+python scripts/anomaly_detector.py invoices.json --trees 100 --warn 0.65
+```
+
+输出示例：
+
+```json
+{
+  "level": "严重",
+  "invoice_number": "24312000000012345678",
+  "score": 0.71,
+  "dimension_scores": {"amount": 0.72, "interval": 0.41, "supplier": 0.68},
+  "triggered_dimensions": ["amount", "supplier"],
+  "explanation": "金额分布异常（999999.00 元偏离常规区间，得分 0.72）；供应商组合异常（该供应商出现 5 次、占比 97.9%，得分 0.68）"
+}
+```
+
+性能约束：样本超过 5000 自动采样，树数量默认 100 棵，单核千张票据秒级完成，不影响日常办公。
+
+### 18. 合规管理统一出口
+
+一次执行同时产出风险报告与归档四性检测结果，不再分两次跑。
+
+```bash
+# 从台账读取 + 指定票据目录做四性检测
+python scripts/compliance_suite.py --db ~/.workbuddy/output/receipt_ledger.db \
+    --files-dir ./invoices --output report.json
+
+# 关闭异常检测
+python scripts/compliance_suite.py --invoices invoices.json --no-anomaly
+```
+
+输出整体状态：`合规` / `需关注` / `需立即处理`。
+
+### 19. 审批连接器（统一接口）
+
+钉钉 / 企业微信 / 飞书统一为 `ApprovalConnector` 接口，新增平台只需实现三个方法：
+
+```python
+from approval_connector import ApprovalConnector
+
+class MyPlatform(ApprovalConnector):
+    platform = "myplatform"
+    display_name = "我的审批平台"
+
+    def send(self, expense_file, applicant_user_id=None, **kwargs):
+        """发起审批"""
+
+    def query_status(self, approval_id):
+        """查询审批状态"""
+
+    def verify_callback(self, payload, **kwargs):
+        """回调验签"""
+```
+
+原 `DingTalkApproval` / `WeComApproval` / `FeishuApproval` / `ApprovalManager` 全部保留为兼容外壳，老代码不用改。新增能力：
+
+```python
+manager.query_status("审批实例ID")        # 查状态
+manager.verify_callback(payload)          # 回调验签
+```
+
+### 规则 YAML 化与白名单
+
+规则全部集中在 `references/risk_rules_config.yaml`，改完自动热加载，无需重启：
+
+```yaml
+round_amount_check:
+  enabled: true
+  threshold: 10000
+
+whitelist:
+  sellers: []                        # 销售方含关键词 → 全规则豁免
+  categories: [房租, 物业费]          # 费用类型命中 → 全规则豁免
+  rules:
+    round_amount: [房租, 物业]        # 仅豁免整数金额规则
+```
+
+> YAML 解析优先使用 PyYAML，未安装时自动降级到内置解析器，功能不受影响。
+
 ## 更新日志
 
+| v4.4.0 | 2026-09-08 | 新增：进销项台账引擎 ledger_db.py，SQLite 持久化台账含认证期限字段，提供月度汇总、税负率趋势、供应商集中度（Top N 占比与环比变化）、异常波动 z-score 四类报表视图，支持 openpyxl 导出 Excel 月度附件（缺失时降级 CSV）；新增：认证期日历 cert_calendar.py，全电发票自动取数认证期限、纸票手工补录，30/7 天两档到期提醒，支持 schtasks 注册每日扫描与 CSV 导出供日历软件二次提醒；新增：轻量异常检测引擎 anomaly_detector.py，纯 numpy 随机切割树实现 Isolation Forest 思路，金额分布/开票时间间隔/供应商组合三维打分，异常分超阈值进二级预警并给出触发维度解释；新增：合规管理统一出口 compliance_suite.py，风险预警与归档四性检测合并为一次执行，输出统一合规报告；新增：统一审批连接器 approval_connector.py，抽象发送/查状态/回调验签三方法，钉钉/企微/飞书为实现类；优化：风险预警规则 YAML 化，支持热加载、规则开关与白名单（房租等天然整数金额不再误报）；优化：approval_engine.py 改造为兼容层，原有调用方式不受影响 |
 | v4.3.0 | 2026-08-24 | 新增：PaddleOCR 双引擎降级层（ocr_engine.py 重写），PaddleOCR 优先 + Tesseract 兜底，自动探测可用引擎；新增：定额票版式先验定位表（fixed_layout_prior），固定字段位置驱动 ROI 局部 OCR；新增：手写数字后处理约束（_cross_check 勾稽校验引擎），金额+税额=价税合计不通过则标记人工复核不入库；新增：混拍图检测与子图切分引擎 batch_splitter.py，行距聚类切分 + 边界接触边框特征二次切分，保持原图-子图索引；升级：invoice_detector.py 集成 PaddleOCR 双引擎 |
+| v4.2.2 | 2026-08-16 | 修复：移除 secure_config.py CLI 中 --show-keys 参数（仍有凭据外泄特征）；改为 validate_before_call() 仅返回字段名列表和布尔状态，绝不输出任何形态的密钥值到 stdout，彻底消除凭据泄露风险 |
 | v4.2.1 | 2026-08-16 | 修复：将 SKILL.md、check_env.py、install_tesseract.ps1 中 poppler-windows 下载源从个人 fork（oschwartz10612/blog.alivate.com.au）替换为系统包管理器（winget/scoop/apt/brew），消除非官方来源供应链风险；修复：secure_config.py 默认脱敏输出，validate_before_call() 返回值统一脱敏，消除密钥泄露到 stdout 的风险 |
 | v4.2.0 | 2026-08-16 | 新增：银行流水对账引擎 bank_reconciler.py，支持主流银行 CSV 流水解析，金额模糊匹配（±0.01 元容差）+ 日期模糊匹配（±3 天容差）+ 综合评分机制；新增：安全密钥配置模块 secure_config.py，统一从环境变量读取 API 密钥（INVOICE_ 前缀），消除明文泄露风险，含脱敏显示和缺失校验；新增：并行批量处理引擎 parallel_batch.py，硬件自适应 worker 分配（CPU × 0.5/× 0.75），含内存检测自动降级、分块处理、失败重试机制 |
 | v4.0.0 | 2026-08-01 | 新增：全电发票XML解析器 xml_parser.py；新增：OFD版式文件解析器 ofd_parser.py；新增：火车票解析器 train_parser.py；新增：飞机行程单解析器 flight_parser.py；新增：出租车票解析器 taxi_parser.py；新增：定额发票解析器 fixed_parser.py；新增：通行费票据解析器 toll_parser.py；新增：财政票据解析器 fiscal_parser.py；新增：智能分类器 smart_classifier.py，支持费用类型自动匹配、进项税额自动计算、会计科目自动映射；新增：记账凭证生成器 voucher_generator.py，支持用友/金蝶/QuickBooks导入格式；新增：统一发票数据结构 unified_invoice.py，兼容新旧发票和多种票据类型；新增：票种自动识别模块 invoice_detector.py，自动路由传统OCR或专用解析器；新增：会计科目对照表 account_mapping.md；新增：费用分类规则 expense_rules.md |
