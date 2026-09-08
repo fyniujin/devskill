@@ -36,6 +36,10 @@ from core.timestamped_summary import TimestampedSummary
 from core.update_notifier import UpdateNotifier
 from core.platform_adapters import PlatformRouter
 from core.editing import HighlightDetector, RedundancyDetector, TimelineGenerator, EDLExporter, SubtitleStylist, JianyingExporter
+from core.editing.auto_editor import AutoEditor
+from core.editing.cover_selector import CoverSelector
+from core.editing.subtitle_translator import SubtitleTranslator
+from core.editing.bgm_recognizer import BGMRecognizer
 from core.speaker_diarization.quality_scorer import QualityScorer
 from core.scene_manager import SceneManager
 from core.viral_predictor import ViralPredictor
@@ -140,6 +144,27 @@ def parse_args():
     parser.add_argument("--download-ct2-model", default=None,
                         choices=["tiny", "small", "medium"],
                         help="下载 Whisper CT2 量化模型")
+    parser.add_argument("--auto-edit", action="store_true",
+                        help="启用一键成片（ffmpeg filter_complex 自动剪辑）")
+    parser.add_argument("--edit-style", default="口播精简",
+                        choices=["口播精简", "高光集锦", "预告片"],
+                        help="一键成片风格 (默认: 口播精简)")
+    parser.add_argument("--edit-platform", default="douyin",
+                        choices=["douyin", "bilibili", "kuaishou", "wechat_video"],
+                        help="一键成片目标平台 (默认: douyin)")
+    parser.add_argument("--bgm-path", default=None,
+                        help="BGM 音频文件路径（用于一键成片）")
+    parser.add_argument("--cover-select", action="store_true",
+                        help="启用封面帧智能选取")
+    parser.add_argument("--translate-subs", default=None,
+                        help="翻译字幕到指定语言 (en/ja/ko/fr/de/es/ru)")
+    parser.add_argument("--translate-format", default="srt",
+                        choices=["srt", "ass", "vtt"],
+                        help="翻译字幕输出格式 (默认: srt)")
+    parser.add_argument("--bgm-detect", action="store_true",
+                        help="启用 BGM 识别（需 chromaprint/fpcalc）")
+    parser.add_argument("--jianying-v6", action="store_true",
+                        help="导出剪映 6.0 draft.json + EDL 导入指南")
     
     return parser.parse_args()
 
@@ -148,7 +173,7 @@ def print_banner():
     """打印启动横幅"""
     banner = """
 ╔══════════════════════════════════════════════════╗
-║          🎬 video-analyzer v4.2.0               ║
+║          🎬 video-analyzer v4.4.0               ║
 ║        视频分析处理 — 本地视频反编译工具         ║
 ╚══════════════════════════════════════════════════╝
     """
@@ -274,7 +299,7 @@ def main():
         # ========== 版本更新检查（非阻塞） ==========
         if not args.no_update_check:
             try:
-                notifier = UpdateNotifier(config, current_version="4.2.0")
+                notifier = UpdateNotifier(config, current_version="4.4.0")
                 update_result = notifier.check_for_updates()
                 update_msg = notifier.format_update_message(update_result)
                 if update_msg:
@@ -481,6 +506,10 @@ def main():
             editing_result=editing_result,
             viral_result=viral_result,
             live_stats=live_stats,
+            auto_edit_result=auto_edit_result,
+            cover_result=cover_result,
+            translate_result=translate_result,
+            bgm_result=bgm_result,
         )
         
         # ========== 章节切片（可选） ==========
@@ -595,7 +624,162 @@ def main():
             output_paths["subtitle"] = subtitle_path
             logger.info(f"   字幕已生成: {subtitle_path}")
         
-        # ========== 场景管理（可选，v4.2 新增） ==========
+        # ========== 一键成片（可选，v4.4 新增） ==========
+        auto_edit_result = None
+        if args.auto_edit:
+            logger.info("🎬 [一键成片] 开始自动剪辑...")
+            
+            # 获取高光和场景数据
+            if highlights_list is None:
+                logger.info("   执行高光检测...")
+                highlight_detector = HighlightDetector(config)
+                highlights_list = highlight_detector.detect(video_path, transcript, scenes)
+                logger.info(f"   发现 {len(highlights_list)} 个高光片段")
+            
+            if scenes is None:
+                scenes = {"scenes": [], "total_scenes": 0}
+            
+            # 获取字幕路径
+            subtitle_path = output_paths.get("subtitle")
+            
+            # 创建编辑器
+            editor = AutoEditor(config)
+            
+            # 生成成片
+            auto_edit_result = editor.edit(
+                video_path=video_path,
+                highlights=highlights_list,
+                scenes=scenes.get("scenes", []),
+                subtitles_path=subtitle_path,
+                style=args.edit_style,
+                platform=args.edit_platform,
+                bgm_path=args.bgm_path,
+                title=platform_meta.title if platform_meta else "",
+            )
+            
+            if auto_edit_result.get("output_path"):
+                logger.info(f"   ✅ 成片完成: {auto_edit_result['output_path']}")
+                logger.info(f"   时长: {auto_edit_result['duration']:.1f}s")
+                logger.info(f"   使用片段: {auto_edit_result['clips_used']}")
+                output_paths["auto_edit"] = auto_edit_result["output_path"]
+                output_paths["edl_map"] = auto_edit_result["edl_map"]
+                output_paths["platform_package"] = auto_edit_result["platform_package"]
+            
+            if auto_edit_result.get("bgm_suggestion"):
+                logger.info(f"   BGM 建议: {auto_edit_result['bgm_suggestion']['mood']}")
+            
+            if auto_edit_result.get("warnings"):
+                for w in auto_edit_result["warnings"]:
+                    logger.warning(f"   ⚠️  {w}")
+        
+        # ========== 封面帧智能选取（可选，v4.4 新增） ==========
+        cover_result = None
+        if args.cover_select:
+            logger.info("🖼️  [封面帧选取] 开始评分...")
+            
+            selector = CoverSelector(config)
+            cover_result = selector.select(
+                video_path=video_path,
+                scenes=scenes.get("scenes", []) if scenes else None,
+                top_n=3,
+            )
+            
+            if cover_result["candidates"]:
+                logger.info(f"   从 {cover_result['total_candidates']} 个候选帧中选出 Top3:")
+                for i, c in enumerate(cover_result["candidates"]):
+                    logger.info(f"   Top{i+1}: {c['path']} (得分: {c['score']})")
+                    logger.info(f"    理由: {', '.join(c['reasons'])}")
+                
+                output_paths["cover_frames"] = [c["path"] for c in cover_result["candidates"]]
+        
+        # ========== 字幕翻译（可选，v4.4 新增） ==========
+        translate_result = None
+        if args.translate_subs:
+            logger.info(f"🌐 [字幕翻译] 翻译为 {args.translate_subs}...")
+            
+            subtitle_path = output_paths.get("subtitle")
+            if not subtitle_path:
+                # 先生成中文字幕
+                subtitle_stylist = SubtitleStylist(config)
+                subtitle_dir = os.path.join(args.output, "subtitles")
+                os.makedirs(subtitle_dir, exist_ok=True)
+                subtitle_path = os.path.join(subtitle_dir, "subtitle.ass")
+                subtitle_stylist.generate(transcript, subtitle_path, format="ass")
+                output_paths["subtitle"] = subtitle_path
+            
+            translator = SubtitleTranslator(config)
+            translate_result = translator.translate_subtitles(
+                subtitles_path=subtitle_path,
+                target_lang=args.translate_subs,
+                output_format=args.translate_format,
+            )
+            
+            if translate_result.get("output_path"):
+                logger.info(f"   ✅ 翻译完成: {translate_result['output_path']}")
+                logger.info(f"   翻译 {translate_result['translated_count']} 条")
+                output_paths[f"subtitle_{args.translate_subs}"] = translate_result["output_path"]
+            
+            if translate_result.get("warnings"):
+                for w in translate_result["warnings"]:
+                    logger.warning(f"   ⚠️  {w}")
+        
+        # ========== BGM 识别（可选，v4.4 新增） ==========
+        bgm_result = None
+        if args.bgm_detect:
+            logger.info("🎵 [BGM 识别] 识别背景音乐...")
+            
+            recognizer = BGMRecognizer(config)
+            bgm_result = recognizer.recognize(video_path)
+            
+            if bgm_result.get("identified"):
+                logger.info(f"   ✅ 识别到 BGM: {bgm_result['bgm_name']}")
+                logger.info(f"   置信度: {bgm_result['confidence']}")
+                logger.info(f"   版权风险: {bgm_result['copyright_risk']}")
+                output_paths["bgm_result"] = bgm_result
+            else:
+                logger.info("   ❌ 未识别到已知 BGM")
+                if bgm_result.get("copyright_risk") == "high":
+                    logger.warning("   ⚠️  未知 BGM，商业使用存在版权风险")
+            
+            if bgm_result.get("warnings"):
+                for w in bgm_result["warnings"]:
+                    logger.warning(f"   ⚠️  {w}")
+        
+        # ========== 剪映 6.0 + EDL 指南（可选，v4.4 新增） ==========
+        if args.jianying_v6:
+            logger.info("🎬 [剪映 6.0] 导出 draft.json + EDL 指南...")
+            
+            # 确保有 timeline
+            if timeline is None and highlights_list:
+                logger.info("   生成剪辑时间线...")
+                redundancy_detector = RedundancyDetector(config)
+                redundancies = redundancy_detector.detect(video_path, transcript, scenes)
+                timeline_gen = TimelineGenerator(config)
+                original_duration = media_info.get("duration", 0)
+                timeline = timeline_gen.generate(highlights_list, redundancies, original_duration)
+            
+            jianying_exporter = JianyingExporter(config)
+            jy_output_dir = os.path.join(args.output, "jianying_v6")
+            jy_result = jianying_exporter.export_with_guide(
+                timeline=timeline or {},
+                transcript=transcript,
+                video_path=video_path,
+                output_dir=jy_output_dir,
+            )
+            
+            if jy_result.get("draft_path"):
+                logger.info(f"   ✅ 剪映 draft.json: {jy_result['draft_path']}")
+                output_paths["jianying_v6_draft"] = jy_result["draft_path"]
+            
+            if jy_result.get("guide_path"):
+                logger.info(f"   ✅ EDL 导入指南: {jy_result['guide_path']}")
+                output_paths["edl_guide"] = jy_result["guide_path"]
+            
+            if jy_result.get("edl_path"):
+                output_paths["jianying_edl"] = jy_result["edl_path"]
+            
+            if jy_result.get("srt_path"):
+                output_paths["jianying_srt"] = jy_result["srt_path"]
         if args.scene_management:
             logger.info("🎬 [场景管理] detect→slice 一条链...")
             scene_manager = SceneManager(config)
