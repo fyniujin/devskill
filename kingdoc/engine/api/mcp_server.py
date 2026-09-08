@@ -36,7 +36,7 @@ from engine.hardware import get_recommended_settings
 from engine.update_check import build_reminder, FEEDBACK_EMAIL
 from engine.exceptions import KingDocError
 
-APP_VERSION = "4.0.0"
+APP_VERSION = "4.1.0"
 
 # 配置路径：环境变量优先，其次 skill 根目录 config.json
 CONFIG_PATH = os.environ.get("KINGDOC_CONFIG", str(SKILL_ROOT / "config.json"))
@@ -1632,6 +1632,590 @@ async def kdoc_form_write_to_doc(form_id: str, target_doc_id: str) -> str:
         return _to_text(result)
     except Exception as e:
         return f"[ERR] 写回失败：{e}"
+
+
+# ===========================================================================
+# 三十二、AirScript 在线自动化（v4.1.0 新增，自然语言→脚本→确认→执行）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_airscript_list_capabilities() -> str:
+    """【免密钥】列出所有可用的 AirScript 脚本能力域。
+
+    能力域：定时通知 / 数据汇总 / 表格批量操作 / 字段计算
+    本地模式，零配置可用。"""
+    try:
+        from engine.airscript import list_capabilities
+        result = list_capabilities()
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 列出能力域失败：{e}"
+
+@mcp.tool()
+async def kdoc_airscript_generate(domain: str, params: str = "") -> str:
+    """【免密钥】生成 AirScript 脚本（本地规则引擎模板，无需外部 LLM）。
+
+    domain: scheduled_notify / data_summary / batch_operation / field_calc
+    params: JSON 字符串，如 '{"channel":"wecom","webhook_key":"xxx","content":"通知内容"}'
+
+    危险操作（DELETE/OVERWRITE/DROP 等）在预检阶段拦截，需二次确认。
+    本地模式，零配置可用。"""
+    try:
+        import json
+        from engine.airscript import generate_script
+        params_obj = json.loads(params) if params else {}
+        result = generate_script(domain, params_obj)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 生成脚本失败：{e}"
+
+@mcp.tool()
+async def kdoc_airscript_precheck(script_content: str) -> str:
+    """【免密钥】脚本预检：扫描危险操作（DELETE/OVERWRITE/DROP 等）。
+
+    script_content: 脚本内容
+    返回危险操作列表与风险等级。
+    本地模式，零配置可用。"""
+    try:
+        from engine.airscript import precheck_script
+        result = precheck_script(script_content)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 预检失败：{e}"
+
+@mcp.tool()
+async def kdoc_airscript_submit(script_id: str, script_content: str,
+                                domain: str, safety_result: str = "") -> str:
+    """【免密钥】提交脚本等待用户确认。
+
+    script_id: 脚本 ID
+    script_content: 脚本内容
+    domain: 能力域
+    safety_result: JSON 字符串（预检结果）
+    本地模式，零配置可用。"""
+    try:
+        import json
+        from engine.airscript import submit_for_confirmation
+        safety_obj = json.loads(safety_result) if safety_result else {"safe": True, "findings": []}
+        result = submit_for_confirmation(script_id, script_content, domain, safety_obj)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 提交失败：{e}"
+
+@mcp.tool()
+async def kdoc_airscript_execute(script_id: str, confirmed: bool = False) -> str:
+    """【免密钥】用户确认后执行脚本。
+
+    script_id: 脚本 ID
+    confirmed: 用户确认（True 执行，False 取消）
+    本地模式，零配置可用。"""
+    try:
+        from engine.airscript import confirm_and_execute
+        result = confirm_and_execute(script_id, confirmed)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 执行失败：{e}"
+
+@mcp.tool()
+async def kdoc_airscript_history(limit: int = 20) -> str:
+    """【免密钥】获取 AirScript 执行历史。
+
+    limit: 数量限制
+    本地模式，零配置可用。"""
+    try:
+        from engine.airscript import get_execution_history
+        result = get_execution_history(limit)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 获取历史失败：{e}"
+
+@mcp.tool()
+async def kdoc_airscript_pending() -> str:
+    """【免密钥】获取待确认脚本列表。
+
+    本地模式，零配置可用。"""
+    try:
+        from engine.airscript import get_pending_scripts
+        result = get_pending_scripts()
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 获取待确认列表失败：{e}"
+
+
+# ===========================================================================
+# 三十三、多维表格字段自动化（v4.1.0 新增，公式/关联/汇总字段批量填充）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_dbf_list_field_types() -> str:
+    """【免密钥】列出所有支持的字段类型。
+
+    支持 text/number/select/date/person/link/formula/relation/rollup 等。
+    本地模式，零配置可用。"""
+    try:
+        from engine.dbf_auto import list_field_types
+        result = list_field_types()
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 列出字段类型失败：{e}"
+
+@mcp.tool()
+async def kdoc_dbf_list_formula_templates() -> str:
+    """【免密钥】列出公式字段模板。
+
+    包含 SUM/AVG/COUNT/IF/CONCAT/DATEDIF/TODAY/ROUND 等常用公式。
+    本地模式，零配置可用。"""
+    try:
+        from engine.dbf_auto import list_formula_templates
+        result = list_formula_templates()
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 列出公式模板失败：{e}"
+
+@mcp.tool()
+async def kdoc_dbf_create_field(table_id: str, field_name: str, field_type: str,
+                               options: str = "", formula: str = "",
+                               relation_table_id: str = "",
+                               rollup_field: str = "",
+                               rollup_operation: str = "") -> str:
+    """【免密钥】创建字段（公式/关联/汇总/基础字段）。
+
+    table_id: 多维表格 ID
+    field_name: 字段名
+    field_type: text/number/select/date/person/link/formula/relation/rollup
+    options: 选项列表（JSON 数组，仅 select 需要）
+    formula: 公式表达式（仅 formula 需要）
+    relation_table_id: 关联表格 ID（仅 relation 需要）
+    rollup_field: 汇总字段名（仅 rollup 需要）
+    rollup_operation: sum/avg/count/max/min（仅 rollup 需要）
+    本地模式，零配置可用。"""
+    try:
+        import json
+        from engine.dbf_auto import create_field
+        opts = json.loads(options) if options else None
+        result = create_field(table_id, field_name, field_type, opts,
+                              formula, relation_table_id, rollup_field, rollup_operation)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 创建字段失败：{e}"
+
+@mcp.tool()
+async def kdoc_dbf_batch_fill(table_id: str, field_name: str,
+                             records: str, batch_size: int = 100) -> str:
+    """【免密钥】批量填充字段值（硬件自适应削峰）。
+
+    table_id: 多维表格 ID
+    field_name: 字段名
+    records: JSON 字符串（记录列表）
+    batch_size: 批次大小（默认 100）
+    本地模式，零配置可用。"""
+    try:
+        import json
+        from engine.dbf_auto import batch_fill_field
+        records_obj = json.loads(records)
+        result = batch_fill_field(table_id, field_name, records_obj, batch_size)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 批量填充失败：{e}"
+
+@mcp.tool()
+async def kdoc_dbf_history(table_id: str = "", limit: int = 20) -> str:
+    """【免密钥】获取多维表格字段自动化操作历史。
+
+    table_id: 表格 ID（空则返回全部）
+    limit: 数量限制
+    本地模式，零配置可用。"""
+    try:
+        from engine.dbf_auto import get_dbf_history
+        result = get_dbf_history(table_id, limit)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 获取历史失败：{e}"
+
+
+# ===========================================================================
+# 三十四、视图渲染引擎（v4.1.0 新增，看板/甘特图渲染导出）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_view_render_kanban(table_id: str = "", status_field: str = "status",
+                                 title_field: str = "title",
+                                 output_path: str = "") -> str:
+    """【免密钥】渲染看板视图（matplotlib 柱图）。
+
+    table_id: 多维表格 ID（空则从 data 参数获取）
+    status_field: 状态字段名
+    title_field: 标题字段名
+    output_path: 输出图片路径（空则自动生成）
+    本地模式，零配置可用。"""
+    try:
+        from engine.view_render import render_kanban
+        # 如果没有 records，返回示例
+        records = []
+        if table_id:
+            try:
+                backend = _backend()
+                result = backend.kdoc_dbt_record_query(table_id, None, 1000)
+                records = json.loads(result) if isinstance(result, str) else []
+            except Exception:
+                records = []
+        result = render_kanban(records, status_field, title_field, output_path)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 渲染看板失败：{e}"
+
+@mcp.tool()
+async def kdoc_view_render_gantt(table_id: str = "", start_field: str = "start_date",
+                                end_field: str = "end_date",
+                                title_field: str = "title",
+                                output_path: str = "") -> str:
+    """【免密钥】渲染甘特视图（mermaid 时间线）。
+
+    table_id: 多维表格 ID
+    start_field: 开始日期字段名
+    end_field: 结束日期字段名
+    title_field: 标题字段名
+    output_path: 输出图片路径
+    本地模式，零配置可用。"""
+    try:
+        from engine.view_render import render_gantt
+        records = []
+        if table_id:
+            try:
+                backend = _backend()
+                result = backend.kdoc_dbt_record_query(table_id, None, 1000)
+                records = json.loads(result) if isinstance(result, str) else []
+            except Exception:
+                records = []
+        result = render_gantt(records, start_field, end_field, title_field, output_path)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 渲染甘特图失败：{e}"
+
+@mcp.tool()
+async def kdoc_view_render_advanced(view_type: str, data: str,
+                                   config: str = "") -> str:
+    """【免密钥】高级视图渲染（支持直接传入数据）。
+
+    view_type: kanban / gantt
+    data: JSON 字符串，格式 {"records": [...], "fields": [...]}
+    config: JSON 字符串（可选），如 {"status_field": "状态", "output_path": "/tmp/kanban.png"}
+    本地模式，零配置可用。"""
+    try:
+        import json
+        from engine.view_render import render_view
+        data_obj = json.loads(data)
+        config_obj = json.loads(config) if config else None
+        result = render_view(view_type, data_obj, config_obj)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 渲染失败：{e}"
+
+
+# ===========================================================================
+# 三十五、CRDT 表格扩展（v4.1.0 新增，单元格级无冲突协作）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_crdt_table_create(session_id: str, category: str,
+                                client_id: str) -> str:
+    """【免密钥】创建 CRDT 表格协同会话。
+
+    session_id: 会话 ID
+    category: sheet / smartsheet / smart_note
+    client_id: 客户端标识
+    本地模式，零配置可用。"""
+    try:
+        from engine.crdt_table import create_session
+        result = create_session(session_id, category, client_id)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 创建会话失败：{e}"
+
+@mcp.tool()
+async def kdoc_crdt_table_set_cell(session_id: str, cell_id: str, value: str,
+                                  client_id: str, row: int = 0, col: int = 0) -> str:
+    """【免密钥】设置单元格值（单元格级操作日志+向量时钟）。
+
+    session_id: 会话 ID
+    cell_id: 单元格 ID
+    value: 单元格值
+    client_id: 客户端标识
+    row: 行号
+    col: 列号
+    本地模式，零配置可用。"""
+    try:
+        from engine.crdt_table import set_cell
+        result = set_cell(session_id, cell_id, value, client_id, row, col)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 设置单元格失败：{e}"
+
+@mcp.tool()
+async def kdoc_crdt_table_get_cell(session_id: str, cell_id: str) -> str:
+    """【免密钥】获取单元格状态（含冲突信息）。
+
+    session_id: 会话 ID
+    cell_id: 单元格 ID
+    本地模式，零配置可用。"""
+    try:
+        from engine.crdt_table import get_cell
+        result = get_cell(session_id, cell_id)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 获取单元格失败：{e}"
+
+@mcp.tool()
+async def kdoc_crdt_table_resolve(session_id: str, cell_id: str,
+                                 chosen_value: str, chosen_client: str = "") -> str:
+    """【免密钥】解决单元格冲突。
+
+    session_id: 会话 ID
+    cell_id: 单元格 ID
+    chosen_value: 选择的值
+    chosen_client: 选择的客户端标识
+    本地模式，零配置可用。"""
+    try:
+        from engine.crdt_table import resolve_conflict
+        result = resolve_conflict(session_id, cell_id, chosen_value, chosen_client)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 解决冲突失败：{e}"
+
+@mcp.tool()
+async def kdoc_crdt_table_get_conflicts(session_id: str) -> str:
+    """【免密钥】获取所有冲突单元格。
+
+    session_id: 会话 ID
+    本地模式，零配置可用。"""
+    try:
+        from engine.crdt_table import get_conflicts
+        result = get_conflicts(session_id)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 获取冲突失败：{e}"
+
+@mcp.tool()
+async def kdoc_crdt_table_state(session_id: str) -> str:
+    """【免密钥】获取完整表格状态。
+
+    session_id: 会话 ID
+    本地模式，零配置可用。"""
+    try:
+        from engine.crdt_table import get_table_state
+        result = get_table_state(session_id)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 获取表格状态失败：{e}"
+
+
+# ===========================================================================
+# 三十六、Excel/CSV 双向导入导出（v4.1.0 新增，四类字段序列化）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_bidata_get_field_rules() -> str:
+    """【免密钥】获取字段类型序列化规则文档。
+
+    包含 date/link/select/person 四类字段的序列化规则。
+    本地模式，零配置可用。"""
+    try:
+        from engine.bidata_io import get_field_rules
+        result = get_field_rules()
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 获取规则失败：{e}"
+
+@mcp.tool()
+async def kdoc_bidata_import_csv(file_path: str, table_id: str = "",
+                                field_types: str = "", batch_size: int = 100) -> str:
+    """【免密钥】导入 CSV 文件（硬件自适应削峰）。
+
+    file_path: CSV 文件路径
+    table_id: 多维表格 ID（空则仅解析不写入）
+    field_types: JSON 字符串，如 '{"日期": "date", "链接": "link"}'
+    batch_size: 批次大小
+    本地模式，零配置可用。"""
+    try:
+        import json
+        from engine.bidata_io import import_csv
+        ft = json.loads(field_types) if field_types else None
+        result = import_csv(file_path, table_id, ft, batch_size)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 导入 CSV 失败：{e}"
+
+@mcp.tool()
+async def kdoc_bidata_import_excel(file_path: str, table_id: str = "",
+                                  field_types: str = "", sheet_name: str = "",
+                                  batch_size: int = 100) -> str:
+    """【免密钥】导入 Excel 文件（openpyxl 读写）。
+
+    file_path: Excel 文件路径
+    table_id: 多维表格 ID
+    field_types: JSON 字符串
+    sheet_name: 工作表名（空则使用活动表）
+    batch_size: 批次大小
+    本地模式，零配置可用。"""
+    try:
+        import json
+        from engine.bidata_io import import_excel
+        ft = json.loads(field_types) if field_types else None
+        result = import_excel(file_path, table_id, ft, sheet_name, batch_size)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 导入 Excel 失败：{e}"
+
+@mcp.tool()
+async def kdoc_bidata_export_csv(records: str, output_path: str = "",
+                                field_types: str = "") -> str:
+    """【免密钥】导出 CSV（支持视图级筛选快照）。
+
+    records: JSON 字符串（记录列表）
+    output_path: 输出路径（空则自动生成）
+    field_types: JSON 字符串
+    本地模式，零配置可用。"""
+    try:
+        import json
+        from engine.bidata_io import export_csv
+        records_obj = json.loads(records)
+        ft = json.loads(field_types) if field_types else None
+        result = export_csv(records_obj, output_path, ft)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 导出 CSV 失败：{e}"
+
+@mcp.tool()
+async def kdoc_bidata_export_excel(records: str, output_path: str = "",
+                                  field_types: str = "") -> str:
+    """【免密钥】导出 Excel（支持视图级筛选快照）。
+
+    records: JSON 字符串（记录列表）
+    output_path: 输出路径（空则自动生成）
+    field_types: JSON 字符串
+    本地模式，零配置可用。"""
+    try:
+        import json
+        from engine.bidata_io import export_excel
+        records_obj = json.loads(records)
+        ft = json.loads(field_types) if field_types else None
+        result = export_excel(records_obj, output_path, ft)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 导出 Excel 失败：{e}"
+
+
+# ===========================================================================
+# 三十七、Webhook 与通知中心（v4.1.0 新增，三通道分发）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_webhook_list_events() -> str:
+    """【免密钥】列出所有 Webhook 事件类型。
+
+    事件类型：record_created / record_updated / record_deleted / field_updated / table_created
+    本地模式，零配置可用。"""
+    try:
+        from engine.webhook_center import list_event_types
+        result = list_event_types()
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 列出事件类型失败：{e}"
+
+@mcp.tool()
+async def kdoc_webhook_list_channels() -> str:
+    """【免密钥】列出所有通知通道。
+
+    通道：金山协作消息 / 企业微信 / 钉钉
+    本地模式，零配置可用。"""
+    try:
+        from engine.webhook_center import list_channels
+        result = list_channels()
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 列出通道失败：{e}"
+
+@mcp.tool()
+async def kdoc_webhook_subscribe(table_id: str, event_type: str,
+                                callback_url: str, channel: str,
+                                webhook_key: str = "") -> str:
+    """【免密钥】订阅事件（签名校验+SQLite 去重）。
+
+    table_id: 多维表格 ID
+    event_type: record_created / record_updated / record_deleted
+    callback_url: 回调 URL
+    channel: kdocs / wecom / dingtalk
+    webhook_key: Webhook 密钥
+    本地模式，零配置可用。"""
+    try:
+        from engine.webhook_center import subscribe
+        result = subscribe(table_id, event_type, callback_url, channel, webhook_key)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 订阅失败：{e}"
+
+@mcp.tool()
+async def kdoc_webhook_unsubscribe(table_id: str, event_type: str) -> str:
+    """【免密钥】取消订阅事件。
+
+    table_id: 多维表格 ID
+    event_type: 事件类型
+    本地模式，零配置可用。"""
+    try:
+        from engine.webhook_center import unsubscribe
+        result = unsubscribe(table_id, event_type)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 取消订阅失败：{e}"
+
+@mcp.tool()
+async def kdoc_webhook_list_subscriptions(table_id: str = "") -> str:
+    """【免密钥】列出所有订阅。
+
+    table_id: 多维表格 ID（空则返回全部）
+    本地模式，零配置可用。"""
+    try:
+        from engine.webhook_center import list_subscriptions
+        result = list_subscriptions(table_id)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 列出订阅失败：{e}"
+
+@mcp.tool()
+async def kdoc_webhook_process_event(payload: str, signature: str = "") -> str:
+    """【免密钥】处理传入的 Webhook 事件。
+
+    payload: JSON 字符串（事件数据）
+    signature: 签名（校验用）
+    本地模式，零配置可用。"""
+    try:
+        import json
+        from engine.webhook_center import process_event
+        payload_obj = json.loads(payload)
+        result = process_event(payload_obj, signature)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 处理事件失败：{e}"
+
+@mcp.tool()
+async def kdoc_webhook_history(table_id: str = "", limit: int = 20) -> str:
+    """【免密钥】获取事件历史。
+
+    table_id: 多维表格 ID
+    limit: 数量限制
+    本地模式，零配置可用。"""
+    try:
+        from engine.webhook_center import get_event_history
+        result = get_event_history(table_id, limit)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 获取历史失败：{e}"
+
+@mcp.tool()
+async def kdoc_webhook_statistics() -> str:
+    """【免密钥】获取 Webhook 统计信息。
+
+    本地模式，零配置可用。"""
+    try:
+        from engine.webhook_center import get_webhook_statistics
+        result = get_webhook_statistics()
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 获取统计失败：{e}"
 
 
 def main():
