@@ -2,9 +2,9 @@
 slug: video-analyzer-local
 displayName: 视频分析处理
 name: video-analyzer
-description: "视频分析处理 — 本地视频反编译分析工具。将视频拆解为时间轴剧本、语音转文字、场景分析、跨模态关联和精华摘要，支持多ASR引擎切换（Whisper/Paraformer/SenseVoice）、中文NLP增强、PaddleOCR中文识别。v4.0 新增短视频平台适配（抖音/快手/B站/视频号）和自动剪辑建议（高光检测/冗余标记/EDL导出/字幕样式）。v4.1 新增tiny模型优先体验（75MB低门槛）、说话人分离质量评分、剪映draft.json导出。v4.2 新增场景管理（detect→slice一条链）、短视频爆款预测、实时直播分析（流式ASR+敏感词检测）。v4.3 新增纯音频输入（mp3/m4a/wav播客与录音）、批量队列（SQLite+硬件档位并发）、GPU自动加速（CT2 int8量化）、ASR配置统一（--asr-engine单参数）。"
-version: 4.3.0
-tags: ["video", "analysis", "transcription", "local-offline", "chinese", "asr"]
+description: "视频分析处理 — 本地视频反编译分析工具。将视频拆解为时间轴剧本、语音转文字、场景分析、跨模态关联和精华摘要，支持多ASR引擎切换（Whisper/Paraformer/SenseVoice）、中文NLP增强、PaddleOCR中文识别。v4.0 新增短视频平台适配（抖音/快手/B站/视频号）和自动剪辑建议（高光检测/冗余标记/EDL导出/字幕样式）。v4.1 新增tiny模型优先体验（75MB低门槛）、说话人分离质量评分、剪映draft.json导出。v4.2 新增场景管理（detect→slice一条链）、短视频爆款预测、实时直播分析（流式ASR+敏感词检测）。v4.3 新增纯音频输入（mp3/m4a/wav播客与录音）、批量队列（SQLite+硬件档位并发）、GPU自动加速（CT2 int8量化）、ASR配置统一（--asr-engine单参数）。v4.4 新增一键成片（ffmpeg filter_complex 自动剪辑+平台规格包导出）、封面帧智能选取（Laplacian+人脸+三分法构图）、自动字幕翻译（cn-llm-router桥接，EN/JP/KO）、BGM识别（chromaprint指纹+本地库匹配）、剪映6.0适配+EDL导入指南。"
+version: 4.4.0
+tags: ["video", "analysis", "transcription", "local-offline", "chinese", "asr", "auto-edit", "subtitle-translate", "bgm-detect"]
 icon: "🎬"
 author: "njskills"
 license: "MIT"
@@ -59,6 +59,15 @@ python main.py --input "视频路径或URL" --output "./output"
 | 分析抖音视频（自动识别+下载+平台分析） | `python main.py -i "https://v.douyin.com/xxxxx" --platform` |
 | 分析B站视频 + 自动剪辑建议 | `python main.py -i "https://www.bilibili.com/video/BVxxxx" --platform --editing-suggest` |
 | 导出 EDL 时间线 + 字幕文件 | `python main.py -i video.mp4 --editing-suggest --export-edl --subtitle-style douyin` |
+| 一键成片（抖音竖屏，口播精简） | `python main.py -i video.mp4 --auto-edit --edit-platform douyin --edit-style 口播精简` |
+| 一键成片（B站横屏，高光集锦） | `python main.py -i video.mp4 --auto-edit --edit-platform bilibili --edit-style 高光集锦` |
+| 一键成片 + BGM | `python main.py -i video.mp4 --auto-edit --bgm-path music.mp3` |
+| 封面帧智能选取 Top3 | `python main.py -i video.mp4 --cover-select` |
+| 字幕翻译（中→英） | `python main.py -i video.mp4 --editing-suggest --translate-subs en` |
+| 字幕翻译（中→日，ASS格式） | `python main.py -i video.mp4 --editing-suggest --translate-subs ja --translate-format ass` |
+| BGM 识别 | `python main.py -i video.mp4 --bgm-detect` |
+| 剪映 6.0 + EDL 导入指南 | `python main.py -i video.mp4 --editing-suggest --jianying-v6` |
+| 一键成片 + 封面 + 翻译 + BGM | `python main.py -i video.mp4 --auto-edit --cover-select --translate-subs en --bgm-detect` |
 
 ### 输出示例
 ```
@@ -126,6 +135,15 @@ output/
 | `--subtitle-format` |  | 字幕输出格式：`srt`/`ass`/`vtt`（默认 ass） |
 | `--export-edl` |  | 导出 EDL 剪辑时间线文件 |
 | `--jianying` |  | 导出剪映 draft.json 格式（可直接导入剪映专业版） |
+| `--jianying-v6` |  | 导出剪映 6.0 draft.json + EDL 导入指南（v4.4 新增） |
+| `--auto-edit` |  | 启用一键成片（ffmpeg filter_complex 自动剪辑，v4.4 新增） |
+| `--edit-style` |  | 一键成片风格：`口播精简`/`高光集锦`/`预告片`（默认 口播精简） |
+| `--edit-platform` |  | 一键成片目标平台：`douyin`/`bilibili`/`kuaishou`/`wechat_video`（默认 douyin） |
+| `--bgm-path` |  | BGM 音频文件路径（用于一键成片） |
+| `--cover-select` |  | 启用封面帧智能选取（v4.4 新增） |
+| `--translate-subs` |  | 翻译字幕到指定语言 (en/ja/ko/fr/de/es/ru) |
+| `--translate-format` |  | 翻译字幕输出格式：`srt`/`ass`/`vtt`（默认 srt） |
+| `--bgm-detect` |  | 启用 BGM 识别（需 chromaprint/fpcalc，v4.4 新增） |
 | `--quality-score` |  | 启用说话人分离质量评分 |
 
 ## 功能说明
@@ -312,6 +330,26 @@ A: tiny 模型（75MB）识别速度更快但准确率略低；small 模型（46
 **Q: 为什么优先推荐 tiny 模型？**
 A: v4.1 新增 tiny 模型优先体验（75MB），首次使用门槛从 466MB 降至 75MB。低配电脑也会自动使用 tiny 模型。如需更高精度，可手动切换 `--model small/medium`。
 
+### v4.4.0 新增功能 FAQ
+
+**Q: 一键成片怎么用？**
+A: 运行 `--auto-edit` 即可。工具会自动检测高光片段，通过 ffmpeg filter_complex 链生成成片视频。支持 3 种风格：`口播精简`（去除冗余保留核心）、`高光集锦`（精选高光片段）、`预告片`（悬念感强）。输出包含成片视频、EDL 映射表和平台规格包。
+
+**Q: 一键成片支持哪些平台？**
+A: 支持抖音（9:16 竖屏 1080x1920）、B站（16:9 横屏 1920x1080）、快手（9:16 竖屏）、微信视频号（9:16 竖屏）。通过 `--edit-platform` 指定。
+
+**Q: 字幕翻译需要什么依赖？**
+A: 需要安装 cn-llm-router skill。未安装时工具会降级为仅输出中文字幕，并提示安装。翻译通过 subprocess 调用 router.py 的 translate 任务，支持 EN/JP/KO/FR/DE/ES/RU 七种语言。
+
+**Q: BGM 识别准确吗？**
+A: BGM 识别基于 chromaprint 音频指纹，匹配本地参考库。需要用户提供常见 BGM 样本建立参考库。无依赖时该功能自动隐藏，不阻塞主流程。未知 BGM 会标记为高风险。
+
+**Q: 封面帧选取的原理是什么？**
+A: 综合 Laplacian 锐度（清晰度）、人脸数量/位置（居中优先）、三分法构图评分和亮度适中度四个维度，从场景边界候选帧中选出 Top3。
+
+**Q: 剪映 6.0 适配是什么？**
+A: 升级了 draft.json 生成器以对齐剪映 6.0 新 schema（materials/tracks/segments）。如果生成失败会自动降级为 SRT+EDL 格式，并输出 Premiere Pro/DaVinci Resolve/Final Cut Pro 的 EDL 导入指南文档。
+
 ## 更新提醒
 启动时会自动检查 GitHub 上的新版本，发现更新时会显示提醒。使用 `--no-update-check` 可跳过此检查。
 
@@ -320,12 +358,13 @@ A: v4.1 新增 tiny 模型优先体验（75MB），首次使用门槛从 466MB �
 
 ## 更新日志
 
-| v4.3.0 | 2026-08-24 | 增加：纯音频输入（mp3/m4a/wav 播客与录音，ffmpeg 探测后直接转 16k 单声道 wav 进 ASR，跳过场景切分与 OCR，报告复用纪要版）；增加：批量队列（SQLite 任务表 + 硬件档位并发控制：low=1/mid=2/high=4，支持中断后续跑）；增加：GPU 自动加速（启动时探测 CUDA，命中则加载 Whisper CT2 int8 量化模型，失败自动回退 CPU tiny）；优化：ASR 配置统一（Whisper/Paraformer/SenseVoice 分散配置合并为 --asr-engine 单参数，auto 沿用现有自动选择逻辑）；增加：--dir / --hardware-tier / --download-ct2-model 参数 |
+| v4.4.0 | 2026-09-08 | 增加：一键成片（ffmpeg filter_complex 链，含片段拼接+转场+ASS字幕烧录+BGM+人声闪避，3种成片风格：口播精简/高光集锦/预告片，导出平台规格包：抖音9:16/B站横屏/快手/视频号，含BGM建议库与EDL映射表，仅导出不自动发布）；增加：封面帧智能选取（Laplacian锐度+人脸数量/位置+三分法构图+亮度评分，输出Top3 PNG并附理由）；增加：自动字幕翻译（白名单桥接 cn-llm-router 翻译任务，subprocess 调用 router.py chat --task translate --json，按字幕批量+术语表约束，生成EN/JP/KO/FR/DE/ES/RU的SRT/ASS/VTT，未安装则降级为仅输出中文字幕+提示安装）；增加：BGM识别（可选依赖 chromaprint/fpcalc 计算音频指纹，匹配本地小参考库，输出版权风险提示：low/medium/high/unknown，无依赖则隐藏）；优化：剪映6.0适配+EDL导入指南（升级 draft.json 生成器对齐新schema：materials/tracks/segments，失败自动降级为SRT+EDL，输出Premiere Pro/DaVinci Resolve/Final Cut Pro导入指南文档）；增加：--auto-edit / --edit-style / --edit-platform / --bgm-path / --cover-select / --translate-subs / --translate-format / --bgm-detect / --jianying-v6 参数 |
 
 <details>
 <summary>历史版本</summary>
 
-### v4.2.0
+### v4.3.0
+- 增加：纯音频输入（mp3/m4a/wav 播客与录音，ffmpeg 探测后直接转 16k 单声道 wav 进 ASR）
 - 合并：场景检测+章节切片为「场景管理」模块（detect→slice 一条链）
 - 增加：短视频爆款预测（多模态特征+爆款样本对比，概率评分+改进建议）
 - 增加：实时直播分析（流式ASR+滑动窗口+敏感词检测+实时告警）
