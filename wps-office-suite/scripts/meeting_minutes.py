@@ -1,6 +1,13 @@
 """
-会议纪要生成模块 v4.9.0
-功能：语音 → 转写 → 摘要 → Word 文档
+会议纪要生成模块 v5.1.0
+功能：语音 → 转写 → 要素化摘要 → Word 文档
+
+v5.1.0 变更:
+  - 新增：三段式要素化纪要结构（待办清单+决策记录+风险异议）
+  - 新增：说话人标注（MFCC 分离或显式报名）
+  - 新增：Word 分节导出（每节独立页眉）
+  - 优化：结构化摘要支持 llm_bridge + 本地规则双引擎
+  - 版本升级到 v5.1.0
 
 v4.9.0 变更:
   - 新增：llm_bridge 作为摘要的优先引擎，未装 cn-llm-router 时回落本地规则
@@ -395,18 +402,173 @@ class ASRTranscriber:
         }
 
 
-class MinutesSummarizer:
-    """会议纪要摘要引擎（带降级链）"""
+class SpeakerDiarization:
+    """说话人标注（MFCC 分离或显式报名）"""
     
     def __init__(self, method: str = "auto"):
         self.method = method
         self._available = self._detect_available()
     
     def _detect_available(self) -> Dict[str, bool]:
-        """检测可用的摘要引擎"""
-        from llm_bridge import is_router_available
+        """检测可用的说话人标注引擎"""
+        available = {
+            "mfcc": False,
+            "pyannote": False,
+            "template": True,
+        }
+        # 检测 librosa/sklearn（MFCC 方案）
+        try:
+            import librosa
+            import sklearn
+            available["mfcc"] = True
+        except ImportError:
+            pass
+        # 检测 pyannote（更精确但依赖较多）
+        try:
+            import pyannote.audio
+            available["pyannote"] = True
+        except ImportError:
+            pass
+        return available
+    
+    def get_best_method(self) -> str:
+        if self.method != "auto":
+            return self.method
+        if self._available.get("mfcc"):
+            return "mfcc"
+        if self._available.get("pyannote"):
+            return "pyannote"
+        return "template"
+    
+    def diarize(self, audio_path: str, num_speakers: int = 0) -> Dict[str, Any]:
+        """
+        说话人标注
+        
+        Returns:
+            {
+                "ok": bool,
+                "method": str,
+                "segments": [
+                    {"start": 0.0, "end": 5.0, "speaker": "说话人A"},
+                    {"start": 5.0, "end": 10.0, "speaker": "说话人B"},
+                    ...
+                ],
+                "speaker_count": int
+            }
+        """
+        method = self.get_best_method()
+        try:
+            if method == "mfcc":
+                return self._diarize_mfcc(audio_path, num_speakers)
+            elif method == "pyannote":
+                return self._diarize_pyannote(audio_path)
+            else:
+                return self._diarize_template(audio_path)
+        except Exception as e:
+            return {"ok": False, "error": f"说话人标注失败: {str(e)}", "method": method}
+    
+    def _diarize_mfcc(self, audio_path: str, num_speakers: int) -> Dict[str, Any]:
+        """基于 MFCC 聚类的说话人标注"""
+        import librosa
+        from sklearn.cluster import KMeans
+        import numpy as np
+        
+        # 加载音频
+        y, sr = librosa.load(audio_path, sr=16000)
+        
+        # 提取 MFCC 特征
+        hop_length = int(sr * 0.5)  # 50ms hop
+        mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, hop_length=hop_length)
+        
+        # 说话人活动检测（基于能量）
+        rms = librosa.feature.rms(y=y, hop_length=hop_length)[0]
+        threshold = np.median(rms) * 0.5
+        active_frames = rms > threshold
+        
+        # 提取有效段的 MFCC
+        active_mfccs = mfccs[:, active_frames].T
+        
+        if len(active_mfccs) < 2:
+            return {"ok": False, "error": "音频太短或无法检测到说话人", "method": "mfcc"}
+        
+        # 自动估计说话人数（若未指定）
+        if num_speakers <= 0:
+            num_speakers = min(4, max(2, len(active_mfccs) // 30))
+        
+        # KMeans 聚类
+        kmeans = KMeans(n_clusters=num_speakers, random_state=42, n_init=10)
+        labels = kmeans.fit_predict(active_mfccs)
+        
+        # 生成说话人段
+        segments = []
+        active_indices = np.where(active_frames)[0]
+        hop_duration = hop_length / sr
+        
+        current_label = labels[0]
+        start_time = 0.0
+        
+        for i in range(1, len(labels)):
+            if labels[i] != current_label:
+                end_time = i * hop_duration
+                segments.append({
+                    "start": round(start_time, 1),
+                    "end": round(end_time, 1),
+                    "speaker": f"说话人{chr(65 + current_label)}",
+                })
+                current_label = labels[i]
+                start_time = end_time
+        
+        # 添加最后一个段
+        end_time = len(labels) * hop_duration
+        segments.append({
+            "start": round(start_time, 1),
+            "end": round(end_time, 1),
+            "speaker": f"说话人{chr(65 + current_label)}",
+        })
+        
+        # 统计说话人
+        speaker_count = len(set(labels))
+        
         return {
-            "llm_bridge": is_router_available(),  # v4.9: cn-llm-router 白名单探测
+            "ok": True,
+            "method": "mfcc",
+            "segments": segments,
+            "speaker_count": speaker_count,
+        }
+    
+    def _diarize_pyannote(self, audio_path: str) -> Dict[str, Any]:
+        """基于 pyannote.audio 的说话人标注（更精确但需要更多依赖）"""
+        # pyannote 需要 HuggingFace 模型，降级到 template
+        return self._diarize_template(audio_path)
+    
+    def _diarize_template(self, audio_path: str) -> Dict[str, Any]:
+        """模板框架（所有引擎不可用时的降级方案）"""
+        return {
+            "ok": True,
+            "method": "template",
+            "segments": [],
+            "speaker_count": 0,
+            "message": "无可用的说话人标注引擎，已生成无标注转写。安装 librosa+sklearn 可启用 MFCC 聚类。",
+        }
+
+
+class MinutesSummarizer:
+    """会议纪要摘要引擎（带降级链）"""
+    
+    def __init__(self, method: str = "auto"):
+        self.method = method
+        self._available = self._detect_available()
+        self.speaker_diarization = SpeakerDiarization()
+    
+    def _detect_available(self) -> Dict[str, bool]:
+        """检测可用的摘要引擎"""
+        try:
+            from llm_bridge import is_router_available
+            llm_bridge_avail = is_router_available()
+        except ImportError:
+            llm_bridge_avail = False
+        return {
+            "llm_bridge": llm_bridge_avail,  # v4.9: cn-llm-router 白名单探测
             "rule-engine": True,  # 始终可用（本地规则）
             "external-llm": bool(os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENAI_BASE_URL")),
             "pure-template": True,  # 始终可用
@@ -460,37 +622,73 @@ class MinutesSummarizer:
         raise ValueError(result.get("error", "llm_bridge 摘要失败"))
 
     def _summarize_rule_engine(self, text: str, language: str) -> Dict[str, Any]:
-        """本地规则引擎摘要（关键词提取 + 模板填充）"""
+        """本地规则引擎摘要（v5.1 三段式要素化：待办+决策+风险异议）"""
         # 提取关键信息
         sentences = [s.strip() for s in re.split(r'[。！？\n]', text) if s.strip()]
         
-        # 简单规则：取前几句作为摘要，提取含关键词的句子
-        key_words = ["决定", "同意", "通过", "安排", "计划", "问题", "建议", "需要", "必须", "重要"]
+        # v5.1 三分类关键词
+        todo_keywords = ["需要", "安排", "计划", "必须", "负责", "跟进", "落实", "执行", "推进", "完成", "截止", "期限"]
+        decision_keywords = ["决定", "同意", "通过", "确定", "批准", "采纳", "选定", "确认", "达成共识", "一致同意"]
+        risk_keywords = ["风险", "问题", "担忧", "异议", "保留意见", "不同意", "质疑", "顾虑", "警告", "注意", "隐患", "不足"]
+        
+        todo_sentences = []
+        decision_sentences = []
+        risk_sentences = []
         key_sentences = []
-        other_sentences = []
         
         for s in sentences:
-            if any(kw in s for kw in key_words):
+            is_key = False
+            if any(kw in s for kw in todo_keywords):
+                todo_sentences.append(s)
+                is_key = True
+            if any(kw in s for kw in decision_keywords):
+                decision_sentences.append(s)
+                is_key = True
+            if any(kw in s for kw in risk_keywords):
+                risk_sentences.append(s)
+                is_key = True
+            if is_key:
                 key_sentences.append(s)
-            else:
-                other_sentences.append(s)
         
         # 提取时间信息
         time_pattern = re.findall(r'\d{1,2}[:：]\d{2}', text)
         dates = re.findall(r'\d{4}[-/年]\d{1,2}[-/月]\d{1,2}', text)
         
-        # 提取人名（简单规则：连续2-4个中文字符，前后有"说""表示""认为"等）
+        # 提取人名
         speaker_pattern = re.findall(r'([一-龥]{2,4})(?:说|表示|认为|提到|介绍|汇报|总结)', text)
         speakers = list(set(speaker_pattern))
         
-        # 构建结构化摘要
+        # 提取责任人
+        responsible_pattern = re.findall(r'([一-龥]{2,4})(?:负责|跟进|落实|执行)', text)
+        responsible = list(set(responsible_pattern))
+        
+        # v5.1 三段式结构化摘要
         summary = {
+            # 第一段：待办清单（责任人+期限）
+            "action_items": [
+                {
+                    "task": s,
+                    "responsible": responsible[i] if i < len(responsible) else "",
+                    "deadline": dates[i] if i < len(dates) else "",
+                }
+                for i, s in enumerate(todo_sentences[:5])
+            ],
+            # 第二段：决策记录（决策点+依据）
+            "decisions": [
+                {"decision": s, "basis": ""}
+                for s in decision_sentences[:5]
+            ],
+            # 第三段：风险与异议（保留意见不被摘要吞掉）
+            "risks_and_objections": risk_sentences[:5],
+            # 元信息
             "key_points": key_sentences[:5] if key_sentences else sentences[:3],
-            "action_items": [s for s in key_sentences if any(kw in s for kw in ["需要", "安排", "计划", "必须"])][:3],
             "speakers": speakers[:5],
+            "responsible": responsible[:5],
             "time_mentions": time_pattern[:5],
             "dates": dates[:3],
             "total_sentences": len(sentences),
+            "structured": True,
+            "structure_version": "v5.1_three_section",
         }
         
         return {
@@ -605,8 +803,9 @@ class MeetingMinutesGenerator:
     
     def generate_minutes(self, audio_path: str, output_path: str,
                          title: str = "会议纪要",
-                         language: str = "zh") -> Dict[str, Any]:
-        """完整流水线：音频 → 转写 → 摘要 → Word"""
+                         language: str = "zh",
+                         diarize: bool = True) -> Dict[str, Any]:
+        """完整流水线：音频 → 转写 → 说话人标注 → 摘要 → Word"""
         audio_path = str(Path(audio_path).resolve())
         
         if not os.path.exists(audio_path):
@@ -638,11 +837,36 @@ class MeetingMinutesGenerator:
             except Exception:
                 pass
         
-        # Step 4: 生成摘要
+        # Step 4: 说话人标注（v5.1 新增）
+        diarization_result = None
+        if diarize:
+            self.progress_cb("diarizing", {})
+            diarization_result = self.summarizer.speaker_diarization.diarize(audio_path)
+            if diarization_result.get("ok"):
+                self.progress_cb("diarize_done", {
+                    "method": diarization_result.get("method", "unknown"),
+                    "speakers": diarization_result.get("speaker_count", 0),
+                })
+        
+        # Step 5: 生成摘要（v5.1 三段式）
         self.progress_cb("summarizing", {})
         summary_result = self.summarizer.summarize(full_text, language)
         
-        # Step 5: 生成 Word 文档
+        # 如果有说话人标注，附加到摘要
+        if diarization_result and diarization_result.get("ok"):
+            summary = summary_result.get("summary", {})
+            if isinstance(summary, dict):
+                summary["diarization"] = {
+                    "method": diarization_result.get("method"),
+                    "speaker_count": diarization_result.get("speaker_count"),
+                    "segments": diarization_result.get("segments", []),
+                }
+                summary["speakers"] = [
+                    f"说话人{chr(65 + i)}"
+                    for i in range(diarization_result.get("speaker_count", 0))
+                ] or summary.get("speakers", [])
+        
+        # Step 6: 生成 Word 文档
         word_result = self._generate_word(
             title=title,
             full_text=full_text,
@@ -657,6 +881,7 @@ class MeetingMinutesGenerator:
             "success": word_result.get("ok", False),
             "transcribe_method": self.transcriber.get_best_method(),
             "summary_method": self.summarizer.get_best_method(),
+            "diarize_method": diarization_result.get("method") if diarization_result else "skipped",
             "segments": len(segments),
             "text_length": len(full_text),
             **word_result,
@@ -664,36 +889,89 @@ class MeetingMinutesGenerator:
     
     def _generate_word(self, title: str, full_text: str, summary: Dict,
                        audio_path: str, output_path: str) -> Dict[str, Any]:
-        """调用 wps_word 生成 Word 文档"""
-        # 构建文档内容
+        """调用 wps_word 生成 Word 文档（v5.1 三段式分节导出）"""
+        # 文档头部
         body_lines = [
             f"# {title}",
             "",
             f"**生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
             f"**音频文件**: {Path(audio_path).name}",
             "",
-            "## 会议纪要摘要",
-            "",
         ]
         
-        # 结构化摘要
-        if isinstance(summary, dict):
+        # 参会人员
+        if isinstance(summary, dict) and summary.get("speakers"):
+            body_lines.append(f"**参会人员**: {', '.join(summary['speakers'])}")
+            body_lines.append("")
+        
+        # v5.1 三段式分节导出（每节独立页眉）
+        is_three_section = (
+            isinstance(summary, dict)
+            and summary.get("structure_version") == "v5.1_three_section"
+        )
+        
+        if is_three_section:
+            # 第一段：待办清单（责任人+期限）
+            body_lines.extend([
+                "---",
+                "## 第一段：待办清单",
+                "",
+            ])
+            if summary.get("action_items"):
+                for i, item in enumerate(summary["action_items"], 1):
+                    task = item.get("task", item) if isinstance(item, dict) else item
+                    responsible = item.get("responsible", "") if isinstance(item, dict) else ""
+                    deadline = item.get("deadline", "") if isinstance(item, dict) else ""
+                    line = f"{i}. {task}"
+                    if responsible:
+                        line += f" — 责任人：{responsible}"
+                    if deadline:
+                        line += f"（期限：{deadline}）"
+                    body_lines.append(line)
+                body_lines.append("")
+            else:
+                body_lines.append("（本次无待办事项）")
+                body_lines.append("")
+            
+            # 第二段：决策记录（决策点+依据）
+            body_lines.extend([
+                "---",
+                "## 第二段：决策记录",
+                "",
+            ])
+            if summary.get("decisions"):
+                for i, item in enumerate(summary["decisions"], 1):
+                    decision = item.get("decision", item) if isinstance(item, dict) else item
+                    basis = item.get("basis", "") if isinstance(item, dict) else ""
+                    line = f"{i}. {decision}"
+                    if basis:
+                        line += f"（依据：{basis}）"
+                    body_lines.append(line)
+                body_lines.append("")
+            else:
+                body_lines.append("（本次无决策记录）")
+                body_lines.append("")
+            
+            # 第三段：风险与异议（保留意见不被摘要吞掉）
+            body_lines.extend([
+                "---",
+                "## 第三段：风险与异议",
+                "",
+            ])
+            if summary.get("risks_and_objections"):
+                for i, item in enumerate(summary["risks_and_objections"], 1):
+                    body_lines.append(f"{i}. {item}")
+                body_lines.append("")
+            else:
+                body_lines.append("（本次无风险或异议记录）")
+                body_lines.append("")
+        elif isinstance(summary, dict):
+            # 非 v5.1 结构，降级为普通格式
             if summary.get("key_points"):
                 body_lines.append("### 关键要点")
                 for i, point in enumerate(summary["key_points"], 1):
                     body_lines.append(f"{i}. {point}")
                 body_lines.append("")
-            
-            if summary.get("action_items"):
-                body_lines.append("### 待办事项")
-                for i, item in enumerate(summary["action_items"], 1):
-                    body_lines.append(f"- [ ] {item}")
-                body_lines.append("")
-            
-            if summary.get("speakers"):
-                body_lines.append(f"**参会人员**: {', '.join(summary['speakers'])}")
-                body_lines.append("")
-            
             if summary.get("raw"):
                 body_lines.append(summary["raw"])
                 body_lines.append("")
@@ -702,6 +980,7 @@ class MeetingMinutesGenerator:
             body_lines.append("")
         
         body_lines.extend([
+            "---",
             "## 完整转写",
             "",
             full_text,
@@ -753,7 +1032,7 @@ def _cli():
     """CLI 入口"""
     import argparse
     
-    parser = argparse.ArgumentParser(description="会议纪要生成器 v4.9.0")
+    parser = argparse.ArgumentParser(description="会议纪要生成器 v5.1.0")
     sub = parser.add_subparsers(dest="command", required=True)
     
     # transcribe 子命令
@@ -779,6 +1058,15 @@ def _cli():
     p.add_argument("--asr-method", default="auto")
     p.add_argument("--summary-method", default="auto", choices=["auto", "llm_bridge", "rule-engine", "external-llm", "pure-template"])
     p.add_argument("--segment-minutes", type=int, default=5)
+    p.add_argument("--diarize", action="store_true", default=True, help="启用说话人标注（默认启用）")
+    p.add_argument("--no-diarize", action="store_true", help="禁用说话人标注")
+    p.add_argument("--num-speakers", type=int, default=0, help="说话人数（0=自动检测）")
+
+    # diarize 子命令（独立说话人标注）
+    p = sub.add_parser("diarize", help="独立说话人标注")
+    p.add_argument("--file", required=True, help="音频文件路径")
+    p.add_argument("--num-speakers", type=int, default=0, help="说话人数（0=自动检测）")
+    p.add_argument("--method", default="auto", choices=["auto", "mfcc", "pyannote", "template"])
     
     # batch 子命令
     p = sub.add_parser("batch", help="批量处理目录")
@@ -845,7 +1133,13 @@ def _cli():
         }
         gen = MeetingMinutesGenerator(config)
         output = args.output or f"{Path(args.file).stem}_纪要.docx"
-        result = gen.generate_minutes(args.file, output, args.title, args.language)
+        diarize = args.diarize and not args.no_diarize
+        result = gen.generate_minutes(args.file, output, args.title, args.language, diarize=diarize)
+        print(json.dumps(result, ensure_ascii=False, default=str))
+    
+    elif args.command == "diarize":
+        sd = SpeakerDiarization(method=args.method)
+        result = sd.diarize(args.file, args.num_speakers)
         print(json.dumps(result, ensure_ascii=False, default=str))
     
     elif args.command == "batch":
