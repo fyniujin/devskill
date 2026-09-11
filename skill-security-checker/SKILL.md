@@ -2,8 +2,8 @@
 slug: skill-security-checker
 displayName: Skill 安全审计扫描器
 name: skill-security-checker
-description: 'Skill Security — 安全审计扫描器，帮助你快速发现 Skill 中的安全风险。轻量 SAST 污点追踪（Python AST + JS 词法近似，source→sink 证据链降误报）、规则引擎（YAML 规则包热插拔扩展）、社区规则（schema 校验 + 来源记录 + 签名验证）、提示注入 ML 语义检测（ONNX + 正则降级）、系统级行为捕获（eBPF Linux / ETW Windows）、动态沙箱执行扫描、供应链风险分析、CVE 离线缓存、恶意 Skill 指纹库、健康度与合规检查（质量+结构+权限合并）、全局排除配置、CI/CD 集成、JSON/HTML/SARIF 报告生成。'
-version: 3.3.0
+description: 'Skill Security — 安全审计扫描器，帮助你快速发现 Skill 中的安全风险。轻量 SAST 污点追踪（Python AST + JS 词法近似，source→sink 证据链降误报）、规则引擎（YAML 规则包热插拔扩展）、社区规则（schema 校验 + 来源记录 + 签名验证）、提示注入 ML 语义检测（ONNX + 正则降级）、系统级行为捕获（eBPF Linux / ETW Windows）、动态沙箱执行扫描、供应链风险分析、OSV.dev 离线数据包（全生态 CVE 覆盖，零密钥）+ 锁文件深度解析（requirements.txt / package-lock.json / poetry.lock，版本区间级精确匹配）、恶意 Skill 指纹库、健康度与合规检查（质量+结构+权限合并）、全局排除配置、CI/CD 集成、JSON/HTML/SARIF 报告生成。'
+version: 3.4.0
 tags: ['security', 'audit', 'skill', 'scanner', 'code-analysis', 'vulnerability']
 icon: '🔒'
 author: 'njskills'
@@ -269,6 +269,33 @@ v3.3.0 将质量评分（SKILL.md 完整性 8 项）与结构检查（文件数/
 
 **好处：** 报告结构更清晰，旧版「质量评分」「结构检查」「权限审计」三个独立模块合并为「合规性检查」一个入口。
 
+### 19. OSV.dev 离线数据包接入（新增）
+
+v3.4.0 将 OSV.dev 官方导出包（按 PyPI / npm 生态过滤）周期下载并合并进已有的三级缓存（7 天全量 + 每日增量 + 离线降级），依赖覆盖从硬编码 26 包跃升到**全生态**，且**全程零密钥**（纯 HTTPS 下载，无需任何 API key）。
+
+| 项 | 说明 |
+|----|------|
+| 数据来源 | OSV 公开导出包（PyPI / npm），无鉴权 |
+| 缓存位置 | `~/.workbuddy/osv_offline_cache/`（仓库外，不污染 skill 包） |
+| 刷新策略 | 索引超过 7 天或 `--refresh-osv` 时联网重建，其余走离线 |
+| 匹配粒度 | 按锁定文件**版本区间**精确匹配（非包名级） |
+| 离线降级 | 无网络时用最近快照，报告中标注 `data_point`（数据时点） |
+
+**性能：** 索引仅构建一次（周期缓存），扫描时为纯内存字典查询；导出包体积大但存于缓存目录，不拖慢扫描。
+
+### 20. 锁文件深度解析（新增）
+
+v3.4.0 新增 `package-lock.json` / `poetry.lock` 两类锁文件解析器（原有 `requirements.txt` 升级），自动展开**传递依赖全树**（lock 文件天然含完整依赖图），扫描匹配从「包名级」升级到「版本区间级」。
+
+| 解析器 | 生态 | 传递依赖 | approx |
+|--------|------|---------|--------|
+| requirements.txt | PyPI | 仅直接依赖 | 标注 `approx`（无 lock 时近似） |
+| package-lock.json | npm | 全树（lock 内含） | 精确 |
+| poetry.lock | PyPI | 全树（lock 内含） | 精确 |
+| package.json / pyproject.toml | npm / PyPI | 仅直接依赖 | 标注 `approx` |
+
+**好处：** 有了 lock 文件即可精确判定「某版本是否落在漏洞影响区间」，大幅降低无版本信息导致的误报；无 lock 时退化为直接依赖 + 近似匹配并明确标注 `approx`。
+
 ## 使用方法
 
 ### 基本用法（命令行）
@@ -324,6 +351,12 @@ python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能�
 
 # v3.3.0 全功能模式
 python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --taint-tracking --community-rules "D:\path\to\community-rules" --rule-engine --ml-detect --malicious-db --global-exclude --supply-chain
+
+# v3.4.0 OSV 离线数据包强制刷新索引（联网重建全生态 CVE 索引）
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --supply-chain --refresh-osv
+
+# v3.4.0 全功能模式（含锁文件版本区间匹配）
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --taint-tracking --community-rules "D:\path\to\community-rules" --rule-engine --ml-detect --malicious-db --global-exclude --supply-chain --refresh-osv
 ```
 
 ### 参数快查
@@ -345,6 +378,7 @@ python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能�
 | `--ml-detect` | 启用 ML 提示注入语义检测 | 关闭 |
 | `--taint-tracking` | 启用污点追踪（Python AST + JS 词法，source→sink 证据链） | 关闭 |
 | `--community-rules` | 加载第三方社区规则包目录（schema 校验 + 来源记录） | 关闭 |
+| `--refresh-osv` | 强制刷新 OSV 离线数据包索引（v3.4.0，联网重建全生态 CVE 索引） | 关闭 |
 
 ### 在 WorkBuddy 中触发
 
@@ -489,6 +523,12 @@ A: 官方规则包（`scripts/rules/*.yaml`）内置在 Skill 目录中，由开
 **Q: 健康度与合规检查合并后，旧版报告还能看吗？**
 A: 完全兼容。旧版的「质量评分」「结构检查」「权限审计」三个模块在 v3.3.0 中合并为「合规性检查」一个出口，输出类别从 `quality_check`/`structure_check`/`permission_audit` 统一为 `health_quality`/`health_structure`/`compliance_permission`，报告结构更清晰，不再重复。
 
+**Q: v3.4.0 的 OSV 离线数据包需要联网和 API Key 吗？**
+A: 不需要 API Key。索引由 OSV 公开导出包（PyPI / npm）周期下载构建，纯 HTTPS、**零密钥**。索引超过 7 天或加 `--refresh-osv` 时联网重建，其余扫描全部走本地索引，无网络也能用（使用最近快照，并在报告中用 `data_point` 标注数据时点）。
+
+**Q: 锁文件解析有什么用？没有 lock 文件会怎样？**
+A: 有 `package-lock.json` / `poetry.lock` 时，工具展开完整传递依赖树并按「版本区间」精确判定某版本是否落在漏洞影响区间，误报显著降低。仅有 `requirements.txt` / `package.json`（无 lock）时退化为直接依赖 + 近似匹配，并在结果中标注 `approx`，提示你补充 lock 文件以获得精确结论。
+
 ## 安全声明
 
 - **默认只做静态分析，不会执行被扫描的代码**（静态模式仅读取文件，不写入）
@@ -509,6 +549,7 @@ A: 完全兼容。旧版的「质量评分」「结构检查」「权限审计�
 
 ## 更新日志
 
+| v3.4.0 | 2026-09-11 | 增加：OSV.dev 离线数据包接入（scripts/osv_offline.py），周期下载 PyPI/npm 导出包并合并进三级缓存，依赖覆盖从 26 包升到全生态，零密钥、离线优先、无网络时标注数据时点；增加：锁文件深度解析（package-lock.json 与 poetry.lock 两类新增解析器 + requirements.txt 升级），传递依赖全树展开，匹配从包名级升级到版本区间级，无 lock 时近似匹配并标注 approx；增加：--refresh-osv 命令行参数（强制刷新 OSV 索引）；优化：supply_chain.py 漏洞查询改为离线优先（OSV 索引 → OSV API → NVD → 本地 26 条三级降级），report meta 区新增 osv_offline 索引时点统计 |
 | v3.3.0 | 2026-08-24 | 增加：轻量 SAST 污点追踪（taint_tracker.py），Python AST + JS 词法近似，source→sink 证据链降误报（无完整链降 info）；增加：社区规则扩展（community_rules.py），第三方 YAML 规则包 schema 校验 + 来源记录 + HMAC-SHA256 签名验证，官方/社区规则报告分开统计；增加：健康度与合规检查合并（scan_health + scan_compliance），质量评分+结构检查统一为健康度模块，权限审计+健康度统一挂合规性检查出口；增加：--taint-tracking 和 --community-rules <path> 两个 CLI 参数；优化：report meta 区新增 taint_tracking / community_rules 维度统计 |
 | v3.2.0 | 2026-08-17 | 增加：规则引擎模块（scripts/rules_engine.py），将 6 类静态规则从硬编码重构为 YAML 规则包（rules/*.yaml），支持热插拔扩展，新增规则只需加 YAML 文件不改代码；增加：scripts/rules/ 目录包含 6 个规则包（prompt_injection/command_injection/ssrf/credential_leak/path_traversal/dangerous_functions），共 67 条正则；增加：系统级行为捕获模块（scripts/sandbox/system_monitor.py），支持 eBPF（Linux）/ ETW（Windows）内核级 syscall 监控，无 eBPF/ETW 时自动降级；增加：ML 提示注入语义检测（scripts/sandbox/ml_detect.py），ONNX 模型优先 + 正则降级双模式，含中文规则与结果缓存；增加：scan_rule_engine()、scan_ml_prompt_injection()、scan_syscall_monitor() 三个扫描方法；增加：--rule-engine、--ml-detect、--syscall-monitor 三个 CLI 参数；增加：report meta 区新增 rule_engine / ml_detect / syscall_monitor 维度统计 |
 | v3.1.0 | 2026-08-07 | 增加：实时恶意 Skill 库同步模块，内置 341 条 SHA256 指纹实现 100% 已知恶意 skill 拦截；增加：CVE 离线缓存（7 天全量 + 每日增量），无网络环境仍可扫描依赖漏洞；增加：全局排除配置（.nosec.yml），支持按类别/文件/正则模式批量排除误报；增加：--malicious-db 和 --global-exclude 两个命令行参数；优化：add_result() 集成全局排除过滤逻辑 |
