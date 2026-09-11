@@ -22,11 +22,13 @@ Features:
   16. System-level behavior capture (eBPF Linux / ETW Windows)
   17. ML prompt injection detection (ONNX + regex fallback)
   18. Taint tracking (Python AST + JS lexical, source-to-sink evidence chains)
-  19. Community rules (schema validation + source recording + signature verification)
-  20. Health check (quality + structure + permission merged into compliance module)
+ 19. Community rules (schema validation + source recording + signature verification)
+ 20. Health check (quality + structure + permission merged into compliance module)
+ 21. OSV.dev offline data package (full-ecosystem CVE coverage, no API key required)
+ 22. Lock-file deep parsing (requirements.txt / package-lock.json / poetry.lock, version-range matching)
 
 Author: njskills@agent.qq.com
-Version: 3.3.0
+Version: 3.4.0
 """
 
 import os
@@ -55,6 +57,15 @@ try:
     _SUPPLY_CHAIN_AVAILABLE = True
 except Exception:
     _SUPPLY_CHAIN_AVAILABLE = False
+
+# OSV offline index status (for report meta; degrades gracefully if missing)
+try:
+    from osv_offline import get_index_timestamp as _osv_get_ts
+    _OSV_OFFLINE_AVAILABLE = True
+except Exception:
+    _OSV_OFFLINE_AVAILABLE = False
+    def _osv_get_ts(eco):
+        return None
 
 # Malicious skill database (optional module; degrades gracefully if missing)
 try:
@@ -267,7 +278,7 @@ KNOWN_VULN_DEPS = {
 
 # Update check URL and version info
 UPDATE_CHECK_URL = "https://api.github.com/repos/njskills/skill-security-checker/releases/latest"
-CURRENT_VERSION = "3.3.0"
+CURRENT_VERSION = "3.4.0"
 
 # Update check cache TTL (hours)
 UPDATE_CACHE_HOURS = 24
@@ -414,7 +425,7 @@ class SecurityAuditor:
     def __init__(self, skill_path, dynamic=False, dynamic_options=None, supply_chain=False,
                  malicious_db=False, global_exclude=False, rule_engine=False,
                  syscall_monitor=False, ml_detect=False, taint_tracking=False,
-                 community_rules_path=None):
+                 community_rules_path=None, refresh_osv=False):
         self.skill_path = Path(skill_path)
         self.results = []
         self.score = 100
@@ -442,6 +453,8 @@ class SecurityAuditor:
         self.taint_tracking = taint_tracking
         self.community_rules_path = community_rules_path
         self.community_rules_loaded = []
+        # v3.4.0 new
+        self.refresh_osv = refresh_osv
         # Initialize
         self._load_skill_md()
         self._load_changelog()
@@ -672,7 +685,8 @@ class SecurityAuditor:
             return
 
         try:
-            findings = scan_supply_chain(str(self.skill_path), self.frontmatter)
+            findings = scan_supply_chain(str(self.skill_path), self.frontmatter,
+                                         refresh_osv=self.refresh_osv)
         except Exception as e:
             self.add_result(
                 category='supply_chain_error', severity='low',
@@ -1363,6 +1377,11 @@ class SecurityAuditor:
                 'supply_chain': {
                     'enabled': self.supply_chain,
                     'findings': len(self.supply_chain_findings),
+                    'osv_offline': {
+                        'available': _OSV_OFFLINE_AVAILABLE,
+                        'index_pypi_at': _osv_get_ts('pypi') if _OSV_OFFLINE_AVAILABLE else None,
+                        'index_npm_at': _osv_get_ts('npm') if _OSV_OFFLINE_AVAILABLE else None,
+                    },
                 },
                 'malicious_db': {
                     'enabled': self.malicious_db,
@@ -1703,6 +1722,8 @@ Examples:
                         help='Enable source-to-sink taint tracking (Python AST + JS lexical)')
     parser.add_argument('--community-rules', type=str, default=None,
                         help='Path to directory of community YAML rule packs')
+    parser.add_argument('--refresh-osv', action='store_true',
+                        help='Force refresh of the OSV offline data package index (v3.4.0)')
     
     args = parser.parse_args()
     
@@ -1722,7 +1743,8 @@ Examples:
                               supply_chain=args.supply_chain, malicious_db=args.malicious_db,
                               global_exclude=args.global_exclude, rule_engine=args.rule_engine,
                               syscall_monitor=args.syscall_monitor, ml_detect=args.ml_detect,
-                              taint_tracking=args.taint_tracking, community_rules_path=args.community_rules)
+                              taint_tracking=args.taint_tracking, community_rules_path=args.community_rules,
+                              refresh_osv=args.refresh_osv)
     report = auditor.run(skip_update=args.skip_update)
     
     if args.format == 'json':
