@@ -2,7 +2,8 @@
 supply_chain.py - Supply chain risk analysis for skill-security-checker.
 
 Runs as part of the audit pipeline (SecurityAuditor.scan_supply_chain()).
-All network calls degrade gracefully: OSV -> NVD -> local 26-entry CVE DB.
+Offline-first: OSV.dev data-package index (full ecosystem) -> OSV API -> NVD
+-> local 26-entry CVE DB. Lock-file parsing enables version-range matching.
 Offline-capable detection (typo-squatting, dependency tree, license scan)
 works without any API access.
 
@@ -18,6 +19,14 @@ import hashlib
 from pathlib import Path
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# OSV offline data package integration (v3.4.0). Degrades gracefully if missing.
+try:
+    from osv_offline import (ensure_osv_index, load_osv_index, query_osv_index,
+                             get_index_timestamp, osv_index_known_packages)
+    _OSV_OFFLINE_AVAILABLE = True
+except Exception:
+    _OSV_OFFLINE_AVAILABLE = False
 
 # ============================================================
 # Constants
@@ -251,25 +260,126 @@ def parse_pyproject_toml(content):
     return deps
 
 
-def discover_dependencies(skill_path):
-    """Find and parse all dependency manifests. Returns {manifest_path: [(name,ver),...]}."""
+def parse_package_lock_json(content):
+    """Parse package-lock.json (lockfileVersion 1/2/3) -> list of (name, version, transitive).
+
+    Lock files contain the full resolved dependency tree, so versions are exact
+    and the closure is known (approx=False).
+    """
+    try:
+        data = json.loads(content)
+    except Exception:
+        return []
+    records = []
+    # lockfileVersion >= 2: 'packages' dict keyed by node_modules path
+    packages = data.get('packages')
+    if isinstance(packages, dict):
+        for key, val in packages.items():
+            if not isinstance(val, dict) or not key:
+                continue
+            name = key.split('node_modules/')[-1]
+            if not name or '/' in name:
+                continue
+            ver = val.get('version')
+            if ver:
+                records.append((name, ver, True))
+        if records:
+            return records
+    # lockfileVersion 1: nested 'dependencies' tree
+    seen = {}
+
+    def _walk(node):
+        if not isinstance(node, dict):
+            return
+        for name, val in node.items():
+            if not isinstance(val, dict):
+                continue
+            ver = val.get('version')
+            if ver and name not in seen:
+                seen[name] = (name, ver, True)
+            _walk(val.get('dependencies', {}))
+
+    _walk(data.get('dependencies', {}))
+    return list(seen.values())
+
+
+def parse_poetry_lock(content):
+    """Parse poetry.lock [[package]] sections -> list of (name, version, transitive).
+
+    Contains full transitive tree; exact + non-approx.
+    """
+    records = []
+    blocks = re.split(r'\[\[package\]\]', content)
+    for block in blocks[1:]:
+        name = None
+        ver = None
+        for line in block.splitlines():
+            m = re.match(r'\s*name\s*=\s*["\']([^"\']+)["\']', line)
+            if m:
+                name = m.group(1)
+            m = re.match(r'\s*version\s*=\s*["\']([^"\']+)["\']', line)
+            if m:
+                ver = m.group(1)
+            if name and ver:
+                break
+        if name and ver:
+            records.append((name, ver, True))
+    return records
+
+
+def discover_dependency_records(skill_path):
+    """Discover and parse all dependency manifests into rich records.
+
+    Returns list of dicts:
+      {name, version_spec, exact_version, approx, ecosystem, manifest, transitive}
+    approx=True means the resolved version / full tree is unknown (no lock file),
+    so version-range matching is approximate and flagged as such.
+    """
     skill_path = Path(skill_path)
-    manifests = {}
+    records = []
+    # (filename, parser, ecosystem, is_lock_file)
     candidates = [
-        ('requirements.txt', parse_requirements_txt),
-        ('package.json', parse_package_json),
-        ('pyproject.toml', parse_pyproject_toml),
-        ('Pipfile', None),  # Future
+        ('requirements.txt', parse_requirements_txt, 'pypi', False),
+        ('package.json', parse_package_json, 'npm', False),
+        ('pyproject.toml', parse_pyproject_toml, 'pypi', False),
+        ('package-lock.json', parse_package_lock_json, 'npm', True),
+        ('poetry.lock', parse_poetry_lock, 'pypi', True),
+        ('Pipfile', None, 'pypi', False),  # Future
     ]
-    for fname, parser in candidates:
+    for fname, parser, eco, is_lock in candidates:
+        if parser is None:
+            continue
         p = skill_path / fname
-        if p.exists() and parser is not None:
-            try:
-                text = p.read_text(encoding='utf-8-sig')
-                manifests[str(p)] = parser(text)
-            except Exception:
-                pass
-    return manifests
+        if not p.exists():
+            continue
+        try:
+            text = p.read_text(encoding='utf-8-sig')
+        except Exception:
+            continue
+        parsed = parser(text)
+        for item in parsed:
+            if len(item) == 3:
+                name, ver, _ = item
+            else:
+                name, ver = item[0], item[1]
+            if is_lock:
+                # Lock file: version is the resolved exact version, full tree known
+                exact_version = ver
+                approx = False
+            else:
+                # Constraint manifest: exact only when pinned; full tree unknown
+                exact_version = ver if ver else None
+                approx = True
+            records.append({
+                'name': name,
+                'version_spec': ver,
+                'exact_version': exact_version,
+                'approx': approx,
+                'ecosystem': eco,
+                'manifest': fname,
+                'transitive': is_lock,
+            })
+    return records
 
 
 # ============================================================
@@ -660,27 +770,27 @@ def query_cve_database(package_names, ecosystem='pypi'):
 # Main Pipeline
 # ============================================================
 
-def scan_supply_chain(skill_path, frontmatter=None):
-    """Run the full supply chain pipeline. Returns list of SupplyChainFinding."""
+def scan_supply_chain(skill_path, frontmatter=None, refresh_osv=False):
+    """Run the full supply chain pipeline. Returns list of SupplyChainFinding.
+
+    v3.4.0: vulnerability detection is offline-first via the OSV data package
+    index (full ecosystem) with version-range matching; falls back to the
+    OSV-API / NVD / local-26-entry chain for packages the index missed.
+    """
     findings = []
-    all_package_names = set()
-    manifests = discover_dependencies(skill_path)
-
-    if not findings and not manifests:
-        # No manifest files at all
+    records = discover_dependency_records(skill_path)
+    if not records:
         return findings
 
-    # Collect all package names and their sources
-    manifest_packages = {}
-    for mpath, deps in manifests.items():
-        for name, ver in deps:
-            all_package_names.add(name)
-            manifest_packages.setdefault(name, []).append((mpath, ver))
+    # Group by ecosystem
+    by_eco = {}
+    for r in records:
+        by_eco.setdefault(r['ecosystem'], []).append(r)
 
-    if not all_package_names:
-        return findings
+    all_package_names = set(r['name'] for r in records)
+    pypi_names = [r['name'] for r in records if r['ecosystem'] == 'pypi']
 
-    # 1. Typo-squatting detection
+    # 1. Typo-squatting detection (both ecosystems merged)
     squats = detect_typo_squats(list(all_package_names))
     for squatted, legit, dist in squats:
         findings.append(SupplyChainFinding(
@@ -690,22 +800,82 @@ def scan_supply_chain(skill_path, frontmatter=None):
             detail={'squatted': squatted, 'legitimate': legit, 'distance': dist},
         ))
 
-    # 2. CVE database query (auto-pull with fallback)
-    if all_package_names:
-        cve_results = query_cve_database(list(all_package_names), ecosystem='pypi')
-        for pkg, cves in cve_results.items():
-            for cve_id in cves:
-                findings.append(SupplyChainFinding(
-                    category='known_cve', severity='critical',
-                    message=f'依赖包 "{pkg}" 存在已知 CVE: {cve_id}',
-                    suggestion=f'请立即升级 "{pkg}" 到安全版本，参考 {cve_id} 官方公告',
-                    detail={'package': pkg, 'cve': cve_id},
-                ))
+    # 2. Vulnerability query (offline-first OSV index + fallback)
+    resolved_cves = set()
+    for eco, eco_records in by_eco.items():
+        exact_map = {r['name']: r['exact_version'] for r in eco_records if r['exact_version']}
+        osv_hits = {}
+        if _OSV_OFFLINE_AVAILABLE:
+            # Refresh index if stale (>7d) or forced; degrades silently on failure
+            try:
+                ensure_osv_index(eco, force=refresh_osv)
+            except Exception:
+                pass
+            data_point = get_index_timestamp(eco) or 'unknown'
+            pkgs_with_ver = [(r['name'], r['exact_version'], r['approx']) for r in eco_records]
+            try:
+                osv_hits = query_osv_index(pkgs_with_ver, eco)
+            except Exception:
+                osv_hits = {}
+            for pkg, hits in osv_hits.items():
+                for h in hits:
+                    vid = h['id']
+                    resolved_cves.add((pkg, vid))
+                    ver = exact_map.get(pkg, '未知')
+                    if h['match_level'] == 'exact':
+                        severity = 'critical'
+                        msg = f'依赖包 "{pkg}" (版本 {ver}) 命中已知漏洞: {vid}'
+                    else:
+                        note = '近似匹配' if h['approx'] else '无精确版本'
+                        severity = 'medium'
+                        msg = f'依赖包 "{pkg}" 存在潜在漏洞 {vid}（{note}，建议提供 lock 文件精确确认）'
+                    findings.append(SupplyChainFinding(
+                        category='known_cve', severity=severity,
+                        message=msg,
+                        suggestion=f'请升级 "{pkg}" 到安全版本，参考 {vid} 官方公告',
+                        detail={'package': pkg, 'cve': vid,
+                                'match_level': h['match_level'], 'approx': h['approx'],
+                                'ecosystem': eco, 'data_point': data_point},
+                    ))
 
-    # 3. Maintenance assessment (parallel, cached, rate-limited)
+        # Fallback: packages the offline index did not cover (network available).
+        # Packages the index already knows (and judged safe) are excluded to avoid
+        # re-introducing name-level false positives from the legacy local DB.
+        known_safe = set()
+        if _OSV_OFFLINE_AVAILABLE:
+            try:
+                known_safe = osv_index_known_packages(eco)
+            except Exception:
+                known_safe = set()
+        unresolved = []
+        for r in eco_records:
+            norm = _normalize_pkg_name(r['name'])
+            if r['name'] not in osv_hits and norm not in known_safe:
+                unresolved.append(r['name'])
+        unresolved = list(set(unresolved))
+        if unresolved:
+            try:
+                cve_results = query_cve_database(list(unresolved), ecosystem=eco)
+            except Exception:
+                cve_results = {}
+            for pkg, cves in cve_results.items():
+                for cve_id in cves:
+                    if (pkg, cve_id) in resolved_cves:
+                        continue
+                    resolved_cves.add((pkg, cve_id))
+                    findings.append(SupplyChainFinding(
+                        category='known_cve', severity='critical',
+                        message=f'依赖包 "{pkg}" 存在已知 CVE: {cve_id}',
+                        suggestion=f'请立即升级 "{pkg}" 到安全版本，参考 {cve_id} 官方公告',
+                        detail={'package': pkg, 'cve': cve_id,
+                                'match_level': 'name', 'approx': True,
+                                'ecosystem': eco, 'data_point': 'api/nvd'},
+                    ))
+
+    # 3. Maintenance assessment (parallel, cached, rate-limited) - PyPI manifests
     with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {}
-        for name in list(all_package_names)[:20]:  # Cap at 20 to be API-friendly
+        for name in list(pypi_names)[:20]:  # Cap at 20 to be API-friendly
             fut = executor.submit(assess_maintenance, name, 'pypi', 24)
             futures[fut] = name
         for fut in as_completed(futures):
@@ -738,14 +908,14 @@ def scan_supply_chain(skill_path, frontmatter=None):
             except Exception:
                 continue
 
-    # 4. License compliance (parallel, cached)
+    # 4. License compliance (parallel, cached) - PyPI manifests
     project_license = ''
     if frontmatter:
         project_license = frontmatter.get('license', '') or frontmatter.get('License', '')
     if project_license:
         with ThreadPoolExecutor(max_workers=3) as executor:
             futures = {}
-            for name in list(all_package_names)[:15]:  # Cap at 15 to be API-friendly
+            for name in list(pypi_names)[:15]:  # Cap at 15 to be API-friendly
                 fut = executor.submit(get_pypi_license, name, 72)
                 futures[fut] = name
             for fut in as_completed(futures):
