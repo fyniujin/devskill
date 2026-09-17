@@ -1,0 +1,224 @@
+version: "1.0.0"
+updated: "2026-09-17"
+description: "CISG 1980 Vienna Convention key clause risks"
+
+rules:
+  - id: CISG001
+    category: dispute_risk
+    name: "CISG Applicability"
+    description: "CISG applies to contracts for the sale of goods between parties whose places of business are in different Contracting States"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(convention on contracts for the international sale of goods|vienna convention|united nations convention|cisg)"
+    legal_basis: "CISG Article 1(1)"
+    suggestion: "Confirm both parties are from Contracting States for CISG to apply automatically."
+    enabled: true
+
+  - id: CISG002
+    category: dispute_risk
+    name: "CISG Exclusion"
+    description: "Article 6 allows parties to exclude CISG application; check if excluded"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(exclude.{0,20}cisg|exclude.{0,30}convention|opt.?out|cisg.{0,30}not apply)"
+    legal_basis: "CISG Article - Exclusion"
+    suggestion: "If the parties intended to exclude CISG, ensure the exclusion is explicit and unambiguous."
+    enabled: true
+
+  - id: CISG003
+    category: clause_risk
+    name: "Offer and Acceptance Formalities"
+    description: "CISG Article 11 requires no written form; check for form requirements"
+    severity: low
+    check_type: pattern_match
+    check_rule: "(?i)(offer|acceptance|counter.?offer|invitation to treat)"
+    legal_basis: "CISG Articles 14-18"
+    suggestion: "Review the offer and acceptance process for compliance with CISG requirements."
+    enabled: true
+
+  - id: CISG004
+    category: clause_risk
+    name: "Battle of Forms"
+    description: "Last-shot rule applies under CISG; check for conflicting standard terms"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(standard terms|general conditions|terms and conditions|boilerplate)"
+    legal_basis: "CISG Article 19"
+    suggestion: "Review standard terms for conflicts with the CISG's battle of forms approach."
+    enabled: true
+
+  - id: CISG005
+    category: clause_risk
+    name: "Price Determination"
+    description: "Article 14 requires the offer to expressly or implicitly fix the price"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(price|purchase price|contract price|total price)"
+    legal_basis: "CISG Article 14"
+    suggestion: "Ensure the contract clearly specifies the price or the method for determining it."
+    enabled: true
+
+  - id: CISG006
+    category: performance_risk
+    name: "Delivery Obligations"
+    description: "Articles 31-33 specify delivery obligations including place and time"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(delivery|deliver|handover|passing of risk|transfer of risk)"
+    legal_basis: "CISG Articles 31-33"
+    suggestion: "Clearly specify delivery terms (place, time, method) and risk transfer point."
+    enabled: true
+
+  - id: CISG007
+    category: performance_risk
+    name: "Non-conforming Goods"
+    description: "Articles 35-44 address non-conforming goods and buyer's right to reject"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(non.?conforming|defective goods|defect in the goods|lack of conformity)"
+    legal_basis: "CISG Articles 35-44"
+    suggestion: "Define conformity requirements (quality, description, packaging) precisely."
+    enabled: true
+
+  - id: CISG008
+    category: compliance_risk
+    name: "Notice of Non-conformity"
+    description: "Article 39 requires buyer to notify seller of non-conformity within reasonable time"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(notice of defect|notice of non.?conformity|notify.{0,20}defect|complain)"
+    legal_basis: "CISG Article 39"
+    suggestion: "Include a clear notice period for defects (typically 30-90 days)."
+    enabled: true
+
+  - id: CISG009
+    category: performance_risk
+    name: "Delivery Date"
+    description: "Article 33 defines time of delivery; early delivery may be refused"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(date of delivery|delivery date|time of delivery|shipping date)"
+    legal_basis: "CISG Article 33"
+    suggestion: "Specify the delivery date clearly and state consequences of early or late delivery."
+    enabled: true
+
+  - id: CISG010
+    category: performance_risk
+    name: "Documents Relating to Goods"
+    description: "Article 34 requires seller to hand over documents relating to the goods"
+    severity: low
+    check_type: pattern_match
+    check_rule: "(?i)(documents|shipping documents|bill of lading|certificate of origin|invoice)"
+    legal_basis: "CISG Article 34"
+    suggestion: "List all required shipping documents and delivery procedures."
+    enabled: true
+
+  - id: CISG011
+    category: clause_risk
+    name: "Fundamental Breach"
+    description: "Article 25 defines fundamental breach; triggers right to avoid contract"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(fundamental breach|material breach|substantial breach|repudiation)"
+    legal_basis: "CISG Article 25"
+    suggestion: "Define what constitutes a fundamental breach for each party's obligations."
+    enabled: true
+
+  - id: CISG012
+    category: clause_risk
+    name: "Avoidance of Contract"
+    description: "Articles 49/64 allow avoidance for fundamental breach; strict time limits"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(avoidance of contract|avoid the contract|terminate.{0,20}contract|rescind)"
+    legal_basis: "CISG Articles 49/64"
+    suggestion: "Include clear procedures and time limits for avoidance of contract."
+    enabled: true
+
+  - id: CISG013
+    category: amount_risk
+    name: "Damages Calculation"
+    description: "Articles 74-77 define damages; includes lost profits and duty to mitigate"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(damages|compensation|loss of profit|consequential loss|liquidated damages)"
+    legal_basis: "CISG Articles 74-77"
+    suggestion: "Review damages clauses for compliance with CISG's full compensation principle."
+    enabled: true
+
+  - id: CISG014
+    category: performance_risk
+    name: "Exemption from Liability"
+    description: "Article 79 provides exemption for failure due to impediment beyond control"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(exemption|impediment|force majeure|obstacle|beyond control)"
+    legal_basis: "CISG Article 79"
+    suggestion: "Ensure the exemption clause is consistent with Article 79 requirements."
+    enabled: true
+
+  - id: CISG015
+    category: compliance_risk
+    name: "Passing of Risk"
+    description: "Articles 66-70 specify when risk passes to buyer; critical for insurance"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(passing of risk|risk passes|transfer of risk|at the buyer's risk)"
+    legal_basis: "CISG Articles 66-70"
+    suggestion: "Clearly specify the point of risk transfer (usually on handing over to first carrier)."
+    enabled: true
+
+  - id: CISG016
+    category: clause_risk
+    name: "Obligations of the Buyer"
+    description: "Articles 53-60 define buyer's obligations including payment and taking delivery"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(buyer.{0,20}obligation|buyer.{0,20}duty|obligations of the buyer)"
+    legal_basis: "CISG Articles 53-60"
+    suggestion: "Review the buyer's obligations (payment, taking delivery) for clarity."
+    enabled: true
+
+  - id: CISG017
+    category: clause_risk
+    name: "Obligations of the Seller"
+    description: "Articles 30-52 define seller's obligations including delivery and conformity"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(seller.{0,20}obligation|seller.{0,20}duty|obligations of the seller)"
+    legal_basis: "CISG Articles 30-52"
+    suggestion: "Review the seller's obligations (delivery, conformity, documents) for clarity."
+    enabled: true
+
+  - id: CISG018
+    category: performance_risk
+    name: "Payment of Price"
+    description: "Articles 54-59 address payment obligations; includes currency and place of payment"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(payment of the price|pay the price|price payment|payment terms)"
+    legal_basis: "CISG Articles 54-59"
+    suggestion: "Clearly specify payment terms including amount, currency, place, and time."
+    enabled: true
+
+  - id: CISG019
+    category: dispute_risk
+    name: "Jurisdiction and Arbitration"
+    description: "CISG does not govern jurisdiction; parties must specify forum"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(jurisdiction|forum|arbitration|dispute resolution|governing law)"
+    legal_basis: "CISG does not govern jurisdiction"
+    suggestion: "Specify a clear jurisdiction or arbitration clause as CISG does not address this."
+    enabled: true
+
+  - id: CISG020
+    category: compliance_risk
+    name: "Third-Party Claims"
+    description: "Articles 41-43 address third-party claims to goods (title, IP)"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(third party claim|third party right|title to the goods|intellectual property.{0,30}goods)"
+    legal_basis: "CISG Articles 41-43"
+    suggestion: "Include seller's warranty against third-party claims to title and IP rights."
+    enabled: true
