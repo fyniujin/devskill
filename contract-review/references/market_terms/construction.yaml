@@ -1,0 +1,34 @@
+version: "1.0.0"
+updated: "2026-09-17"
+description: "建设工程市场惯例基准值"
+
+clauses:
+  - clause_type: construction_warranty
+    keywords: ["质保", "保修", "缺陷通知期", "defects notification"]
+    fair_value: "竣工验收后365天"
+    range: "180-730天"
+    unit: "days"
+
+  - clause_type: fidic_payment
+    keywords: ["付款", "payment", "interim", "progress"]
+    fair_value: "按月支付，28天内签发支付证书"
+    range: "按月或按里程碑"
+    unit: "payment_schedule"
+
+  - clause_type: fidic_claim_notice
+    keywords: ["索赔", "claim", "notice", "通知"]
+    fair_value: "知道或应当知道索赔事件后28天内通知"
+    range: "14-56天"
+    unit: "days"
+
+  - clause_type: construction_price_adjustment
+    keywords: ["调价", "价格调整", "price adjustment", "fluctuation"]
+    fair_value: "固定价格，主要材料涨幅超±5%时调整"
+    range: "±3-10%以外调整"
+    unit: "percentage"
+
+  - clause_type: liquidated_damages_construction
+    keywords: ["延期违约金", "liquidated damages", "delay damages"]
+    fair_value: "每日0.05-0.1%（合同总价），累计不超过10%"
+    range: "0.02-0.2%/日，累计5-20%"
+    unit: "percentage"
