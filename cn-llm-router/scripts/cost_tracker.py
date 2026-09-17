@@ -28,12 +28,17 @@ def _conn(db_path=None):
             ts TEXT, provider TEXT, model TEXT, task TEXT,
             in_tokens INTEGER, out_tokens INTEGER, cost REAL,
             elapsed_ms INTEGER, success INTEGER, error TEXT,
-            fallback_from TEXT
+            fallback_from TEXT,
+            tokens_estimated INTEGER DEFAULT 0
         )"""
     )
-    # 兼容旧表无 fallback_from 列
+    # 兼容旧表无 fallback_from 列 / tokens_estimated 列
     try:
         c.execute("ALTER TABLE calls ADD COLUMN fallback_from TEXT")
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE calls ADD COLUMN tokens_estimated INTEGER DEFAULT 0")
     except Exception:
         pass
     # v2.2 竞技场表
@@ -56,20 +61,20 @@ def _conn(db_path=None):
 
 
 def log_call(provider, model, task, in_tokens, out_tokens, cost,
-             elapsed_ms, success, error="", fallback_from=None, db_path=None):
-    """记录一次调用。参数化写入，防注入。
+             elapsed_ms, success, error="", fallback_from=None, tokens_estimated=0, db_path=None):
+    """记录一次调用。
     
-    fallback_from: 若本次调用为降级触发，记录原主模型 "provider:model"。
+    tokens_estimated: v2.6 新增，标记 token 数是否为估算（0=实测，1=估算）。
     """
     c = _conn(db_path)
     try:
         c.execute(
-            "INSERT INTO calls (ts, provider, model, task, in_tokens, out_tokens, cost, elapsed_ms, success, error, fallback_from) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO calls (ts, provider, model, task, in_tokens, out_tokens, cost, elapsed_ms, success, error, fallback_from, tokens_estimated) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (datetime.now().isoformat(timespec="seconds"), provider, model, task,
              int(in_tokens or 0), int(out_tokens or 0), float(cost or 0.0),
              int(elapsed_ms or 0), 1 if success else 0, error or "",
-             fallback_from or ""),
+             fallback_from or "", 1 if tokens_estimated else 0),
         )
         c.commit()
     finally:
@@ -103,12 +108,15 @@ def _period_filter(period):
 
 
 def aggregate(period="month", db_path=None):
-    """聚合指定周期的花费 / 调用量 / 成功率 / P95 延迟。"""
+    """聚合指定周期的花费 / 调用量 / 成功率 / P95 延迟。
+
+    v2.6 新增：tokens_estimated 统计（实测/估算分列）。
+    """
     c = _conn(db_path)
     try:
         start = _period_filter(period)
         rows = c.execute(
-            "SELECT provider, model, task, in_tokens, out_tokens, cost, elapsed_ms, success "
+            "SELECT provider, model, task, in_tokens, out_tokens, cost, elapsed_ms, success, tokens_estimated "
             "FROM calls WHERE ts >= ?", (start,)
         ).fetchall()
     finally:
@@ -116,24 +124,34 @@ def aggregate(period="month", db_path=None):
 
     total_cost = 0.0
     total_in = total_out = 0
+    est_in = est_out = 0
+    measured_in = measured_out = 0
     total_calls = len(rows)
     success_calls = 0
     by_provider = {}
     latencies = []
-    for provider, model, task, it, ot, cost, el, succ in rows:
+    for provider, model, task, it, ot, cost, el, succ, tokens_est in rows:
         total_cost += cost or 0
         total_in += it or 0
         total_out += ot or 0
+        if tokens_est:
+            est_in += it or 0
+            est_out += ot or 0
+        else:
+            measured_in += it or 0
+            measured_out += ot or 0
         if succ:
             success_calls += 1
         if el:
             latencies.append(el)
         key = provider or "unknown"
-        d = by_provider.setdefault(key, {"cost": 0.0, "calls": 0, "in": 0, "out": 0})
+        d = by_provider.setdefault(key, {"cost": 0.0, "calls": 0, "in": 0, "out": 0, "est_calls": 0})
         d["cost"] += cost or 0
         d["calls"] += 1
         d["in"] += it or 0
         d["out"] += ot or 0
+        if tokens_est:
+            d["est_calls"] += 1
 
     latencies.sort()
     p95 = latencies[int(len(latencies) * 0.95) - 1] if latencies else 0
@@ -144,6 +162,10 @@ def aggregate(period="month", db_path=None):
         "total_cost": round(total_cost, 4),
         "total_in": total_in,
         "total_out": total_out,
+        "measured_in": measured_in,
+        "measured_out": measured_out,
+        "est_in": est_in,
+        "est_out": est_out,
         "total_calls": total_calls,
         "success_rate": round(success_rate, 1),
         "p95_ms": p95,
