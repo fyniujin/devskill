@@ -1,0 +1,169 @@
+version: "1.0.0"
+updated: "2026-09-17"
+description: "FIDIC Red Book (2017) and Silver Book key clause risks"
+
+rules:
+  - id: EN_FIDIC_001
+    category: clause_risk
+    name: "No Site Access Date Specified"
+    description: "Sub-Clause 2.1 requires the Employer to give the Contractor right of access to the Site within the time stated in the Appendix to Tender"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(access to the site|right of access|site access|entry to site)"
+    legal_basis: "FIDIC Red Book Sub-Clause 2.1 - Right of Access to the Site"
+    suggestion: "Confirm the Appendix to Tender specifies a definite date for access to the Site. If no date is stated, the Contractor may be unable to commence work without breach."
+    enabled: true
+
+  - id: EN_FIDIC_002
+    category: clause_risk
+    name: "Site Data Not Provided"
+    description: "Sub-Clause 4.10 requires the Employer to make available to the Contractor all relevant site data"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(site data|site investigation|geotechnical|ground condition)"
+    legal_basis: "FIDIC Red Book Sub-Clause 4.10 - Site Data"
+    suggestion: "Ensure all available site data (geotechnical, environmental, survey) is provided to the Contractor before tender submission."
+    enabled: true
+
+  - id: EN_FIDIC_003
+    category: clause_risk
+    name: "Programme Submission Missing"
+    description: "Sub-Clause 8.3 requires the Contractor to submit a Programme within 28 days of commencement"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(programme|work schedule|construction schedule|time schedule)"
+    legal_basis: "FIDIC Red Book Sub-Clause 8.3 - Programme"
+    suggestion: "Verify the Contract requires the Contractor to submit a Programme and specifies consequences of non-submission."
+    enabled: true
+
+  - id: EN_FIDIC_004
+    category: amount_risk
+    name: "Foreign Currency Payment Clause Missing"
+    description: "Sub-Clause 13.5 addresses payment in foreign currencies; absence may expose Contractor to exchange rate risk"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(foreign currency|exchange rate|currency conversion|payment in)"
+    legal_basis: "FIDIC Red Book Sub-Clause 13.5 - Payment in Foreign Currencies"
+    suggestion: "If the Contract involves payments in multiple currencies, ensure Sub-Clause 13.5 specifies the currencies and exchange rates."
+    enabled: true
+
+  - id: EN_FIDIC_005
+    category: compliance_risk
+    name: "Employer Termination Clause"
+    description: "Sub-Clause 15.2 specifies Employer's right to terminate; check for imbalanced termination rights"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(terminat.{0,30}employer|employer.{0,30}terminat|at the employer's option)"
+    legal_basis: "FIDIC Red Book Sub-Clause 15.2 - Termination by Employer"
+    suggestion: "Review termination rights for balance. Unilateral Employer termination rights without adequate compensation expose the Contractor to significant risk."
+    enabled: true
+
+  - id: EN_FIDIC_006
+    category: performance_risk
+    name: "Contractor's Suspension Rights"
+    description: "Sub-Clause 16.1 gives Contractor entitlement to suspend work if Employer fails to pay"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(suspend.{0,30}work|suspend.{0,30}performance|cease work)"
+    legal_basis: "FIDIC Red Book Sub-Clause 16.1 - Contractor's Entitlement to Suspend Work"
+    suggestion: "Ensure the Contract recognizes the Contractor's right to suspend work upon non-payment."
+    enabled: true
+
+  - id: EN_FIDIC_007
+    category: liability_risk
+    name: "Employer's Risks Allocation"
+    description: "Sub-Clause 17.3 defines Employer's risks including war, terrorism, and design errors"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(employer's risk|risk of the employer|employer risk event)"
+    legal_basis: "FIDIC Red Book Sub-Clause 17.3 - Employer's Risks"
+    suggestion: "Review allocation of Employer's risks. Ensure war, terrorism, and design errors are properly allocated."
+    enabled: true
+
+  - id: EN_FIDIC_008
+    category: compliance_risk
+    name: "Force Majeure Clause"
+    description: "Sub-Clause 19 defines Force Majeure events and consequences; 2017 edition introduced 'exceptional events'"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(force majeure|exceptional event|act of god|beyond control)"
+    legal_basis: "FIDIC Red Book Sub-Clause 19 - Force Majeure"
+    suggestion: "Ensure the Force Majeure clause covers pandemic, epidemic, and sanctions events given recent global disruptions."
+    enabled: true
+
+  - id: EN_FIDIC_009
+    category: performance_risk
+    name: "Contractor Claims Notice Period"
+    description: "Sub-Clause 20.1 requires Contractor to give notice of claim within 28 days"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(notice of claim|claim notice|submit a claim|claim within)"
+    legal_basis: "FIDIC Red Book Sub-Clause 20.1 - Contractor's Claims"
+    suggestion: "Ensure the 28-day notice period is reasonable and that failure to give notice does not automatically bar the claim."
+    enabled: true
+
+  - id: EN_FIDIC_010
+    category: clause_risk
+    name: "Engineer's Determination"
+    description: "Sub-Clause 3.5 requires the Engineer to make fair determinations"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(engineer's determination|determination by engineer|determine.{0,20}engineer)"
+    legal_basis: "FIDIC Red Book Sub-Clause 3.5 - Determinations"
+    suggestion: "Review the Engineer's determination process for impartiality and timeliness."
+    enabled: true
+
+  - id: EN_FIDIC_011
+    category: amount_risk
+    name: "Defects Notification Period"
+    description: "Sub-Clause 11.1 defines the Defects Notification Period (typically 365 days); absence creates ambiguity"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(defects notification|defects liability|rectification period|maintenance period)"
+    legal_basis: "FIDIC Red Book Sub-Clause 11.1 - Completion of Outstanding Work and Remedying Defects"
+    suggestion: "Specify the Defects Notification Period (usually 365 days) and the consequences of failure to remedy defects."
+    enabled: true
+
+  - id: EN_FIDIC_012
+    category: liability_risk
+    name: "Unforeseen Physical Conditions"
+    description: "Sub-Clause 4.12 addresses unforeseen physical conditions; Contractor's entitlement to claim"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(unforeseen physical|unforeseeable condition|physical condition|adverse condition)"
+    legal_basis: "FIDIC Red Book Sub-Clause 4.12 - Unforeseeable Physical Conditions"
+    suggestion: "Ensure the Contract provides for fair allocation of unforeseen physical conditions risk."
+    enabled: true
+
+  - id: EN_FIDIC_013
+    category: performance_risk
+    name: "Time for Completion"
+    description: "Sub-Clause 8.2 defines Time for Completion; liquidated damages may apply for delay"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(time for completion|completion date|substantial completion|taking over)"
+    legal_basis: "FIDIC Red Book Sub-Clause 8.2 - Time for Completion"
+    suggestion: "Verify the Time for Completion is realistic and that liquidated damages for delay are proportionate."
+    enabled: true
+
+  - id: EN_FIDIC_014
+    category: amount_risk
+    name: "Interim Payment Certificates"
+    description: "Sub-Clause 14.3 requires interim payments; check payment schedule adequacy"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(interim payment|payment certificate|monthly payment|progress payment)"
+    legal_basis: "FIDIC Red Book Sub-Clause 14.3 - Application for Interim Payment"
+    suggestion: "Ensure interim payments are timely (usually monthly) and that the Engineer must issue certificates promptly."
+    enabled: true
+
+  - id: EN_FIDIC_015
+    category: liability_risk
+    name: "Employer's Financial Arrangements"
+    description: "Sub-Clause 2.4 requires Employer to demonstrate financial arrangements; failure is a breach"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(financial arrangement|funding arrangement|payment guarantee|employer's funds)"
+    legal_basis: "FIDIC Red Book Sub-Clause 2.4 - Employer's Financial Arrangements"
+    suggestion: "Request evidence of Employer's financial arrangements before signing."
+    enabled: true
