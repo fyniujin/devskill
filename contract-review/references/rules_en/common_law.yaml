@@ -1,0 +1,888 @@
+version: "1.0.0"
+updated: "2026-09-17"
+description: "Common law contract risks — indemnity, limitation of liability, governing law, termination for convenience (20 rules each)"
+
+rules:
+  # ========== Indemnity (20 rules) ==========
+  - id: EN_I001
+    category: liability_risk
+    name: "Indemnity Survives Termination?"
+    description: "Whether indemnity obligations survive contract termination"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,80}(terminat|expir|survive)"
+    legal_basis: "Common Law - Indemnity Survival"
+    suggestion: "Confirm whether indemnity obligations are intended to survive termination and for how long. Recommend 12-24 months survival for IP indemnities."
+    enabled: true
+
+  - id: EN_I002
+    category: liability_risk
+    name: "Uncapped Indemnity Liability"
+    description: "Indemnity has no cap, exposing the indemnifying party to unlimited liability"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,60}(unlimited|unlimited amount|no cap|without limit)"
+    legal_basis: "Common Law - Indemnity Cap"
+    suggestion: "Negotiate a cap on indemnity liability, e.g., linked to contract value or specific amounts."
+    enabled: true
+
+  - id: EN_I003
+    category: liability_risk
+    name: "Indemnity Covers Third-Party Claims Only?"
+    description: "Check whether indemnity covers only third-party claims or also direct losses"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,40}(third.party|claim|action|suit)"
+    legal_basis: "Common Law - Third-Party Claim Indemnity"
+    suggestion: "Clarify scope: third-party claims vs. direct losses, and which party bears which losses."
+    enabled: true
+
+  - id: EN_I004
+    category: liability_risk
+    name: "No Time Limit for Indemnity Claims"
+    description: "Indemnity claims can be made indefinitely without time bar"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,50}(no time limit|indefinite|perpetual|forever)"
+    legal_basis: "Common Law - Limitation Period"
+    suggestion: "Add a time limit for raising indemnity claims (e.g., 12-24 months)."
+    enabled: true
+
+  - id: EN_I005
+    category: liability_risk
+    name: "Mutual vs. One-Way Indemnity"
+    description: "Check if indemnity is mutual or one-sided"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,40}(each party|mutual|both parties|one.?way)"
+    legal_basis: "Common Law - Mutual Indemnity"
+    suggestion: "Consider whether indemnity should be mutual to ensure fairness."
+    enabled: true
+
+  - id: EN_I006
+    category: liability_risk
+    name: "Indemnity for Own Negligence"
+    description: "Indemnity clause may cover claims arising from indemnified party's own negligence"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,50}(negligence|fault|willful misconduct|gross negligence)"
+    legal_basis: "Common Law - Indemnity for Negligence"
+    suggestion: "Review whether indemnity covers the indemnified party's own negligence; this may be unenforceable in some jurisdictions."
+    enabled: true
+
+  - id: EN_I007
+    category: liability_risk
+    name: "Defense Costs Included in Indemnity"
+    description: "Check if defense costs are included in indemnity obligations"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,40}(defense cost|attorney fee|legal cost|litigation cost)"
+    legal_basis: "Common Law - Defense Costs"
+    suggestion: "Clarify whether defense costs are included in the indemnity obligation."
+    enabled: true
+
+  - id: EN_I008
+    category: liability_risk
+    name: "Indemnity Notice Requirements"
+    description: "Check if there are notice requirements for indemnity claims"
+    severity: low
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,40}(notice|notify|prompt notice|written notice)"
+    legal_basis: "Common Law - Notice Requirements"
+    suggestion: "Include reasonable notice requirements for indemnity claims."
+    enabled: true
+
+  - id: EN_I009
+    category: liability_risk
+    name: "Control of Defense"
+    description: "Check who controls the defense of indemnified claims"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,40}(control.{0,20}defense|defend|right to defend)"
+    legal_basis: "Common Law - Control of Defense"
+    suggestion: "Specify which party has the right to control the defense of claims."
+    enabled: true
+
+  - id: EN_I010
+    category: liability_risk
+    name: "Settlement Consent"
+    description: "Check if settlement of indemnified claims requires consent"
+    severity: low
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,40}(settlement|settle|consent)"
+    legal_basis: "Common Law - Settlement"
+    suggestion: "Require mutual consent for settlement of indemnified claims."
+    enabled: true
+
+  - id: EN_I011
+    category: liability_risk
+    name: "Indemnity for IP Infringement"
+    description: "Check if indemnity covers intellectual property infringement"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,40}(intellectual property|ip infringement|patent|copyright|trademark)"
+    legal_basis: "Common Law - IP Indemnity"
+    suggestion: "Ensure IP infringement is explicitly covered by the indemnity clause."
+    enabled: true
+
+  - id: EN_I012
+    category: liability_risk
+    name: "Indemnity for Data Breach"
+    description: "Check if indemnity covers data breach and privacy violations"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,40}(data breach|privacy|personal data|data protection)"
+    legal_basis: "Common Law - Data Breach Indemnity"
+    suggestion: "Ensure data breach and privacy violations are covered by the indemnity clause."
+    enabled: true
+
+  - id: EN_I013
+    category: liability_risk
+    name: "Indemnity for Tax Liabilities"
+    description: "Check if indemnity covers tax liabilities"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,40}(tax|taxation|tax liability)"
+    legal_basis: "Common Law - Tax Indemnity"
+    suggestion: "Clarify whether tax liabilities are covered by the indemnity clause."
+    enabled: true
+
+  - id: EN_I014
+    category: liability_risk
+    name: "Indemnity for Employee Claims"
+    description: "Check if indemnity covers employee-related claims"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,40}(employee|worker|staff|personnel)"
+    legal_basis: "Common Law - Employment Indemnity"
+    suggestion: "Clarify whether employee-related claims are covered by the indemnity clause."
+    enabled: true
+
+  - id: EN_I015
+    category: liability_risk
+    name: "Indemnity for Environmental Damage"
+    description: "Check if indemnity covers environmental damage"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,40}(environment|pollution|contamination|hazardous)"
+    legal_basis: "Common Law - Environmental Indemnity"
+    suggestion: "Clarify whether environmental damage is covered by the indemnity clause."
+    enabled: true
+
+  - id: EN_I016
+    category: liability_risk
+    name: "Indemnity for Product Liability"
+    description: "Check if indemnity covers product liability claims"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,40}(product liability|product defect|product recall)"
+    legal_basis: "Common Law - Product Liability Indemnity"
+    suggestion: "Clarify whether product liability is covered by the indemnity clause."
+    enabled: true
+
+  - id: EN_I017
+    category: liability_risk
+    name: "Indemnity for Regulatory Fines"
+    description: "Check if indemnity covers regulatory fines and penalties"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,40}(regulatory fine|penalty|sanction|government)"
+    legal_basis: "Common Law - Regulatory Indemnity"
+    suggestion: "Clarify whether regulatory fines are covered by the indemnity clause."
+    enabled: true
+
+  - id: EN_I018
+    category: liability_risk
+    name: "Indemnity for Fraud"
+    description: "Check if indemnity covers fraud or willful misconduct"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,40}(fraud|willful|intentional|deliberate)"
+    legal_basis: "Common Law - Fraud Indemnity"
+    suggestion: "Ensure fraud and willful misconduct are explicitly covered by the indemnity clause."
+    enabled: true
+
+  - id: EN_I019
+    category: liability_risk
+    name: "Indemnity for Consequential Loss"
+    description: "Check if indemnity covers consequential or indirect losses"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,40}(consequential|indirect|special|incidental|loss of profit)"
+    legal_basis: "Common Law - Consequential Loss Indemnity"
+    suggestion: "Clarify whether consequential losses are covered by the indemnity clause."
+    enabled: true
+
+  - id: EN_I020
+    category: liability_risk
+    name: "Indemnity for Breach of Contract"
+    description: "Check if indemnity covers breach of contract claims"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,40}(breach of contract|breach of agreement|violation)"
+    legal_basis: "Common Law - Breach Indemnity"
+    suggestion: "Clarify whether breach of contract is covered by the indemnity clause."
+    enabled: true
+
+  # ========== Limitation of Liability (20 rules) ==========
+  - id: EN_L001
+    category: liability_risk
+    name: "Liability Cap Missing"
+    description: "No cap on total liability, exposing party to unlimited claims"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(liability.{0,30}cap|cap.{0,30}liability|maximum liability|limit.{0,30}liability)"
+    legal_basis: "Common Law - Liability Cap"
+    suggestion: "Include a liability cap, typically linked to contract value or fees paid."
+    enabled: true
+
+  - id: EN_L002
+    category: liability_risk
+    name: "Liability Cap Too Low"
+    description: "Liability cap is disproportionately low relative to contract value"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(liability.{0,30}exceed|not exceed|limited to|aggregate liability)"
+    legal_basis: "Common Law - Reasonable Liability Cap"
+    suggestion: "Ensure the liability cap is reasonable relative to the contract value and potential losses."
+    enabled: true
+
+  - id: EN_L003
+    category: liability_risk
+    name: "Exclusion of Consequential Loss"
+    description: "Consequential loss exclusion may be too broad"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(consequential loss|indirect loss|special loss|incidental loss|loss of profit)"
+    legal_basis: "Common Law - Consequential Loss Exclusion"
+    suggestion: "Review the scope of consequential loss exclusion for reasonableness."
+    enabled: true
+
+  - id: EN_L004
+    category: liability_risk
+    name: "Liability Cap Exclusions"
+    description: "Check what is excluded from the liability cap"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(notwithstanding|excluded from|outside the cap|unlimited liability|excepted from)"
+    legal_basis: "Common Law - Liability Cap Exclusions"
+    suggestion: "Review exclusions from the liability cap (e.g., IP infringement, confidentiality breach)."
+    enabled: true
+
+  - id: EN_L005
+    category: liability_risk
+    name: "Mutual Liability Cap"
+    description: "Check if liability cap applies equally to both parties"
+    severity: low
+    check_type: pattern_match
+    check_rule: "(?i)(each party|both parties|mutual|reciprocal).{0,30}(liability|cap|limit)"
+    legal_basis: "Common Law - Mutual Liability"
+    suggestion: "Consider whether the liability cap should be mutual."
+    enabled: true
+
+  - id: EN_L006
+    category: liability_risk
+    name: "Liability for Gross Negligence"
+    description: "Check if liability cap applies to gross negligence"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(gross negligence|willful misconduct|fraud).{0,30}(liability|cap|limit|exclude)"
+    legal_basis: "Common Law - Gross Negligence Liability"
+    suggestion: "Ensure the liability cap does not apply to gross negligence or willful misconduct."
+    enabled: true
+
+  - id: EN_L007
+    category: liability_risk
+    name: "Liability for Death or Personal Injury"
+    description: "Check if liability cap applies to death or personal injury"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(death|personal injury|bodily injury).{0,30}(liability|cap|limit|exclude)"
+    legal_basis: "Common Law - Death/Injury Liability"
+    suggestion: "Ensure the liability cap does not apply to death or personal injury caused by negligence."
+    enabled: true
+
+  - id: EN_L008
+    category: liability_risk
+    name: "Liability for IP Infringement"
+    description: "Check if liability cap applies to IP infringement"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(intellectual property|ip infringement|patent|copyright).{0,30}(liability|cap|limit)"
+    legal_basis: "Common Law - IP Liability"
+    suggestion: "Consider whether IP infringement should be excluded from the liability cap."
+    enabled: true
+
+  - id: EN_L009
+    category: liability_risk
+    name: "Liability for Data Breach"
+    description: "Check if liability cap applies to data breach"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(data breach|privacy|personal data|data protection).{0,30}(liability|cap|limit)"
+    legal_basis: "Common Law - Data Breach Liability"
+    suggestion: "Consider whether data breach should be excluded from the liability cap."
+    enabled: true
+
+  - id: EN_L010
+    category: liability_risk
+    name: "Liability for Confidentiality Breach"
+    description: "Check if liability cap applies to confidentiality breach"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(confidential|confidentiality|non.?disclosure).{0,30}(liability|cap|limit)"
+    legal_basis: "Common Law - Confidentiality Liability"
+    suggestion: "Consider whether confidentiality breach should be excluded from the liability cap."
+    enabled: true
+
+  - id: EN_L011
+    category: liability_risk
+    name: "Liability for Third-Party Claims"
+    description: "Check if liability cap applies to third-party claims"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(third party|third-party|claim).{0,30}(liability|cap|limit)"
+    legal_basis: "Common Law - Third-Party Liability"
+    suggestion: "Clarify whether third-party claims are subject to the liability cap."
+    enabled: true
+
+  - id: EN_L012
+    category: liability_risk
+    name: "Liability for Breach of Warranty"
+    description: "Check if liability cap applies to breach of warranty"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(warranty|warranties|breach of warranty).{0,30}(liability|cap|limit)"
+    legal_basis: "Common Law - Warranty Liability"
+    suggestion: "Clarify whether breach of warranty is subject to the liability cap."
+    enabled: true
+
+  - id: EN_L013
+    category: liability_risk
+    name: "Liability for Indemnity Claims"
+    description: "Check if liability cap applies to indemnity claims"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,30}(liability|cap|limit)"
+    legal_basis: "Common Law - Indemnity Liability"
+    suggestion: "Clarify whether indemnity claims are subject to the liability cap."
+    enabled: true
+
+  - id: EN_L014
+    category: liability_risk
+    name: "Liability for Regulatory Fines"
+    description: "Check if liability cap applies to regulatory fines"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(regulatory fine|penalty|sanction|government).{0,30}(liability|cap|limit)"
+    legal_basis: "Common Law - Regulatory Liability"
+    suggestion: "Clarify whether regulatory fines are subject to the liability cap."
+    enabled: true
+
+  - id: EN_L015
+    category: liability_risk
+    name: "Liability for Environmental Damage"
+    description: "Check if liability cap applies to environmental damage"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(environment|pollution|contamination|hazardous).{0,30}(liability|cap|limit)"
+    legal_basis: "Common Law - Environmental Liability"
+    suggestion: "Clarify whether environmental damage is subject to the liability cap."
+    enabled: true
+
+  - id: EN_L016
+    category: liability_risk
+    name: "Liability for Product Recall"
+    description: "Check if liability cap applies to product recall costs"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(product recall|recall cost|withdrawal).{0,30}(liability|cap|limit)"
+    legal_basis: "Common Law - Product Recall Liability"
+    suggestion: "Clarify whether product recall costs are subject to the liability cap."
+    enabled: true
+
+  - id: EN_L017
+    category: liability_risk
+    name: "Liability for Service Credits"
+    description: "Check if service credits count toward liability cap"
+    severity: low
+    check_type: pattern_match
+    check_rule: "(?i)(service credit|service level credit|penalty).{0,30}(liability|cap|limit)"
+    legal_basis: "Common Law - Service Credit Liability"
+    suggestion: "Clarify whether service credits count toward the liability cap."
+    enabled: true
+
+  - id: EN_L018
+    category: liability_risk
+    name: "Liability for Refund Obligations"
+    description: "Check if refund obligations count toward liability cap"
+    severity: low
+    check_type: pattern_match
+    check_rule: "(?i)(refund|reimburse|repay).{0,30}(liability|cap|limit)"
+    legal_basis: "Common Law - Refund Liability"
+    suggestion: "Clarify whether refund obligations count toward the liability cap."
+    enabled: true
+
+  - id: EN_L019
+    category: liability_risk
+    name: "Liability for Tax Liabilities"
+    description: "Check if tax liabilities count toward liability cap"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(tax|taxation|tax liability).{0,30}(liability|cap|limit)"
+    legal_basis: "Common Law - Tax Liability"
+    suggestion: "Clarify whether tax liabilities count toward the liability cap."
+    enabled: true
+
+  - id: EN_L020
+    category: liability_risk
+    name: "Liability for Employee Claims"
+    description: "Check if employee-related claims count toward liability cap"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(employee|worker|staff|personnel).{0,30}(liability|cap|limit)"
+    legal_basis: "Common Law - Employment Liability"
+    suggestion: "Clarify whether employee-related claims count toward the liability cap."
+    enabled: true
+
+  # ========== Governing Law (20 rules) ==========
+  - id: EN_G001
+    category: dispute_risk
+    name: "Governing Law Clause Missing"
+    description: "No governing law clause specified"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(governing law|applicable law|governed by|subject to.{0,20}law)"
+    legal_basis: "Common Law - Governing Law"
+    suggestion: "Include a clear governing law clause specifying which law applies to the contract."
+    enabled: true
+
+  - id: EN_G002
+    category: dispute_risk
+    name: "Governing Law Ambiguity"
+    description: "Governing law clause is ambiguous or contradictory"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(laws of|law of|jurisdiction of).{0,30}(and|or|excluding|except)"
+    legal_basis: "Common Law - Governing Law Clarity"
+    suggestion: "Ensure the governing law clause is clear and unambiguous."
+    enabled: true
+
+  - id: EN_G003
+    category: dispute_risk
+    name: "Governing Law and Jurisdiction Mismatch"
+    description: "Governing law and jurisdiction clauses may conflict"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(governing law|applicable law).{0,50}(jurisdiction|court|forum|arbitration)"
+    legal_basis: "Common Law - Law vs. Jurisdiction"
+    suggestion: "Ensure the governing law and jurisdiction clauses are consistent."
+    enabled: true
+
+  - id: EN_G004
+    category: dispute_risk
+    name: "Governing Law Excludes Conflict of Laws"
+    description: "Check if conflict of laws rules are excluded"
+    severity: low
+    check_type: pattern_match
+    check_rule: "(?i)(conflict of laws|private international law|without regard to)"
+    legal_basis: "Common Law - Conflict of Laws"
+    suggestion: "Consider excluding conflict of laws rules to avoid uncertainty."
+    enabled: true
+
+  - id: EN_G005
+    category: dispute_risk
+    name: "Governing Law for IP Rights"
+    description: "Check if governing law covers IP rights"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(intellectual property|ip rights|patent|copyright|trademark).{0,30}(governing law|applicable law)"
+    legal_basis: "Common Law - IP Governing Law"
+    suggestion: "Clarify which law governs IP rights, which may differ from the main contract governing law."
+    enabled: true
+
+  - id: EN_G006
+    category: dispute_risk
+    name: "Governing Law for Real Estate"
+    description: "Check if governing law is appropriate for real estate"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(real estate|real property|land|premises).{0,30}(governing law|applicable law)"
+    legal_basis: "Common Law - Real Estate Governing Law"
+    suggestion: "For real estate contracts, the law of the location of the property usually applies."
+    enabled: true
+
+  - id: EN_G007
+    category: dispute_risk
+    name: "Governing Law for Employment"
+    description: "Check if governing law is appropriate for employment"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(employment|employee|worker|employer).{0,30}(governing law|applicable law)"
+    legal_basis: "Common Law - Employment Governing Law"
+    suggestion: "For employment contracts, the law of the place of work usually applies."
+    enabled: true
+
+  - id: EN_G008
+    category: dispute_risk
+    name: "Governing Law for Consumer Contracts"
+    description: "Check if governing law protects consumer rights"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(consumer|consumer contract|consumer protection).{0,30}(governing law|applicable law)"
+    legal_basis: "Common Law - Consumer Protection"
+    suggestion: "For consumer contracts, mandatory consumer protection laws may override the chosen governing law."
+    enabled: true
+
+  - id: EN_G009
+    category: dispute_risk
+    name: "Governing Law for International Sales"
+    description: "Check if governing law is appropriate for international sales"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(international sale|cross.?border|export|import).{0,30}(governing law|applicable law)"
+    legal_basis: "Common Law - International Sales Law"
+    suggestion: "For international sales, consider whether CISG should apply or be excluded."
+    enabled: true
+
+  - id: EN_G010
+    category: dispute_risk
+    name: "Governing Law for Maritime Contracts"
+    description: "Check if governing law is appropriate for maritime contracts"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(maritime|shipping|vessel|charter|bill of lading).{0,30}(governing law|applicable law)"
+    legal_basis: "Common Law - Maritime Law"
+    suggestion: "For maritime contracts, specialized maritime law may apply."
+    enabled: true
+
+  - id: EN_G011
+    category: dispute_risk
+    name: "Governing Law for Construction"
+    description: "Check if governing law is appropriate for construction contracts"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(construction|building|engineering|infrastructure).{0,30}(governing law|applicable law)"
+    legal_basis: "Common Law - Construction Law"
+    suggestion: "For construction contracts, the law of the project location usually applies."
+    enabled: true
+
+  - id: EN_G012
+    category: dispute_risk
+    name: "Governing Law for Technology"
+    description: "Check if governing law is appropriate for technology contracts"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(technology|software|saas|cloud|digital).{0,30}(governing law|applicable law)"
+    legal_basis: "Common Law - Technology Law"
+    suggestion: "For technology contracts, consider data protection and IP laws in the chosen jurisdiction."
+    enabled: true
+
+  - id: EN_G013
+    category: dispute_risk
+    name: "Governing Law for Financial Services"
+    description: "Check if governing law is appropriate for financial services"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(financial|banking|investment|securities|insurance).{0,30}(governing law|applicable law)"
+    legal_basis: "Common Law - Financial Services Law"
+    suggestion: "For financial services, regulatory requirements may override the chosen governing law."
+    enabled: true
+
+  - id: EN_G014
+    category: dispute_risk
+    name: "Governing Law for Healthcare"
+    description: "Check if governing law is appropriate for healthcare contracts"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(healthcare|medical|pharmaceutical|clinical|patient).{0,30}(governing law|applicable law)"
+    legal_basis: "Common Law - Healthcare Law"
+    suggestion: "For healthcare contracts, patient protection laws may override the chosen governing law."
+    enabled: true
+
+  - id: EN_G015
+    category: dispute_risk
+    name: "Governing Law for Energy"
+    description: "Check if governing law is appropriate for energy contracts"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(energy|oil|gas|petroleum|renewable|power).{0,30}(governing law|applicable law)"
+    legal_basis: "Common Law - Energy Law"
+    suggestion: "For energy contracts, resource ownership and environmental laws may apply."
+    enabled: true
+
+  - id: EN_G016
+    category: dispute_risk
+    name: "Governing Law for Telecommunications"
+    description: "Check if governing law is appropriate for telecom contracts"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(telecom|telecommunication|network|spectrum|wireless).{0,30}(governing law|applicable law)"
+    legal_basis: "Common Law - Telecom Law"
+    suggestion: "For telecom contracts, regulatory requirements may override the chosen governing law."
+    enabled: true
+
+  - id: EN_G017
+    category: dispute_risk
+    name: "Governing Law for Government Contracts"
+    description: "Check if governing law is appropriate for government contracts"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(government|public|state|federal|municipal).{0,30}(governing law|applicable law)"
+    legal_basis: "Common Law - Government Contracts"
+    suggestion: "For government contracts, the law of the government's jurisdiction usually applies."
+    enabled: true
+
+  - id: EN_G018
+    category: dispute_risk
+    name: "Governing Law for Joint Ventures"
+    description: "Check if governing law is appropriate for joint ventures"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(joint venture|jv|partnership|strategic alliance).{0,30}(governing law|applicable law)"
+    legal_basis: "Common Law - Joint Venture Law"
+    suggestion: "For joint ventures, consider the law of the jurisdiction where the JV operates."
+    enabled: true
+
+  - id: EN_G019
+    category: dispute_risk
+    name: "Governing Law for M&A"
+    description: "Check if governing law is appropriate for M&A transactions"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(merger|acquisition|takeover|due diligence|share purchase).{0,30}(governing law|applicable law)"
+    legal_basis: "Common Law - M&A Law"
+    suggestion: "For M&A, the law of the target company's jurisdiction usually applies."
+    enabled: true
+
+  - id: EN_G020
+    category: dispute_risk
+    name: "Governing Law for Franchise"
+    description: "Check if governing law is appropriate for franchise agreements"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(franchise|franchisor|franchisee|franchise agreement).{0,30}(governing law|applicable law)"
+    legal_basis: "Common Law - Franchise Law"
+    suggestion: "For franchise agreements, franchise disclosure laws may override the chosen governing law."
+    enabled: true
+
+  # ========== Termination for Convenience (20 rules) ==========
+  - id: EN_T001
+    category: clause_risk
+    name: "Termination for Convenience Missing"
+    description: "No termination for convenience clause"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(terminat.{0,30}convenience|terminat.{0,30}without cause|terminat.{0,30}at will)"
+    legal_basis: "Common Law - Termination for Convenience"
+    suggestion: "Consider including a termination for convenience clause to provide flexibility."
+    enabled: true
+
+  - id: EN_T002
+    category: clause_risk
+    name: "Termination Notice Period"
+    description: "Check if termination notice period is specified"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(terminat.{0,30}notice|notice of terminat|written notice.{0,30}terminat)"
+    legal_basis: "Common Law - Termination Notice"
+    suggestion: "Specify a reasonable notice period for termination (typically 30-90 days)."
+    enabled: true
+
+  - id: EN_T003
+    category: clause_risk
+    name: "Termination Compensation"
+    description: "Check if compensation is payable on termination for convenience"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(terminat.{0,30}compensat|terminat.{0,30}payment|terminat.{0,30}fee|break fee)"
+    legal_basis: "Common Law - Termination Compensation"
+    suggestion: "Specify compensation payable on termination for convenience (e.g., costs incurred, lost profit)."
+    enabled: true
+
+  - id: EN_T004
+    category: clause_risk
+    name: "Termination for Cause"
+    description: "Check if termination for cause is defined"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(terminat.{0,30}cause|terminat.{0,30}breach|terminat.{0,30}default)"
+    legal_basis: "Common Law - Termination for Cause"
+    suggestion: "Define what constitutes cause for termination (e.g., material breach, insolvency)."
+    enabled: true
+
+  - id: EN_T005
+    category: clause_risk
+    name: "Termination for Insolvency"
+    description: "Check if termination for insolvency is included"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(insolvenc|bankrupt|liquidation|administration|receivership|winding up)"
+    legal_basis: "Common Law - Insolvency Termination"
+    suggestion: "Include termination rights upon insolvency of the other party."
+    enabled: true
+
+  - id: EN_T006
+    category: clause_risk
+    name: "Termination for Change of Control"
+    description: "Check if termination for change of control is included"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(change of control|change in control|acquisition|merger).{0,30}terminat"
+    legal_basis: "Common Law - Change of Control Termination"
+    suggestion: "Consider including termination rights upon change of control of the other party."
+    enabled: true
+
+  - id: EN_T007
+    category: clause_risk
+    name: "Termination for Force Majeure"
+    description: "Check if termination for prolonged force majeure is included"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(force majeure|exceptional event).{0,30}terminat"
+    legal_basis: "Common Law - Force Majeure Termination"
+    suggestion: "Include termination rights if force majeure continues beyond a specified period."
+    enabled: true
+
+  - id: EN_T008
+    category: clause_risk
+    name: "Termination Consequences"
+    description: "Check if consequences of termination are specified"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(upon terminat|on terminat|effect of terminat|consequence.{0,30}terminat)"
+    legal_basis: "Common Law - Termination Consequences"
+    suggestion: "Specify the consequences of termination (e.g., return of property, payment of outstanding amounts)."
+    enabled: true
+
+  - id: EN_T009
+    category: clause_risk
+    name: "Termination Survival Clauses"
+    description: "Check if survival clauses are specified"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(survive.{0,30}terminat|survival.{0,30}terminat|continue.{0,30}terminat)"
+    legal_basis: "Common Law - Survival Clauses"
+    suggestion: "Specify which clauses survive termination (e.g., confidentiality, IP, dispute resolution)."
+    enabled: true
+
+  - id: EN_T010
+    category: clause_risk
+    name: "Termination Transition Assistance"
+    description: "Check if transition assistance is required"
+    severity: low
+    check_type: pattern_match
+    check_rule: "(?i)(transition|handover|migration|knowledge transfer).{0,30}terminat"
+    legal_basis: "Common Law - Transition Assistance"
+    suggestion: "Require transition assistance upon termination to ensure smooth handover."
+    enabled: true
+
+  - id: EN_T011
+    category: clause_risk
+    name: "Termination Data Return"
+    description: "Check if data return/destruction is required"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(return.{0,30}data|destroy.{0,30}data|delete.{0,30}data|data.{0,30}terminat)"
+    legal_basis: "Common Law - Data Return"
+    suggestion: "Require return or destruction of data upon termination."
+    enabled: true
+
+  - id: EN_T012
+    category: clause_risk
+    name: "Termination IP Rights"
+    description: "Check what happens to IP rights upon termination"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(intellectual property|ip rights|license).{0,30}terminat"
+    legal_basis: "Common Law - IP Termination"
+    suggestion: "Specify what happens to IP rights and licenses upon termination."
+    enabled: true
+
+  - id: EN_T013
+    category: clause_risk
+    name: "Termination Confidentiality"
+    description: "Check if confidentiality obligations survive termination"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(confidential|confidentiality|non.?disclosure).{0,30}terminat"
+    legal_basis: "Common Law - Confidentiality Survival"
+    suggestion: "Ensure confidentiality obligations survive termination."
+    enabled: true
+
+  - id: EN_T014
+    category: clause_risk
+    name: "Termination Non-Compete"
+    description: "Check if non-compete obligations survive termination"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(non.?compete|non.?solicitation|restrictive covenant).{0,30}terminat"
+    legal_basis: "Common Law - Non-Compete Survival"
+    suggestion: "Specify whether non-compete obligations survive termination."
+    enabled: true
+
+  - id: EN_T015
+    category: clause_risk
+    name: "Termination Payment Obligations"
+    description: "Check if payment obligations survive termination"
+    severity: high
+    check_type: pattern_match
+    check_rule: "(?i)(payment|outstanding|unpaid|due).{0,30}terminat"
+    legal_basis: "Common Law - Payment Survival"
+    suggestion: "Ensure payment obligations survive termination."
+    enabled: true
+
+  - id: EN_T016
+    category: clause_risk
+    name: "Termination Dispute Resolution"
+    description: "Check if dispute resolution survives termination"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(dispute|arbitration|mediation|litigation).{0,30}terminat"
+    legal_basis: "Common Law - Dispute Resolution Survival"
+    suggestion: "Ensure dispute resolution clauses survive termination."
+    enabled: true
+
+  - id: EN_T017
+    category: clause_risk
+    name: "Termination Warranty Claims"
+    description: "Check if warranty claims survive termination"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(warranty|warranties|defect|guarantee).{0,30}terminat"
+    legal_basis: "Common Law - Warranty Survival"
+    suggestion: "Specify whether warranty claims survive termination."
+    enabled: true
+
+  - id: EN_T018
+    category: clause_risk
+    name: "Termination Indemnity Claims"
+    description: "Check if indemnity claims survive termination"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(indemnif|hold harmless).{0,30}terminat"
+    legal_basis: "Common Law - Indemnity Survival"
+    suggestion: "Ensure indemnity claims survive termination."
+    enabled: true
+
+  - id: EN_T019
+    category: clause_risk
+    name: "Termination Limitation of Liability"
+    description: "Check if limitation of liability survives termination"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(limitation of liability|liability cap|damages).{0,30}terminat"
+    legal_basis: "Common Law - Liability Limitation Survival"
+    suggestion: "Ensure limitation of liability survives termination."
+    enabled: true
+
+  - id: EN_T020
+    category: clause_risk
+    name: "Termination Export Control"
+    description: "Check if export control obligations survive termination"
+    severity: medium
+    check_type: pattern_match
+    check_rule: "(?i)(export control|sanctions|trade compliance|embargo).{0,30}terminat"
+    legal_basis: "Common Law - Export Control Survival"
+    suggestion: "Ensure export control obligations survive termination."
+    enabled: true
