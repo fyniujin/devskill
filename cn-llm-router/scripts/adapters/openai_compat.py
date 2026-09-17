@@ -43,6 +43,57 @@ class OpenAICompatAdapter(AdapterBase):
         else:
             return self._stream(url, headers, payload, timeout)
 
+    def embed(self, texts, model=None, timeout=60):
+        """文本向量嵌入（OpenAI 兼容 /embeddings 端点）。"""
+        base_url = self.cfg.get("base_url")
+        api_key = self.cfg.get("api_key")
+        if not base_url or not api_key:
+            raise AdapterError("缺少 base_url 或 api_key，无法调用 embedding")
+        embed_model = model or self.cfg.get("default_embed_model", "text-embedding-3-small")
+        url = base_url.rstrip("/") + "/embeddings"
+        headers = {
+            "Authorization": "Bearer " + api_key,
+            "Content-Type": "application/json",
+        }
+        payload = {"model": embed_model, "input": texts}
+        status, data = http_post_json(url, headers, payload, timeout)
+        if status != 200:
+            raise AdapterError("embedding 调用失败: %s" % _short(data))
+        if isinstance(data, str):
+            raise AdapterError("embedding 响应非 JSON: %s" % _short(data))
+        embeddings = [item["embedding"] for item in data.get("data", [])]
+        usage = data.get("usage", {})
+        return {
+            "embeddings": embeddings,
+            "model": embed_model,
+            "dim": len(embeddings[0]) if embeddings else 0,
+            "tokens": usage.get("total_tokens", 0),
+        }
+
+    def rerank(self, query, documents, model=None, timeout=60):
+        """文档重排序（OpenAI 兼容 /rerank 端点，部分厂商支持）。"""
+        base_url = self.cfg.get("base_url")
+        api_key = self.cfg.get("api_key")
+        if not base_url or not api_key:
+            raise AdapterError("缺少 base_url 或 api_key，无法调用 rerank")
+        rerank_model = model or self.cfg.get("default_rerank_model", "bge-reranker-v2-m3")
+        url = base_url.rstrip("/") + "/reranking"
+        headers = {
+            "Authorization": "Bearer " + api_key,
+            "Content-Type": "application/json",
+        }
+        payload = {"model": rerank_model, "query": query, "documents": documents}
+        status, data = http_post_json(url, headers, payload, timeout)
+        if status != 200:
+            raise AdapterError("rerank 调用失败: %s" % _short(data))
+        if isinstance(data, str):
+            raise AdapterError("rerank 响应非 JSON: %s" % _short(data))
+        results = data.get("results", [])
+        return {
+            "results": results,
+            "model": rerank_model,
+        }
+
     def _stream(self, url, headers, payload, timeout):
         import urllib.request
         data = json.dumps(payload).encode("utf-8")
