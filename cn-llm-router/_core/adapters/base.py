@@ -79,6 +79,14 @@ class AdapterBase:
     def chat(self, messages, model, stream=False, timeout=60):
         raise NotImplementedError
 
+    def embed(self, texts, model=None, timeout=60):
+        """文本向量嵌入。子类实现，不支持的厂商抛 NotImplementedError。"""
+        raise NotImplementedError("该适配器不支持 embedding")
+
+    def rerank(self, query, documents, model=None, timeout=60):
+        """文档重排序。子类实现，不支持的厂商抛 NotImplementedError。"""
+        raise NotImplementedError("该适配器不支持 rerank")
+
     def _extract_usage(self, data):
         """从响应里取 token 用量，兼容多种字段名。"""
         usage = (data or {}).get("usage") or {}
