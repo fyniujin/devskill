@@ -25,7 +25,6 @@ import json
 import os
 import random
 import sys
-import time
 
 # 确保 llm-core 目录在 sys.path 中
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -46,33 +45,41 @@ CLASSIFICATION_CASES = [
 ]
 
 # 代码通过率：验证模型是否能生成可执行代码（语法检查）
+# 注意：check 函数直接存 lambda 对象，避免 eval() 触发安全扫描
 CODE_CASES = [
-    {"prompt": "用 Python 写一个 hello world", "check": "lambda r: 'print' in r and 'hello' in r.lower()"},
-    {"prompt": "用 Python 写一个列表去重函数", "check": "lambda r: 'def ' in r and 'return' in r"},
-    {"prompt": "用 Python 写一个冒泡排序", "check": "lambda r: 'def ' in r and 'for ' in r"},
-    {"prompt": "用 Python 写一个读取文件的函数", "check": "lambda r: 'def ' in r and 'open' in r"},
-    {"prompt": "用 Python 写一个计算斐波那契的函数", "check": "lambda r: 'def ' in r and 'return' in r"},
+    {"prompt": "用 Python 写一个 hello world", "check": lambda r: 'print' in r and 'hello' in r.lower()},
+    {"prompt": "用 Python 写一个列表去重函数", "check": lambda r: 'def ' in r and 'return' in r},
+    {"prompt": "用 Python 写一个冒泡排序", "check": lambda r: 'def ' in r and 'for ' in r},
+    {"prompt": "用 Python 写一个读取文件的函数", "check": lambda r: 'def ' in r and 'open' in r},
+    {"prompt": "用 Python 写一个计算斐波那契的函数", "check": lambda r: 'def ' in r and 'return' in r},
 ]
 
 # 长文摘要质量代理：验证长文本输入后模型能生成摘要（长度合理、关键词覆盖）
 LONG_CASES = [
     {"prompt": "请用一句话总结以下文章：" + "人工智能是计算机科学的一个分支。" * 50,
-     "check": "lambda r: 10 < len(r) < 200"},
+     "check": lambda r: 10 < len(r) < 200},
     {"prompt": "请用两句话总结以下文章：" + "气候变化是全球性挑战。" * 50,
-     "check": "lambda r: 10 < len(r) < 300"},
+     "check": lambda r: 10 < len(r) < 300},
     {"prompt": "请用一句话总结以下文章：" + "量子计算利用量子力学原理。" * 50,
-     "check": "lambda r: 10 < len(r) < 200"},
+     "check": lambda r: 10 < len(r) < 200},
     {"prompt": "请用两句话总结以下文章：" + "生物技术改变医疗领域。" * 50,
-     "check": "lambda r: 10 < len(r) < 300"},
+     "check": lambda r: 10 < len(r) < 300},
     {"prompt": "请用一句话总结以下文章：" + "区块链是一种分布式账本技术。" * 50,
-     "check": "lambda r: 10 < len(r) < 200"},
+     "check": lambda r: 10 < len(r) < 200},
 ]
 
 
 def run_classification_tests(adapter, model_name):
-    """跑分类准确率测试，返回 0-10 分。"""
-    from adapters import build as build_adapter
-    import classifier
+    """跑分类准确率测试，返回 0-10 分。
+
+    注意：classifier 是上层 skill 模块（非 llm-core），用可选导入。
+    若当前环境无 classifier（如 cn-model-gateway），跳过分类测试返回 0。
+    """
+    try:
+        import classifier
+    except ImportError:
+        # classifier 不可用时跳过（llm-core 不依赖上层 skill 模块）
+        return 0
     correct = 0
     for case in CLASSIFICATION_CASES:
         try:
@@ -94,7 +101,7 @@ def run_code_tests(adapter, model_name, mock=False):
                 response = "def solution():\n    return 'mock answer'"
             else:
                 response = _call_adapter(adapter, model_name, case["prompt"])
-            if response and eval(case["check"])(response):
+            if response and case["check"](response):
                 correct += 1
         except Exception:
             pass
@@ -110,7 +117,7 @@ def run_long_tests(adapter, model_name, mock=False):
                 response = "这是一个关于该主题的摘要，内容简洁且有意义。"
             else:
                 response = _call_adapter(adapter, model_name, case["prompt"])
-            if response and eval(case["check"])(response):
+            if response and case["check"](response):
                 correct += 1
         except Exception:
             pass
@@ -137,7 +144,7 @@ def calibrate_model(provider, model_name, cfg, mock=False):
 
     try:
         adapter = build_adapter(cfg.get("adapter", "openai_compat"), cfg)
-    except Exception as e:
+    except Exception:
         return None
 
     reason_score = run_classification_tests(adapter, model_name)
