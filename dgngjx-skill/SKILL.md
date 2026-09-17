@@ -1,10 +1,10 @@
 ---
 name: dgngjx-skill
 slug: dgngjx-skill
-displayName: "多功能工具箱 v3.9"
-description: "多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐、实用小工具、系统工具、AI办公。11大模块49个工具。v3.9 统一CLI与体验重构：dgngjx CLI(argparse) + registry.json注册表 + 49工具参数化 + 安全分级 + 无人值守。"
-description_zh: "多功能免费工具箱 - 11大模块49个工具。v3.9 统一CLI与体验重构：dgngjx命令行入口 + 工具注册表 + 参数化调用 + 安全分级 + 无人值守支持。"
-version: 3.9.0
+displayName: "多功能工具箱 v4.0"
+description: "多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐、实用小工具、系统工具、AI办公。11大模块49个工具。v4.0 数据准确性：个税五险全国化（tax_2026.yaml 查表累进引擎）+ 汇率缓存时效治理（72h TTL + 陈旧标注）。"
+description_zh: "多功能免费工具箱 - 11大模块49个工具。v4.0 数据准确性：个税五险全国化（13城市查表累进引擎）+ 汇率缓存时效治理（72h TTL + 陈旧标注）。"
+version: 4.0.0
 category: office-efficiency
 platforms:
   - windows
@@ -46,10 +46,14 @@ tags:
   - cli
   - registry
   - argparse
+  - data-accuracy
+  - tax-calculation
+  - social-insurance
+  - exchange-rate-ttl
 requires_api_key: false
 ---
 
-# 多功能工具箱 dgngjx-skill v3.9.0
+# 多功能工具箱 dgngjx-skill v4.0.0
 
 ## 🚀 dgngjx CLI 统一入口 ⭐ v3.9.0 新增
 
@@ -215,9 +219,9 @@ if __name__ == "__main__":
 
 ---
 
-## 🆕 v3.9.0 更新提醒
+## 🆕 v4.0.0 更新提醒
 
-> 🔔 **您正在使用 dgngjx-skill v3.9.0**
+> 🔔 **您正在使用 dgngjx-skill v4.0.0**
 > 
 > 检查更新：`skillhub search dgngjx-skill`
 > 
@@ -688,30 +692,204 @@ except ValueError:
 
 ---
 
-#### 1.2 五险一金计算器
+#### 1.2 五险一金计算器 ⭐ v4.0.0 查表累进引擎
 
 **✅ 开箱即用** ｜ 🌐 [个税计算器](https://www.taxcalculator.com)
 
+> v4.0 重写计算引擎：数据与引擎分离，读取 `references/tax_2026.yaml` 数据驱动计算。支持 13 个城市，查表确定基数上下限，7 级超额累进个税。
+
 <details>
-<summary>📋 展开查看命令</summary>
+<summary>📋 五险一金 + 个税计算器（查表 + 分段累进）</summary>
 
 ```python
+import os, yaml, math
+
+def calc_insurance_tax(salary, city_code="beijing"):
+    """读取 tax_2026.yaml，查表+分段累进计算五险一金和个税"""
+    # 加载数据包
+    yaml_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "references", "tax_2026.yaml")
+    with open(yaml_path, encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    
+    meta = data.get("meta", {})
+    bases = data.get("social_insurance_bases", {})
+    rates = data.get("insurance_rates", {})
+    overrides = rates.get("overrides", {})
+    tax_brackets = data.get("individual_income_tax", {}).get("brackets", [])
+    monthly_threshold = data.get("individual_income_tax", {}).get("monthly_threshold", 5000)
+    
+    if city_code not in bases:
+        city_name = city_code
+        supported = [f"{v.get('name', k)} ({k})" for k, v in bases.items()]
+        return None, f"❌ 不支持的城市: {city_name}。支持: {', '.join(supported)}"
+    
+    city_data = bases[city_code]
+    city_name = city_data.get("name", city_code)
+    
+    # 获取城市差异化比例
+    city_overrides = overrides.get(city_code, {})
+    personal_rates = {**rates.get("default", {}).get("personal", {}), **city_overrides.get("personal", {})}
+    company_rates = {**rates.get("default", {}).get("company", {}), **city_overrides.get("company", {})}
+    
+    # 计算各项社保缴费基数（在上下限之间）
+    def get_base(insurance_type):
+        base_info = city_data.get(insurance_type, {})
+        lower = base_info.get("lower", 0)
+        upper = base_info.get("upper", float("inf"))
+        return max(lower, min(salary, upper))
+    
+    # 计算个人社保缴费
+    personal_items = {}
+    personal_total = 0
+    for insurance_type in ["pension", "medical", "unemployed", "injury", "maternity"]:
+        base = get_base(insurance_type)
+        rate = personal_rates.get(insurance_type, 0)
+        amount = base * rate
+        if amount > 0:
+            names = {"pension": "养老", "medical": "医疗", "unemployed": "失业", "injury": "工伤", "maternity": "生育"}
+            personal_items[names.get(insurance_type, insurance_type)] = round(amount, 2)
+        personal_total += amount
+    
+    # 公积金
+    hf_base = get_base("housing_fund")
+    hf_rate = personal_rates.get("housing_fund", 0.12)
+    hf_amount = hf_base * hf_rate
+    personal_items["公积金"] = round(hf_amount, 2)
+    personal_total += hf_amount
+    
+    # 应纳税所得额 = 工资 - 社保公积金 - 起征点
+    taxable_income = max(0, salary - personal_total - monthly_threshold)
+    
+    # 7级超额累进税率
+    tax = 0
+    tax_detail = None
+    for bracket in tax_brackets:
+        if taxable_income <= 0:
+            break
+        taxable_at_bracket = min(taxable_income, bracket["limit"])
+        tax += taxable_at_bracket * bracket["rate"]
+        taxable_income -= taxable_at_bracket
+        if taxable_at_bracket > 0:
+            tax_detail = f"{bracket['rate']*100:.0f}%"
+    
+    # 到手工资
+    net_salary = salary - personal_total - tax
+    
+    # 计算单位缴费（仅供展示）
+    company_total = 0
+    for insurance_type in ["pension", "medical", "unemployed", "injury", "maternity"]:
+        base = get_base(insurance_type)
+        rate = company_rates.get(insurance_type, 0)
+        company_total += base * rate
+    company_total += hf_base * company_rates.get("housing_fund", 0.12)
+    
+    return {
+        "city": city_name,
+        "data_version": meta.get("version", "unknown"),
+        "data_effective": meta.get("effective_date", "unknown"),
+        "salary": salary,
+        "personal_insurance": personal_items,
+        "personal_total": round(personal_total, 2),
+        "housing_fund_employee": round(hf_amount, 2),
+        "housing_fund_employer": round(hf_base * company_rates.get("housing_fund", 0.12), 2),
+        "tax": round(tax, 2),
+        "tax_rate_used": tax_detail,
+        "net_salary": round(net_salary, 2),
+        "company_total": round(company_total, 2),
+    }, None
+
+# 城市名称到代码映射
+CITY_MAP = {
+    "北京": "beijing", "上海": "shanghai", "广州": "guangzhou", "深圳": "shenzhen",
+    "杭州": "hangzhou", "成都": "chengdu", "南京": "nanjing", "武汉": "wuhan",
+    "西安": "xian", "重庆": "chongqing", "天津": "tianjin", "苏州": "suzhou",
+    "郑州": "zhengzhou", "长沙": "changsha"
+}
+
 try:
     s = float(input("税前月薪: ") or 15000)
-    city = input("城市(北京/上海/广州/深圳): ").strip() or "北京"
-    r = {"北京":[.08,.02,.005,0,0,.12], "上海":[.08,.02,.005,0,0,.07],
-         "广州":[.08,.02,.002,0,0,.05], "深圳":[.08,.02,.003,0,0,.05]}
-    if city not in r:
-        print(f"❌ 不支持的城市: {city}。支持: 北京/上海/广州/深圳")
-    elif s <= 0:
+    city_input = input("城市(北京/上海/广州/深圳/杭州/成都/南京/武汉/西安/重庆/天津/苏州/郑州/长沙): ").strip() or "北京"
+    
+    if s <= 0:
         print("❌ 月薪必须大于0")
     else:
-        i = dict(zip(["养老","医疗","失业","工伤","生育","公积金"], r[city]))
-        t = sum(v*s for v in i.values())
-        tax = max(0,(s-t-5000))*.03
-        print(f"到手: {s-t-tax:.2f}元")
+        city_code = CITY_MAP.get(city_input, city_input.lower())
+        result, err = calc_insurance_tax(s, city_code)
+        if err:
+            print(err)
+        else:
+            print(f"=== {result['city']} 五险一金计算明细 (数据版本: {result['data_version']}, 生效: {result['data_effective']}) ===")
+            print(f"税前月薪: ¥{result['salary']:,.2f}")
+            print(f"\n--- 个人缴纳 ---")
+            for name, amount in result["personal_insurance"].items():
+                if name == "公积金":
+                    print(f"  {name}: ¥{amount:,.2f} (单位另缴 ¥{result['housing_fund_employer']:,.2f})")
+                else:
+                    print(f"  {name}: ¥{amount:,.2f}")
+            print(f"  个人社保合计: ¥{result['personal_total']:,.2f}")
+            print(f"\n--- 个税 ---")
+            print(f"  应缴个税: ¥{result['tax']:,.2f}")
+            print(f"\n实发工资: ¥{result['net_salary']:,.2f}")
+            print(f"  (相当于税前 {result['net_salary']/result['salary']*100:.1f}%)")
+            print(f"\n--- 单位缴纳（供参考）---")
+            print(f"  单位社保公积金合计: ¥{result['company_total']:,.2f}")
 except ValueError:
     print("❌ 输入错误：月薪请输入纯数字。例如：15000")
+except Exception as e:
+    print(f"❌ 计算失败: {e}")
+```
+
+</details>
+
+---
+
+#### 1.2.1 个税计算器（单独查询）
+
+**✅ 开箱即用**
+
+<details>
+<summary>📋 个税计算器</summary>
+
+```python
+import os, yaml
+
+def calc_personal_tax_only(salary, social_insurance_deduction=0, special_deduction=0):
+    """单独计算个税（7级超额累进）"""
+    yaml_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "references", "tax_2026.yaml")
+    with open(yaml_path, encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    
+    monthly_threshold = data.get("individual_income_tax", {}).get("monthly_threshold", 5000)
+    tax_brackets = data.get("individual_income_tax", {}).get("brackets", [])
+    
+    taxable_income = max(0, salary - social_insurance_deduction - special_deduction - monthly_threshold)
+    tax = 0
+    bracket_used = "0%"
+    for bracket in tax_brackets:
+        if taxable_income <= 0:
+            break
+        taxable_at_bracket = min(taxable_income, bracket["limit"])
+        tax += taxable_at_bracket * bracket["rate"]
+        taxable_income -= taxable_at_bracket
+        if taxable_at_bracket > 0:
+            bracket_used = f"{bracket['rate']*100:.0f}%"
+    
+    return round(tax, 2), bracket_used
+
+try:
+    s = float(input("税前月薪: ") or 20000)
+    ins = float(input("社保公积金扣除(默认0): ") or 0)
+    special = float(input("专项附加扣除(默认0): ") or 0)
+    
+    if s <= 0:
+        print("❌ 月薪必须大于0")
+    else:
+        tax, bracket = calc_personal_tax_only(s, ins, special)
+        net = s - ins - tax
+        print(f"应纳税: ¥{tax:,.2f} (适用 {bracket} 税率)")
+        print(f"税后工资: ¥{net:,.2f}")
+except ValueError:
+    print("❌ 请输入数字")
 ```
 
 </details>
@@ -807,17 +985,18 @@ except ValueError:
 
 ---
 
-#### 1.5 汇率查询 ⭐ v3.7.0 新增
+#### 1.5 汇率查询 ⭐ v4.0.0 时效治理
 
 **✅ 开箱即用**（零依赖：内置常见汇率缓存 + 联网实时查询可选）
 
-> 支持 30+ 种常见货币。默认使用内置汇率（无需联网），输入联网模式可获取实时汇率。
+> v4.0 时效治理：缓存条目带抓取时间戳，超 72 小时标注陈旧 + 警示横幅。在线刷新失败保留旧值 + 陈旧标注，绝不静默用旧值冒充新值。
 
 <details>
-<summary>📋 展开查看命令</summary>
+<summary>📋 汇率查询（时效感知版）</summary>
 
 ```python
-import urllib.request, json
+import urllib.request, json, os, time
+from datetime import datetime, timedelta
 
 # 内置常见汇率缓存（以 1 USD 为基准），联网失败时降级
 CACHE = {
@@ -829,38 +1008,107 @@ CACHE = {
     "UAH": 40.5, "EGP": 48.5
 }
 
+CACHE_FILE = os.path.join(os.path.expanduser("~"), ".workbuddy", "dgngjx_exchange_cache.json")
+TTL_HOURS = 72
+
+def load_cache():
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {}
+
+def save_cache(cache):
+    os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
+    with open(CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False, indent=2)
+
+def is_stale(timestamp_str):
+    try:
+        ts = datetime.fromisoformat(timestamp_str)
+        return datetime.now() - ts > timedelta(hours=TTL_HOURS)
+    except (ValueError, TypeError):
+        return True
+
+def get_cached_rate(cur):
+    cache = load_cache()
+    entry = cache.get(cur)
+    if entry:
+        rate = entry.get("rate")
+        ts = entry.get("timestamp")
+        if rate and ts:
+            stale = is_stale(ts)
+            return rate, ts, stale
+    return None, None, False
+
+def fetch_live_rate(fr, to):
+    try:
+        url = f"https://api.exchangerate-api.com/v4/latest/{fr}"
+        req = urllib.request.Request(url, headers={"User-Agent": "dgngjx/4.0"})
+        data = json.loads(urllib.request.urlopen(req, timeout=6).read())
+        if "rates" in data and to in data["rates"]:
+            rate = data["rates"][to]
+            cache = load_cache()
+            cache[to] = {"rate": rate, "timestamp": datetime.now().isoformat(), "base": fr}
+            cache[fr] = {"rate": 1.0, "timestamp": datetime.now().isoformat(), "base": fr}
+            save_cache(cache)
+            return rate, True
+    except Exception:
+        pass
+    return None, False
+
+def convert_currency(amt, fr, to):
+    fr = fr.upper()
+    to = to.upper()
+    rate, live = fetch_live_rate(fr, to)
+    if live:
+        return rate, "实时汇率", False, None
+    if fr == to:
+        return 1.0, "同币种", False, None
+    fr_rate, fr_ts, fr_stale = get_cached_rate(fr)
+    to_rate, to_ts, to_stale = get_cached_rate(to)
+    if fr_rate and to_rate:
+        cross_rate = to_rate / fr_rate
+        stale = fr_stale or to_stale
+        older_ts = min(fr_ts, to_ts) if fr_ts and to_ts else (fr_ts or to_ts)
+        days_old = (datetime.now() - datetime.fromisoformat(older_ts)).days if older_ts else "?"
+        tag = f"缓存汇率({days_old}天前)"
+        return cross_rate, tag, stale, older_ts
+    if fr in CACHE and to in CACHE:
+        cross_rate = CACHE[to] / CACHE[fr]
+        return cross_rate, "静态缓存(离线)", True, None
+    return None, None, False, None
+
 s = input("输入(如 100 USD CNY，或回车查汇率表):").strip()
 if not s:
     print("=== 常见货币汇率 (1 USD 基准) ===")
+    cache = load_cache()
     for cur, rate in sorted(CACHE.items()):
-        print(f"  1 USD = {rate:>10.2f} {cur}")
+        cached_rate, ts, stale = get_cached_rate(cur)
+        if cached_rate and not stale:
+            print(f"  1 USD = {cached_rate:>10.2f} {cur}  (实时)")
+        elif cached_rate:
+            days = (datetime.now() - datetime.fromisoformat(ts)).days
+            print(f"  1 USD = {cached_rate:>10.2f} {cur}  ({days}天前)")
+        else:
+            print(f"  1 USD = {rate:>10.2f} {cur}  (静态)")
 else:
     parts = s.split()
     try:
         amt = float(parts[0])
         fr = (parts[1] if len(parts) > 1 else "USD").upper()
         to = (parts[2] if len(parts) > 2 else "CNY").upper()
-        # 尝试联网实时汇率
-        live = False
-        try:
-            url = f"https://api.exchangerate-api.com/v4/latest/{fr}"
-            req = urllib.request.Request(url, headers={"User-Agent":"dgngjx/3.7"})
-            data = json.loads(urllib.request.urlopen(req, timeout=6).read())
-            if "rates" in data and to in data["rates"]:
-                rate = data["rates"][to]
-                live = True
-        except Exception:
-            # 降级：缓存汇率
-            if fr in CACHE and to in CACHE:
-                rate = CACHE[to] / CACHE[fr]
-            else:
-                print(f"❌ 不支持 {fr}→{to}。可用：{', '.join(sorted(CACHE.keys()))}")
-                raise SystemExit
-        result = amt * rate
-        tag = "实时汇率" if live else "缓存汇率(离线)"
-        print(f"✅ {amt:.2f} {fr} = {result:.2f} {to}  ({tag})")
-        if not live:
-            print("   💡 联网后可获取实时汇率")
+        rate, tag, stale, ts = convert_currency(amt, fr, to)
+        if rate is None:
+            print(f"❌ 不支持 {fr}→{to}。可用：{', '.join(sorted(CACHE.keys()))}")
+        else:
+            result = amt * rate
+            print(f"✅ {amt:.2f} {fr} = {result:.2f} {to}  ({tag})")
+            if stale:
+                print(f"   ⚠️ 数据更新于 {ts[:10] if ts else 'N/A'}，可能已过期")
+                print(f"   💡 联网后可获取实时汇率")
     except (ValueError, IndexError):
         print("❌ 格式：100 USD CNY（金额 源货币 目标货币）")
 ```
@@ -3236,6 +3484,7 @@ v3.5.0 起已根据你的硬件自动调度，低配机会自动降为小文件�
 
 ## 更新日志
 
+| v4.0.0 | 2026-09-17 | 增加：个税五险全国化（tax_2026.yaml 数据包，13城市查表+7级分段累进引擎，替换固定3%简化模型）；增加：汇率缓存时效治理（72h TTL + 陈旧标注 + 警示横幅，在线刷新失败保留旧值绝不静默）；增加：独立个税计算器（模块1.2.1）；优化：五险一金支持13个城市（北京/上海/广州/深圳/杭州/成都/南京/武汉/西安/重庆/天津/苏州/郑州/长沙） |
 | v3.9.0 | 2026-08-24 | 增加：统一 CLI 入口（argparse 子命令 + registry.json 注册表 + 49 工具参数化）；拆分：编码/哈希拆分为 encode + hash 独立工具；合并：图片五功能合并为 img 统一入口（compress/convert/removebg/idphoto/repair）；优化：安全规则分级重构（🔴 硬拦截 / 🟡 警告+确认 / 🟢 自由读写）；增加：无人值守支持（DGNGJX_ASSUME_YES 环境变量 + --yes + --json 输出） |
 | v3.8.0 | 2026-08-17 | 增加：会议纪要生成器（模块11.1 ASR三级降级链：本地whisper→Paraformer API→手动粘贴，零依赖保底）；增加：周报/月报自动生成（模块10.6 消费history.json生成结构化报告）；优化：系统资源监控（模块10.1 wmic迁移到PowerShell CIM cmdlet，兼容Windows Server 2025+）；新增：模块11 AI办公（首个AI办公模块） |
 | v3.7.0 | 2026-08-07 | 增加：CSV查看器（模块9.8 自动编码/分隔符识别+分页显示）；增加：密码强度检测（模块9.9 长度/多样性/弱密码字典+改进建议）；增加：颜色值转换（模块9.10 RGB↔HEX↔HSL互转）；增加：随机数生成器（模块9.11 7种模式）；增加：文本差异对比（模块2.4 逐行diff+高亮）；增加：BMI计算器（模块4.3 中国标准判定）；增加：番茄钟（模块4.4 自定义时长/轮数）；增加：汇率查询（模块1.5 30+货币+缓存降级）；扩展：图片批量压缩与格式转换（模块6.1 目录批量+4种格式+硬件感知并发）；增加：历史记录系统（模块10.4 跨会话JSON持久化）；增加：配置持久化（模块10.5 用户偏好）；增加：管道联动架构（多工具串联）；优化：开箱即用率从57%提升至65% |
@@ -3272,6 +3521,6 @@ v3.5.0 起已根据你的硬件自动调度，低配机会自动降为小文件�
 - **联系邮箱**：njskills@agent.qq.com
 - **许可证**：MIT
 - **支持平台**：Windows / macOS / Linux
-- **当前版本**：v3.9.0
+- **当前版本**：v4.0.0
 - **检查更新**：`skillhub search dgngjx-skill`
 - **升级命令**：`skillhub upgrade dgngjx-skill`
