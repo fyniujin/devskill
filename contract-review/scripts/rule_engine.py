@@ -51,6 +51,25 @@ INDUSTRY_ALIASES = {
     'internet': 'internet', 'software': 'internet', 'net': 'internet',
 }
 
+# v5.3 英文规则目录映射（按规则类别）
+EN_RULE_DIRS = {
+    'fidic': 'fidic',
+    'cisg': 'cisg',
+    'common_law': 'common_law',
+}
+
+# v5.3 英文规则别名
+EN_RULE_ALIASES = {
+    'fidic': 'fidic',
+    'fIDIC': 'fidic',
+    'cisg': 'cisg',
+    'CISG': 'cisg',
+    'common_law': 'common_law',
+    'common law': 'common_law',
+    'english': 'common_law',
+    'en': 'common_law',
+}
+
 
 # v4.0 《民法典》第 470 条七项必备条款的同义表述族
 # 合同实务中同一要素表述差异极大（如"标的"可写作"工程概况""服务内容""采购标的"），
@@ -154,7 +173,8 @@ class RuleEngine:
             self.rules = []
     
     def check_all(self, text: str, contract_type: str = "", 
-                  structure: Dict = None, industry: str = "") -> List[RiskItem]:
+                  structure: Dict = None, industry: str = "",
+                  en_rules: str = "") -> List[RiskItem]:
         """
         运行所有规则检查
         
@@ -163,6 +183,8 @@ class RuleEngine:
             contract_type: 合同类型
             structure: 解析后的合同结构
             industry: v4.0 行业代码（medical/construction/cross_border/internet）
+            en_rules: v5.3 英文规则类别，逗号分隔（fidic,cisg,common_law）
+                     或 "auto" —— 当 contract_type/industry 含 cross_border 时自动加载 common_law
             
         Returns:
             风险项列表
@@ -178,7 +200,9 @@ class RuleEngine:
         specific_rules = self._load_contract_specific_rules(contract_type)
         # v4.0 加载行业专项规则
         industry_rules = self._load_industry_rules(industry)
-        all_rules = industry_rules + specific_rules + self.rules
+        # v5.3 加载英文规则
+        en_rule_list = self._load_en_rules(en_rules, contract_type, industry)
+        all_rules = industry_rules + en_rule_list + specific_rules + self.rules
         
         for rule in all_rules:
             if not rule.get('enabled', True):
@@ -257,6 +281,60 @@ class RuleEngine:
         except Exception as e:
             logger.warning(f"加载行业规则失败: {e}")
             return []
+    
+    def _load_en_rules(self, en_rules: str, contract_type: str,
+                       industry: str) -> List[Dict]:
+        """v5.3 按类别懒加载英文合同风险规则"""
+        categories: List[str] = []
+        
+        if en_rules:
+            # 显式指定类别（逗号分隔）
+            raw = en_rules.strip().lower()
+            if raw == 'auto':
+                # 自动判断：跨境行业或合同类型含"涉外/英文/跨境"
+                auto_triggers = ('cross_border', '涉外', '英文', '跨境', 'international')
+                combined = f"{contract_type}|{industry}".lower()
+                if any(t in combined for t in auto_triggers):
+                    categories = ['common_law']
+                    logger.info("auto 模式自动匹配到跨境合同，加载 common_law 规则")
+            else:
+                for part in raw.split(','):
+                    cat = EN_RULE_ALIASES.get(part.strip(), part.strip())
+                    if cat and cat not in categories:
+                        categories.append(cat)
+        else:
+            # 无显式参数 + 跨境场景 → 自动加载
+            combined = f"{contract_type}|{industry}".lower()
+            if 'cross_border' in combined or '涉外' in combined or '跨境' in combined:
+                categories = ['common_law']
+                logger.info("隐式跨境场景，自动加载 common_law 英文规则")
+        
+        if not categories:
+            return []
+        
+        en_rules_dir = Path(__file__).parent.parent / 'references' / 'rules_en'
+        if not en_rules_dir.exists():
+            logger.debug(f"英文规则目录不存在: {en_rules_dir}")
+            return []
+        
+        all_en_rules: List[Dict] = []
+        for cat in categories:
+            filename = f"{cat}.yaml"
+            rule_path = en_rules_dir / filename
+            if not rule_path.exists():
+                logger.warning(f"英文规则文件不存在: {rule_path}")
+                continue
+            try:
+                with open(rule_path, 'r', encoding='utf-8') as f:
+                    content = f.read(2 * 1024 * 1024)
+                    config = yaml.safe_load(content)
+                rules = config.get('rules', []) if isinstance(config, dict) else []
+                all_en_rules.extend(rules)
+                logger.info(f"加载英文规则 {cat}：{len(rules)} 条")
+            except Exception as e:
+                logger.warning(f"加载英文规则 {filename} 失败: {e}")
+        
+        return all_en_rules
     
     def _apply_rule(self, rule: Dict, text: str, contract_type: str,
                     structure: Dict) -> Any:
