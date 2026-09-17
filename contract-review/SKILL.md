@@ -2,10 +2,10 @@
 name: contract-review
 slug: workbuddy-contract-review
 displayName: AI 法律合同审查
-version: 5.2.1
+version: 5.3.0
 category: 法律合规
 platforms: [WorkBuddy, QClaw, ima]
-tags: [合同审查, 法律, 风险识别, 合规检查, 中文合同, contract, legal, review]
+tags: [合同审查, 法律, 风险识别, 合规检查, 中文合同, 英文合同, 涉外合同, FIDIC, CISG, contract, legal, review]
 agent_created: true
 read_count: 0
 triggers:
@@ -20,7 +20,7 @@ triggers:
   - "审查一下合同"
   - "合同有没有坑"
   - "帮我看看合同"
-description: 对中文合同进行智能风险审查，识别条款风险、提取关键信息、生成审查报告，覆盖买卖/技术/租赁/劳动等常见合同类型。v5.0 新增法条引用溯源、合同谈判辅助、中英双语对照审查。v5.1 新增指导案例引用溯源、金额校验引擎、多语种扩展（日/韩）。v5.2 新增合同台账与履约提醒、档案库全文检索、风险趋势对比、类案要点库与判决倾向参考。
+description: 对中文合同进行智能风险审查，识别条款风险、提取关键信息、生成审查报告，覆盖买卖/技术/租赁/劳动等常见合同类型。v5.0 新增法条引用溯源、合同谈判辅助、中英双语对照审查。v5.1 新增指导案例引用溯源、金额校验引擎、多语种扩展（日/韩）。v5.2 新增合同台账与履约提醒、档案库全文检索、风险趋势对比、类案要点库与判决倾向参考。v5.3 新增涉外增强：英文条款全量审查（FIDIC/CISG/普通法 115+ 条规则）、对方立场推演与谈判话术、锚点+长度双因子句级对齐、混合合同自动检测与双语报告。
 ---
 
 # 合同智能审查 v5.2
@@ -52,6 +52,13 @@ description: 对中文合同进行智能风险审查，识别条款风险、提�
 - **🌐 多语种扩展（日/韩）**：支持中日双语对照审查、中韩双语对照审查，段落级对齐算法通用，补日语/韩语法律术语对照表（各 200+ 组）
 - **📋 日语法律术语对照表**：200+ 组高频术语（通用法律/公司/劳动/建设工程/知识产权/金融/争议解决/房地产/动词/国际贸易）
 - **📋 韩语法律术语对照表**：200+ 组高频术语（通用法律/公司/劳动/建设工程/知识产权/金融/争议解决/房地产/动词/国际贸易）
+
+### 🆕 v5.3 新特性（涉外增强，2026-09-17）
+
+- **🇬🇧 英文条款全量审查**：新增 `references/rules_en/` 英文规则包（schema 与中文 `risk_rules.yaml` 完全一致，工具链零改动），首批覆盖 FIDIC 15 条、CISG 20 条、普通法高频条款 80 条（indemnity / limitation of liability / governing law / termination for convenience 各 20 条）；新增 `references/llm_prompts_en/cross_border_contract.md` LLM 审查双语提示词
+- **🧠 对方立场推演与谈判话术**：`perspective` 模式逐条款生成三件套——对方最可能异议（基于条款偏离公平值的幅度）、对方底线推测（同类条款市场惯例库）、我方让步阶梯话术（首次回应/折中方案/底线表述）；LLM 生成全部标注条款号引用，规则层校验不虚构条款；配套 `references/market_terms/` 市场惯例库（采购/销售/通用/工程/劳务 5 类 40+ 条）
+- **📐 锚点+长度双因子句级对齐**：`--align-v2` 启用锚点+长度双因子句级对齐（替代 v5.0 段落级对齐），以数字、日期、专有名词为锚点先配对，剩余句段按长度比与位置校正，输出对齐置信度，低于阈值（0.6）时人工复核标记
+- **🔍 混合合同自动检测与双语报告**：新增 `mixed_contract_detector.py`，检测英文段落占比超 30%（阈值可调 `--mixed-threshold`）自动启用双语报告并分语种出具风险清单；`--bilingual` 强制双语输出
 
 ### 🆕 v5.0 新特性（2026-07-15）
 
@@ -566,7 +573,12 @@ python scripts/main.py <合同文件> [选项]
 | `--align-priority` | **v5.0** 双语对照时以哪个版本为准：`zh`（中文优先）/ `en`（英文优先）/ `strict`（严格模式） | `zh` |
 | `--align-ja` | **v5.1** 启用中日双语对照审查，指定日语版本路径 | 不启用 |
 | `--align-ko` | **v5.1** 启用中韩双语对照审查，指定韩语版本路径 | 不启用 |
-| `--validate-amounts` | **v5.1** 启用关键金额校验（大小写一致性+勾稽关系验证），金额识别错误率 <0.5% | 关闭 |
+- `--validate-amounts` | **v5.1** 启用关键金额校验（大小写一致性+勾稽关系验证），金额识别错误率 <0.5% | 关闭 |
+| `--en-rules` | **v5.3** 启用英文合同风险规则（fidic/cisg/common_law，逗号分隔；或 `auto`——跨境合同时自动加载 common_law） | 不启用 |
+| `--perspective` | **v5.3** 启用对方立场推演与谈判话术（seller/buyer/landlord/tenant），逐条款生成三件套（异议推测/底线推测/让步阶梯话术） | 不启用 |
+| `--align-v2` | **v5.3** 启用锚点+长度双因子句级对齐（替代 v5.0 段落级对齐），输出置信度，低于阈值时人工复核标记 | 关闭 |
+| `--bilingual` | **v5.3** 双语输出（同时生成中文和英文风险清单） | 关闭 |
+| `--mixed-threshold` | **v5.3** 混合合同检测阈值（默认 0.30，即 30%），英文段落占比超此值自动启用双语报告 | 0.30 |
 | `--ledger` | **v5.2** 启用合同台账，审查完成后自动回填台账 | 关闭 |
 | `--ledger-list` | **v5.2** 列出所有台账记录 | — |
 | `--ledger-remind` | **v5.2** 手动触发履约提醒扫描 | — |
@@ -638,6 +650,7 @@ python scripts/main.py <合同文件> [选项]
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v5.3.0 | 2026-09-17 | 增加：英文条款全量审查（references/rules_en/ 规则包：FIDIC 15 条 + CISG 20 条 + 普通法 80 条 = 115 条，schema 与中文一致，工具链零改动）；增加：混合合同检测器 mixed_contract_detector.py（英文占比超 30% 自动启用双语报告，阈值可调 --mixed-threshold）；增加：对方立场推演引擎 perspective_analyzer.py（perspective 模式逐条款生成三件套：异议推测/底线推测/让步阶梯话术，配套市场惯例库 references/market_terms/ 5 类 40+ 条）；增加：锚点+长度双因子句级对齐引擎 anchor_aligner.py（数字/日期/专有名词为锚点先配对，剩余按长度比与位置校正，输出置信度，低于阈值 0.6 标记人工复核）；增加：英文 LLM 审查提示词 cross_border_contract.md（含 clause_fact + contract_fact 原文引用防幻觉）；增加：references/llm_prompts_en/ 目录并加载到 rule_engine；更新：rule_engine.py 支持 en_rules 参数（fidic/cisg/common_law，支持 auto 模式）；更新：main.py 新增 --en-rules/--perspective/--align-v2/--bilingual/--mixed-threshold 五个参数；更新：SKILL.md 版本号升至 5.3.0 |
 | v5.2.1 | 2026-08-24 | 修复：移除自动远程版本检查逻辑（updater.py 不再在审查流程中自动拉取远程 SKILL.md，改为仅在用户显式使用 --check-update 时以固定 commit 拉取并校验 SHA-256 哈希）；修复：Windows 计划任务注册移出自动模式（contract_ledger.py register_schtasks_reminder 改为独立显式命令，执行前打印任务名称、触发时间与影响范围，取得用户确认后再执行）；修复：删除 curl 管道执行远程安装脚本指引（SKILL.md 和 README.md 改为下载到本地后人工校验再执行，main.py 同步更新）；修复：移除 main.py 中自动调用 UpdateChecker 的代码（审查流程不再发起远程请求） |
 | v5.2.0 | 2026-07-29 | 增加：合同台账与履约提醒引擎 contract_ledger.py（SQLite 台账自动抽取回填、到期前 30/7/1 天提醒、Windows 计划任务注册、企微 webhook 推送）；增加：档案库全文检索引擎 archive_search.py（char/bigram 倒排索引、BM25 召回、多维过滤、命中高亮）；增加：统一检索引擎 unified_retriever.py（合并 legal_retriever 与 clause_matcher，共享分词/TF-IDF/BM25 基础设施，法条索引+条款索引双索引统一搜索）；增加：风险趋势对比分析引擎 risk_trend.py（多合同聚合视图、风险类型频次按月分布、红级条款占比变化、同一对方历史风险复发标记、matplotlib 可选出图）；增加：类案要点库与判决倾向参考引擎 case_law_retriever.py（内置 30 个最高法指导案例要点、按争议条款类型输出法院倾向摘要、支持用户导入自整理案例 JSON 增库）；增加：类案要点库数据库 case_law_db.json（30 个民商事合同类指导案例，覆盖买卖/借款/公司/建设工程/知识产权/劳动等 20 个类别）；增加：命令行参数 --ledger（启用合同台账）、--ledger-list（列出台账记录）、--ledger-remind（手动触发履约提醒）、--archive-search（档案库全文检索）、--archive-filter（档案库检索过滤）、--risk-trend（风险趋势对比分析）、--case-law（启用类案要点库）、--case-search（类案搜索）、--case-import（导入用户案例）；更新：SKILL.md 版本号升至 5.2.0；更新：pyproject.toml 版本号升至 5.2.0 |
 | v5.1.0 | 2026-07-29 | 增加：指导案例引用溯源（为审查结论附带最高人民法院指导性案例引用，增强说服力）；增加：指导案例数据库（30 个民商事合同类指导案例，覆盖买卖/借款/公司/建设工程/知识产权/劳动等 20 个类别）；增加：指导案例检索引擎 case_retriever.py（关键词+标签自动匹配案例、案例全文展开查看、月度更新提醒）；增加：指导案例数据库月度更新提醒（每月检查一次最高法新发布的指导性案例）；增加：关键金额校验引擎 amount_validator.py（金额大小写一致性验证、勾稽关系自动验证）；增加：金额字段自动提取与校验（从合同文本中自动识别金额字段并验证一致性）；增加：多语种扩展（日语/韩语术语对照表各 200+ 组，覆盖通用法律/公司/劳动/建设工程/知识产权/金融/争议解决/房地产/动词/国际贸易）；增加：中日双语对照审查（bilingual_aligner 扩展支持 ja 目标语言）；增加：中韩双语对照审查（bilingual_aligner 扩展支持 ko 目标语言）；增加：命令行参数 --guiding-cases（启用指导案例引用溯源）、--align-ja <路径>（启用中日对照）、--align-ko <路径>（启用中韩对照）、--validate-amounts（启用关键金额校验）；更新：bilingual_aligner.py 重构为多语种架构（术语表懒加载、按语言缓存单例、条款编号归一化支持日韩）；更新：updater.py 扩展指导案例数据库月度更新检查；增加：新脚本 case_retriever.py、amount_validator.py；增加：新术语表 ja_legal_terms.yaml、ko_legal_terms.yaml | 增加：法条引用溯源（为每个审查结论附带具体法律条文引用，增强专业可信度）；增加：民法典合同编核心条文数据库（60 条高频引用条款）；增加：公司法核心条文数据库（40 条高频引用条款）；增加：司法解释精选数据库（30 条高频引用司法解释）；增加：法条检索引擎 legal_retriever.py（关键词自动匹配法条、法条全文展开查看）；增加：法条数据库季度更新提醒（每 3 个月检查一次法律法规变化）；增加：合同谈判辅助引擎 negotiation_analyzer.py（多轮修改差异分析、必争/可让步条款识别）；增加：谈判准备文档生成（.md/.docx：谈判目标/底线条款/让步方案/替代方案）；增加：谈判策略库（13 项条款策略：违约金/知识产权/付款节点/竞业限制/工程价款等）；增加：中英文双语合同对齐引擎 bilingual_aligner.py（段落对齐算法、版本不一致检测）；增加：中英法律术语对照表（200+ 组高频术语，含通用法律/公司/劳动/建设工程/知识产权等）；增加：双语对照审查报告（匹配段落、缺失条款、措辞矛盾、优先级标注）；增加：命令行参数 --legal-base（启用法条引用溯源）、--negotiate <目录>（启用谈判辅助）、--align <路径>（启用双语对照）、--align-priority zh|en|strict（指定优先语言）；更新：updater.py 扩展法条数据库版本检查；增加：新脚本 legal_retriever.py、negotiation_analyzer.py、bilingual_aligner.py |
@@ -677,6 +690,9 @@ python scripts/main.py <合同文件> [选项]
 - `references/guiding_cases/index.json` — **v5.1** 指导案例索引（关键词、风险标签、类别映射）
 - `references/guiding_cases/update_log.json` — **v5.1** 指导案例数据库更新记录
 - `references/guiding_cases/case_law_db.json` — **v5.2** 类案要点库数据库（30 个最高法指导案例要点，含裁判要旨、法律依据、风险标签）
+- `references/rules_en/` — **v5.3** 英文合同风险规则包（index.yaml 索引 + fidic.yaml 15 条 + cisg.yaml 20 条 + common_law.yaml 80 条）
+- `references/market_terms/` — **v5.3** 市场惯例库（index.yaml 索引 + procurement/sales/common_contract/construction/labor 5 类 40+ 条）
+- `references/llm_prompts_en/` — **v5.3** 英文 LLM 审查提示词（cross_border_contract.md 双语版）
 
 ## 脚本工具
 
@@ -701,7 +717,10 @@ python scripts/main.py <合同文件> [选项]
 - `scripts/unified_retriever.py` — **v5.2** 统一检索引擎（合并 legal_retriever 与 clause_matcher，共享分词/TF-IDF/BM25 基础设施，法条索引+条款索引双索引统一搜索）
 - `scripts/risk_trend.py` — **v5.2** 风险趋势对比分析引擎（多合同聚合视图、风险类型频次按月分布、红级条款占比变化、历史风险复发标记）
 - `scripts/case_law_retriever.py` — **v5.2** 类案要点库与判决倾向参考引擎（内置 30 个指导案例要点、按争议条款类型输出法院倾向摘要、支持用户导入）
-- `scripts/main.py` — 主入口（首次向导 + Ollama 安装 + **v3.0 硬件检测** + **v4.0 行业专项与一键修订** + **v5.0 法条引用溯源/谈判辅助/双语对照** + **v5.1 指导案例引用/金额校验/多语种扩展** + **v5.2 合同台账/档案检索/风险趋势/类案要点库** + 完整进度）
+- `scripts/mixed_contract_detector.py` — **v5.3** 混合合同自动检测（英文段落占比超 30% 自动启用双语报告并分语种出具风险清单）
+- `scripts/anchor_aligner.py` — **v5.3** 锚点+长度双因子句级对齐引擎（数字/日期/专有名词为锚点，输出对齐置信度，低于阈值时人工复核标记）
+- `scripts/perspective_analyzer.py` — **v5.3** 对方立场推演与谈判话术引擎（逐条款生成三件套：异议推测/底线推测/让步阶梯话术，规则层防虚构条款）
+- `scripts/main.py` — 主入口（首次向导 + Ollama 安装 + **v3.0 硬件检测** + **v4.0 行业专项与一键修订** + **v5.0 法条引用溯源/谈判辅助/双语对照** + **v5.1 指导案例引用/金额校验/多语种扩展** + **v5.2 合同台账/档案检索/风险趋势/类案要点库** + **v5.3 涉外增强（en-rules/perspective/align-v2/bilingual）** + 完整进度）
 
 ---
 
