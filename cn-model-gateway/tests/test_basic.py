@@ -1,9 +1,11 @@
 """Basic smoke tests."""
 from __future__ import annotations
 
+import json
 import sys
 import os
 import unittest
+import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -118,7 +120,8 @@ class TestMCPServer(unittest.TestCase):
         req = {"jsonrpc": "2.0", "id": 3, "method": "resources/list", "params": {}}
         resp = self.server.handle_request(req)
         uris = [r["uri"] for r in resp["result"]["resources"]]
-        self.assertIn("cn-model-gateway://config", uris)
+        # v1.8.0: merged config + usage into single status resource
+        self.assertIn("cn-model-gateway://status", uris)
 
     def test_prompts_list(self):
         req = {"jsonrpc": "2.0", "id": 4, "method": "prompts/list", "params": {}}
@@ -532,10 +535,10 @@ class TestNewToolsV16(unittest.TestCase):
 
 
 class TestNewToolCount(unittest.TestCase):
-    """Test that v1.6.0 has exactly 8 MCP tools."""
+    """Test that v1.8.0 has exactly 10 MCP tools."""
 
-    def test_tool_count_is_8(self):
-        """Should have 8 tools: ask_model, describe_image, embed_text, rerank, audio_transcribe, video_understand, list_providers, health_check."""
+    def test_tool_count_is_10(self):
+        """v1.8.0: Should have 10 tools (added batch_submit, batch_result)."""
         router = ModelRouter()
         monitor = Monitor()
         server = MCPServer(router, monitor)
@@ -545,7 +548,8 @@ class TestNewToolCount(unittest.TestCase):
         tool_names = {t["name"] for t in tools}
         expected = {
             "ask_model", "describe_image", "embed_text", "rerank",
-            "audio_transcribe", "video_understand", "list_providers", "health_check"
+            "audio_transcribe", "video_understand", "batch_submit", "batch_result",
+            "list_providers", "health_check"
         }
         self.assertEqual(tool_names, expected)
 
@@ -665,3 +669,283 @@ class TestVideoUnderstandingResult(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ========== v1.8.0 Tests: Batch Async + SSE Heartbeat + Resource Consolidation ==========
+
+
+class TestChunkBuffer(unittest.TestCase):
+    """Tests for ChunkBuffer (SSE reconnect ring buffer)."""
+
+    def test_append_and_get(self):
+        from src.mcp_server import ChunkBuffer
+        buf = ChunkBuffer(max_size=10)
+        buf.append("req1", "chunk1")
+        buf.append("req1", "chunk2")
+        chunks = buf.get_since("req1")
+        self.assertEqual(chunks, ["chunk1", "chunk2"])
+
+    def test_max_size_trims(self):
+        from src.mcp_server import ChunkBuffer
+        buf = ChunkBuffer(max_size=3)
+        for i in range(5):
+            buf.append("req1", f"c{i}")
+        chunks = buf.get_since("req1")
+        self.assertEqual(len(chunks), 3)
+        self.assertEqual(chunks, ["c2", "c3", "c4"])
+
+    def test_get_since_index(self):
+        from src.mcp_server import ChunkBuffer
+        buf = ChunkBuffer(max_size=10)
+        for i in range(5):
+            buf.append("req1", f"c{i}")
+        chunks = buf.get_since("req1", last_index=3)
+        self.assertEqual(chunks, ["c3", "c4"])
+
+    def test_clear(self):
+        from src.mcp_server import ChunkBuffer
+        buf = ChunkBuffer(max_size=10)
+        buf.append("req1", "c1")
+        buf.clear("req1")
+        self.assertEqual(buf.get_since("req1"), [])
+
+    def test_multiple_requests(self):
+        from src.mcp_server import ChunkBuffer
+        buf = ChunkBuffer(max_size=10)
+        buf.append("req1", "a")
+        buf.append("req2", "b")
+        self.assertEqual(buf.get_since("req1"), ["a"])
+        self.assertEqual(buf.get_since("req2"), ["b"])
+
+
+class TestBatchQueue(unittest.TestCase):
+    """Tests for BatchQueue (SQLite WAL task queue)."""
+
+    def setUp(self):
+        import tempfile
+        self.tmpdir = tempfile.mkdtemp()
+        self.db_path = os.path.join(self.tmpdir, "test_batch.db")
+        from src.batch_queue import BatchQueue
+        self.queue = BatchQueue(db_path=self.db_path)
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_create_task(self):
+        items = [{"tool": "ask_model", "args": {"question": "hi"}}]
+        task_id = self.queue.create_task(items)
+        self.assertTrue(task_id.startswith("batch_"))
+
+    def test_create_task_with_priority(self):
+        items = [{"tool": "ask_model", "args": {"question": "hi"}}]
+        task_id = self.queue.create_task(items, priority=3)
+        task = self.queue.get_task(task_id)
+        self.assertEqual(task["priority"], 3)
+
+    def test_get_task(self):
+        items = [{"tool": "ask_model", "args": {"question": "hi"}}]
+        task_id = self.queue.create_task(items)
+        task = self.queue.get_task(task_id)
+        self.assertEqual(task["status"], "pending")
+        self.assertEqual(task["total"], 1)
+        self.assertEqual(task["done"], 0)
+
+    def test_get_task_not_found(self):
+        task = self.queue.get_task("batch_nonexistent")
+        self.assertIsNone(task)
+
+    def test_claim_next_item(self):
+        items = [{"tool": "ask_model", "args": {"question": "q1"}}, {"tool": "ask_model", "args": {"question": "q2"}}]
+        task_id = self.queue.create_task(items)
+        item = self.queue.claim_next_item(task_id)
+        self.assertIsNotNone(item)
+        self.assertEqual(item["_index"], 0)
+
+    def test_claim_next_item_returns_none_when_done(self):
+        items = [{"tool": "ask_model", "args": {"question": "q1"}}]
+        task_id = self.queue.create_task(items)
+        self.queue.claim_next_item(task_id)
+        self.queue.complete_item(task_id, 0, {"content": "result"})
+        self.queue.finish_task(task_id)
+        item = self.queue.claim_next_item(task_id)
+        self.assertIsNone(item)
+
+    def test_complete_item_success(self):
+        items = [{"tool": "ask_model", "args": {"question": "hi"}}]
+        task_id = self.queue.create_task(items)
+        self.queue.claim_next_item(task_id)
+        self.queue.complete_item(task_id, 0, {"content": "result"})
+        task = self.queue.get_task(task_id)
+        self.assertEqual(task["done"], 1)
+        self.assertEqual(task["errors"], 0)
+
+    def test_complete_item_error(self):
+        items = [{"tool": "ask_model", "args": {"question": "hi"}}]
+        task_id = self.queue.create_task(items)
+        self.queue.claim_next_item(task_id)
+        self.queue.complete_item(task_id, 0, None, error="API timeout")
+        task = self.queue.get_task(task_id)
+        self.assertEqual(task["errors"], 1)
+
+    def test_finish_task(self):
+        items = [{"tool": "ask_model", "args": {"question": "hi"}}]
+        task_id = self.queue.create_task(items)
+        self.queue.claim_next_item(task_id)
+        self.queue.complete_item(task_id, 0, {"content": "ok"})
+        self.queue.finish_task(task_id)
+        task = self.queue.get_task(task_id)
+        self.assertEqual(task["status"], "done")
+
+    def test_list_items(self):
+        items = [{"tool": "ask_model", "args": {"question": "q1"}}, {"tool": "ask_model", "args": {"question": "q2"}}]
+        task_id = self.queue.create_task(items)
+        result = self.queue.list_items(task_id)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["tool"], "ask_model")
+        self.assertEqual(result[0]["status"], "pending")
+
+    def test_list_items_after_completion(self):
+        items = [{"tool": "ask_model", "args": {"question": "q1"}}]
+        task_id = self.queue.create_task(items)
+        self.queue.claim_next_item(task_id)
+        self.queue.complete_item(task_id, 0, {"content": "result"})
+        result = self.queue.list_items(task_id)
+        self.assertEqual(result[0]["status"], "done")
+
+    def test_list_tasks(self):
+        for i in range(3):
+            self.queue.create_task([{"tool": "ask_model", "args": {"question": f"q{i}"}}])
+        tasks = self.queue.list_tasks(limit=2)
+        self.assertEqual(len(tasks), 2)
+
+
+class TestBatchWorker(unittest.TestCase):
+    """Tests for BatchWorker (background worker thread)."""
+
+    def test_start_stop(self):
+        import tempfile, os
+        tmpdir = tempfile.mkdtemp()
+        db_path = os.path.join(tmpdir, "test.db")
+        from src.batch_queue import BatchQueue, BatchWorker
+        queue = BatchQueue(db_path=db_path)
+        router = MagicMock()
+        monitor = MagicMock()
+        worker = BatchWorker(queue=queue, router=router, monitor=monitor, max_concurrency=1)
+        worker.start()
+        self.assertTrue(worker.is_running())
+        worker.stop()
+        self.assertFalse(worker.is_running())
+
+    def test_max_concurrency(self):
+        import tempfile, os
+        tmpdir = tempfile.mkdtemp()
+        db_path = os.path.join(tmpdir, "test.db")
+        from src.batch_queue import BatchQueue, BatchWorker
+        queue = BatchQueue(db_path=db_path)
+        worker = BatchWorker(queue=queue, router=MagicMock(), monitor=MagicMock(), max_concurrency=2)
+        self.assertEqual(worker.max_concurrency, 2)
+
+
+class TestMCPServerV17(unittest.TestCase):
+    """Tests for v1.8.0 MCPServer features."""
+
+    def setUp(self):
+        self.router = ModelRouter()
+        self.monitor = Monitor()
+        self.server = MCPServer(self.router, self.monitor)
+
+    def test_tool_count_is_10(self):
+        """v1.8.0: Should have 10 tools (added batch_submit, batch_result)."""
+        req = {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
+        resp = self.server.handle_request(req)
+        tools = resp["result"]["tools"]
+        tool_names = {t["name"] for t in tools}
+        expected = {
+            "ask_model", "describe_image", "embed_text", "rerank",
+            "audio_transcribe", "video_understand", "batch_submit", "batch_result",
+            "list_providers", "health_check"
+        }
+        self.assertEqual(tool_names, expected)
+
+    def test_batch_submit_tool_exists(self):
+        """batch_submit tool should be registered."""
+        self.assertIn("batch_submit", self.server._tools)
+
+    def test_batch_result_tool_exists(self):
+        """batch_result tool should be registered."""
+        self.assertIn("batch_result", self.server._tools)
+
+    def test_batch_submit_has_tasks_param(self):
+        """batch_submit tool should have tasks parameter."""
+        tool = self.server._tools["batch_submit"]
+        props = tool["inputSchema"]["properties"]
+        self.assertIn("tasks", props)
+
+    def test_batch_result_has_task_id_param(self):
+        """batch_result tool should have task_id parameter."""
+        tool = self.server._tools["batch_result"]
+        props = tool["inputSchema"]["properties"]
+        self.assertIn("task_id", props)
+
+    def test_resources_list_single_status(self):
+        """v1.8.0: resources/list should return single cn-model-gateway://status."""
+        req = {"jsonrpc": "2.0", "id": 3, "method": "resources/list", "params": {}}
+        resp = self.server.handle_request(req)
+        uris = [r["uri"] for r in resp["result"]["resources"]]
+        self.assertEqual(len(uris), 1)
+        self.assertIn("cn-model-gateway://status", uris)
+        self.assertNotIn("cn-model-gateway://config", uris)
+        self.assertNotIn("cn-model-gateway://usage", uris)
+
+    def test_resource_read_status(self):
+        """cn-model-gateway://status should return merged config+usage+alerts."""
+        req = {"jsonrpc": "2.0", "id": 4, "method": "resources/read",
+               "params": {"uri": "cn-model-gateway://status"}}
+        resp = self.server.handle_request(req)
+        self.assertIn("result", resp)
+        text = resp["result"]["contents"][0]["text"]
+        data = json.loads(text)
+        self.assertIn("config", data)
+        self.assertIn("usage", data)
+        self.assertIn("quota_alerts", data)
+
+    def test_resource_read_unknown_uri(self):
+        """Unknown resource URI should return error."""
+        req = {"jsonrpc": "2.0", "id": 5, "method": "resources/read",
+               "params": {"uri": "cn-model-gateway://nonexistent"}}
+        resp = self.server.handle_request(req)
+        self.assertIn("error", resp)
+
+    def test_batch_submit_empty_tasks(self):
+        """batch_submit with empty tasks should raise error."""
+        req = {"jsonrpc": "2.0", "id": 10, "method": "tools/call",
+               "params": {"name": "batch_submit", "arguments": {"tasks": []}}}
+        resp = self.server.handle_request(req)
+        self.assertIn("error", resp)
+
+    def test_batch_result_missing_task_id(self):
+        """batch_result with missing task_id should raise error."""
+        req = {"jsonrpc": "2.0", "id": 11, "method": "tools/call",
+               "params": {"name": "batch_result", "arguments": {}}}
+        resp = self.server.handle_request(req)
+        self.assertIn("error", resp)
+
+    def test_batch_result_nonexistent_task(self):
+        """batch_result with nonexistent task_id should return not found."""
+        req = {"jsonrpc": "2.0", "id": 12, "method": "tools/call",
+               "params": {"name": "batch_result", "arguments": {"task_id": "batch_9999999999999"}}}
+        resp = self.server.handle_request(req)
+        self.assertIn("result", resp)
+        self.assertIn("不存在", resp["result"]["content"][0]["text"])
+
+    def test_version_is_170(self):
+        """Server version should be 1.8.0."""
+        req = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+        resp = self.server.handle_request(req)
+        self.assertEqual(resp["result"]["serverInfo"]["version"], "1.8.0")
+
+    def test_shutdown(self):
+        """Server shutdown should stop batch worker."""
+        self.server.shutdown()
+        self.assertFalse(self.server._batch_worker.is_running())
