@@ -1,16 +1,20 @@
 """MCP (Model Context Protocol) server - JSON-RPC 2.0 implementation.
 
-v1.6.0: Added 4 new tools (embed_text, rerank, audio_transcribe, video_understand)
-        via shared llm_core kernel.
+v1.8.0: Added batch async (batch_submit/batch_result), SSE heartbeat + reconnect,
+        merged resources into single "网关状态" status resource.
 """
 from __future__ import annotations
 
 import json
 import sys
+import time
+import threading
 import traceback
+from collections import defaultdict
 from typing import Any, Callable, Dict, List, Optional
 
 from .adapters.base import ChatMessage
+from .batch_queue import BatchQueue, BatchWorker
 from .router import ModelRouter
 from .router import (
     ERROR_PARAM_INVALID,
@@ -22,6 +26,38 @@ from .router import (
 from .monitor import Monitor
 
 
+# SSE constants
+SSE_HEARTBEAT_INTERVAL = 30  # seconds
+SSE_CHUNK_BUFFER_SIZE = 200  # max chunks buffered per request for reconnect
+
+
+class ChunkBuffer:
+    """Ring buffer for streaming chunks, supports reconnect via request_id."""
+
+    def __init__(self, max_size: int = SSE_CHUNK_BUFFER_SIZE) -> None:
+        self._buffers: Dict[str, List[str]] = defaultdict(list)
+        self._max_size = max_size
+        self._lock = threading.Lock()
+
+    def append(self, request_id: str, chunk: str) -> None:
+        with self._lock:
+            buf = self._buffers[request_id]
+            buf.append(chunk)
+            # trim to max_size
+            if len(buf) > self._max_size:
+                self._buffers[request_id] = buf[-self._max_size :]
+
+    def get_since(self, request_id: str, last_index: int = 0) -> List[str]:
+        """Get chunks since last_index (for reconnect)."""
+        with self._lock:
+            buf = self._buffers.get(request_id, [])
+            return buf[last_index:]
+
+    def clear(self, request_id: str) -> None:
+        with self._lock:
+            self._buffers.pop(request_id, None)
+
+
 class MCPServer:
     """Minimal MCP server implementing JSON-RPC 2.0 over stdio."""
 
@@ -31,11 +67,19 @@ class MCPServer:
         self._tools: Dict[str, Dict[str, Any]] = {}
         self._resources: Dict[str, Dict[str, Any]] = {}
         self._prompts: Dict[str, Dict[str, Any]] = {}
+        self._chunk_buffer = ChunkBuffer(SSE_CHUNK_BUFFER_SIZE)
+        self._batch_queue = BatchQueue()
+        self._batch_worker = BatchWorker(
+            queue=self._batch_queue,
+            router=router,
+            monitor=monitor,
+        )
+        self._batch_worker.start()
         self._register_defaults()
 
     def _register_defaults(self) -> None:
         """Register built-in tools, resources, and prompts."""
-        # v1.6.0: 4 new MCP tools added
+        # v1.8.0: 2 new MCP tools added (batch_submit, batch_result)
         self._tools = {
             "ask_model": {
                 "name": "ask_model",
@@ -140,6 +184,42 @@ class MCPServer:
                     "required": ["video"],
                 },
             },
+            "batch_submit": {
+                "name": "batch_submit",
+                "description": "提交批量任务列表，立即返回任务 ID。"
+                                "后台顺序执行（复用硬件自适应并发），失败任务自动重试一次。"
+                                "用 batch_result 轮询结果。",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "tasks": {
+                            "type": "array",
+                            "items": {"type": "object"},
+                            "description": "任务列表。每项包含 tool（ask_model/describe_image）和 arguments。",
+                        },
+                        "priority": {
+                            "type": "integer",
+                            "description": "优先级 0-9（默认 5，数字越小优先级越高）",
+                        },
+                    },
+                    "required": ["tasks"],
+                },
+            },
+            "batch_result": {
+                "name": "batch_result",
+                "description": "查询批量任务状态和结果。返回每个任务的执行状态、结果或错误详情。",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "task_id": {"type": "string", "description": "任务 ID（由 batch_submit 返回）"},
+                        "include_items": {
+                            "type": "boolean",
+                            "description": "是否包含每个子项的详细结果（默认 false，仅返回汇总）",
+                        },
+                    },
+                    "required": ["task_id"],
+                },
+            },
             "list_providers": {
                 "name": "list_providers",
                 "description": "列出所有已配置且可用的模型提供商。",
@@ -152,17 +232,12 @@ class MCPServer:
             },
         }
 
+        # v1.8.0: merged config + usage into single status resource
         self._resources = {
-            "config": {
-                "uri": "cn-model-gateway://config",
-                "name": "当前配置",
-                "description": "查看当前已注册的模型提供商列表（不含 api_key）",
-                "mimeType": "application/json",
-            },
-            "usage_stats": {
-                "uri": "cn-model-gateway://usage",
-                "name": "使用统计",
-                "description": "查看各模型调用次数、token 消耗等统计信息",
+            "status": {
+                "uri": "cn-model-gateway://status",
+                "name": "网关状态",
+                "description": "查看当前配置、使用统计、配额告警（一屏汇总）",
                 "mimeType": "application/json",
             },
         }
@@ -203,7 +278,7 @@ class MCPServer:
                 },
                 "serverInfo": {
                     "name": "cn-model-gateway",
-                    "version": "1.6.0",
+                    "version": "1.8.0",
                     "description": "国产模型 MCP 服务器 - DeepSeek/通义/智谱/Kimi/混元/豆包一站式接入",
                 },
             })
@@ -341,13 +416,12 @@ class MCPServer:
         if provider:
             adapter = self.router.get_adapter(provider)
         else:
-            # Auto-select: find adapter that supports embed_text
             for p in self.router.list_available():
                 a = self.router.get_adapter(p)
-                if a and hasattr(a, 'embed_text'):
+                if a and hasattr(a, "embed_text"):
                     try:
-                        # Test if it actually works (not just inherited NotImplementedError)
                         from llm_core.adapters.base import BaseAdapter
+
                         if a.embed_text.__func__ is not BaseAdapter.embed_text:
                             adapter = a
                             break
@@ -390,8 +464,9 @@ class MCPServer:
         else:
             for p in self.router.list_available():
                 a = self.router.get_adapter(p)
-                if a and hasattr(a, 'rerank'):
+                if a and hasattr(a, "rerank"):
                     from llm_core.adapters.base import BaseAdapter
+
                     if a.rerank.__func__ is not BaseAdapter.rerank:
                         adapter = a
                         break
@@ -410,8 +485,12 @@ class MCPServer:
                 f"耗时: {result.duration_ms}ms\n",
             ]
             for i, score in enumerate(result.scores):
-                doc_preview = documents[i][:50] + "..." if len(documents[i]) > 50 else documents[i]
-                lines.append(f"  [{i+1}] 相关度: {score:.4f} | {doc_preview}")
+                doc_preview = (
+                    documents[i][:50] + "..."
+                    if len(documents[i]) > 50
+                    else documents[i]
+                )
+                lines.append(f"  [{i + 1}] 相关度: {score:.4f} | {doc_preview}")
             return "\n".join(lines)
         except NotImplementedError as e:
             return f"该提供商不支持重排序: {e}"
@@ -433,8 +512,9 @@ class MCPServer:
         else:
             for p in self.router.list_available():
                 a = self.router.get_adapter(p)
-                if a and hasattr(a, 'audio_transcribe'):
+                if a and hasattr(a, "audio_transcribe"):
                     from llm_core.adapters.base import BaseAdapter
+
                     if a.audio_transcribe.__func__ is not BaseAdapter.audio_transcribe:
                         adapter = a
                         break
@@ -476,8 +556,9 @@ class MCPServer:
         else:
             for p in self.router.list_available():
                 a = self.router.get_adapter(p)
-                if a and hasattr(a, 'video_understand'):
+                if a and hasattr(a, "video_understand"):
                     from llm_core.adapters.base import BaseAdapter
+
                     if a.video_understand.__func__ is not BaseAdapter.video_understand:
                         adapter = a
                         break
@@ -500,6 +581,81 @@ class MCPServer:
             return f"该提供商不支持视频理解: {e}"
         except Exception as e:
             return f"视频理解失败: {e}"
+
+    # --- v1.8.0: batch async tool handlers ---
+
+    def _tool_batch_submit(self, args: Dict[str, Any]) -> str:
+        """Submit batch tasks for async execution."""
+        tasks = args.get("tasks", [])
+        if not tasks:
+            raise ValueError("tasks 不能为空")
+        if not isinstance(tasks, list):
+            raise ValueError("tasks 必须是列表")
+        priority = args.get("priority", 5)
+        if not isinstance(priority, int) or priority < 0 or priority > 9:
+            raise ValueError("priority 必须是 0-9 的整数")
+
+        task_id = self._batch_queue.create_task(tasks, priority=priority)
+        return (
+            f"## 批量任务已提交\n任务 ID: `{task_id}`\n"
+            f"任务数量: {len(tasks)}\n优先级: {priority}\n\n"
+            f"使用 `batch_result` 工具查询结果。示例：\n"
+            f'{{"tool": "batch_result", "arguments": {{"task_id": "{task_id}"}}}}'
+        )
+
+    def _tool_batch_result(self, args: Dict[str, Any]) -> str:
+        """Query batch task status and results."""
+        task_id = args.get("task_id", "")
+        if not task_id:
+            raise ValueError("task_id 不能为空")
+        include_items = args.get("include_items", False)
+
+        task = self._batch_queue.get_task(task_id)
+        if not task:
+            return f"任务 `{task_id}` 不存在或已过期清理。"
+
+        lines = [
+            f"## 批量任务状态\n"
+            f"任务 ID: `{task_id}`\n"
+            f"状态: {task["status"]}\n"
+            f"优先级: {task.get("priority", 5)}\n"
+            f"创建时间: {task["created_at"]}\n"
+        ]
+
+        if task.get("started_at"):
+            lines.append(f"开始时间: {task['started_at']}")
+        if task.get("finished_at"):
+            lines.append(f"结束时间: {task['finished_at']}")
+
+        items = self._batch_queue.list_items(task_id)
+        total = len(items)
+        done = sum(1 for i in items if i["status"] == "done")
+        failed = sum(1 for i in items if i["status"] == "failed")
+        pending = sum(1 for i in items if i["status"] in ("pending", "retrying"))
+        running = sum(1 for i in items if i["status"] == "running")
+
+        lines.append(
+            f"\n进度: {done + failed}/{total}"
+            f"（完成 {done}，失败 {failed}，"
+            f"运行中 {running}，等待 {pending}）"
+        )
+
+        if include_items:
+            lines.append("\n### 子项详情")
+            for i, item in enumerate(items):
+                lines.append(f"\n#### 子项 {i + 1}（{item['status']}）")
+                lines.append(f"工具: {item['tool']}")
+                if item.get("error"):
+                    lines.append(f"错误: {item['error']}")
+                if item.get("result"):
+                    result_preview = item["result"][:200]
+                    if len(item["result"]) > 200:
+                        result_preview += "..."
+                    lines.append(f"结果: {result_preview}")
+                if item.get("retried"):
+                    lines.append("（已自动重试）")
+
+        return "\n".join(lines)
 
     def _tool_list_providers(self, args: Dict[str, Any]) -> str:
         available = self.router.list_available()
@@ -527,24 +683,42 @@ class MCPServer:
 
     def _handle_resource_read(self, req_id: Any, params: Dict[str, Any]) -> Dict[str, Any]:
         uri = params.get("uri", "")
-        if uri == "cn-model-gateway://config":
+        if uri == "cn-model-gateway://status":
+            # v1.8.0: merged config + usage + quota alerts
             config_info = {}
             for provider, adapter in self.router._adapters.items():
                 config_info[provider] = {
                     "available": adapter.is_available(),
                     "default_model": adapter.default_model,
                 }
-            content = json.dumps(config_info, ensure_ascii=False, indent=2)
-            return self._success(req_id, {
-                "contents": [{"uri": uri, "mimeType": "application/json", "text": content}]
-            })
-        if uri == "cn-model-gateway://usage":
-            stats = self.monitor.get_stats()
-            content = json.dumps(stats, ensure_ascii=False, indent=2)
+            usage_stats = self.monitor.get_stats()
+            merged = {
+                "config": config_info,
+                "usage": usage_stats,
+                "quota_alerts": self._compute_quota_alerts(usage_stats),
+            }
+            content = json.dumps(merged, ensure_ascii=False, indent=2)
             return self._success(req_id, {
                 "contents": [{"uri": uri, "mimeType": "application/json", "text": content}]
             })
         return self._error(req_id, ERROR_PARAM_INVALID, f"未知资源: {uri}")
+
+    def _compute_quota_alerts(self, usage_stats: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Compute quota alerts based on usage statistics."""
+        alerts = []
+        provider_stats = usage_stats.get("providers", {})
+        for provider, stats in provider_stats.items():
+            total_calls = stats.get("total_calls", 0)
+            error_calls = stats.get("error_calls", 0)
+            if total_calls > 0:
+                error_rate = error_calls / total_calls
+                if error_rate > 0.5 and total_calls >= 5:
+                    alerts.append({
+                        "provider": provider,
+                        "level": "warning",
+                        "message": f"错误率 {error_rate:.0%}（{error_calls}/{total_calls}）",
+                    })
+        return alerts
 
     def _handle_prompt_get(self, req_id: Any, params: Dict[str, Any]) -> Dict[str, Any]:
         name = params.get("name", "")
@@ -621,3 +795,7 @@ class MCPServer:
     def _send(self, response: Dict[str, Any]) -> None:
         sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
         sys.stdout.flush()
+
+    def shutdown(self) -> None:
+        """Gracefully stop the batch worker and cleanup."""
+        self._batch_worker.stop()
