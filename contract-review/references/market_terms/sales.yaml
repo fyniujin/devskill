@@ -1,0 +1,58 @@
+version: "1.0.0"
+updated: "2026-09-17"
+description: "销售合同市场惯例基准值（国际贸易）"
+
+clauses:
+  - clause_type: price_terms
+    keywords: ["价格", "price", "FOB", "CIF", "EXW", "DDP"]
+    fair_value: "FOB 或 CIF（Incoterms 2020）"
+    range: "EXW/FCA/FOB/CIF/DDP 按交易场景选择"
+    unit: "incoterm"
+
+  - clause_type: payment_terms_international
+    keywords: ["付款", "支付", "payment", "L/T", "T/T", "L/C"]
+    fair_value: "30% T/T 预付，70% L/C 即期"
+    range: "T/T 20-50%预付 + L/C 50-80% or D/P"
+    unit: "procedure"
+
+  - clause_type: delivery_time_international
+    keywords: ["交付", "交货", "delivery", "shipping"]
+    fair_value: "收到信用证后30-45天"
+    range: "15-60天"
+    unit: "days"
+
+  - clause_type: risk_transfer_international
+    keywords: ["风险", "risk", "transfer", "passing"]
+    fair_value: "FOB 装运港船上转移"
+    range: "按 Incoterms 约定"
+    unit: "incoterm_point"
+
+  - clause_type: warranty_period_international
+    keywords: ["质保", "保修", "warranty", "guarantee"]
+    fair_value: "装运后12个月或到港后6个月"
+    range: "6-24个月"
+    unit: "months"
+
+  - clause_type: penalty_breach_international
+    keywords: ["违约金", "赔偿", "penalty", "damages"]
+    fair_value: "违约部分合同金额的10-20%"
+    range: "5-30%"
+    unit: "percentage"
+
+  - clause_type: force_majeure_international
+    keywords: ["不可抗力", "force majeure", "act of god"]
+    fair_value: "ICC Force Majeure Clause 2020"
+    range: "ICC 或 UNIDROIT 原则"
+    unit: "clause_template"
+
+  - clause_type: governing_law_international
+    keywords: ["适用法律", "管辖", "governing law", "jurisdiction"]
+    fair_value: "新加坡法或英国法（中立第三国）"
+    range: "英国法/纽约法/新加坡法/HK法"
+    unit: "jurisdiction"
+
+  - clause_type: dispute_resolution_international
+    keywords: ["争议", "仲裁", "dispute", "arbitration", "ICC", "SIAC"]
+    fair_value: "SIAC 或 ICC 仲裁，新加坡或巴黎"
+    range: "ICC/SIAC/HKIAC/LCIA"
+    unit: "arbitration_institution"
