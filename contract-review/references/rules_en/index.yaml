@@ -1,0 +1,23 @@
+# 英文合同风险规则包 — 索引
+# schema 与中文 risk_rules.yaml 完全一致，工具链零改动
+# 首批覆盖：FIDIC(15条) + CISG(20条) + 普通法高频条款(80条)
+
+rule_categories:
+  - id: fidic_risk
+    name: FIDIC 合同风险
+    description: 国际工程承包 FIDIC 合同条件相关风险
+  - id: cisg_risk
+    name: CISG 风险
+    description: 联合国国际货物销售合同公约相关风险
+  - id: common_law_risk
+    name: 普通法高频条款风险
+    description: Indemnity / Limitation of Liability / Governing Law / Termination for Convenience
+
+# 规则文件列表
+rule_files:
+  - fidic.yaml       # FIDIC 合同条件 15 条
+  - cisg.yaml        # CISG 国际货物销售 20 条
+  - common_law.yaml  # 普通法高频条款 80 条（赔偿/责任限制/适用法律/终止各20条）
+
+version: "1.0.0"
+updated: "2026-09-17"
