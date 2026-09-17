@@ -1,11 +1,14 @@
 """CLI entry point for CN Model Gateway.
 
+v1.8.0: Added batch subcommand for async batch task submission/query.
 v1.6.0: Added 4 new subcommands (embed, rerank, transcribe, video)
         via shared llm_core kernel.
 """
 from __future__ import annotations
 
 import argparse
+import json
+import sqlite3
 import sys
 import os
 import time
@@ -405,6 +408,121 @@ def cmd_cost_predict(args: argparse.Namespace) -> None:
     print(f"备注: {result['note']}")
 
 
+# --- v1.8.0: batch async CLI subcommand ---
+
+def cmd_batch(args: argparse.Namespace) -> None:
+    """Submit or query batch tasks."""
+    sub = getattr(args, 'batch_subcommand', None)
+    if sub == "submit":
+        cmd_batch_submit(args)
+    elif sub == "result":
+        cmd_batch_result(args)
+    else:
+        print("batch 子命令: submit / result", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_batch_submit(args: argparse.Namespace) -> None:
+    """Submit a batch task from JSON file or stdin."""
+    import json
+    tasks = []
+    if args.tasks:
+        # Load from file
+        task_path = Path(args.tasks)
+        if not task_path.exists():
+            print(f"任务文件不存在: {args.tasks}", file=sys.stderr)
+            sys.exit(1)
+        with open(task_path, "r", encoding="utf-8") as f:
+            tasks = json.load(f)
+    else:
+        # Read from stdin
+        print("请输入任务列表 JSON（Ctrl+D 结束）:")
+        data = sys.stdin.read()
+        tasks = json.loads(data)
+
+    if not isinstance(tasks, list):
+        print("tasks 必须是列表", file=sys.stderr)
+        sys.exit(1)
+
+    config_path = args.config or get_default_config_path()
+    config = load_config(config_path)
+    router = ModelRouter(timeout=args.timeout, failover=not args.no_failover)
+    router.register_all(config)
+    monitor = Monitor()
+
+    from src.batch_queue import BatchQueue, BatchWorker
+    queue = BatchQueue()
+    task_id = queue.create_task(tasks, priority=args.priority)
+
+    # Start worker in background
+    worker = BatchWorker(queue=queue, router=router, monitor=monitor)
+    worker.start()
+
+    print(f"\n批量任务已提交")
+    print(f"任务 ID: {task_id}")
+    print(f"任务数量: {len(tasks)}")
+    print(f"优先级: {args.priority}")
+    print(f"后台执行中，使用 'python main.py batch result {task_id}' 查询结果。")
+    print(f"Worker 并发上限: {worker.max_concurrency}")
+
+    # Wait for completion (optional: --wait)
+    if args.wait:
+        print("\n等待所有任务完成...")
+        import time
+        while True:
+            task = queue.get_task(task_id)
+            if task and task["status"] in ("done", "failed"):
+                break
+            time.sleep(1)
+        print(f"任务完成，状态: {task['status']}")
+        worker.stop()
+
+
+def cmd_batch_result(args: argparse.Namespace) -> None:
+    """Query batch task result."""
+    task_id = args.task_id
+    from src.batch_queue import BatchQueue
+    queue = BatchQueue()
+    task = queue.get_task(task_id)
+    if not task:
+        print(f"任务 {task_id} 不存在或已过期清理。")
+        sys.exit(1)
+
+    print(f"\n批量任务状态")
+    print(f"任务 ID: {task_id}")
+    print(f"状态: {task['status']}")
+    print(f"总任务数: {task['total']}")
+    print(f"完成: {task['done']}")
+    print(f"错误: {task['errors']}")
+    print(f"创建时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(task['created_at']))}")
+    print(f"更新时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(task['updated_at']))}")
+
+    if args.include_items:
+        # Show detailed item results
+        with sqlite3.connect(queue.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT items, results, errors FROM batch_tasks WHERE task_id = ?",
+                (task_id,)
+            ).fetchone()
+            if row:
+                items = json.loads(row["items"])
+                results = json.loads(row["results"])
+                errors = json.loads(row["errors"])
+                print(f"\n子项详情:")
+                for i, (item, result, error) in enumerate(zip(items, results, errors)):
+                    tool = item.get("tool", "?")
+                    status_icon = "✅" if result else "❌" if error else "⏳"
+                    print(f"\n  [{i+1}] {status_icon} {tool}")
+                    if error:
+                        print(f"      错误: {error}")
+                    elif result:
+                        result_str = json.dumps(result, ensure_ascii=False)
+                        if len(result_str) > 200:
+                            result_str = result_str[:200] + "..."
+                        print(f"      结果: {result_str}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="cn-model-gateway",
@@ -501,6 +619,19 @@ def main() -> None:
     cost_parser = subparsers.add_parser("cost-predict", help="预测月度成本")
     cost_parser.add_argument("-t", "--tokens", type=int, help="每月 token 数")
     cost_parser.set_defaults(func=cmd_cost_predict)
+
+    # v1.8.0: batch async subcommand
+    batch_parser = subparsers.add_parser("batch", help="批量异步任务")
+    batch_sub = batch_parser.add_subparsers(dest="batch_subcommand", help="batch 子命令")
+    batch_submit_parser = batch_sub.add_parser("submit", help="提交批量任务")
+    batch_submit_parser.add_argument("--tasks", help="任务列表 JSON 文件路径")
+    batch_submit_parser.add_argument("--priority", type=int, default=5, help="优先级 0-9（默认 5）")
+    batch_submit_parser.add_argument("--wait", action="store_true", help="等待任务完成")
+    batch_submit_parser.set_defaults(func=cmd_batch)
+    batch_result_parser = batch_sub.add_parser("result", help="查询批量任务结果")
+    batch_result_parser.add_argument("task_id", help="任务 ID")
+    batch_result_parser.add_argument("--include-items", action="store_true", help="显示子项详情")
+    batch_result_parser.set_defaults(func=cmd_batch)
 
     args = parser.parse_args()
     if not args.command:
