@@ -1,0 +1,34 @@
+version: "1.0.0"
+updated: "2026-09-17"
+description: "劳动合同市场惯例基准值"
+
+clauses:
+  - clause_type: noncompete_period
+    keywords: ["竞业限制", "non-compete", "non-solicitation"]
+    fair_value: "解除或终止后不超过2年"
+    range: "6个月-2年"
+    unit: "months"
+
+  - clause_type: noncompete_compensation
+    keywords: ["竞业限制补偿", "non-compete compensation", "补偿金"]
+    fair_value: "离职前12个月平均工资的30%/月，不低于最低工资"
+    range: "20-50%/月"
+    unit: "percentage"
+
+  - clause_type: notice_period_termination
+    keywords: ["解除通知", "notice period", "提前通知"]
+    fair_value: "提前30天书面通知（无过失解除）"
+    range: "15-90天"
+    unit: "days"
+
+  - clause_type: severance_pay
+    keywords: ["经济补偿", "severance", "N+1", "compensation"]
+    fair_value: "N+1个月工资（N=工作年限）"
+    range: "N至N+2"
+    unit: "months"
+
+  - clause_type: probation_period
+    keywords: ["试用期", "probation", "trial period"]
+    fair_value: "合同期≤1年→1个月；1-3年→2个月；≥3年→6个月"
+    range: "法定上限内"
+    unit: "months"
