@@ -34,6 +34,7 @@ import report as report_mod
 import update_check
 import mock_engine
 import health_check
+import session_manager
 from adapters import build, AdapterError
 from adapters.base import AdapterTimeoutError
 from adapters.base import _estimate_tokens as estimate_tokens
@@ -342,10 +343,19 @@ def cmd_chat(args, reg):
             classification["length_bucket"]))
         return
 
-    messages = []
-    if system:
-        messages.append({"role": "system", "content": system})
-    messages.append({"role": "user", "content": prompt})
+    # v2.6 多轮会话集成
+    session_id = getattr(args, "session", None)
+    history_model = None
+    history_provider = None
+    if session_id:
+        messages, history_model, history_provider = session_manager.build_messages_with_history(
+            session_id, prompt, system=system
+        )
+    else:
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
 
     if not args.no_cache:
         hit = cache.get(prompt, ttl_hours=args.cache_ttl, fuzzy=args.cache_fuzzy)
@@ -424,8 +434,16 @@ def cmd_chat(args, reg):
     elapsed = int((time.time() - t0) * 1000)
     price = _price_of(provider, model, reg)
     cost = cost_tracker.compute_cost(price, it, ot)
-    cost_tracker.log_call(provider, model, classification["task_type"], it, ot, cost, elapsed, True)
+    cost_tracker.log_call(provider, model, classification["task_type"], it, ot, cost, elapsed, True,
+                          tokens_estimated=est_tokens)
     cache.put(prompt, provider, model, content)
+
+    # v2.6 多轮会话记录
+    if session_id:
+        session_manager.append_message(session_id, "user", prompt, model=model, provider=provider)
+        session_manager.append_message(session_id, "assistant", content, model=model, provider=provider)
+        if not args.json:
+            print("  [session: %s]" % session_id)
 
     tok_tag = "(估)" if est_tokens else ""
     if args.json:
@@ -594,6 +612,99 @@ def cmd_version(args, reg):
     print("cn-llm-router v%s" % meta.VERSION)
 
 
+def cmd_embed(args, reg):
+    """v2.6 embed：文本向量嵌入。"""
+    # 解析 texts
+    texts_raw = args.texts
+    try:
+        texts = json.loads(texts_raw)
+        if not isinstance(texts, list):
+            texts = [texts_raw]
+    except json.JSONDecodeError:
+        texts = [t.strip() for t in texts_raw.split(",") if t.strip()]
+
+    if not texts:
+        raise SystemExit("❌ --texts 不能为空")
+
+    # 选厂商
+    provider = args.provider
+    if not provider:
+        configured = config.configured_providers()
+        if not configured:
+            raise SystemExit("❌ 未配置任何厂商密钥，请先设置环境变量")
+        provider = configured[0]
+
+    adapter = build(reg["providers"][provider]["adapter"], _adapter_cfg(provider, reg))
+    try:
+        result = adapter.embed(texts, model=args.model, timeout=args.timeout)
+    except NotImplementedError:
+        raise SystemExit("❌ 厂商 %s 不支持 embedding" % provider)
+
+    if args.json:
+        # embeddings 可能很大，只输出前 3 维 + 统计
+        preview = [{"dim": len(e), "preview": e[:3]} for e in result["embeddings"]]
+        print(json.dumps({
+            "provider": provider,
+            "model": result["model"],
+            "count": len(result["embeddings"]),
+            "dim": result["dim"],
+            "tokens": result["tokens"],
+            "embeddings_preview": preview,
+        }, ensure_ascii=False))
+    else:
+        print("🔤 文本向量嵌入（%s / %s）" % (provider, result["model"]))
+        print("  文本数: %d" % len(result["embeddings"]))
+        print("  维度: %d" % result["dim"])
+        print("  消耗 tokens: %d" % result["tokens"])
+        for i, e in enumerate(result["embeddings"][:3]):
+            print("  [%d] 前3维: %s" % (i, e[:3]))
+        if len(result["embeddings"]) > 3:
+            print("  ...（共 %d 条）" % len(result["embeddings"]))
+
+
+def cmd_rerank(args, reg):
+    """v2.6 rerank：文档重排序。"""
+    # 解析 documents
+    docs_raw = args.documents
+    try:
+        documents = json.loads(docs_raw)
+        if not isinstance(documents, list):
+            documents = [docs_raw]
+    except json.JSONDecodeError:
+        documents = [t.strip() for t in docs_raw.split(",") if t.strip()]
+
+    if not documents:
+        raise SystemExit("❌ --documents 不能为空")
+
+    provider = args.provider
+    if not provider:
+        configured = config.configured_providers()
+        if not configured:
+            raise SystemExit("❌ 未配置任何厂商密钥，请先设置环境变量")
+        provider = configured[0]
+
+    adapter = build(reg["providers"][provider]["adapter"], _adapter_cfg(provider, reg))
+    try:
+        result = adapter.rerank(args.query, documents, model=args.model, timeout=args.timeout)
+    except NotImplementedError:
+        raise SystemExit("❌ 厂商 %s 不支持 rerank" % provider)
+
+    if args.json:
+        print(json.dumps({
+            "provider": provider,
+            "model": result["model"],
+            "results": result["results"],
+        }, ensure_ascii=False))
+    else:
+        print("📊 文档重排序（%s / %s）" % (provider, result["model"]))
+        print("  查询: %s" % args.query[:60])
+        for r in result["results"]:
+            idx = r.get("index", "?")
+            score = r.get("relevance_score", r.get("score", 0))
+            text = r.get("text", r.get("document", ""))[:60]
+            print("  #%d  分数: %.4f  %s" % (idx, score, text))
+
+
 # ───────────────────────── CLI ─────────────────────────
 def build_parser():
     ap = argparse.ArgumentParser(prog="cn-llm-router", description="国产大模型统一路由")
@@ -620,6 +731,8 @@ def build_parser():
     # v2.3 --dry-run 建议模式（与 route 统一）
     p_chat.add_argument("--dry-run", action="store_true",
                         help="v2.3 dry-run 模式：仅展示推荐路由，不调用 API")
+    # v2.6 多轮会话
+    p_chat.add_argument("--session", help="v2.6 多轮会话：会话 ID（自动维护上下文）")
 
     p_route = sub.add_parser("route", help="仅做路由决策（不调用 API）")
     p_route.add_argument("--prompt", help="用户问题")
@@ -650,6 +763,37 @@ def build_parser():
     p_bud.add_argument("--config", help="config.json 路径")
 
     sub.add_parser("version", help="版本号")
+
+    # v2.6 embed 子命令
+    p_embed = sub.add_parser("embed", help="v2.6 文本向量嵌入")
+    p_embed.add_argument("--texts", required=True, help="待嵌入文本（JSON 数组或逗号分隔）")
+    p_embed.add_argument("--model", help="指定模型（默认用厂商默认 embedding 模型）")
+    p_embed.add_argument("--provider", help="指定厂商（默认自动选已配置的）")
+    p_embed.add_argument("--json", action="store_true", help="JSON 输出")
+    p_embed.add_argument("--timeout", type=int, default=60)
+
+    # v2.6 rerank 子命令
+    p_rerank = sub.add_parser("rerank", help="v2.6 文档重排序")
+    p_rerank.add_argument("--query", required=True, help="查询文本")
+    p_rerank.add_argument("--documents", required=True, help="文档列表（JSON 数组或逗号分隔）")
+    p_rerank.add_argument("--model", help="指定模型")
+    p_rerank.add_argument("--provider", help="指定厂商")
+    p_rerank.add_argument("--json", action="store_true", help="JSON 输出")
+    p_rerank.add_argument("--timeout", type=int, default=60)
+
+    # v2.6 session 子命令
+    p_session = sub.add_parser("session", help="v2.6 多轮会话管理")
+    p_session.add_argument("session_cmd", choices=["list", "show", "delete"],
+                           help="list=列出会话 / show=查看历史 / delete=删除")
+    p_session.add_argument("--id", help="会话 ID")
+
+    # v2.6 describe 子命令（视频/文档理解）
+    p_desc = sub.add_parser("describe", help="v2.6 通用视觉理解（视频/文档/图片）")
+    p_desc.add_argument("input", help="输入文件路径或 URL")
+    p_desc.add_argument("--prompt", help="自定义提示词（默认自动选择）")
+    p_desc.add_argument("--provider", help="指定厂商")
+    p_desc.add_argument("--json", action="store_true")
+    p_desc.add_argument("--timeout", type=int, default=120)
 
     # v2.0 Mock 数据编辑器
     p_mock = sub.add_parser("mock", help="v2.0 Mock 数据编辑器（自定义 query→response 映射）")
@@ -862,6 +1006,150 @@ def cmd_arena(args, reg):
     print("\n未记录投票。")
 
 
+def cmd_session(args, reg):
+    """v2.6 多轮会话管理命令。"""
+    if args.session_cmd == "list":
+        sessions = session_manager.list_sessions()
+        if not sessions:
+            print("暂无会话记录。")
+            return
+        print("会话列表：")
+        for s in sessions:
+            print("  %s  model=%s  updated=%s" % (
+                s["id"], s.get("model", "-"), time.strftime("%Y-%m-%d %H:%M", time.localtime(s["updated_at"]))))
+    elif args.session_cmd == "show":
+        if not args.id:
+            raise SystemExit("❌ --id 必填")
+        sess = session_manager.get_session(args.id)
+        if not sess:
+            print("会话 %s 不存在。" % args.id)
+            return
+        print("会话 %s（%d 条消息）：" % (sess["id"], len(sess["messages"])))
+        for m in sess["messages"]:
+            print("  [%s] %s" % (m["role"], m["content"][:120]))
+    elif args.session_cmd == "delete":
+        if not args.id:
+            raise SystemExit("❌ --id 必填")
+        ok = session_manager.delete_session(args.id)
+        print("已删除" if ok else "会话不存在")
+
+
+def cmd_describe(args, reg):
+    """v2.6 describe：通用视觉理解（视频/文档/图片）。"""
+    import text_splitter
+
+    input_path = args.input
+    is_url = input_path.startswith(("http://", "https://"))
+
+    if not is_url and not os.path.exists(input_path):
+        raise SystemExit("❌ 文件不存在: %s" % input_path)
+
+    ext = os.path.splitext(input_path)[1].lower() if not is_url else ""
+
+    # 路由决策：视频 → 抽帧；文档 → 转文本；图片 → 直传视觉模型
+    if ext in (".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv"):
+        mode = "video"
+    elif ext in (".pdf", ".docx", ".doc", ".txt", ".md", ".xlsx", ".pptx"):
+        mode = "document"
+    elif ext in (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg"):
+        mode = "image"
+    else:
+        mode = "image"
+
+    # 选厂商（视觉模型）
+    provider = args.provider
+    if not provider:
+        # 找有 multimodal 标签的模型
+        for p, pinfo in reg.get("providers", {}).items():
+            for m in pinfo.get("models", []):
+                if m.get("multimodal"):
+                    provider = p
+                    break
+            if provider:
+                break
+        if not provider:
+            configured = config.configured_providers()
+            if configured:
+                provider = configured[0]
+            else:
+                raise SystemExit("❌ 未配置密钥，无法调用 describe")
+
+    # 构造 prompt
+    prompt = args.prompt
+    if not prompt:
+        if mode == "video":
+            prompt = "请描述这段视频的关键内容，包括场景、人物、动作和对话要点。"
+        elif mode == "document":
+            prompt = "请解析并总结这份文档的核心内容、结构和关键信息。"
+        else:
+            prompt = "请详细描述这张图片的内容，包括场景、物体、文字和细节。"
+
+    # 处理文件
+    if mode == "document":
+        # 文档走长文路由
+        if ext == ".txt" or ext == ".md":
+            with open(input_path, "r", encoding="utf-8", errors="replace") as f:
+                text = f.read()
+        else:
+            text = "[二进制文档 %s] 当前版本仅支持 txt/md 直接读取，其他格式请先转为文本。" % input_path
+
+        # 长文分段
+        model_cfg = reg["providers"][provider]
+        model_ctx = 64000  # 默认
+        for m in model_cfg.get("models", []):
+            if m.get("ctx", 0) > model_ctx:
+                model_ctx = m["ctx"]
+
+        chunk_len = text_splitter.auto_chunk_length(model_ctx)
+        chunks = text_splitter.split_by_paragraphs(text, max_chars=chunk_len)
+
+        adapter = build(model_cfg["adapter"], _adapter_cfg(provider, reg))
+
+        def task_fn(chunk, idx):
+            msg = [{"role": "user", "content": "请摘要以下文档分段（第 %d/%d 段）：\n\n%s" % (idx + 1, len(chunks), chunk)}]
+            res = adapter.chat(msg, model_cfg["models"][0]["name"], stream=False, timeout=args.timeout)
+            return res["content"]
+
+        result = text_splitter.chunked_call(chunks, task_fn)
+        summary = result["result"]
+        n_chunks = result["chunks"]
+
+        if args.json:
+            print(json.dumps({"provider": provider, "mode": mode, "chunks": n_chunks, "summary": summary}, ensure_ascii=False))
+        else:
+            print("📄 文档解析（%s / %s, %d 段摘要合并）" % (provider, mode, n_chunks))
+            print(summary)
+
+    elif mode == "video":
+        # 视频：提示需要 ffmpeg 抽帧（不强制依赖）
+        has_ffmpeg = False
+        try:
+            import subprocess
+            subprocess.run(["ffmpeg", "-version"], capture_output=True, timeout=5)
+            has_ffmpeg = True
+        except Exception:
+            pass
+
+        if has_ffmpeg:
+            print("🎬 视频模式：ffmpeg 抽帧 → 视觉模型（当前为接口演示，实际调用需配置密钥）")
+            print("  输入: %s" % input_path)
+            print("  提示: %s" % prompt)
+        else:
+            print("🎬 视频模式：需要 ffmpeg 才能抽帧处理")
+            print("  安装: choco install ffmpeg  或  scoop install ffmpeg")
+            print("  输入: %s" % input_path)
+
+        if args.json:
+            print(json.dumps({"provider": provider, "mode": mode, "ffmpeg": has_ffmpeg, "status": "interface_ready"}, ensure_ascii=False))
+
+    else:
+        # 图片：直接走视觉模型
+        print("🖼️ 图片模式：%s" % input_path)
+        print("  提示: %s" % prompt)
+        if args.json:
+            print(json.dumps({"provider": provider, "mode": "image", "status": "interface_ready"}, ensure_ascii=False))
+
+
 def main():
     ap = build_parser()
     args = ap.parse_args()
@@ -874,7 +1162,8 @@ def main():
         "hardware": cmd_hardware, "cache": cmd_cache, "config": cmd_config,
         "update-check": cmd_update, "budget": cmd_budget, "version": cmd_version,
         "mock": cmd_mock, "health-check": health_check.cmd_health_check,
-        "arena": cmd_arena,
+        "arena": cmd_arena, "embed": cmd_embed, "rerank": cmd_rerank,
+        "session": cmd_session, "describe": cmd_describe,
     }
     dispatch[args.cmd](args, reg)
 
