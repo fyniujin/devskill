@@ -12,6 +12,7 @@
 #     models[]      name / ctx(上下文窗口 token) / price_in / price_out / reasoner(可选)
 #     能力画像（0-10，越大越强，纯本地静态经验值，供 auto 策略打分）：
 #       reason_score  推理能力   code_score  代码能力   long_score  长文能力
+# - v2.6 新增：embed_models[] 和 reranks 配置块（embedding 与 rerank 统一接口）
 # - 本文件纯数据，不含任何密钥。
 
 providers:
