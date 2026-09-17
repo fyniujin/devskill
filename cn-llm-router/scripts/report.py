@@ -24,11 +24,16 @@ def render_text(agg):
     lines.append("  成功率 : %.1f%%" % agg["success_rate"])
     lines.append("  P95 延迟: %d ms" % agg["p95_ms"])
     lines.append("  输入/输出 token: %d / %d" % (agg["total_in"], agg["total_out"]))
+    # v2.6 实测/估算分列
+    if agg.get("measured_in", 0) or agg.get("est_in", 0):
+        lines.append("  ┌ 实测 token: 入 %d / 出 %d" % (agg["measured_in"], agg["measured_out"]))
+        lines.append("  └ 估算 token: 入 %d / 出 %d (标注 est)" % (agg["est_in"], agg["est_out"]))
     if agg["by_provider"]:
         lines.append("")
         lines.append("  各家花费：")
         for p, d in sorted(agg["by_provider"].items(), key=lambda x: -x[1]["cost"]):
-            lines.append("    - %-10s 花费 ¥%.4f  调用 %d 次" % (p, d["cost"], d["calls"]))
+            est_tag = " (%d 次估算)" % d.get("est_calls", 0) if d.get("est_calls") else ""
+            lines.append("    - %-10s 花费 ¥%.4f  调用 %d 次%s" % (p, d["cost"], d["calls"], est_tag))
     else:
         lines.append("  （暂无调用记录）")
     lines.append("═══════════════════════════════════════════════")
