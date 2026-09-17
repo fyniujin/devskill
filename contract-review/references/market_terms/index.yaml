@@ -1,0 +1,37 @@
+# 市场惯例库 — 索引
+# 用于立场推演时计算条款偏离公平值的幅度
+
+version: "1.0.0"
+updated: "2026-09-17"
+description: "Market benchmark terms for cross-border and domestic contracts"
+
+mappings:
+  - id: procurement
+    file: procurement.yaml
+    description: "采购合同市场惯例"
+    usage: "buyer/supplier negotiations"
+    disclaimer: "仅供参考，实际因行业、地区、交易规模而异"
+
+  - id: sales
+    file: sales.yaml
+    description: "销售合同市场惯例（国际贸易）"
+    usage: "international trade transactions"
+    disclaimer: "仅供参考，实际因行业、地区、交易规模而异"
+
+  - id: common_contract
+    file: common_contract.yaml
+    description: "通用合同市场惯例"
+    usage: "NDA, IP license, service agreements"
+    disclaimer: "仅供参考，实际因行业、地区、交易规模而异"
+
+  - id: construction
+    file: construction.yaml
+    description: "建设工程市场惯例"
+    usage: "construction and infrastructure projects"
+    disclaimer: "仅供参考，实际因行业、地区、交易规模而异"
+
+  - id: labor
+    file: labor.yaml
+    description: "劳动合同市场惯例"
+    usage: "employment contracts and HR negotiations"
+    disclaimer: "仅供参考，实际因行业、地区、交易规模而异"
