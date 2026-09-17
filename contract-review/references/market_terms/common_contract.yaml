@@ -1,0 +1,46 @@
+version: "1.0.0"
+updated: "2026-09-17"
+description: "通用合同市场惯例基准值（NDA/IP/服务）"
+
+clauses:
+  - clause_type: nda_duration
+    keywords: ["保密", "NDA", "non-disclosure", "confidentiality"]
+    fair_value: "合同期内及终止后2年"
+    range: "1-5年"
+    unit: "years"
+
+  - clause_type: nda_scope
+    keywords: ["保密范围", "保密信息", "confidential information", "scope"]
+    fair_value: "所有书面标注为保密的信息"
+    range: "书面标注 + 口头30天内书面确认"
+    unit: "scope_definition"
+
+  - clause_type: ip_license_scope
+    keywords: ["许可", "license", "授权", "使用权限"]
+    fair_value: "非独占、不可转让、限于合同约定用途"
+    range: "非独占/排他/独占"
+    unit: "license_type"
+
+  - clause_type: ip_license_term
+    keywords: ["许可期限", "license term", "许可期"]
+    fair_value: "合同期限或知识产权有效期"
+    range: "1年-永久"
+    unit: "years"
+
+  - clause_type: service_sla
+    keywords: ["SLA", "服务水平", "service level", "uptime"]
+    fair_value: "月度可用性99.5%"
+    range: "99.0-99.9%"
+    unit: "percentage"
+
+  - clause_type: service_penalty
+    keywords: ["服务违约金", "SLA penalty", "service credit"]
+    fair_value: "服务费的10-20%/月（低于SLA时）"
+    range: "5-30%"
+    unit: "percentage"
+
+  - clause_type: consultation_fee
+    keywords: ["咨询费", "顾问费", "consultation fee", "advisory fee"]
+    fair_value: "按小时计费或固定项目费"
+    range: "小时费率或项目总价"
+    unit: "fee_structure"
