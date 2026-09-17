@@ -1,0 +1,52 @@
+version: "1.0.0"
+updated: "2026-09-17"
+description: "采购合同市场惯例基准值"
+
+clauses:
+  - clause_type: payment_terms
+    keywords: ["付款", "支付", "payment", "pay"]
+    fair_value: "分期付款：预付30%，到货验收付60%，质保期满付10%"
+    range: "预付10-50%，验收付40-80%，质保0-20%"
+    unit: "percentage"
+
+  - clause_type: delivery_time
+    keywords: ["交付", "交货", "delivery", "ship"]
+    fair_value: "合同生效后30-60天"
+    range: "15-90天"
+    unit: "days"
+
+  - clause_type: warranty_period
+    keywords: ["质保", "保修", "warranty", "guarantee"]
+    fair_value: "验收合格后12个月"
+    range: "6-24个月"
+    unit: "months"
+
+  - clause_type: penalty_rate
+    keywords: ["违约金", "滞纳金", "penalty", "late fee"]
+    fair_value: "每日0.05%（年18%）"
+    range: "每日0.03-0.1%（年11-36%）"
+    unit: "percentage"
+
+  - clause_type: retention_bond
+    keywords: ["质保金", "保留金", "retention", "holdback"]
+    fair_value: "合同总价的5%"
+    range: "3-10%"
+    unit: "percentage"
+
+  - clause_type: price_adjustment
+    keywords: ["价格调整", "调价", "price adjustment", "escalation"]
+    fair_value: "固定价格，不调整"
+    range: "±10%以内按约定调整"
+    unit: "percentage"
+
+  - clause_type: inspection_period
+    keywords: ["验收", "检验", "inspection", "acceptance"]
+    fair_value: "到货后7-14天"
+    range: "3-30天"
+    unit: "days"
+
+  - clause_type: dispute_resolution
+    keywords: ["争议", "纠纷", "dispute", "arbitration"]
+    fair_value: "先协商，协商不成提交仲裁"
+    range: "协商→调解→仲裁/诉讼"
+    unit: "procedure"
