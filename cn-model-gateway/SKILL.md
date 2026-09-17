@@ -2,8 +2,8 @@
 slug: cn-model-gateway
 displayName: 国产模型 MCP 服务器
 name: cn-model-gateway
-description: "国产大模型统一 MCP 服务器，通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline / n8n 等 18+ Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包、MiniMax、零一万物、百川智能、阶跃星辰十家模型的统一调用接口。新增 5 个非 MCP 框架适配器：LangChain Tool、AutoGPT Plugin、CrewAI Tool、Coze 插件、Dify 工具节点，实现从 MCP 生态到全 Agent 生态的扩展。内置模型性能基准测试套件（50 道题库、6 维度评分、雷达图对比、历史追踪）和 Token 价格实时追踪（价格抓取、变更通知、趋势图、成本预测）。支持 8 个 MCP 工具（ask_model/describe_image/embed_text/rerank/audio_transcribe/video_understand/list_providers/health_check）、资源读取（配置/使用统计）、预置 prompt 模板（代码审查/翻译），内置统一错误映射、流式 SSE 输出、使用量统计、硬件感知并发控制。auto 模式支持能力画像排序 + 自动故障转移（超时/失败切备用）；API key 支持环境变量优先读取；SQLite 启用 WAL 模式支持多 Agent 框架并发写入；支持多模态视觉模型（Qwen-VL/GLM-4V/豆包视觉）和图片理解（describe_image）；支持 Function Calling / Tool Use（ask_model 传入 tools 参数）；新增文本向量嵌入（embed_text）、文档重排序（rerank）、语音转文字（audio_transcribe）、视频理解（video_understand）四个新工具。config.json 填写 api_key 即可启动，无需 GPU、不做微调、不做私有部署，只做标准 MCP 协议网关。"
-version: 1.7.0
+description: "国产大模型统一 MCP 服务器，通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline 等 Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包、MiniMax、零一万物、百川智能、阶跃星辰十家模型的统一调用接口。10 个 MCP 工具（ask_model/describe_image/embed_text/rerank/audio_transcribe/video_understand/batch_submit/batch_result/list_providers/health_check）+ 单一网关状态资源 + 2 个 prompt 模板。内置统一错误映射、流式 SSE 输出+心跳保活+断线重连、使用量统计、硬件感知并发控制、SQLite WAL 批量任务队列、自动故障转移、环境变量优先读取 API key。支持 Function Calling、多模态视觉、5 个非 MCP 框架适配器（LangChain/AutoGPT/CrewAI/Coze/Dify）、性能基准测试和 Token 价格追踪。config.json 填写 api_key 即可启动，无需 GPU、不做微调、不做私有部署，只做标准 MCP 协议网关。"
+version: 1.8.0
 tags: ["mcp", "llm", "deepseek", "tongyi", "zhipu", "kimi", "hunyuan", "doubao", "minimax", "lingyi", "baichuan", "stepfun", "agent", "json-rpc", "claude-code", "cursor", "model-gateway", "chinese-ai", "embedding", "rerank", "audio", "video"]
 icon: "🔌"
 author: "njskills"
@@ -149,6 +149,8 @@ print(resp.content)
 | `rerank` | 对文档列表按查询相关性重排序 | `query`（必填）, `documents`（必填，文档列表）, `provider`（可选）, `model`（可选） |
 | `audio_transcribe` | 将音频文件转换为文字（语音识别） | `audio`（必填，URL/base64/文件路径）, `provider`（可选）, `model`（可选）, `language`（可选） |
 | `video_understand` | 理解视频内容（关键帧+视觉描述） | `video`（必填，URL/文件路径）, `prompt`（可选）, `provider`（可选）, `model`（可选） |
+| `batch_submit` | 提交批量任务列表，立即返回任务 ID | `tasks`（必填，任务列表）, `priority`（可选，0-9，默认 5） |
+| `batch_result` | 查询批量任务状态和结果 | `task_id`（必填）, `include_items`（可选，默认 false） |
 | `list_providers` | 列出所有已配置且可用的模型提供商 | 无 |
 | `health_check` | 检查所有已配置提供商的连通性 | 无 |
 
@@ -158,8 +160,7 @@ print(resp.content)
 
 | 资源 URI | 描述 |
 |----------|------|
-| `cn-model-gateway://config` | 查看当前已注册的模型提供商列表（不含 api_key 明文） |
-| `cn-model-gateway://usage` | 查看调用次数、token 消耗、各模型使用占比等统计 |
+| `cn-model-gateway://status` | 网关状态总览——当前配置（不含 api_key 明文）+ 使用统计 + 配额告警，一屏汇总 |
 
 ---
 
@@ -256,9 +257,10 @@ gh release list --repo your-org/cn-model-gateway
 
 - 支持文本对话、图片理解（v1.5.0 新增多模态）、文本向量嵌入（v1.6.0）、文档重排序（v1.6.0）、语音转文字（v1.6.0）、视频理解（v1.6.0）
 - 支持 Function Calling / Tool Use（v1.5.0 新增，通过 `tools` 参数传入）
+- 支持批量异步调用（v1.8.0 新增）：`batch_submit` 提交任务列表 → 后台顺序执行 → `batch_result` 轮询结果；失败自动重试一次
+- 支持 SSE 心跳保活（30s ping）+ 断线重连（v1.8.0 新增）：客户端断开后凭请求 ID 重连续传，网络抖动不导致长回答作废重计费
 - 不支持本地模型推理或 GPU 部署
 - auto 模式支持故障转移（v1.4.0 新增），默认按能力画像排序 + 超时自动切备用
-- 不支持批量异步调用（single-call synchronous only）
 
 ---
 
@@ -291,6 +293,12 @@ A: 使用 `audio_transcribe` 工具，传入音频文件路径或 URL。支持 z
 **Q: 如何理解视频内容？**
 A: 使用 `video_understand` 工具，传入视频文件路径或 URL。系统会自动抽取关键帧并通过视觉模型生成描述。
 
+**Q: 如何批量执行多个任务（如批量翻译、批量文档摘要）？**
+A: 使用 `batch_submit` 工具提交任务列表（每项指定 `tool` 和 `arguments`），立即返回任务 ID。然后用 `batch_result` 工具轮询任务进度和结果。后台顺序执行（复用硬件自适应并发），失败任务自动重试一次并保留错误详情。
+
+**Q: 网络断开后正在进行的调用会作废吗？**
+A: 不会。v1.8.0 新增 SSE 心跳保活（30s ping）+ 断线重连：服务端缓冲最近 200 个 chunk，客户端凭请求 ID 重连后从断点续传，避免长回答作废重计费。
+
 **Q: 各家模型的默认模型是什么？**
 A: deepseek-chat / qwen-turbo / glm-4-flash / moonshot-v1-8k / hunyuan-standard / doubao 系列。可通过 `model` 参数覆盖。
 
@@ -318,7 +326,7 @@ A: 完全不需要。本 skill 只做 API 网关，不进行本地推理。
 
 ## 更新日志
 
-| v1.7.0 | 2026-08-24 | 引入 llm-core 共享内核——adapters/cost_tracker/cache/health_check/config/yaml_simple 公共代码抽为 llm-core/ 源码目录，build_core.py 构建脚本 vendor 注入本 skill 包，生成 _core_lock.json 版本锁确保同源；build_core.py 三个子命令（inject 注入 / check 版本一致性检查 / regression 双端回归门禁）；集成 calibrate.py 能力实测校准器——跑标准题集（分类/代码/长文各 5 题）实测回填画像分数，标注来源+日期，支持全量/抽样预算配置；ernie.py 适配器精简——推荐走 OpenAI 兼容通道，原生签名路径保留作兜底
+| v1.8.0 | 2026-08-24 | 新增批量异步任务引擎：batch_submit 提交任务列表立即返回 ID，后台顺序执行（复用硬件自适应并发），batch_result 轮询状态与结果，失败自动重试一次并保留错误详情；新增 SSE 心跳保活（30s ping）+ 断线重连（chunk ring buffer，凭请求 ID 从断点续传，保护长输出与成本）；MCP 资源合并：config + usage 两个资源合并为 cn-model-gateway://status 单一资源（配置+使用统计+配额告警一屏汇总）；新增 batch_queue.py 任务队列模块（SQLite WAL + 后台 worker 线程）；MCPServer 启动时自动启动 batch_worker，新增 shutdown() 优雅停止；SKILL.md 更新工具列表（10 个工具）、资源列表、能力边界、FAQ |
 | v1.6.0 | 2026-08-24 | 新增共享内核（llm-core monorepo）：抽取 src/llm_core/ 共享内核模块，支持 MCP 形态与 CLI 形态共用同一份 core（adapters/router/error_map/cost/cache/monitor/benchmark），构建时注入同版副本+版本锁；新增 4 个 MCP 工具：embed_text（文本向量嵌入，支持 deepseek/zhipu/doubao/tongyi）、rerank（文档重排序，支持 zhipu）、audio_transcribe（语音转文字）、video_understand（关键帧抽取+视觉模型描述→视频摘要）；BaseAdapter 新增 4 个抽象方法（embed_text/rerank/audio_transcribe/video_understand）+ 降级 NotImplementedError 机制；CLI 新增 4 个子命令（embed/rerank/transcribe/video）；SKILL.md 全面更新工具列表/能力边界/FAQ |
 | v1.5.0 | 2026-08-16 | 合并 MCP 工具：ask_model + compare_models → ask_model（新增可选 providers 参数，空=单家，≥2 家=对比）；新增多模态视觉支持：ChatMessage 加 image 字段 + describe_image MCP 工具 + 视觉适配器多模态 payload（Qwen-VL/GLM-4V/豆包视觉）；新增 Function Calling / Tool Use：ChatResponse 加 tool_calls 字段 + BaseAdapter 加 format_tools/parse_tool_calls 方法 + ask_model 支持 tools 参数；SKILL.md 全面更新工具列表/能力边界/FAQ |
 | v1.4.0 | 2026-08-16 | 改进 auto 模式故障转移：auto_select() 从 random.choice 改为能力画像 + 健康检查有序选择；chat() 和 stream_chat() 新增自动故障转移循环，失败/超时自动切备用提供商；支持环境变量优先读取 api_key（DEEPSEEK_API_KEY / DASHSCOPE_API_KEY 等 10 个），config.json 向后兼容；SQLite 全部启用 WAL 模式（PRAGMA journal_mode=WAL），支持多 Agent 框架并发写入；新增 --timeout 和 --no-failover CLI 参数；新增 3 个故障转移+环境变量+WAL 单元测试（总计 40 tests） |
