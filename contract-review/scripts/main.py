@@ -362,6 +362,19 @@ def main():
                         help='启用中韩双语对照审查，指定韩语版本路径（v5.1）')
     parser.add_argument('--validate-amounts', action='store_true',
                         help='启用关键金额校验（大小写一致性+勾稽关系验证）（v5.1）')
+    # ===== v5.3 新增参数（涉外增强） =====
+    parser.add_argument('--en-rules', default='',
+                        help='启用英文合同风险规则（v5.3），逗号分隔类别（fidic/cisg/common_law）'
+                             '或 "auto"——跨境合同时自动加载 common_law')
+    parser.add_argument('--perspective', default='',
+                        help='启用对方立场推演与谈判话术（v5.3）：seller/buyer/landlord/tenant，'
+                             '逐条款生成三件套（异议推测/底线推测/让步阶梯话术）')
+    parser.add_argument('--align-v2', action='store_true',
+                        help='启用锚点+长度双因子句级对齐（v5.3），替代 v5.0 段落级对齐')
+    parser.add_argument('--bilingual', action='store_true',
+                        help='双语输出（v5.3），同时生成中文和英文风险清单')
+    parser.add_argument('--mixed-threshold', type=float, default=0.30,
+                        help='混合合同检测阈值（v5.3，默认 0.30），英文段落占比超此值自动启用双语报告')
 
     args = parser.parse_args()
     
@@ -493,6 +506,25 @@ def main():
             f"条款数={len(structure.clauses)}"
         )
         
+        # v5.3 混合合同检测（Step 2 与 Step 3 之间）
+        is_mixed = False
+        en_ratio = 0.0
+        recommendation = 'zh_only'
+        if args.bilingual or args.en_rules:
+            try:
+                from mixed_contract_detector import detect_mixed_contract, generate_detection_report
+                mixed_result = detect_mixed_contract(contract_text)
+                is_mixed = mixed_result.get('is_mixed', False)
+                en_ratio = mixed_result.get('en_ratio', 0.0)
+                recommendation = mixed_result.get('recommendation', 'zh_only')
+                if args.bilingual or args.en_rules:
+                    print(f"\n📊 混合合同检测（阈值 {args.mixed_threshold:.0%}）：")
+                    print(f"   英文占比 {en_ratio:.0%} | 中文占比 {mixed_result.get('zh_ratio', 0):.0%} | 建议：{recommendation}")
+                    if is_mixed:
+                        print("   ✅ 启用双语报告模式")
+            except ImportError:
+                print_warning("混合合同检测器未安装，跳过检测")
+        
         # Step 3: 规则引擎检查
         print_step(3, total_steps, "规则引擎检查")
         
@@ -515,7 +547,14 @@ def main():
         rule_risks = engine.check_all(
             contract_text, structure.contract_type, structure.to_dict(),
             industry=industry_code,
+            en_rules=args.en_rules or ('auto' if is_mixed else ''),
         )
+        
+        # v5.3 统计英文规则命中数
+        if args.en_rules or is_mixed:
+            en_risk_count = sum(1 for r in rule_risks if r.risk_id.startswith(('EN_', 'CISG', 'FIDIC')))
+            if en_risk_count:
+                print_success(f"英文规则命中 {en_risk_count} 项")
         
         print_success(f"完成 {len(rule_risks)} 项硬规则检查")
         
@@ -560,6 +599,41 @@ def main():
                 special_notes.append("LLM 审查未启用（未检测到 OpenAI API 或本地模型）")
         else:
             print("  ⏭️  跳过 LLM 审查（--no-llm）")
+        
+        # ===== v5.3 对方立场推演与谈判话术 =====
+        perspective_result = None
+        if args.perspective:
+            try:
+                from perspective_analyzer import get_analyzer, analyze_perspective, generate_perspective_report
+                analyzer = get_analyzer()
+                role_map = {
+                    'seller': 'seller', 'buyer': 'buyer',
+                    'landlord': 'landlord', 'tenant': 'tenant',
+                    '甲方': 'seller', '乙方': 'buyer',
+                }
+                role_key = role_map.get(args.perspective, args.perspective)
+                perspective_result = analyzer.analyze_contract(structure.to_dict(), role=role_key)
+                if perspective_result and perspective_result.get('total_clauses', 0) > 0:
+                    matched_terms = sum(
+                        1 for c in perspective_result.get('clauses', [])
+                        if c.get('market_basis')
+                    )
+                    print_success(f"立场推演完成：分析 {perspective_result['total_clauses']} 条款，"
+                                  f"匹配市场惯例 {matched_terms} 条")
+                    # 保存推演报告
+                    p_doc_path = Path(args.output).parent if args.output else Path('.')
+                    p_doc_path = p_doc_path / 'perspective_brief.md'
+                    p_report = generate_perspective_report(perspective_result)
+                    p_doc_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(p_doc_path, 'w', encoding='utf-8') as f:
+                        f.write(p_report)
+                    print_success(f"立场推演文档已保存: {p_doc_path}")
+                else:
+                    print_warning("立场推演未生成有效结果（合同结构未解析出条款）")
+            except ImportError:
+                print_warning("立场推演引擎未安装，跳过")
+            except Exception as e:
+                print_warning(f"立场推演失败: {e}")
         
         # Step 5: 生成审查报告
         print_step(5, total_steps, "生成审查报告")
@@ -809,7 +883,41 @@ def main():
 
         # ===== v5.0 中英双语对照 =====
         align_result = None
-        if args.align:
+        # v5.3 锚点+长度双因子对齐（--align-v2）
+        if args.align_v2 and args.align:
+            try:
+                from anchor_aligner import get_aligner, align_anchor, generate_anchor_report
+                anchor_aligner = get_aligner()
+                other_path = Path(args.align)
+                if other_path.exists():
+                    from extract_text import TextExtractor
+                    ext = TextExtractor(enable_security=False)
+                    other_text = ext.extract(str(other_path)).get('text', '')
+                    if args.align_priority == 'en':
+                        zh_text_a, en_text_a = other_text, contract_text
+                    else:
+                        zh_text_a, en_text_a = contract_text, other_text
+                    anchor_result = anchor_aligner.align(zh_text_a, en_text_a)
+                    low_conf = sum(1 for p in anchor_result.get('pairs', [])
+                                   if p.get('confidence', 1) < 0.6)
+                    print_success(
+                        f"锚点对齐完成：匹配 {anchor_result['statistics']['matched']} 对，"
+                        f"置信度不足 {low_conf} 条（建议人工复核）"
+                    )
+                    # 保存锚点对齐报告
+                    anchor_report_path = Path(args.output).parent if args.output else Path('.')
+                    anchor_report_path = anchor_report_path / 'anchor_align_report.md'
+                    with open(anchor_report_path, 'w', encoding='utf-8') as f:
+                        f.write(generate_anchor_report(anchor_result))
+                    print_success(f"锚点对齐报告已保存: {anchor_report_path}")
+                    align_result = anchor_result
+                else:
+                    print_warning(f"对照版本文件不存在: {args.align}")
+            except ImportError:
+                print_warning("锚点对齐引擎未安装，跳过 --align-v2")
+            except Exception as e:
+                print_warning(f"锚点对齐失败: {e}")
+        elif args.align:
             try:
                 from bilingual_aligner import BilingualAligner
                 aligner = BilingualAligner()
@@ -903,6 +1011,34 @@ def main():
             except Exception as e:
                 print_warning(f"中韩对照失败: {e}")
 
+        # v5.3 双语输出：在中文报告基础上追加英文风险清单
+        if args.bilingual and unique_risks:
+            try:
+                en_risks = [r for r in unique_risks if r.get('risk_id', '').startswith(('EN_', 'CISG', 'FIDIC'))]
+                if not en_risks:
+                    # 若规则层面无英文标签，从 LLM 结果里筛英文备注
+                    en_risks = [r for r in unique_risks if r.get('clause_ref', '').startswith('EN')]
+                if en_risks:
+                    bilingual_path = Path(args.output).parent if args.output else Path('.')
+                    bilingual_path = bilingual_path / 'bilingual_en_risks.md'
+                    bilingual_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(bilingual_path, 'w', encoding='utf-8') as f:
+                        f.write("# English Risk Summary (双语风险清单)\n\n")
+                        f.write(f"Generated: {__import__('datetime').datetime.now().isoformat()}\n\n")
+                        for r in en_risks:
+                            f.write(f"- [{r.get('severity', '?')}] **{r.get('title', '')}**\n")
+                            f.write(f"  - Description: {r.get('description', '')}\n")
+                            f.write(f"  - Suggestion: {r.get('suggestion', '')}\n")
+                            if r.get('clause_ref'):
+                                f.write(f"  - Clause: {r['clause_ref']}\n")
+                            f.write("\n")
+                    print_success(f"英文风险清单已保存: {bilingual_path}")
+                    if args.output:
+                        print(f"  📄 中文报告: {args.output}")
+                        print(f"  📄 英文风险: {bilingual_path}")
+            except Exception as e:
+                print_warning(f"双语输出失败: {e}")
+        
         elapsed = time.time() - start_time
         
         print("\n" + "=" * 50, flush=True)
