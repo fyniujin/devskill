@@ -4,7 +4,7 @@ slug: zwjh-skill
 displayName: "长期记忆 / 知识图谱 会思考的进化 AI"
 description: "统一记忆底座：长期记忆 + 知识图谱 + 自动沉淀 + 检索。让 AI「记得你」，跨会话持久记忆、实体/关系图谱、语义与时间线检索、记忆健康度审计、本地备份（可接百度网盘）。纯本地、零密钥、按硬件自适应，不拖累电脑。并保留 v1.7 的根因分析/预测性维护/进化报告。"
 description_zh: "统一记忆底座：长期记忆 + 知识图谱 + 自动沉淀 + 检索。纯本地、零密钥、按硬件自适应，不拖累电脑。"
-version: 2.5.0
+version: 2.6.0
 category: ai-agent
 platforms:
   - windows
@@ -23,7 +23,7 @@ tags:
 requires_api_key: false
 ---
 
-# 长期记忆 / 知识图谱 会思考的进化 AI — zwjh-skill v2.3.0
+# 长期记忆 / 知识图谱 会思考的进化 AI — zwjh-skill v2.6.0
 
 > **安装后说「帮我配置 + 设置定时任务」，AI 自动完成一切。**
 >
@@ -63,6 +63,10 @@ requires_api_key: false
 | 让 AI 用记忆回答 | `python scripts/cli.py ask "我最近在做什么项目"` |
 | 查某段时间发生的事 | `python scripts/cli.py timeline --from 2026-07-01 --to 2026-07-31` |
 | 看知识图谱 | `python scripts/cli.py graph list` / `graph show`（Mermaid） |
+| 知识图谱查询 | `python scripts/cli.py graph-query --action search --name 张三` |
+| 遗忘指定记忆 | `python scripts/cli.py forget --memory-id 42` |
+| 查看归档 | `python scripts/cli.py forget --list-archive` |
+| 流式导出 | `python scripts/cli.py export-stream --format markdown` |
 | 记忆健康度体检 | `python scripts/cli.py health` |
 | 压缩（去重+摘要） | `python scripts/cli.py compact --apply` |
 | 备份 / 恢复 | `python scripts/cli.py backup` / `restore <路径>` |
@@ -432,6 +436,67 @@ python scripts/cli.py embedder-info           # 查看模型状态
 
 ---
 
+### 模块 21：MCP 工具扩建（记忆即服务）
+
+**做了什么**：MCP 服务器从 3 个工具扩建至 7 个，覆盖图谱查询、时间线检索、遗忘归档、流式导出，并附赠 mcp_version 协商机制。
+
+- **7 个 MCP Tool**：query / deposit / health / **graph_query** / **timeline** / **forget** / **export_stream**
+- **graph_query**：知识图谱查询（实体搜索/详情/事实/最短路径）
+- **timeline**：时间线检索（按日期区间+关键词过滤记忆）
+- **forget**：遗忘（软删除）指定记忆，移入归档表可恢复
+- **export_stream**：流式导出（分批返回，避免大内存占用，支持 json/markdown/csv）
+- **mcp_version 协商**：initialize 时返回服务端版本，兼容不同客户端
+
+**启动方式**：
+```bash
+python scripts/mcp_server.py
+# 或
+python scripts/cli.py mcp
+```
+
+---
+
+### 模块 22：记忆访问权限分级
+
+**做了什么**：调用方提交 manifest（HMAC-SHA256 签名），服务端校验签名、有效期和权限，实现命名空间隔离。
+
+- **命名空间**：`public`（公共）/ `private/<skill-id>`（技能私有）/ `shared/<name>`（共享）
+- **权限等级**：read（读）/ write（写）/ admin（删除/管理）
+- **向后兼容**：未传 manifest 默认 public 只读（旧调用方零改造）
+- **签名算法**：HMAC-SHA256（namespace + permissions + timestamp + nonce）
+- **有效期**：manifest 5 分钟过期，防重放
+- **密钥管理**：首次运行自动生成，CLI `access-key --rotate` 轮换
+
+**示例**：
+```python
+from scripts.memory_access import create_manifest
+manifest = create_manifest("private/my-skill", ["read", "write"])
+# 将 manifest 作为 MCP tool 参数传递
+```
+
+---
+
+### 模块 23：多进程并发写入门禁
+
+**做了什么**：通过 SQLite 事务 + version 字段乐观锁，防止多进程/多线程并发写入时的数据不一致。
+
+- **乐观锁**：memories 表新增 `version` 字段，UPDATE 时校验版本号，冲突返回 `WRITE_CONFLICT` 错误码
+- **原子操作**：所有写入走 `threading.Lock` + SQLite 事务
+- **错误码**：WRITE_CONFLICT（版本冲突）/ NOT_FOUND（记忆不存在）/ ALREADY_EXISTS（已存在）
+- **归档隔离**：forget 操作移入独立归档表，不阻塞主表写入
+- **命名空间隔离**：不同命名空间的记忆可独立管理
+
+**示例**：
+```python
+from scripts.store import update_memory_with_lock
+result = update_memory_with_lock(memory_id, {"version": 1, "raw_text": "修正内容"})
+if not result["ok"] and result["error"] == "WRITE_CONFLICT":
+    # 冲突处理：重新读取最新版本再写入
+    ...
+```
+
+---
+
 ### 模块 10：知识图谱可视化（Web 界面）
 
 **做了什么**：在浏览器中直观探索实体关系网络，从"黑盒存储"变为"可视化探索"。
@@ -500,6 +565,7 @@ python scripts/cli.py demo
 
 ## 更新日志
 
+| v2.6.0 | 2026-09-19 | 新增：MCP 工具扩建至 7 个（graph_query / timeline / forget / export_stream + mcp_version 协商）；新增记忆访问权限分级（HMAC-SHA256 manifest + 命名空间隔离，未声明默认 public 只读）；新增多进程并发写入门禁（SQLite 事务 + version 字段乐观锁 + WRITE_CONFLICT 错误码）；新增 forget / export-stream / graph-query / access-key CLI 子命令；新增 graph.py BFS 最短路径；新增 memory_access.py 权限模块；新增 memories 表 version/namespace 字段 + memories_archive 表 |
 | v2.5.0 | 2026-08-24 | 新增：本地 embedding 层（ONNX BGE 语义向量 + TF-IDF 回退，模型外部放置 + SHA256 校验）；新增混合检索（语义/关键词/时间三路召回 RRF 融合排序）；新增检索解释（返回结果附命中理由分项）；新增存量记忆一键重建索引（后台分批不阻塞）；新增 embedder.py / rebuild_index.py；优化 retrieval.py 升级为 hybrid_search |
 | v2.4.0 | 2026-08-17 | 新增：跨 skill 记忆总线（MCP 服务器，暴露 query/deposit/health 为 MCP Tool，零依赖）；新增自动归档策略（冷热分层 + 时间衰减热度分，autopilot 自动触发）；新增任务状态 Web 面板（定时任务/健康度/归档统计可视化）；新增 mcp_server.py / archive.py；新增 CLI archive / mcp 命令 |
 | v2.3.0 | 2026-08-07 | 新增：多格式导出（Markdown/JSON/Cypher/CSV/Obsidian/Logseq）与选择性筛选；新增时间线叙事生成（项目/人脉/知识成长/周期回顾）；新增多模态记忆（图片/音频/文件索引）；新增 export.py / narrative.py / multimodal.py |
