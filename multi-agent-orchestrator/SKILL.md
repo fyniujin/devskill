@@ -2,8 +2,8 @@
 name: multi-agent-pro
 slug: multi-agent-pro
 displayName: 多Agent协作编排引擎
-description: 支持多Agent流水线编排（采集→分析→报告），基于DAG调度实现跨技能状态共享、错误重断点续传、执行报告生成、HTML甘特图可视化、人工审批节点（含超时策略）、历史执行对比、硬件自适应参数和版本更新提醒。v5.3新增官方流水线模板库（4类预置模板+依赖探测）、任务级重试策略（节点级retry块+退避+降级链）、节点类型归组（7→4类认知归组）、错误恢复命令合并（recover统一入口）、条件表达式增强（re_safe+字符串函数）。AI即编排器，脚本提供基础设施。
-version: 5.3.0
+description: 支持多Agent流水线编排（采集→分析→报告），基于DAG调度实现跨技能状态共享、错误重断点续传、执行报告生成、HTML甘特图可视化、人工审批节点（含超时策略）、历史执行对比、硬件自适应参数、版本更新提醒、官方流水线模板库、任务级重试策略、节点类型归组、统一错误恢复命令、条件表达式增强、Web控制台（ECharts甘特图+人工审批按钮）、MCP stdio JSON-RPC暴露（3个工具）、成本实测化桥接（cn-llm-router实测回填+估算分离展示）。AI即编排器，脚本提供基础设施。
+version: 5.4.0
 category: developer-tools
 platforms:
   - windows
@@ -992,10 +992,109 @@ python orchestrator.py impact state.json node_a
 
 ---
 
+### 模块 23：Web 控制台 🆕
+
+**功能**：内置 http.server 只读 Web 服务，使用 ECharts 渲染交互式甘特图，支持流水线列表、执行日志、节点输入输出查看、人工审批按钮。
+
+**触发词**：`控制台`、`仪表盘`、`dashboard`、`web 控制台`、`可视化面板`
+
+**启动方式**：
+```bash
+python orchestrator.py dashboard [state_dir] [port]
+```
+
+**默认配置**：
+- 监听地址：`127.0.0.1:7788`（仅本机，不暴露外网）
+- 端口可通过第二个参数覆盖
+
+**功能说明**：
+
+| 页面 | 功能 |
+|------|------|
+| 首页 `/` | 列出所有已执行的流水线（名称/状态/耗时/节点数） |
+| 详情页 `/detail?file=<state.json>` | ECharts 甘特图：X 轴时间、Y 轴节点列表，颜色编码状态，点击节点显示输入/输出 |
+| 审批按钮 | 审批节点出现"通过/拒绝"按钮，点击后 POST 到 `/api/approve`，需带 `X-Local-Token` 请求头（令牌从状态目录下的 `.dashboard_token` 文件读取） |
+
+**安全设计**：
+- 仅监听 `127.0.0.1`，拒绝外部连接
+- 审批 API 需携带本地令牌（`secrets.token_hex(16)`），防止误操作
+- 全部为只读操作（除审批外），不修改任何流水线文件
+
+---
+
+### 模块 24：MCP Server 暴露 🆕
+
+**功能**：将 multi-agent-orchestrator 包装为 MCP（Model Context Protocol）工具，通过 stdio JSON-RPC 暴露三个工具，其他 Agent 框架可把整条流水线当作单个工具调用。
+
+**触发词**：`MCP`、`tool`、`暴露为工具`、`跨框架调用`
+
+**启动方式**：
+```bash
+python orchestrator.py mcp
+```
+
+**暴露的三个工具**：
+
+| 工具名 | 说明 | 必需参数 |
+|--------|------|---------|
+| `pipeline_run` | 运行流水线 | `pipeline_file`（YAML/JSON 路径），可选 `inputs`（输入参数 dict） |
+| `pipeline_status` | 查询运行状态 | `run_id`（由 pipeline_run 返回） |
+| `pipeline_approve` | 人工审批/拒绝 | `run_id`、`node_id`、`approved`（True/False），可选 `comment` |
+
+**集成方式**：其他 Agent 框架通过 MCP 协议连接 orchestrator 后，调用 `pipeline_run` 启动流水线，`pipeline_status` 轮询进度，`pipeline_approve` 处理人工审批。
+
+---
+
+### 模块 25：成本实测化桥接 🆕
+
+**功能**：白名单探测 `cn-llm-router`，命中则子进程调用其成本报告命令（`--json {start,end}` 区间），回填真实 token/cost 到节点 `cost_data` 列；未安装则保留估算值，加 `est` 前缀。报告分"实测/估算"两列展示。
+
+**触发词**：`成本`、`费用`、`实测成本`、`token消耗`、`cost`
+
+**使用方式**：
+
+```bash
+# 1. 检测 cn-llm-router 是否可用
+python orchestrator.py cost <state_dir> --check
+
+# 2. 回填实测成本（扫描目录下所有状态文件）
+python orchestrator.py cost <state_dir>
+
+# 3. 指定流水线回填
+python orchestrator.py cost <state_dir> --pipeline <pipeline_name>
+
+# 4. 输出单个状态文件的成本汇总
+python orchestrator.py cost <state_file> --summary
+```
+
+**数据流**：
+1. `cost_bridge.detect_cn_llm_router()` 探测 `~/.workbuddy/skills/cn-llm-router/scripts/cn_llm_router.py` 是否存在
+2. 若可用，调用 `cn_llm_router cost-report --json [--run-id X] [--start T] [--end T]` 获取实测数据
+3. 匹配节点（按节点 ID/名称），覆盖估算值，标记 `"est": False`、`"source": "cn-llm-router"`
+4. `pipeline_reporter._build_visualization_data()` 按 `est` 字段分组求和，报告展示：
+   - 实测 Token / 实测费用（蓝色 🔵）
+   - 估算 Token / 估算费用（白色 ⚪）
+   - 合计 Token / 合计费用
+
+**估算价格表**（未安装 cn-llm-router 时使用）：
+
+| 模型 | 每 token 价格（¥） |
+|------|------------------|
+| default | 0.0004 |
+| gpt-4 | 0.03 |
+| gpt-3.5-turbo | 0.002 |
+| deepseek-chat | 0.001 |
+| qwen-turbo | 0.0008 |
+| glm-4 | 0.001 |
+| glm-4-flash | 0.0001 |
+
+---
+
 ## 更新日志
 
 | 版本 | 日期 | 更新内容 |
 |------|------|---------|
+| v5.4.0 | 2026-08-07 | 增加：Web 控制台（web_dashboard.py），内置 http.server 只读服务（仅本机 127.0.0.1:7788）+ ECharts 甘特图，支持点击节点查看输入输出、人工审批按钮（POST 带 X-Local-Token 防误触）；增加：MCP Server（mcp_server.py），stdio JSON-RPC 暴露 pipeline_run/pipeline_status/pipeline_approve 三个工具，其他 Agent 框架可调用整条流水线为单工具；增加：成本实测化桥接（cost_bridge.py），白名单探测 cn-llm-router，命中则子进程调用成本报告回填真实 token/cost，未安装保留估算值加 est 前缀，报告分实测/估算两列展示；增加：cost 命令（cost_bridge 入口），支持 --check/--summary/--pipeline 参数；增加：dashboard 命令（Web 控制台入口），支持 [state_dir] [port] 参数；增加：mcp 命令（MCP Server 入口）；优化：pipeline_reporter 成本概览分实测/估算两列，节点成本分布表增加来源标签（🔵实测/⚪估算） |
 | v5.3.0 | 2026-08-24 | 增加：官方流水线模板库（4类预置模板：政采日报/视频分析/周报/巡检），模板元数据声明依赖 skill，运行时探测缺失则标灰+安装链接，单包合规不自动安装；增加：任务级重试策略（节点级 retry 块：count/backoff_base/fallback_chain），未配置走旧全局策略向后兼容；增加：节点类型归组（7类→4类：任务/控制/人工/复用），仅认知层文档归组 Schema 零变更；增加：统一错误恢复命令 recover（retry/fallback/impact 三合一），旧命令向后兼容；增加：条件表达式增强（re_safe 正则子集 + contains/startswith/split/join 等字符串函数），AST 白名单机制不变 |
 | v5.2.0 | 2026-08-07 | 增加：统一可视化命令 visualize（--format md|html|both），整合执行报告与甘特图为单一入口，消除 report/gantt 命令重复代码；增加：evaluate 控制流节点（Self-Improving 循环），支持质量表达式评估 + 自动重试目标节点 + 最大轮次限制；增加：节点级成本追踪（cost_data 字段），在 complete_node 自动提取 _cost 字段，报告展示总 token/费用/节点分布；增加：HTML 甘特图费用概览区块，展示总消耗与节点成本分布；优化：dag_validator 校验 evaluate 节点字段与 retry_targets 引用完整性；优化：flow_controller 扩展 evaluate 类型调度，复用 while-loop 迭代模式；优化：state_store 持久化 quality_expr/retry_targets/max_eval_rounds 控制流字段 |
 | v5.1.0 | 2026-08-07 | 增加：统一状态恢复子系统 state_recovery，合并断点续传与快照恢复为单一入口，消除两套独立恢复代码；增加：快照保留策略（SNAPSHOT_MAX_AGE_DAYS=7天 / SNAPSHOT_MAX_COUNT=100次 / SNAPSHOT_MAX_SIZE_MB=100MB），按时间+数量+大小三维度自动淘汰旧快照；增加：审批节点超时策略（timeout_seconds + timeout_action），支持超时自动通过/拒绝，避免无人值守场景阻塞；增加：恢复前自动创建检查点（.recovery_checkpoints/），防止误操作不可逆；优化：dag_validator 校验 approval 节点 timeout_seconds 与 timeout_action 字段合法性 |
