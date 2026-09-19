@@ -5,9 +5,16 @@ v3.7.0 变更：
 - 强制本地 Tesseract（免密钥、零配置）
 - 硬件自适应：OCR 并发不超过 workers
 - 新增：手写/公式识别场景（education 入口）
+
+v4.2 收敛（删除重复维护面）：
+- 统一为唯一 OCR 入口；公式/教育场景改为 import 本模块（删除 engine/ocr/local_ocr.py 重复预处理）
+- 新增 wps-office-suite OCR 桥接：白名单探测已装则桥接其 OCR（subprocess JSON 契约 {image_path, lang}）
+- 未装 wps 保留 Tesseract 最小兜底；两路均本地引擎，数据不出域
 """
 from __future__ import annotations
 
+import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -17,6 +24,85 @@ from engine.hardware import get_recommended_settings
 
 # 内置默认语言：中英文。用户可在调用时覆盖。
 DEFAULT_LANG = "chi_sim+eng"
+
+
+# ---------------------------------------------------------------------------
+# v4.2：OCR 收敛 — 唯一入口，优先桥接 wps-office-suite，未装则 Tesseract 兜底
+# ---------------------------------------------------------------------------
+def _wps_install_path() -> Optional[str]:
+    """探测 wps-office-suite 安装路径（复用本地桥接白名单）。"""
+    try:
+        from engine.local_bridge import WpsDetector
+        return WpsDetector.detect()
+    except Exception:
+        return None
+
+
+def wps_ocr_available() -> bool:
+    """检测 wps-office-suite 是否可提供 OCR（安装即认为可用）。"""
+    return _wps_install_path() is not None
+
+
+def _run_wps_ocr(image_path: str, lang: str) -> Dict:
+    """桥接 wps-office-suite OCR：subprocess + JSON 契约 {image_path, lang}。
+
+    与本地桥接引擎一致：超时自动关闭，不残留；未找到 OCR 脚本降级 Tesseract。
+    数据不出域：本地引擎，绝不调用外部 API。
+    """
+    try:
+        from engine.local_bridge import WpsDetector, SUBPROCESS_TIMEOUT
+        install = _wps_install_path()
+        if not install:
+            return _fail("wps-office-suite 未安装，降级 Tesseract。")
+        scripts_dir = WpsDetector.get_scripts_dir(install)
+        ocr_script = os.path.join(scripts_dir, "wps_ocr.py")
+        if not os.path.exists(ocr_script):
+            return _fail("wps OCR 脚本缺失，降级 Tesseract。")
+        contract = json.dumps({"image_path": image_path, "lang": lang}, ensure_ascii=False)
+        proc = subprocess.run(
+            ["python", ocr_script, "--bridge-stdin"], input=contract,
+            capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
+        )
+        if proc.returncode != 0:
+            return _fail(f"wps OCR 失败：{proc.stderr[:200]}，降级 Tesseract。")
+        out = json.loads(proc.stdout) if proc.stdout else {}
+        return {
+            "source": "wps_ocr",
+            "text": out.get("text", ""),
+            "confidence": out.get("confidence"),
+            "engine": "wps-office-suite OCR（桥接）",
+            "hint": "",
+        }
+    except Exception as e:
+        return _fail(f"wps OCR 桥接异常：{e}，降级 Tesseract。")
+
+
+def extract_text_bridged(image_path: str, lang: str = DEFAULT_LANG) -> Dict:
+    """OCR 统一入口（v4.2 收敛）：优先 wps-office-suite，未装 Tesseract 最小兜底。
+
+    两路均为本地引擎，数据不出域。
+    """
+    if wps_ocr_available():
+        res = _run_wps_ocr(image_path, lang)
+        # 桥接成功且识别到文字 → 返回；否则（脚本缺失/空识别）降级 Tesseract
+        if res.get("source") == "wps_ocr" and res.get("text", "").strip():
+            return res
+    return extract_text(image_path, lang)
+
+
+def recognize(image_path: str, lang: str = DEFAULT_LANG) -> Dict:
+    """兼容 engine.ocr.local_ocr 的 recognize 形态（success/text/confidence/engine/hint）。
+
+    v4.2 收敛：公式/教育场景统一走 engine.local.ocr，删除重复预处理代码。
+    """
+    res = extract_text_bridged(image_path, lang)
+    return {
+        "success": res.get("source") != "none",
+        "text": res.get("text", ""),
+        "confidence": res.get("confidence"),
+        "engine": res.get("engine", ""),
+        "hint": res.get("hint", ""),
+    }
 
 
 def tesseract_available() -> bool:
