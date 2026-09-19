@@ -54,7 +54,7 @@ class FormulaRecognizer:
             }
         """
         try:
-            from engine.ocr.local_ocr import recognize, tesseract_available
+            from engine.local.ocr import recognize, tesseract_available
             if not tesseract_available():
                 return self._fail("未安装 Tesseract，无法识别公式。")
 
