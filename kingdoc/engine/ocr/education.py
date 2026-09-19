@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from engine.ocr.local_ocr import recognize, tesseract_available
+from engine.local.ocr import recognize, tesseract_available
 from engine.ocr.formula_recognizer import FormulaRecognizer
 
 
