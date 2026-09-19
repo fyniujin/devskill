@@ -36,7 +36,7 @@ from engine.hardware import get_recommended_settings
 from engine.update_check import build_reminder, FEEDBACK_EMAIL
 from engine.exceptions import KingDocError
 
-APP_VERSION = "4.1.0"
+APP_VERSION = "4.2.0"
 
 # 配置路径：环境变量优先，其次 skill 根目录 config.json
 CONFIG_PATH = os.environ.get("KINGDOC_CONFIG", str(SKILL_ROOT / "config.json"))
@@ -410,11 +410,11 @@ async def kdoc_local_flowchart_generate(code: str, output_path: Optional[str] = 
 
 @mcp.tool()
 async def kdoc_local_ocr_extract(image_path: str, lang: str = "chi_sim+eng") -> str:
-    """【免密钥】本地 OCR 提取图片文字：优先本机 Tesseract（免费无 key），
-    未安装则降级云端（需 App Key），都不可用给出安装指引。"""
+    """【免密钥】本地 OCR 提取图片文字：v4.2 收敛为唯一入口，
+    优先桥接 wps-office-suite OCR，未装则 Tesseract 最小兜底（数据不出域）。"""
     try:
-        from engine.local.ocr import extract_text
-        res = extract_text(image_path, lang=lang, config_path=CONFIG_PATH)
+        from engine.local.ocr import extract_text_bridged
+        res = extract_text_bridged(image_path, lang=lang)
         if res["source"] == "none":
             return f"[OCR 未就绪] {res['hint']}"
         return _to_text(res)
@@ -1204,12 +1204,11 @@ async def kdoc_file_delete_unified(file_id: str, force: bool = False,
 # ===========================================================================
 @mcp.tool()
 async def kdoc_local_ocr_extract(image_path: str, lang: str = "chi_sim+eng") -> str:
-    """【免密钥】本地 OCR 提取图片文字：强制本地 Tesseract（数据不出域）。
-
-    未安装 Tesseract 给出安装指引，不调用任何外部 API。"""
+    """【免密钥】本地 OCR 提取图片文字：v4.2 收敛为唯一入口，
+    优先桥接 wps-office-suite OCR，未装则 Tesseract 最小兜底（数据不出域）。"""
     try:
-        from engine.local.ocr import extract_text
-        res = extract_text(image_path, lang=lang)
+        from engine.local.ocr import extract_text_bridged
+        res = extract_text_bridged(image_path, lang=lang)
         if res["source"] == "none":
             return f"[OCR 未就绪] {res['hint']}"
         return _to_text(res)
@@ -2216,6 +2215,205 @@ async def kdoc_webhook_statistics() -> str:
         return _to_text(result)
     except Exception as e:
         return f"[ERR] 获取统计失败：{e}"
+
+
+# ===========================================================================
+# 三十八、知识中枢 / 政企合规 / 主题生成 / 跨品类对比 / OCR 桥接（v4.2.0 新增）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_khub_index(docs: str, space_id: str = "") -> str:
+    """【免密钥】构建团队知识库索引（本地倒排索引）。
+
+    docs: JSON 字符串，格式 [{"doc_id": "...", "title": "...", "content": "...", "space_id": "...", "owner": "..."}]
+    space_id: 空间 ID（可选）
+    硬件自适应分块建索引，零配置可用。"""
+    try:
+        import json
+        from engine.knowledge_hub import index_documents
+        docs_obj = json.loads(docs)
+        result = index_documents(docs_obj, space_id)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 索引构建失败：{e}"
+
+@mcp.tool()
+async def kdoc_khub_search(query: str, space_id: str = "", limit: int = 20,
+                         viewer_id: str = "") -> str:
+    """【免密钥】权限感知全文检索（先鉴权后检索，无 read 权限文档不进结果）。
+
+    query: 搜索关键词
+    space_id: 空间 ID（可选）
+    limit: 返回数量
+    viewer_id: 查看者标识（可选，用于权限过滤）
+    本地倒排索引 + 可选 jieba 中文分词，零配置可用。"""
+    try:
+        from engine.knowledge_hub import search_knowledge
+        result = search_knowledge(query, space_id, limit, viewer_id)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 检索失败：{e}"
+
+@mcp.tool()
+async def kdoc_khub_permission(space_id: str, matrix: str) -> str:
+    """【免密钥】注入空间权限矩阵（doc_id → 级别，1=read/2=edit/3=admin）。
+
+    space_id: 空间 ID
+    matrix: JSON 字符串，如 '{"doc_1": 1, "doc_2": 3}'
+    检索前据此过滤，无权限文档不进入结果（遵守平台权限边界）。"""
+    try:
+        import json
+        from engine.knowledge_hub import set_permission
+        matrix_obj = json.loads(matrix)
+        result = set_permission(space_id, matrix_obj)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 权限矩阵设置失败：{e}"
+
+@mcp.tool()
+async def kdoc_khub_status() -> str:
+    """【免密钥】获取知识中枢状态（文档数/词项数/权限加载/jieba 状态）。"""
+    try:
+        from engine.knowledge_hub import get_hub_status
+        return _to_text(get_hub_status())
+    except Exception as e:
+        return f"[ERR] 状态获取失败：{e}"
+
+@mcp.tool()
+async def kdoc_compliance_label(doc_id: str, level: str, reason: str = "") -> str:
+    """【免密钥】政企合规中心：标注文档密级（公开/内部/秘密/机密）并落库。
+
+    doc_id: 文档 ID
+    level: 公开 / 内部 / 秘密 / 机密
+    reason: 标注理由（可选）
+    本地降级模式，零配置可用。"""
+    try:
+        from engine.compliance_center import label_classification
+        result = label_classification(doc_id, level, reason)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 密级标注失败：{e}"
+
+@mcp.tool()
+async def kdoc_compliance_get(doc_id: str) -> str:
+    """【免密钥】获取文档已标注密级。"""
+    try:
+        from engine.compliance_center import get_classification
+        return _to_text(get_classification(doc_id))
+    except Exception as e:
+        return f"[ERR] 查询失败：{e}"
+
+@mcp.tool()
+async def kdoc_compliance_scan(text: str, doc_id: str = "") -> str:
+    """【免密钥】政企合规全量扫描：敏感词 + 数据泄露（Luhn/校验码）+ 密级建议，聚合报告。
+
+    text: 待扫描全文
+    doc_id: 文档 ID（可选，传入则自动落库密级建议）
+    复用 v3.4 合规检查，零配置可用。"""
+    try:
+        from engine.compliance_center import full_scan
+        result = full_scan(text, doc_id)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 扫描失败：{e}"
+
+@mcp.tool()
+async def kdoc_compliance_declare(doc_id: str = "", engine: str = "tesseract") -> str:
+    """【免密钥】生成数据不出域声明（本地 OCR 强制、云端仅元数据）。
+
+    doc_id: 文档 ID（可选）
+    engine: tesseract / wps_ocr（均为本地引擎，绝不调用外部 API）
+    零配置可用。"""
+    try:
+        from engine.compliance_center import declare_data_local
+        result = declare_data_local(doc_id, engine)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 声明生成失败：{e}"
+
+@mcp.tool()
+async def kdoc_compliance_status() -> str:
+    """【免密钥】获取政企合规中心状态。"""
+    try:
+        from engine.compliance_center import get_center_status
+        return _to_text(get_center_status())
+    except Exception as e:
+        return f"[ERR] 状态获取失败：{e}"
+
+@mcp.tool()
+async def kdoc_topic_generate(topic: str, outline: str, target_format: str = "doc") -> str:
+    """【免密钥】主题一键生成（WPS AI 适配层 generate）：大纲 → 智能文档/PPT/表格初稿。
+
+    topic: 主题/标题
+    outline: JSON 字符串（要点列表），如 '["背景", "目标", "方案"]'
+    target_format: doc / ppt / table
+    本地降级：模板驱动 + 分段生成；WPS AI 真源可用时无缝切换。零配置可用。"""
+    try:
+        import json
+        from engine.topic_generator import generate_topic
+        outline_obj = json.loads(outline) if outline else []
+        result = generate_topic(topic, outline_obj, target_format)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 生成失败：{e}"
+
+@mcp.tool()
+async def kdoc_topic_status() -> str:
+    """【免密钥】获取主题生成适配层状态（当前生效 AI 源：local / wps_ai）。"""
+    try:
+        from engine.topic_generator import get_generator_status
+        return _to_text(get_generator_status())
+    except Exception as e:
+        return f"[ERR] 状态获取失败：{e}"
+
+@mcp.tool()
+async def kdoc_compare_timeline(file_id: str = "", snapshots: str = "") -> str:
+    """【免密钥】跨品类版本时间线：逐版本 difflib 生成 who/when/what。
+
+    file_id: 文档 ID（云端模式轮询版本历史）
+    snapshots: JSON 字符串（本地模式），格式 [{"version":1,"author":"...","time":"...","content":"..."}]
+    文本类走行级 diff，表格类走行级 diff。零配置可用。"""
+    try:
+        import json
+        from engine.cross_compare import build_timeline
+        snaps = json.loads(snapshots) if snapshots else None
+        result = build_timeline(file_id, snaps)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 时间线生成失败：{e}"
+
+@mcp.tool()
+async def kdoc_compare_cells(rows_a: str, rows_b: str, headers: str = "") -> str:
+    """【免密钥】单元格级 diff（表格/多维表格品类跨版本差异）。
+
+    rows_a: 旧版二维表 JSON
+    rows_b: 新版二维表 JSON
+    headers: 列名 JSON（可选）
+    标注新增/修改/删除单元格，零配置可用。"""
+    try:
+        import json
+        from engine.cross_compare import diff_cells
+        a = json.loads(rows_a)
+        b = json.loads(rows_b)
+        h = json.loads(headers) if headers else None
+        result = diff_cells(a, b, h)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 单元格 diff 失败：{e}"
+
+@mcp.tool()
+async def kdoc_ocr_bridge_status() -> str:
+    """【免密钥】OCR 收敛状态：wps-office-suite OCR 是否可用、Tesseract 兜底就绪。
+
+    v4.2 起 OCR 统一为单一入口（优先桥接 wps，未装则 Tesseract 最小兜底）。"""
+    try:
+        from engine.local.ocr import wps_ocr_available, tesseract_available
+        return _to_text({
+            "wps_ocr_available": wps_ocr_available(),
+            "tesseract_available": tesseract_available(),
+            "mode": "wps_bridge" if wps_ocr_available() else "tesseract_fallback",
+        })
+    except Exception as e:
+        return f"[ERR] 状态获取失败：{e}"
 
 
 def main():
