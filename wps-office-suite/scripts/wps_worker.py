@@ -754,14 +754,6 @@ def cmd_nl_analyze(args):
         sheet=args.get("sheet", "Sheet1")
     )
 
-def cmd_contract_review(args):
-    """Word 合同审查"""
-    from wps_contract_review import review_docx_contract
-    return review_docx_contract(
-        filepath=args.get("file"),
-        output_path=args.get("output", "")
-    )
-
 def cmd_invoice_ocr(args):
     """发票 OCR 入账"""
     from wps_invoice_ocr import invoice_to_accounting
@@ -887,7 +879,6 @@ COMMANDS = {
     "check_update": cmd_check_update,
     "docx_to_ppt": cmd_docx_to_ppt,
     "nl_analyze": cmd_nl_analyze,
-    "contract_review": cmd_contract_review,
     "invoice_ocr": cmd_invoice_ocr,
     "ppt_generate": cmd_ppt_generate,
     "excel_analyze": cmd_excel_analyze,
