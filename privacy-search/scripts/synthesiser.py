@@ -336,7 +336,27 @@ def synthesize_pro(
         source_list = []
         for source_id, url, _content in sources:
             source_list.append(f"[{source_id}] {url}")
-        return llm_result + "\n\n--- 来源 ---\n" + "\n".join(source_list)
+        
+        # 事实核查层（V1.8 新增）
+        full_answer = llm_result + "\n\n--- 来源 ---\n" + "\n".join(source_list)
+        
+        try:
+            from fact_checker import fact_check, format_fact_check_report
+            fc_result = fact_check(full_answer, sources, config)
+            
+            if fc_result["removed_claims"]:
+                # 有论断被移除，使用清洗后的答案
+                full_answer = fc_result["cleaned_answer"]
+                # 追加来源列表
+                full_answer += "\n\n--- 来源 ---\n" + "\n".join(source_list)
+            
+            # 追加事实核查报告
+            full_answer += format_fact_check_report(fc_result)
+        except Exception:
+            # 事实核查失败不中断主流程
+            pass
+        
+        return full_answer
 
     # LLM 调用失败，降级
     return _extractive_synthesis(query, results, max_sources)
