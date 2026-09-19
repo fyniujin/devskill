@@ -2,8 +2,8 @@
 slug: privacy-search
 displayName: 隐私搜索
 name: privacy-search
-description: "隐私优先的多引擎并行搜索 Skill，提供十大搜索引擎（百度/必应/搜狗/360/DuckDuckGo/Yandex/Startpage/Qwant/Brave/本地SearXNG）并行检索。V1.7 新增 MCP Server 形态（stdio JSON-RPC 2.0 暴露 search/synthesize/fetch 三工具），可被 Claude Code/Cursor/n8n 直接挂载，让搜索能力成为任何 Agent 的即插组件。V1.6 新增 Perplexity 式答案合成（引用+正文抓取+citation）和定时引擎失效告警，jieba 默认安装提升中文精度。支持结果缓存与搜索历史、统一 HTTP 出口（隐私头/UA池/代理/自动重试真正生效）、标准 SimHash 去重、多因子加权排序（共识度/位次/相关度/权威度/域名质量）、多套备选选择器与解析诊断、bangs 语法透传、网页正文抓取、搜索结果导出（Markdown/HTML/PDF）、LLM 摘要（智谱 GLM-4-Flash + 抽取式降级）、定时 selftest + 告警、MCP Server 生态桥接。SearXNG 本地实例双路径部署，隐私模式 normal/strict 一键切换，不污染系统 Python 环境。"
-version: 1.7.0
+description: "隐私优先的多引擎并行搜索 Skill，提供十大搜索引擎（百度/必应/搜狗/360/DuckDuckGo/Yandex/Startpage/Qwant/Brave/本地SearXNG）并行检索。V1.8 新增可信合成与垂直搜索：事实核查层逐论断回链原文做相似度比对（标注支撑度三级，无源论断默认剔除），垂直搜索模式（news/realtime/academic/image 四类），高级检索语法（after:/before:/site:/filetype:），与现有 bangs 语法统一为查询语法表。V1.7 新增 MCP Server 形态（stdio JSON-RPC 2.0 暴露 search/synthesize/fetch 三工具），可被 Claude Code/Cursor/n8n 直接挂载，让搜索能力成为任何 Agent 的即插组件。V1.6 新增 Perplexity 式答案合成（引用+正文抓取+citation）和定时引擎失效告警，jieba 默认安装提升中文精度。V1.5 新增网页正文抓取、搜索结果导出（Markdown/HTML/PDF）、LLM 摘要（智谱 GLM-4-Flash + 抽取式降级）。V1.2 统一 HTTP 出口（隐私头/UA池/代理/自动重试真正生效）、标准 SimHash 去重、多因子加权排序、多套备选选择器与解析诊断、bangs 语法透传、结果缓存与搜索历史、SearXNG 本地实例双路径部署、隐私模式 normal/strict 一键切换，不污染系统 Python 环境。"
+version: 1.8.0
 tags: ["privacy", "search", "multi-engine", "duckduckgo", "searxng", "local-first", "simhash", "china-friendly", "export", "summary"]
 icon: "🔒"
 author: "njskills"
@@ -12,7 +12,7 @@ license: "MIT"
 
 # 隐私搜索（Privacy Search）
 
-隐私优先的多引擎并行搜索 Skill。V1.7 新增 **MCP Server 形态**（stdio JSON-RPC 2.0 暴露 search/synthesize/fetch 三工具），可被 Claude Code / Cursor / n8n 直接挂载，让搜索能力成为任何 Agent 的即插组件。V1.6 新增 Perplexity 式答案合成（引用+正文抓取+citation）和定时引擎失效告警，jieba 默认安装提升中文相关度精度。V1.5 在搜索质量与隐私真实生效基础上，新增网页正文抓取、结果导出（Markdown/HTML/PDF）与 LLM 摘要（智谱 GLM-4-Flash + 抽取式降级）。
+隐私优先的多引擎并行搜索 Skill。V1.8 新增 **可信合成与垂直搜索**：事实核查层逐论断回链原文做相似度比对（标注支撑度三级：充分/部分/无源，无源论断默认剔除），正文抓取与摘要合并为显式「内容处理管线」；垂直搜索模式（news/realtime/academic/image 四类，各配引擎优先级与参数）；高级检索语法（after:/before:/site:/filetype:），与现有 bangs 语法统一为查询语法表。V1.7 新增 MCP Server 形态（stdio JSON-RPC 2.0 暴露 search/synthesize/fetch 三工具）。V1.6 新增 Perplexity 式答案合成（引用+正文抓取+citation）和定时引擎失效告警。V1.5 新增网页正文抓取、结果导出（Markdown/HTML/PDF）与 LLM 摘要（智谱 GLM-4-Flash + 抽取式降级）。V1.2 统一 HTTP 出口、SimHash 去重、多因子排序、结果缓存与搜索历史、SearXNG 本地双路径部署、隐私模式 normal/strict 一键切换。
 
 ## 环境要求
 
@@ -96,6 +96,35 @@ python -m scripts.search --selftest-schedule status
 python -m scripts.selftest_scheduler run
 python -m scripts.selftest_scheduler status
 ```
+
+### F7：可信合成与垂直搜索（V1.8 新增）
+
+```bash
+# 事实核查（逐论断回链原文，标注支撑度三级）
+python -m scripts.search "量子计算最新进展" --synthesize-pro --fact-check
+
+# 新闻搜索（时效性排序，优先百度资讯/必应新闻）
+python -m scripts.search "AI 大模型" --vertical news
+
+# 实时搜索（秒级/分钟级更新）
+python -m scripts.search "突发新闻" --vertical realtime
+
+# 学术搜索（Semanticscholar 学术数据库）
+python -m scripts.search "quantum computing" --vertical academic
+
+# 图片搜索
+python -m scripts.search "猫咪" --vertical image
+
+# 高级检索语法（时间/站点/文件类型限定）
+python -m scripts.search "python教程 site:github.com filetype:pdf"
+python -m scripts.search "AI新闻 after:2025 before:2026"
+
+# 组合使用
+python -m scripts.search "量子计算 site:mit.edu after:2024" --vertical academic
+```
+
+> 高级语法支持引擎：baidu(site), bing(site,filetype), duckduckgo(site), yandex(site), searxng(site,after,brave)。不支持语法的引擎自动本地过滤。
+> 统一查询语法表 → `python -m scripts.query_parser`
 
 ### F6：MCP Server（V1.7 新增）
 
@@ -209,6 +238,10 @@ python -m scripts.update_checker status
 | 请求频率控制 | 单引擎日上限 200 + 随机延迟 |
 | venv 隔离 | pip 依赖全虚拟环境，不污染系统 |
 | Perplexity 式合成 | 抓取正文→分块→LLM 带 citation 生成答案（Pro 模式） |
+| 事实核查层 | 逐论断回链原文做相似度比对，三级标注支撑度 |
+| 垂直搜索 | news/realtime/academic/image 四类，各配引擎优先级 |
+| 高级检索语法 | after:/before:/site:/filetype:，与 bangs 语法统一 |
+| 内容处理管线 | 正文抓取→分块→摘要显式链，中间产物可查 |
 | 定时引擎告警 | 每日/每小时自动 selftest，失效引擎主动通知 |
 | jieba 中文分词 | 默认安装，中文相关度精度提升 |
 | MCP Server | stdio JSON-RPC 2.0 服务，暴露 search/synthesize/fetch 三工具 |
@@ -363,11 +396,23 @@ A: 在 config.yaml 的 `selftest_schedule.webhook_url` 填入企业微信/钉钉
 **Q: 配置项太多，哪些必须改？**
 A: 首次只需改 3 项（config.yaml 中标注 [推荐修改]）：`default_engines`、`timeout`、`default_mode`。其他保持默认。
 
+**Q: 事实核查是什么？怎么用？**
+A: 事实核查是 V1.8 新增的可信合成层。用 `--synthesize-pro --fact-check` 启用，逐条论断回链原文做 TF-IDF 余弦相似度比对，标注支撑度三级（充分/部分/无源），无源论断默认剔除。核查报告自动追加在答案末尾，含引用清单与核查方法说明。
+
+**Q: 无源论断怎么处理？**
+A: 默认自动剔除（`fact_check.remove_unsupported: true`）。如想保留但标注警告，设置 `fact_check.remove_unsupported: false`。阈值也可调：`sufficient_threshold`（默认 0.55）、`partial_threshold`（默认 0.25）。
+
+**Q: 垂直搜索怎么用？**
+A: `--vertical news/realtime/academic/image` 四类。新闻走百度资讯/必应新闻，学术走 Semanticscholar 开放接口（不可用时降级为通用引擎+学术关键词），图片走引擎图片端。每类有独立的引擎优先级和排序权重。
+
+**Q: 高级检索语法和 bangs 冲突吗？**
+A: 不冲突，统一为查询语法表。bangs（`!w` `!gh` `!yt`）走 SearXNG 原生快捷跳转，高级语法（`after:/before:/site:/filetype:`）映射为各引擎等价参数。不支持语法的引擎本地过滤并注明。
+
 **Q: MCP Server 是什么？怎么用？**
-A: MCP Server 是 V1.7 新增的 stdio JSON-RPC 2.0 服务，把搜索/合成/抓取能力暴露为标准工具协议。运行 `python scripts/mcp_server.py` 即可启动，可被 Claude Code、Cursor、n8n 等支持 MCP 的客户端挂载。详见 `references/mcp_schema.md`。
+A: MCP Server 是 V1.7 新增的 stdio JSON-RPC 2.0 服务，把搜索/合成/抓取能力暴露为标准工具协议。V1.8 为 synthesize 工具新增事实核查层。运行 `python scripts/mcp_server.py` 即可启动，可被 Claude Code、Cursor、n8n 等支持 MCP 的客户端挂载。详见 `references/mcp_schema.md`。
 
 **Q: MCP Server 暴露了哪些工具？**
-A: 3 个工具：`search`（多引擎隐私搜索）、`synthesize`（Perplexity 式答案合成）、`fetch`（URL 正文抓取）。可通过 config.yaml 的 `mcp_server.tools` 缩减子集。
+A: 3 个工具：`search`（多引擎隐私搜索）、`synthesize`（Perplexity 式答案合成 + V1.8 事实核查）、`fetch`（URL 正文抓取）。可通过 config.yaml 的 `mcp_server.tools` 缩减子集。
 
 **Q: MCP Server 超时怎么办？**
 A: 默认单次调用 30 秒，超时返回 JSON-RPC 错误响应，不中断服务。可在 config.yaml 调整 `mcp_server.timeout`。LLM 不可用时自动降级为抽取式，不影响 search/fetch 工具。
@@ -394,7 +439,10 @@ privacy-search/
 │   ├── quick_setup.py                # 一键安装
 │   ├── synthesiser.py                # F4: Perplexity 式答案合成（V1.6 新增）
 │   ├── selftest_scheduler.py         # F5: 定时 selftest 告警（V1.6 新增）
-│   └── mcp_server.py                 # F6: MCP Server stdio JSON-RPC 2.0（V1.7 新增）
+│   ├── mcp_server.py                 # F6: MCP Server stdio JSON-RPC 2.0（V1.7 新增）
+│   ├── fact_checker.py               # F7: 事实核查层（V1.8 新增）
+│   ├── vertical_search.py            # F7: 垂直搜索路由（V1.8 新增）
+│   └── query_parser.py               # F7: 高级检索语法（V1.8 新增）
 ├── references/
 │   ├── config.yaml.example           # 配置模板（含推荐配置标注）
 │   ├── engines.md                    # 引擎适配器文档
@@ -408,6 +456,9 @@ privacy-search/
     ├── test_search_v15.py            # V1.5 新模块测试
     ├── test_search_v16.py            # V1.6 新模块测试
     ├── test_mcp_server.py            # MCP Server 协议与工具测试（V1.7 新增）
+    ├── test_fact_checker.py          # 事实核查层测试（V1.8 新增）
+    ├── test_vertical_search.py       # 垂直搜索测试（V1.8 新增）
+    ├── test_query_parser.py          # 高级语法解析测试（V1.8 新增）
     ├── test_searxng.py               # SearXNG 管理测试
     ├── test_privacy.py               # 隐私模式测试
     └── test_update_checker.py        # 更新检查测试
@@ -415,6 +466,7 @@ privacy-search/
 
 ## 更新日志
 
+| v1.8.0 | 2026-09-19 | 增加：事实核查层（逐论断回链原文做相似度比对，标注支撑度三级：充分/部分/无源，无源论断默认剔除）；增加：垂直搜索模式（news/realtime/academic/image 四类，各配引擎优先级与参数）；增加：高级检索语法（after:/before:/site:/filetype: 解析为各引擎等价参数，不支持的引擎本地过滤并注明）；增加：内容处理管线（正文抓取→分块→摘要显式链，中间产物可查）；调整：synthesiser 集成事实核查层，--synthesize-pro 输出自动附带核查报告；调整：MCP Server synthesize 工具 schema 更新（V1.8 新增事实核查层说明） |
 | v1.7.0 | 2026-08-28 | 增加：MCP Server 形态（stdio JSON-RPC 2.0 暴露 search/synthesize/fetch 三工具）；增加：生态桥接文档（references/mcp_schema.md）；增加：MCP Server 配置段（config.yaml） |
 | v1.6.0 | 2026-08-17 | 增加：Perplexity 式答案合成（抓取正文→分块→LLM 带 citation 生成答案）；增加：定时 selftest 调度+引擎失效告警（每日/每小时，支持 webhook）；调整：jieba 从可选改为默认安装，中文相关度精度提升；优化：无 API Key 时 Pro 模式自动降级为抽取式摘要+来源列表 |
 | v1.5.0 | 2026-08-07 | 增加：网页正文抓取模块（trafilatura/boilerpy3/正则三层降级）；增加：搜索结果导出（Markdown/HTML/PDF，PDF 有降级方案）；增加：LLM 摘要（智谱 GLM-4-Flash + 抽取式降级）；增加：引擎统计与动态降级（按历史成功率选引擎）；增加：UA 池可配置化（config.yaml 追加）；增加：TF-IDF 相关度算法（jieba 分词 + 余弦相似度）；增加：降级引擎列表可配置；优化：域名质量表扩展（+30 常用中文站点）；优化：SearXNG Secret 持久化（重启不失效）；优化：request_delay 默认值与示例文件一致（1.0-5.0）；优化：update_check 接入 search.py 启动检查；修复：github_url 占位符替换为 njskills；修复：引擎改版 mock 回归测试 |
