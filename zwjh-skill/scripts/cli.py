@@ -45,7 +45,7 @@ except Exception:
 from scripts import (config, store, embeddings, retrieval, graph, deposit,
                      health, backup, legacy, setup, update_check, hardware, version,
                      conflict_resolver, export, narrative, multimodal, archive,
-                     rebuild_index, embedder)
+                     rebuild_index, embedder, memory_access)
 
 
 # ── 子命令实现 ────────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ def cmd_deposit(args):
             r = deposit.deposit_conversation(args.text, day=args.day)
         else:
             r = deposit.deposit_text(args.text, source=args.source or "conversation",
-                                     day=args.day)
+                                     day=args.day, namespace=args.namespace)
         print(json.dumps(r, ensure_ascii=False, indent=2))
     else:
         # 从 stdin 读取（便于管道）
@@ -390,6 +390,170 @@ def cmd_embedder_info(args):
     print(json.dumps(info, ensure_ascii=False, indent=2))
 
 
+# ── v2.6.0 新增命令 ─────────────────────────────────────────────────────────
+
+def cmd_graph_query(args):
+    """知识图谱查询（实体搜索/详情/事实/路径）。"""
+    if args.action == "search":
+        if not args.name:
+            print(json.dumps({"error": "缺少 --name 参数"}, ensure_ascii=False))
+            return
+        results = store.search_entities_by_name(args.name, limit=args.limit)
+        print(json.dumps(results, ensure_ascii=False, indent=2))
+    elif args.action == "entity":
+        if not args.entity_id:
+            print(json.dumps({"error": "缺少 --entity-id 参数"}, ensure_ascii=False))
+            return
+        conn = store.get_conn()
+        row = conn.execute("SELECT * FROM entities WHERE id=?", (args.entity_id,)).fetchone()
+        if not row:
+            print(json.dumps({"error": "实体不存在"}, ensure_ascii=False))
+            return
+        ent = dict(row)
+        rels = store.relations_of(args.entity_id, direction="both")
+        facts = store.current_facts(args.entity_id)
+        print(json.dumps({"entity": ent, "relations": rels, "facts": facts},
+                         ensure_ascii=False, indent=2))
+    elif args.action == "facts":
+        eid = args.entity_id
+        if eid is None and args.name:
+            ent = store.find_entity(None, args.name)
+            if not ent:
+                print(json.dumps({"error": "实体不存在"}, ensure_ascii=False))
+                return
+            eid = ent["id"]
+        if eid is None:
+            print(json.dumps({"error": "缺少 --entity-id 或 --name"}, ensure_ascii=False))
+            return
+        facts = store.current_facts(eid)
+        print(json.dumps(facts, ensure_ascii=False, indent=2))
+    elif args.action == "path":
+        if not args.from_name or not args.to_name:
+            print(json.dumps({"error": "缺少 --from-name 或 --to-name"}, ensure_ascii=False))
+            return
+        result = graph.find_shortest_path(args.from_name, args.to_name)
+        if not result:
+            print(json.dumps({"error": "未找到路径"}, ensure_ascii=False))
+            return
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def cmd_forget(args):
+    """遗忘（软删除）指定记忆或恢复归档。"""
+    if args.restore:
+        result = store.restore_from_archive(args.restore)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    if args.list_archive:
+        items = store.list_archive(limit=args.limit)
+        print(json.dumps(items, ensure_ascii=False, indent=2))
+        return
+    if not args.memory_id and not args.day:
+        print(json.dumps({"error": "缺少 --memory-id 或 --day 参数"}, ensure_ascii=False))
+        return
+    conn = store.get_conn()
+    now = __import__("datetime").datetime.now().isoformat(timespec="seconds")
+    if args.memory_id:
+        row = conn.execute("SELECT * FROM memories WHERE id=?", (args.memory_id,)).fetchone()
+        if not row:
+            print(json.dumps({"error": "记忆不存在"}, ensure_ascii=False))
+            return
+        d = dict(row)
+        existing = conn.execute("SELECT id FROM memories_archive WHERE original_id=?",
+                                (args.memory_id,)).fetchone()
+        if not existing:
+            conn.execute(
+                """INSERT INTO memories_archive(original_id, day, source, raw_text,
+                   norm_hash, tokens_json, importance, archived_at, reason)
+                   VALUES(?,?,?,?,?,?,?,?,?)""",
+                (args.memory_id, d["day"], d["source"], d["raw_text"], d["norm_hash"],
+                 d["tokens_json"], d["importance"], now, args.reason))
+        conn.execute("DELETE FROM memories WHERE id=?", (args.memory_id,))
+        conn.commit()
+        print(json.dumps({"ok": True, "forgotten_id": args.memory_id, "archived": True},
+                         ensure_ascii=False, indent=2))
+    else:
+        rows = conn.execute("SELECT * FROM memories WHERE day=?", (args.day,)).fetchall()
+        if not rows:
+            print(json.dumps({"error": "该日期没有记忆"}, ensure_ascii=False))
+            return
+        count = 0
+        for row in rows:
+            d = dict(row)
+            existing = conn.execute("SELECT id FROM memories_archive WHERE original_id=?",
+                                    (d["id"],)).fetchone()
+            if not existing:
+                conn.execute(
+                    """INSERT INTO memories_archive(original_id, day, source, raw_text,
+                       norm_hash, tokens_json, importance, archived_at, reason)
+                       VALUES(?,?,?,?,?,?,?,?,?)""",
+                    (d["id"], d["day"], d["source"], d["raw_text"], d["norm_hash"],
+                     d["tokens_json"], d["importance"], now, args.reason))
+            conn.execute("DELETE FROM memories WHERE id=?", (d["id"],))
+            count += 1
+        conn.commit()
+        print(json.dumps({"ok": True, "forgotten_day": args.day, "count": count},
+                         ensure_ascii=False, indent=2))
+
+
+def cmd_export_stream(args):
+    """流式导出记忆（分批返回）。"""
+    batch_size = min(max(args.batch_size, 1), 200)
+    rows = store.list_memories(day_from=args.from_day, day_to=args.to_day,
+                               limit=100000, offset=0)
+    if not rows:
+        print("没有可导出的记忆。")
+        return
+    batch = rows[:batch_size]
+    remaining = len(rows) - len(batch)
+    if args.format == "json":
+        content = json.dumps(batch, ensure_ascii=False, indent=2)
+    elif args.format == "markdown":
+        lines = ["# 记忆导出\n\n共 %d 条\n" % len(rows)]
+        for r in batch:
+            lines.append("## [%s] %s (id=%d)\n\n%s\n" % (
+                r["day"], r["source"], r["id"], r["raw_text"]))
+        content = "\n".join(lines)
+    else:  # csv
+        lines = ["id,day,source,importance,raw_text"]
+        for r in batch:
+            txt = r["raw_text"].replace('"', '""').replace('\n', ' ')
+            lines.append('%d,%s,%s,%.2f,"%s"' % (
+                r["id"], r["day"], r["source"], r["importance"], txt))
+        content = "\n".join(lines)
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(content)
+        print("已写入 %s（第 1 批 %d 条，共 %d 条）" % (args.output, len(batch), len(rows)))
+    else:
+        print(content)
+    if remaining > 0:
+        print("\n（剩余 %d 条未导出，缩小日期范围或分批请求）" % remaining)
+
+
+def cmd_access_key(args):
+    """查看/轮换访问密钥。"""
+    if args.rotate:
+        cfg = config.load_config()
+        old_key = cfg.get("access_key", "")
+        import secrets
+        new_key = secrets.token_hex(32)
+        cfg["access_key"] = new_key
+        config.save_config(cfg)
+        print(json.dumps({"ok": True, "rotated": True,
+                         "old_key_prefix": old_key[:8] + "..." if old_key else None,
+                         "new_key_prefix": new_key[:8] + "..."}, ensure_ascii=False))
+        print("⚠️ 密钥已轮换，旧 manifest 签名将失效。请通知调用方。")
+    else:
+        cfg = config.load_config()
+        key = cfg.get("access_key", "")
+        if key:
+            print("当前 access_key 前缀：%s..." % key[:8])
+        else:
+            print("尚未配置 access_key，首次调用 manifest 会自动生成。")
+        print("运行 `python cli.py access-key --rotate` 轮换密钥。")
+
+
 def cmd_status_overview(args):
     h = health.audit()
     print("═══════════════════════════════════════════")
@@ -442,6 +606,7 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--conversation", action="store_true", help="按段落拆分沉淀")
     d.add_argument("--source", default="conversation")
     d.add_argument("--day", default=None)
+    d.add_argument("--namespace", default="public", help="命名空间（默认 public）")
     d.set_defaults(func=cmd_deposit)
 
     q = sub.add_parser("query", help="语义检索")
@@ -594,6 +759,43 @@ def build_parser() -> argparse.ArgumentParser:
     # Embedder 信息
     ei = sub.add_parser("embedder-info", help="查看 embedding 模型状态")
     ei.set_defaults(func=cmd_embedder_info)
+
+    # v2.6.0 新增子命令
+
+    # graph-query（知识图谱查询）
+    gq = sub.add_parser("graph-query", help="知识图谱查询（实体搜索/详情/事实/路径）")
+    gq.add_argument("--action", required=True, choices=["search", "entity", "facts", "path"],
+                    help="查询动作")
+    gq.add_argument("--name", default=None, help="实体名称（search/facts 用）")
+    gq.add_argument("--entity-id", type=int, default=None, help="实体 ID（entity/facts 用）")
+    gq.add_argument("--from-name", default=None, help="起始实体名（path 用）")
+    gq.add_argument("--to-name", default=None, help="目标实体名（path 用）")
+    gq.add_argument("--limit", type=int, default=20, help="返回数量上限（默认 20）")
+    gq.set_defaults(func=cmd_graph_query)
+
+    # forget（遗忘/归档）
+    fg = sub.add_parser("forget", help="遗忘（软删除）指定记忆")
+    fg.add_argument("--memory-id", type=int, default=None, help="要遗忘的记忆 ID")
+    fg.add_argument("--day", default=None, help="要遗忘的日期（YYYY-MM-DD）")
+    fg.add_argument("--reason", default="CLI forget request", help="遗忘原因")
+    fg.add_argument("--restore", type=int, default=None, help="从归档表恢复指定 archive_id")
+    fg.add_argument("--list-archive", action="store_true", help="列出归档的记忆")
+    fg.set_defaults(func=cmd_forget)
+
+    # export-stream（流式导出）
+    es = sub.add_parser("export-stream", help="流式导出记忆（分批返回）")
+    es.add_argument("--format", required=True, choices=["json", "markdown", "csv"],
+                    help="导出格式")
+    es.add_argument("--batch-size", type=int, default=50, help="每批条数（默认 50，最大 200）")
+    es.add_argument("--from-day", default=None, help="起始日期过滤")
+    es.add_argument("--to-day", default=None, help="结束日期过滤")
+    es.add_argument("--output", default=None, help="输出文件路径（不指定则打印到 stdout）")
+    es.set_defaults(func=cmd_export_stream)
+
+    # access-key（查看/轮换访问密钥）
+    ak = sub.add_parser("access-key", help="查看/轮换访问密钥（HMAC 用）")
+    ak.add_argument("--rotate", action="store_true", help="轮换密钥（旧 manifest 失效）")
+    ak.set_defaults(func=cmd_access_key)
 
     return p
 
