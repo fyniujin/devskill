@@ -7,7 +7,7 @@
 """
 from __future__ import annotations
 
-from engine.ocr.local_ocr import recognize, tesseract_available
+from engine.local.ocr import recognize, tesseract_available
 from engine.ocr.formula_recognizer import FormulaRecognizer
 from engine.ocr.education import EducationOCR
 
