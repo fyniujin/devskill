@@ -38,6 +38,14 @@ def _connect() -> sqlite3.Connection:
 
 
 def _init_schema(conn: sqlite3.Connection) -> None:
+    # Check if memories table already exists and lacks new columns
+    has_namespace = False
+    try:
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(memories)")]
+        has_namespace = "namespace" in cols
+    except Exception:
+        pass
+
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS memories (
@@ -51,12 +59,62 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             last_accessed TEXT NOT NULL,
             access_count  INTEGER NOT NULL DEFAULT 0,
             quality       REAL   NOT NULL DEFAULT 1.0,  -- 健康度质量分
-            importance    REAL   NOT NULL DEFAULT 0.5
+            importance    REAL   NOT NULL DEFAULT 0.5,
+            version       INTEGER NOT NULL DEFAULT 1,   -- 乐观锁版本号
+            namespace     TEXT NOT NULL DEFAULT 'public' -- 命名空间隔离
         );
         CREATE INDEX IF NOT EXISTS idx_mem_day ON memories(day);
         CREATE INDEX IF NOT EXISTS idx_mem_hash ON memories(norm_hash);
         CREATE INDEX IF NOT EXISTS idx_mem_access ON memories(last_accessed);
+        -- idx_mem_namespace created below after migration check
 
+        -- 归档表（forget 软删除后的恢复用）
+        CREATE TABLE IF NOT EXISTS memories_archive (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            original_id   INTEGER NOT NULL,
+            day           TEXT NOT NULL,
+            source        TEXT NOT NULL,
+            raw_text      TEXT NOT NULL,
+            norm_hash     TEXT NOT NULL,
+            tokens_json   TEXT NOT NULL,
+            importance    REAL NOT NULL DEFAULT 0.5,
+            namespace     TEXT NOT NULL DEFAULT 'public',
+            archived_at   TEXT NOT NULL,
+            reason        TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_arch_original ON memories_archive(original_id);
+        CREATE INDEX IF NOT EXISTS idx_arch_day ON memories_archive(day);
+        """
+    )
+    # Migration: add columns if missing (for existing DBs that pre-date v2.6.0)
+    if not has_namespace:
+        try:
+            cols = [row[1] for row in conn.execute("PRAGMA table_info(memories)")]
+            if "version" not in cols:
+                conn.execute("ALTER TABLE memories ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
+            if "namespace" not in cols:
+                conn.execute("ALTER TABLE memories ADD COLUMN namespace TEXT NOT NULL DEFAULT 'public'")
+        except Exception:
+            pass
+    # Create namespace index (safe after migration)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_mem_namespace ON memories(namespace)")
+    conn.commit()
+
+    # Migration: add columns if missing (for existing DBs that pre-date v2.6.0)
+    try:
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(memories)")]
+        if "version" not in cols:
+            conn.execute("ALTER TABLE memories ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
+        if "namespace" not in cols:
+            conn.execute("ALTER TABLE memories ADD COLUMN namespace TEXT NOT NULL DEFAULT 'public'")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_mem_namespace ON memories(namespace)")
+        conn.commit()
+    except Exception:
+        pass
+
+    # Continue creating remaining tables
+    conn.executescript(
+        """
         CREATE TABLE IF NOT EXISTS entities (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             type       TEXT NOT NULL DEFAULT 'concept',
@@ -129,16 +187,18 @@ def _conn_local():
 
 # ── 记忆 ──────────────────────────────────────────────────────────────────
 def add_memory(day: str, source: str, raw_text: str, norm_hash: str,
-               tokens: list[str], importance: float = 0.5) -> int:
+               tokens: list[str], importance: float = 0.5,
+               namespace: str = "public") -> int:
     now = datetime.now().isoformat(timespec="seconds")
     with _lock:
         conn = get_conn()
         cur = conn.execute(
             """INSERT INTO memories(day, source, raw_text, norm_hash, tokens_json,
-                                    created_at, last_accessed, access_count, importance)
-               VALUES(?,?,?,?,?,?,?,0,?)""",
+                                    created_at, last_accessed, access_count, importance,
+                                    namespace)
+               VALUES(?,?,?,?,?,?,?,?,?,?)""",
             (day, source, raw_text, norm_hash, json.dumps(tokens, ensure_ascii=False),
-             now, now, importance),
+             now, now, 0, importance, namespace),
         )
         conn.commit()
         return int(cur.lastrowid)
@@ -150,6 +210,54 @@ def find_by_hash(norm_hash: str):
         "SELECT * FROM memories WHERE norm_hash=?", (norm_hash,)
     ).fetchone()
     return dict(row) if row else None
+
+
+def get_memory_version(memory_id: int) -> int | None:
+    """获取记忆当前版本号（乐观锁）。"""
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT version FROM memories WHERE id=?", (memory_id,)
+    ).fetchone()
+    return row["version"] if row else None
+
+
+def update_memory_with_lock(memory_id: int, fields: dict) -> dict:
+    """
+    带乐观锁的记忆更新。
+
+    Args:
+        memory_id: 记忆 ID
+        fields: 要更新的字段 dict，必须包含 'version' 键表示期望的当前版本
+
+    Returns:
+        {"ok": True} 或 {"ok": False, "error": "WRITE_CONFLICT", "current_version": int}
+    """
+    with _lock:
+        conn = get_conn()
+        row = conn.execute(
+            "SELECT version FROM memories WHERE id=?", (memory_id,)
+        ).fetchone()
+        if not row:
+            return {"ok": False, "error": "NOT_FOUND"}
+        current_ver = row["version"]
+        expected_ver = fields.get("version", current_ver)
+        if current_ver != expected_ver:
+            return {"ok": False, "error": "WRITE_CONFLICT",
+                    "current_version": current_ver,
+                    "expected_version": expected_ver}
+        # 构建 SET 子句
+        allowed = {"raw_text", "importance", "quality", "namespace", "source"}
+        updates = {k: v for k, v in fields.items() if k in allowed}
+        if not updates:
+            return {"ok": True, "version": current_ver}
+        updates["version"] = current_ver + 1
+        set_clause = ", ".join("%s=?" % k for k in updates)
+        values = list(updates.values()) + [memory_id, current_ver]
+        conn.execute(
+            "UPDATE memories SET %s WHERE id=? AND version=?" % set_clause,
+            values)
+        conn.commit()
+        return {"ok": True, "version": current_ver + 1}
 
 
 def get_daily_log(day: str):
@@ -437,6 +545,55 @@ def wipe_memories_only() -> int:
         conn.execute("DELETE FROM entities")
         conn.commit()
         return 1
+
+
+# ── 归档（forget 软删除）────────────────────────────────────────────────
+def list_archive(limit: int = 200, offset: int = 0) -> list[dict]:
+    """列出归档的记忆（forget 后可恢复）。"""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM memories_archive ORDER BY archived_at DESC LIMIT ? OFFSET ?",
+        (limit, offset)
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def restore_from_archive(archive_id: int) -> dict:
+    """从归档表恢复一条记忆。"""
+    with _lock:
+        conn = get_conn()
+        row = conn.execute(
+            "SELECT * FROM memories_archive WHERE id=?", (archive_id,)
+        ).fetchone()
+        if not row:
+            return {"ok": False, "error": "NOT_FOUND"}
+        d = dict(row)
+        # 检查是否已恢复
+        existing = conn.execute(
+            "SELECT id FROM memories WHERE id=?", (d["original_id"],)
+        ).fetchone()
+        if existing:
+            return {"ok": False, "error": "ALREADY_EXISTS"}
+        cur = conn.execute(
+            """INSERT INTO memories(id, day, source, raw_text, norm_hash, tokens_json,
+                                    created_at, last_accessed, access_count, importance,
+                                    version, namespace)
+               VALUES(?,?,?,?,?,?,?,?,
+                       COALESCE((SELECT access_count FROM memories WHERE id=?),0),
+                       ?,1,?)""",
+            (d["original_id"], d["day"], d["source"], d["raw_text"], d["norm_hash"],
+             d["tokens_json"], d["day"] + "T00:00:00", d["day"] + "T00:00:00",
+             d["original_id"], d["importance"], d["namespace"]),
+        )
+        conn.execute("DELETE FROM memories_archive WHERE id=?", (archive_id,))
+        conn.commit()
+        return {"ok": True, "restored_id": d["original_id"]}
+
+
+def archive_count() -> int:
+    """统计归档记忆数。"""
+    conn = get_conn()
+    return conn.execute("SELECT COUNT(*) FROM memories_archive").fetchone()[0]
 
 
 if __name__ == "__main__":
