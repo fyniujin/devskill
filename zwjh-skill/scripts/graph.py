@@ -175,5 +175,42 @@ def render_mermaid() -> str:
     return "\n".join(lines)
 
 
+def find_shortest_path(from_name: str, to_name: str) -> dict | None:
+    """BFS 查找两实体间的最短路径。"""
+    from . import store
+    f = store.find_entity(None, from_name)
+    t = store.find_entity(None, to_name)
+    if not f or not t:
+        return None
+    if f["id"] == t["id"]:
+        return {"path": [f["name"]], "text": f["name"], "hops": 0}
+    from collections import deque
+    queue = deque([(f["id"], [f["id"]])])
+    visited = {f["id"]}
+    while queue:
+        cur, path = queue.popleft()
+        rels = store.relations_of(cur, direction="both")
+        for r in rels:
+            nid = r["from_id"] if r["to_id"] == cur else r["to_id"]
+            if nid in visited:
+                continue
+            visited.add(nid)
+            new_path = path + [nid]
+            if nid == t["id"]:
+                # 构建可读路径
+                names = []
+                conn = store.get_conn()
+                for pid in new_path:
+                    row = conn.execute("SELECT name FROM entities WHERE id=?", (pid,)).fetchone()
+                    names.append(row["name"] if row else "?")
+                return {
+                    "path": names,
+                    "hops": len(names) - 1,
+                    "text": " → ".join(names),
+                }
+            queue.append((nid, new_path))
+    return None
+
+
 if __name__ == "__main__":
     print(render_mermaid())
