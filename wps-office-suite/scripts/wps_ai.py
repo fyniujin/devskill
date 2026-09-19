@@ -40,7 +40,6 @@ def main():
             "email-reply",
             "report",
             "meeting",
-            "contract",
             "translate",
             "formula",
             "continue",
@@ -93,15 +92,6 @@ def main():
         help="摘要方法",
     )
 
-    # 合同审查参数
-    parser.add_argument(
-        "--mode",
-        default="full",
-        choices=["full", "risks", "terms", "obligations"],
-        help="审查模式（contract 动作）",
-    )
-    parser.add_argument("--template", default="", help="审查规则模板路径")
-
     # 文档翻译参数
     parser.add_argument("--source", default="", help="源语言（translate 动作）")
     parser.add_argument("--target", default="zh", help="目标语言")
@@ -129,8 +119,6 @@ def main():
         result = _ai_report(args)
     elif args.action == "meeting":
         result = _ai_meeting(args)
-    elif args.action == "contract":
-        result = _ai_contract(args)
     elif args.action == "translate":
         result = _ai_translate(args)
     elif args.action == "formula":
@@ -205,23 +193,6 @@ def _ai_meeting(args) -> dict:
         asr_method=args.method,
         summary_method=args.summary_method,
         language=args.language,
-    )
-
-
-def _ai_contract(args) -> dict:
-    """合同审查"""
-    try:
-        from wps_contract_review import ContractReviewer
-    except ImportError:
-        sys.path.insert(0, str(SCRIPT_DIR))
-        from wps_contract_review import ContractReviewer
-
-    reviewer = ContractReviewer()
-    return reviewer.review(
-        filepath=args.file,
-        output=args.output or "",
-        mode=args.mode,
-        template_path=args.template or "",
     )
 
 
