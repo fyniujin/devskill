@@ -2,7 +2,7 @@
 name: kingdoc
 displayName: 金山文档 KingDoc
 slug: kingdoc
-version: 4.1.0
+version: 4.2.0
 description: >
   金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理
   （文档/智能画布/电子表格/演示文稿/多维表格/收集表/可视化/历史管理/全文搜索/附件），
@@ -20,7 +20,12 @@ description: >
   多维表格字段自动化（公式/关联/汇总字段）、视图渲染（matplotlib 看板柱图 + mermaid 甘特时间线）、
   CRDT 表格扩展（单元格级操作日志 + 向量时钟冲突标记）、Excel/CSV 双向 I/O（date/link/select/person 四类字段序列化）、
   Webhook 通知中心（新增/修改/删除事件订阅 + 金山协作/企微/钉钉三通道）。
-  本地生成、OCR、硬件画像、WPS AI、全文搜索、块级编辑、配额管理、桥接、AirScript、视图渲染、CRDT、数据 I/O、Webhook 等能力零密钥可用。
+  v4.2 知识中枢与政企合规：团队知识库模式（空间级倒排检索 + 权限矩阵过滤，先鉴权后检索）、
+  政企合规中心（密级标注落库 + 敏感词/数据泄露全量扫描报告 + 数据不出域声明）、
+  主题一键生成（WPS AI 适配层 generate：大纲→智能文档/PPT/表格初稿，本地降级可切换真源）、
+  跨品类对比与时间线（版本历史轮询→who/when/what 时间线 + 表格单元格级 diff），
+  OCR 收敛（唯一入口，优先桥接 wps-office-suite，未装则 Tesseract 最小兜底，数据不出域）。
+  本地生成、OCR、硬件画像、WPS AI、全文搜索、块级编辑、配额管理、桥接、AirScript、视图渲染、CRDT、数据 I/O、Webhook、知识中枢、政企合规、主题生成、跨品类对比等能力零密钥可用。
 description_zh: "金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理（深度直连 WPS 开放平台 + 智能画布元素级编辑 + 全文搜索超越腾讯 + 块级编辑段落级 + 18 项增强）"
 platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
 tags: [文档处理, 表格处理, PPT生成, 多维表格, 表单收集, 思维导图, 流程图, OCR, 政企合规]
@@ -555,7 +560,7 @@ templates/
 ```yaml
 ---
 name: weekly-report
-category: 工作汇报
+分类: 工作汇报
 description: 标准周报模板
 ---
 
@@ -965,6 +970,7 @@ python -m engine.update_check --version 3.0.0 --reminder
 
 ## 更新日志
 
+| v4.2.0 | 2026-09-19 | 增加：团队知识库模式引擎 `engine/knowledge_hub.py`（空间级本地倒排索引全文检索，可选 jieba 中文分词，权限矩阵先鉴权后检索，无 read 权限文档不进结果集，硬件自适应分块建索引）；增加：政企合规中心引擎 `engine/compliance_center.py`（密级标注公开/内部/秘密/机密随文档元数据落库，敏感词+数据泄露全量扫描聚合报告，数据不出域声明，本地 OCR 强制云端仅元数据）；增加：主题一键生成引擎 `engine/topic_generator.py`（WPS AI 适配层 generate：大纲→智能文档/PPT/表格初稿，本地降级模板驱动+分段生成，真源可用无缝切换）；增加：跨品类对比与时间线引擎 `engine/cross_compare.py`（版本历史轮询→who/when/what 时间线，表格/多维表格单元格级 diff 视图，跨品类差异化）；优化：OCR 收敛为唯一入口 `engine/local/ocr.py`（删除重复维护的 `engine/ocr/local_ocr.py`，优先桥接 wps-office-suite OCR，未装则 Tesseract 最小兜底，数据不出域）；增加：MCP 工具 19 个（kdoc.khub.* 4 个、kdoc.compliance.* 5 个、kdoc.topic.* 2 个、kdoc.compare.* 3 个、kdoc.ocr_bridge_status 1 个、复用 kdoc.local.ocr.extract_text_bridged）；增加：知识中枢/政企合规/主题生成/跨品类对比/OCR 桥接场景案例；优化：SKILL.md 版本号 4.1.0→4.2.0；优化：description 增强到 30 项增强 |
 | v4.1.0 | 2026-09-08 | 增加：AirScript 在线自动化引擎 `engine/airscript.py`（自然语言→脚本生成→预检（危险操作拦截）→用户确认→在线执行；能力域：定时通知/数据汇总/表格批量操作/字段计算；SQLite 执行历史+待确认队列）；增加：多维表格字段自动化引擎 `engine/dbf_auto.py`（公式字段/关联字段/汇总字段创建与批量填充，16 种字段类型，硬件自适应削峰）；增加：视图渲染引擎 `engine/view_render.py`（看板 matplotlib 柱图 + 甘特 mermaid 时间线，硬件自适应渲染并发）；增加：CRDT 表格扩展引擎 `engine/crdt_table.py`（单元格级操作日志 + 向量时钟，冲突时保留双方并标记，支持电子表格/多维表格/智能文档）；增加：Excel/CSV 双向导入导出引擎 `engine/bidata_io.py`（openpyxl 读写，date/link/select/person 四类字段序列化规则文档化，配额削峰）；增加：Webhook 与通知中心引擎 `engine/webhook_center.py`（新增/修改/删除事件订阅，HMAC 签名校验 + SQLite 去重队列，金山协作/企微/钉钉三通道分发，zwjh 记忆桥接）；增加：MCP 工具 24 个（kdoc.airscript.* 7 个、kdoc.dbf.* 5 个、kdoc.view.* 3 个、kdoc.crdt_table.* 6 个、kdoc.bidata.* 5 个、kdoc.webhook.* 8 个）；增加：AirScript/多维表格/视图渲染/CRDT/Webhook 场景案例；优化：SKILL.md 版本号 4.0.0→4.1.0；优化：description 增强到 24 项增强 |
 | v4.0.0 | 2026-08-31 | 增加：本地桥接引擎 `engine/local_bridge.py`（wps-office-suite 双向互通：白名单探测 + SQLite 映射表 + 下行拉取/处理/覆盖 + 上行 mtime 监听同步 + JSON 契约 + 子进程超时自动关闭）；增加：记忆桥接引擎 `engine/memory_bridge.py`（zwjh 记忆库打通：白名单探测 + stdio JSON-RPC 调用 deposit + 关键事件写入长期记忆 + 未安装→本地待迁移日志 + 一次性导入）；增加：表单答卷收集统计 `engine/form_analytics.py`（答卷列表/内容接口 + 按题统计 + 交叉分析 + 未填名单 + 图表生成 + 导出 CSV/Excel + 写回智能文档）；增加：MCP 工具 12 个（kdoc.bridge.* 5 个、kdoc.memory.* 3 个、kdoc.form.* 4 个）；增加：桥接/记忆/表单场景案例；优化：SKILL.md 版本号 3.9.0→4.0.0；优化：description 增强到 21 项增强 |
 | v3.9.0 | 2026-08-24 | 增加：块级编辑引擎 `engine/blocks.py`（段落级在线编辑，block_id CRUD，块类型映射表，未知块类型跳过不中断）；增加：演示页替换引擎 `engine/page_swap.py`（双路径自动选择：页级更新/整文件替换 + 页数校验 diff）；增加：配额管理器 `engine/quota_manager.py`（SQLite 按天计数 500 次/天 + 令牌桶限速 5 req/s + 429 指数退避 + 批量任务硬件自适应削峰）；增加：格式转换引擎 `engine/format_converter.py`（补齐 jpg/png/txt 三类目标格式，全格式覆盖 pdf/jpg/png/txt/docx/xlsx/pptx/html/md，云端优先→本地兜底失败降级链）；增加：MCP 工具 9 个（kdoc.block.* 5 个、kdoc.page_swap 1 个、kdoc.quota.* 3 个、kdoc.office.convert.enhanced 1 个）；增加：块级编辑/页替换/配额管理/格式转换场景案例；优化：SKILL.md 版本号 3.8.0→3.9.0 |
@@ -1051,7 +1057,7 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 ---
 
-*最后更新：2026-08-31 | v4.0.0*
+*最后更新：2026-09-19 | v4.2.0*
 
 ---
 
@@ -1474,4 +1480,111 @@ text / number / select / multi_select / date / person / link / formula / relatio
 
 ---
 
-*最后更新：2026-09-08 | v4.1.0*
+## 39. 团队知识库模式（v4.2.0 新增，知识中枢）
+
+> v4.2 企业文档中枢落地：空间级全文检索 + 权限感知过滤。
+> 遵守平台权限边界——检索前按空间成员权限矩阵过滤，用户无 read 权限的文档不进入结果集。
+
+### 39.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.khub.index` | 构建知识库索引 | 注入文档集建本地倒排索引 |
+| `kdoc.khub.search` | 权限感知全文检索 | 先鉴权后检索，无权限剔除 |
+| `kdoc.khub.permission` | 注入空间权限矩阵 | doc_id→级别（1 read/2 edit/3 admin） |
+| `kdoc.khub.status` | 知识中枢状态 | 文档数/词项/jieba 状态 |
+
+### 39.2 检索流程
+
+1. 分词：中文走 jieba（可选，未装退化为字符级），英文/数字按词边界切分
+2. 倒排取候选：token → 文档集
+3. 权限过滤：依据 `kdoc.khub.permission` 注入的矩阵，剔除无 read 权限文档
+4. 打分排序：命中词频排序，返回 snippet
+
+### 39.3 安全约束
+
+- 权限边界强制：无矩阵登记的空间文档视为无权限，绝不进入结果
+- 硬件自适应：索引构建按 batch_chunk 分块，不卡顿
+- 云端降级：无 backend 时接受外部文档集建本地索引
+
+---
+
+## 40. 政企合规中心（v4.2.0 新增，差异化主战场）
+
+> 把散点合规检查聚合为政企可采购的能力叙事：密级标注 + 全量扫描 + 数据不出域。
+
+### 40.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.compliance.label` | 密级标注落库 | 公开/内部/秘密/机密 |
+| `kdoc.compliance.get` | 查询密级 | 返回已标注级别 |
+| `kdoc.compliance.scan` | 全量扫描报告 | 敏感词+泄露+密级建议聚合 |
+| `kdoc.compliance.declare` | 数据不出域声明 | 本地 OCR 强制、云端仅元数据 |
+| `kdoc.compliance.status` | 合规中心状态 | 级别/引擎清单 |
+
+### 40.2 能力
+
+- 密级标注：随文档元数据落库（SQLite），检索/分享前可被权限层引用
+- 全量扫描：复用 v3.4 合规检查（敏感词 + 手机号/身份证/银行卡号/邮箱 Luhn 校验 + 密级建议），聚合为政企报告
+- 数据不出域：本地 OCR 强制（Tesseract / wps_ocr 均为本地引擎），云端仅同步元数据
+
+---
+
+## 41. 主题一键生成（v4.2.0 新增，WPS AI 对齐）
+
+> 对标腾讯文档·AI 生成：输入主题与大纲要点，本地降级引擎生成初稿，WPS AI 真源开放后无缝切换。
+
+### 41.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.topic.generate` | 主题生成 | 大纲→智能文档/PPT/表格初稿 |
+| `kdoc.topic.status` | 适配层状态 | 当前生效 AI 源（local/wps_ai） |
+
+### 41.2 实现原理
+
+- 适配层：本地生成（零密钥）优先；WPS AI 真源可用时切换，接口统一
+- 三类产出：智能文档（Markdown 初稿）/ PPT（幻灯片大纲）/ 表格（字段+样例行）
+- 本地降级：模板驱动 + 分段生成，硬件自适应不卡顿
+
+---
+
+## 42. 跨品类对比与时间线（v4.2.0 新增，差异化）
+
+> 版本历史轮询→who/when/what 时间线；表格/多维表格品类新增单元格级 diff 视图（跨品类对比是腾讯文档没有的）。
+
+### 42.1 工具列表
+
+| 工具 | 说明 | 操作 |
+|------|------|------|
+| `kdoc.compare.timeline` | 版本时间线 | 逐版本 difflib 生成变更摘要 |
+| `kdoc.compare.cells` | 单元格级 diff | 表格/多维表格跨版本差异 |
+| `kdoc.compare.status` | 对比状态 | 品类/硬件信息 |
+
+### 42.2 实现原理
+
+- 时间线：轮询版本历史（云端）或接受快照列表（本地），逐版本 difflib 生成「谁-何时-改了什么」
+- 单元格 diff：按 (行,列) 比对，标注新增/修改/删除单元格（表格品类差异化能力）
+
+---
+
+## 43. OCR 收敛（v4.2.0 优化，生态专职工具）
+
+> 删除重复维护的本地 OCR 预处理代码，收敛为唯一入口，桥接生态专职工具。
+
+### 43.1 收敛说明
+
+- 删除 `engine/ocr/local_ocr.py` 重复预处理面，公式/教育场景统一 import `engine.local.ocr`
+- 唯一入口 `engine/local/ocr.py`：优先桥接 wps-office-suite OCR（subprocess JSON 契约 {image_path, lang}）
+- 未装 wps 保留 Tesseract 最小兜底；两路均本地引擎，数据不出域
+- MCP `kdoc.local.ocr.extract` 与 `kdoc.ocr.formula`/`kdoc.ocr.education` 均经此入口
+
+### 43.2 安全约束
+
+- 子进程超时自动关闭，不残留
+- 绝不调用任何外部 OCR API（数据不出域）
+
+---
+
+*最后更新：2026-09-19 | v4.2.0*
