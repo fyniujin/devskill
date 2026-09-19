@@ -197,3 +197,36 @@ mcp_server:
   # auto = LLM 不可用时自动降级为抽取式
   # extractive = 强制抽取式（不调用 LLM）
   degradation: auto
+
+# ═══════ 事实核查层（V1.8 新增） ═══════
+fact_check:
+  # 是否启用事实核查（配合 --synthesize-pro 使用）
+  enabled: true
+  
+  # 无源论断处理方式：remove=默认剔除；keep=保留但标注 [无源]
+  remove_unsupported: true
+  
+  # 支撑度阈值（余弦相似度，0-1）
+  sufficient_threshold: 0.55     # ≥此值 = 充分支撑
+  partial_threshold: 0.25        # ≥此值 = 部分支撑，<此值 = 无源
+
+# ═══════ 垂直搜索配置（V1.8 新增） ═══════
+vertical_search:
+  # 学术搜索配置
+  academic:
+    # Semanticscholar API 地址（留空使用官方公开接口）
+    semanticscholar_url: "https://api.semanticscholar.org/graph/v1/paper/search"
+    # API 超时（秒）
+    api_timeout: 15
+    # 降级配置：Semanticscholar 不可用时
+    fallback_suffix: "论文"   # 给查询添加的学术关键词后缀
+  
+  # 新闻搜索配置
+  news:
+    # 时间过滤：day/week/month
+    time_filter: day
+  
+  # 图片搜索配置
+  image:
+    # 缩略图最大返回数
+    max_thumbnails: 10
