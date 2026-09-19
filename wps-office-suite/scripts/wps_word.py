@@ -61,10 +61,6 @@ def main():
 
     p = sub.add_parser("engine-info", help="引擎信息")
 
-    p = sub.add_parser("review", help="合同条款审查")
-    p.add_argument("--file", required=True, help="合同 .docx 文件路径")
-    p.add_argument("--output", default="", help="输出审查版 .docx 路径")
-
     p = sub.add_parser("long-document", help="长文档排版（目录/页眉页脚/编号/图表索引/格式统一）")
     p.add_argument("--file", required=True, help="Word 文件路径")
     p.add_argument("--action", default="analyze",
@@ -156,8 +152,6 @@ def main():
         r = call_worker("info_word", {"filepath": args.file})
     elif args.command == "engine-info":
         r = call_worker("engine_info", {})
-    elif args.command == "review":
-        r = call_worker("contract_review", {"file": args.file, "output": args.output})
     elif args.command == "long-doc":
         r = call_worker("long_document", {
             "file": args.file,
