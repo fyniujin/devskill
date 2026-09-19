@@ -114,13 +114,19 @@ def _build_visualization_data(state):
     }
     status_text = status_map.get(overall_status, overall_status)
 
-    total_tokens = 0
-    total_cost = 0.0
+    actual_tokens = 0
+    actual_cost = 0.0
+    est_tokens = 0
+    est_cost = 0.0
     for n in nodes.values():
         cost = n.get('cost_data', {})
         if cost:
-            total_tokens += cost.get('tokens', 0)
-            total_cost += cost.get('cost_rmb', 0)
+            if cost.get('est', False):
+                est_tokens += cost.get('tokens', 0)
+                est_cost += cost.get('cost_rmb', 0)
+            else:
+                actual_tokens += cost.get('tokens', 0)
+                actual_cost += cost.get('cost_rmb', 0)
 
     return {
         'pipeline_name': pipeline_name, 'pipeline_id': pipeline_id,
@@ -129,7 +135,14 @@ def _build_visualization_data(state):
         'skipped': skipped, 'pending': pending, 'total_retries': total_retries,
         'total_duration': total_duration, 'nodes': nodes,
         'all_start': all_start, 'all_end': all_end, 'total_seconds': total_seconds,
-        'total_tokens': total_tokens, 'total_cost': total_cost,
+        'total_tokens': actual_tokens + est_tokens,
+        'total_cost': round(actual_cost + est_cost, 6),
+        'actual_tokens': actual_tokens,
+        'actual_cost_rmb': round(actual_cost, 6),
+        'est_tokens': est_tokens,
+        'est_cost_rmb': round(est_cost, 6),
+        'has_actual': actual_tokens > 0,
+        'has_est': est_tokens > 0,
     }
 
 
@@ -213,8 +226,20 @@ def _generate_md_report(data, state_path, output_path):
         lines.append("")
         lines.append("| 项目 | 值 |")
         lines.append("|------|------|")
-        lines.append(f"| 总 Token 消耗 | {data['total_tokens']:,} |")
-        lines.append(f"| 总费用（¥） | {data['total_cost']:.4f} |")
+        if data.get('has_actual'):
+            lines.append(f"| 实测 Token 消耗 | {data['actual_tokens']:,} |")
+            lines.append(f"| 实测费用（¥） | {data['actual_cost_rmb']:.4f} |")
+        if data.get('has_est'):
+            lines.append(f"| 估算 Token 消耗 | {data['est_tokens']:,} |")
+            lines.append(f"| 估算费用（¥） | {data['est_cost_rmb']:.4f} |")
+        lines.append(f"| **合计 Token** | **{data['total_tokens']:,}** |")
+        lines.append(f"| **合计费用（¥）** | **{data['total_cost']:.4f}** |")
+        if data.get('has_actual') and data.get('has_est'):
+            lines.append(f"| 数据来源 | 实测 + 估算混合 |")
+        elif data.get('has_actual'):
+            lines.append(f"| 数据来源 | cn-llm-router 实测 |")
+        else:
+            lines.append(f"| 数据来源 | 估算（未安装 cn-llm-router） |")
         lines.append("")
 
         cost_rows = []
@@ -224,12 +249,13 @@ def _generate_md_report(data, state_path, output_path):
                 tokens = cost.get('tokens', 0)
                 cost_val = cost.get('cost_rmb', 0)
                 model = cost.get('model', '-')
-                cost_rows.append(f"| [{aid}] | {tokens:,} | ¥{cost_val:.4f} | {model} |")
+                tag = '🔵实测' if not cost.get('est', False) else '⚪估算'
+                cost_rows.append(f"| [{aid}] | {tokens:,} | ¥{cost_val:.4f} | {model} | {tag} |")
         if cost_rows:
             lines.append("### 节点成本分布")
             lines.append("")
-            lines.append("| 节点 | Token | 费用（¥） | 模型 |")
-            lines.append("|------|-------|----------|------|")
+            lines.append("| 节点 | Token | 费用（¥） | 模型 | 来源 |")
+            lines.append("|------|-------|----------|------|------|")
             lines.extend(cost_rows)
             lines.append("")
 
@@ -265,6 +291,10 @@ def _generate_md_report(data, state_path, output_path):
         if cost:
             lines.append(f"| Token 消耗 | {cost.get('tokens', 0):,} |")
             lines.append(f"| 费用（¥） | {cost.get('cost_rmb', 0):.4f} |")
+            if cost.get('est', False):
+                lines.append(f"| 成本来源 | ⚪ 估算 |")
+            else:
+                lines.append(f"| 成本来源 | 🔵 实测 |")
 
         lines.append("")
 
