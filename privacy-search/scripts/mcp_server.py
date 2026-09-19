@@ -207,8 +207,9 @@ def _get_tools_schema(config: Dict[str, Any]) -> List[Dict[str, Any]]:
             "name": "synthesize",
             "description": (
                 "Perplexity 式答案合成。抓取搜索结果正文，分块编号后"
-                "调用 LLM 生成带 citation 的答案。每个论断都能追溯到具体来源。"
-                "无 API Key 时自动降级为抽取式摘要。"
+                "调用 LLM 生成带 citation 的答案。V1.8 新增事实核查层："
+                "逐论断回链原文做相似度比对，标注支撑度三级（充分/部分/无源），"
+                "无源论断默认剔除。无 API Key 时自动降级为抽取式摘要。"
             ),
             "inputSchema": {
                 "type": "object",
