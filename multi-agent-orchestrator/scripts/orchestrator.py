@@ -576,6 +576,42 @@ def cmd_snapshot(args):
         print(f"未知 snapshot 子命令：{sub}")
 
 
+def cmd_dashboard(args):
+    """启动 Web 控制台（只读服务 + ECharts 甘特图）"""
+    import web_dashboard
+    state_dir = args[0] if args else '.'
+    port = int(args[1]) if len(args) > 1 else web_dashboard.DASHBOARD_PORT
+    print(f"🖥️  Web 控制台启动中...")
+    print(f"   地址：http://127.0.0.1:{port}")
+    print(f"   状态目录：{state_dir}")
+    print(f"   按 Ctrl+C 停止")
+    web_dashboard.start_dashboard(state_dir, port)
+
+
+def cmd_mcp(args):
+    """启动 MCP Server（stdio JSON-RPC）"""
+    import mcp_server
+    mcp_server.main()
+
+
+def cmd_cost(args):
+    """成本桥接：回填实测成本（cn-llm-router 可用时）"""
+    import cost_bridge
+    if not args:
+        print("用法：python orchestrator.py cost <state_dir> [--pipeline <name>] [--check] [--summary]")
+        print("  --check    仅检测 cn-llm-router 是否可用")
+        print("  --summary  输出单个状态文件的成本汇总")
+        sys.exit(1)
+
+    state_dir = args[0]
+    # 去掉前两个位置参数
+    remaining_args = args[1:]
+
+    import sys as _sys
+    _sys.argv = ['cost_bridge.py', state_dir] + remaining_args
+    cost_bridge.main()
+
+
 def cmd_template(args):
     """预置流水线模板库：list/show/check/render"""
     import template_lib
@@ -650,6 +686,9 @@ if __name__ == '__main__':
         'snapshot': cmd_snapshot,
         'template': cmd_template,
         'recover': cmd_recover,
+        'dashboard': cmd_dashboard,
+        'mcp': cmd_mcp,
+        'cost': cmd_cost,
         # 旧命令别名（向后兼容）
         'retry': lambda a: cmd_recover(['retry'] + a),
         'fallback': lambda a: cmd_recover(['fallback'] + a),
