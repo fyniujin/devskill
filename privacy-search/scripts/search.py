@@ -1293,8 +1293,12 @@ def main():
         help="对搜索结果生成摘要（V1.5 新增，需配置 llm_summary.api_key）",
     )
     parser.add_argument(
-        "--synthesize-pro", action="store_true",
-        help="Perplexity 式答案合成（V1.6 新增，抓取正文+带 citation 生成答案）",
+        "--vertical", choices=["news", "realtime", "academic", "image"],
+        help="垂直搜索模式（V1.8 新增）：news=新闻, realtime=实时, academic=学术, image=图片",
+    )
+    parser.add_argument(
+        "--fact-check", action="store_true",
+        help="合成答案事实核查（V1.8 新增，逐论断回链原文做相似度比对）",
     )
     parser.add_argument(
         "--selftest-schedule", choices=["run", "status"],
@@ -1399,16 +1403,64 @@ def main():
 
     # ---- 执行搜索 ----
 
+    # V1.8 新增：解析高级检索语法
+    try:
+        from query_parser import parse_query, get_unsupported_syntax, filter_results_locally
+    except ImportError:
+        from .query_parser import parse_query, get_unsupported_syntax, filter_results_locally
+
+    clean_query, syntax_filter = parse_query(args.query)
+    if syntax_filter.has_filters:
+        # 提示不支持的语法
+        engines_hint = [e.strip() for e in (args.engines or "").split(",")] if args.engines else None
+        if engines_hint:
+            for eng in engines_hint:
+                unsupported = get_unsupported_syntax(eng, syntax_filter)
+                if unsupported:
+                    print(f"提示: {eng} 不支持 {','.join(unsupported)}，将本地过滤")
+
+    search_query = clean_query if clean_query else args.query
+
+    # V1.8 新增：垂直搜索模式
+    if args.vertical:
+        from vertical_search import run_vertical_search, format_vertical_results, get_vertical_config
+        vcfg = get_vertical_config(args.vertical)
+        print(f"\n{'='*60}")
+        print(f"{vcfg['display_name'] if vcfg else args.vertical} 搜索: {search_query}")
+        print(f"{'='*60}")
+        results = run_vertical_search(
+            query=search_query,
+            vertical_type=args.vertical,
+            config=config,
+            num=args.num,
+            privacy_mode=args.privacy,
+        )
+        # 应用本地过滤
+        if syntax_filter.has_filters:
+            results, extra_notices = filter_results_locally(results, syntax_filter)
+            for n in extra_notices:
+                print(f"提示: {n}")
+        print(format_vertical_results(results, args.vertical, search_query))
+        for notice in orchestrator.notices:
+            print(f"提示: {notice}")
+        return
+
     engines = [e.strip() for e in args.engines.split(",")] if args.engines else None
 
     results = asyncio.run(orchestrator.search(
-        query=args.query,
+        query=search_query,
         engines=engines,
         num=args.num,
         privacy_mode=args.privacy,
         use_cache=not args.no_cache,
         verbose=args.verbose,
     ))
+
+    # V1.8 新增：高级语法本地过滤
+    if syntax_filter.has_filters:
+        results, extra_notices = filter_results_locally(results, syntax_filter)
+        for n in extra_notices:
+            orchestrator._notices.append(n)
 
     for notice in orchestrator.notices:
         print(f"提示: {notice}")
@@ -1490,7 +1542,7 @@ def main():
         try:
             from synthesiser import synthesize_pro
             print("\n正在抓取正文并生成答案（Pro 模式）...")
-            answer = synthesize_pro(args.query, results, config)
+            answer = synthesize_pro(search_query, results, config)
             print("\n" + "=" * 60)
             print("答案（Pro 模式）:")
             print(answer)
