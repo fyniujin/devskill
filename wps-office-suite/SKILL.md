@@ -2,8 +2,8 @@
 name: wps-office-suite
 displayName: WPS Office 全家桶
 slug: wps-office-suite
-description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v5.1新增：kingdoc云端桥接（白名单探测+配置预检+subprocess上传+差异检查）、条件格式/数据验证跨引擎IO（JSON中间格式保真往返）、会议纪要三段式要素化（待办清单+决策记录+风险异议）+说话人标注（MFCC聚类）
-version: 5.1.0
+description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v5.1新增：kingdoc云端桥接（白名单探测+配置预检+subprocess上传+差异检查）、条件格式/数据验证跨引擎IO（JSON中间格式保真往返）、会议纪要三段式要素化（待办清单+决策记录+风险异议）+说话人标注（MFCC聚类）；v5.2新增：公文一键排版（GB/T 9704 规则库约束+结构识别套版+红头预留位+联合行文）、批量水印与敏感信息打码（身份证/手机号/银行卡/邮箱双轨识别+黑色矩形覆盖+打码清单）、跨文档知识检索与问答（本地TF-IDF零依赖+跳转+可选zwjh记忆桥接）；删除：与contract-review重复的轻量合同审查模块，改为文档互链引导
+version: 5.2.0
 category: 办公协作与生产力工具
 platforms:
   - windows
@@ -42,7 +42,7 @@ tags:
   建议反馈邮箱: njskills@agent.qq.com
 ---
 
-# WPS Office 全家桶 v5.0.0 ✅
+# WPS Office 全家桶 v5.2.0 ✅
 
 > 🏗️ **四引擎智能识别**：自动检测用户电脑已安装的软件，按 WPS → MS Office → LibreOffice → 纯Python 顺序选择最合适的引擎
 > ✨ **纯Python模式增强 v4.8**：排序、筛选、图表、公式、统计、条件格式、数据验证、合并单元格、命名区域 — 跨平台全部支持
@@ -74,6 +74,10 @@ tags:
 > ☁️ **kingdoc 桥接 v5.1**：白名单探测+配置预检+subprocess 上传金山文档，difflib 差异检查
 > 🔄 **跨引擎 IO v5.1**：条件格式/数据验证 JSON 中间格式，WPS↔纯 Python 保真往返
 > 📋 **纪要要素化 v5.1**：三段式结构（待办清单+决策记录+风险异议）+ 说话人标注
+> 📑 **公文一键排版 v5.2**：GB/T 9704 规则库约束 + 结构识别套版，支持红头预留位与联合行文，处理前自动备份
+> 🔒 **批量水印与打码 v5.2**：文字/图片水印（平铺/对角线，批量目录）；敏感信息双轨识别（身份证/手机号/银行卡/邮箱）+ 黑色矩形覆盖 + 打码清单
+> 🔍 **跨文档检索 v5.2**：本地 TF-IDF 零依赖索引，跨文档找内容问答，命中返回文件+段落+跳转，可选 embedding 与 zwjh 记忆桥接
+> 🔗 **合同审查改互链 v5.2**：裁撤重复合同审查模块，完整审查请安装 contract-review（互链引导，无代码依赖）
 > 📧 **建议反馈**：有更好建议？邮箱：[njskills@agent.qq.com](mailto:njskills@agent.qq.com)
 
 ---
@@ -667,7 +671,6 @@ python scripts/wps_word.py create --title "report" --body "正文内容"
 python scripts/wps_word.py edit --file "report.docx" --text "新增内容"
 python scripts/wps_word.py format --file "report.docx" --font "微软雅黑" --size 14 --align center --bold --first-indent 0.74
 python scripts/wps_word.py export --file "report.docx" --format pdf
-python scripts/wps_word.py review --file "合同.docx" --output "合同_审查版.docx"
 python scripts/wps_word.py info --file "report.docx"
 python scripts/wps_word.py engine-info
 python scripts/wps_word.py md-convert --file "README.md" --format docx --output "文档.docx"
@@ -715,7 +718,7 @@ python scripts/wps_ppt.py engine-info
 |------|------|
 | Word→PPT | `python scripts/wps_ppt.py docx-to-ppt --input report.docx --output ppt.pptx` |
 | NL分析 | `python scripts/wps_excel.py nl-analyze --file data.xlsx --query "按月份统计销售额画趋势图"` |
-| 合同审查 | `python scripts/wps_word.py review --file contract.docx --output 审查版.docx` |
+| 合同审查 | 已裁撤（见下方说明）；完整审查请安装 [contract-review](https://skillhub.cn/skills/contract-review) 技能 |
 | 发票OCR | `python scripts/wps_excel.py invoice --input 发票.pdf --output 入账台账.xlsx` |
 | 公式解释器 | `python scripts/wps_excel.py formula-explain --formula "=SUM(A1:A10)"` |
 | MD→Word/PPT | `python scripts/wps_word.py md-convert --file README.md --format docx` |
@@ -973,6 +976,14 @@ python scripts/wps_update.py --force          # 强制检查更新
 python scripts/wps_toc.py insert --file "report.docx"  # 插入目录
 python scripts/format_converter.py batch --input-dir "D:\Reports" --input-format docx --output-format pdf  # 批量转换
 python templates/generate_templates.py --dir ./output  # 生成模板
+
+# --- v5.2 新增 ---
+python scripts/gongwen.py layout --file 公文.docx --redhead --joint          # 公文一键排版（红头预留位+联合行文）
+python scripts/watermark.py add --file 报告.docx --text 机密 --diagonal      # 文字水印（对角线）
+python scripts/watermark.py add --dir ./Docs --image logo.png --tile         # 批量图片水印（平铺）
+python scripts/redact.py run --file 客户.docx --manifest 打码清单.json       # 敏感信息打码+清单
+python scripts/doc_search.py search --dir ./资料库 --query "质保期两年" --open # 跨文档检索并打开
+python scripts/doc_search.py search --dir ./资料库 --query "..." --deposit    # 检索命中沉淀为长期记忆（桥接 zwjh）
 ```
 
 ---
@@ -1015,6 +1026,7 @@ python templates/generate_templates.py --dir ./output  # 生成模板
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v5.2.0 | 2026-09-19 | 增加：公文一键排版 gongwen.py + references/gongwen_rules.yaml（GB/T 9704 党政机关公文格式约束库，结构识别套版，支持红头预留位与联合行文，处理前自动备份原文件）；增加：批量水印 watermark.py（文字/图片水印，平铺与对角线，docx/pptx/图片批量目录处理）；增加：敏感信息打码 redact.py（正则+词典双轨识别身份证/手机号/银行卡/邮箱，黑色矩形覆盖，输出打码清单供人工复核，NER 可选增强）；增加：跨文档知识检索 doc_search.py（本地 TF-IDF char/bigram 自研零依赖，跨文档找内容问答，命中返回文件+段落+跳转，embedding 可选，zwjh 记忆桥接未装则跳过）；删除：与 contract-review 重复的轻量合同审查模块 wps_contract_review.py 及其在 wps_ai/wps_word/wps_worker 的入口命令，SKILL.md 改为文本互链引导（无代码依赖） |
 | v5.1.0 | 2026-09-08 | 增加：kingdoc 云端桥接 kingdoc_bridge.py（白名单探测+配置预检+subprocess JSON 契约上传+ difflib 差异检查，未安装/未配置隐藏入口+可选装提示）；增加：条件格式跨引擎 IO conditional_format_io.py（色阶/数据条/公式条件→JSON 中间格式，跨引擎保真往返 WPS↔纯Python）；增加：数据验证跨引擎 IO validation_io.py（下拉/数值区间/日期→JSON 中间格式，跨引擎保真往返）；优化：meeting_minutes.py 升级为 v5.1 三段式要素化纪要（待办清单+决策记录+风险异议，每节独立页眉）；增加：说话人标注 SpeakerDiarization（MFCC 聚类或显式报名，独立 diarize 子命令）；增加：--diarize/--no-diarize 参数控制说话人标注；增加：--num-speakers 参数指定说话人数 |
 | v5.0.0 | 2026-08-16 | 增加：定时任务注册管理 schedule_register.py（schtasks/crontab 双平台，4个预定义任务，注册前展示命令确认，list/cancel/enable管理）；增加：目录轮询监听 watch.py（轮询间隔3秒无内核依赖，YAML规则表匹配，>50MB自动分片并行处理+合并输出，LibreOffice并发池控制）；增加：使用统计与稳定性中心 usage_stats.py（SQLite埋点：操作数/耗时/引擎命中/失败降级/重试成功率，stats日/周报表+引擎健康度，全局engine-info合并3脚本，引擎偏好优先级配置）；增加：COM三步自愈 com_health.py self-heal子命令（regsvr32重注册→WPS修复安装[用户确认]→手动指引，每步记录SQLite日志）；增加：对话式数据查询 nl2sql_engine.py（意图解析器+查询计划生成器+pandas执行器+对话上下文，Top20关键词模板覆盖sum/avg/max/min/count/filter/groupby/sort/topn/yoy/mom等，无LLM降级）；增加：multi-agent编排引擎桥接 pipeline_bridge.py（白名单探测multi-agent-orchestrator，命中注册5条WPS流水线模板，未装降级watch.py本地串行，同一套规则表两种执行路径） |
 | v4.9.0 | 2026-08-08 | 增加：llm_bridge 统一模型层桥接（白名单探测 cn-llm-router，零配置多模型调用，JSON 契约 text/model/cost）；增加：wps ai 续写/改写/扩写 3 个新 AI 动作（经 llm_bridge 路由，未装 cn-llm-router 回落自配 API + 安装提示）；增加：模板市场 template_manager.py（50+ 内置模板覆盖公文/合同/简历/标书/报告/会议，支持用户沉淀 user_templates + 导出/导入分享包）；增加：NL2Formula 多轮澄清 clarify.py（歧义检测 3 类规则 + 槽位填充 + 反向验证回路，公式生成更精准）；优化：document_translator.py 优先走 llm_bridge 后回落直接 API；优化：report_generator.py 新增 --polish 参数（经 llm_bridge 润色）；优化：meeting_minutes.py 摘要引擎优先走 llm_bridge 后回落本地规则 |
