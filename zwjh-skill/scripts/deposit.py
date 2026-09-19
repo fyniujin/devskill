@@ -48,19 +48,19 @@ def _day_of(day: str | None) -> str:
 
 
 def deposit_text(text: str, source: str = "conversation", day: str | None = None,
-                 link_graph: bool = True) -> dict:
+                 link_graph: bool = True, namespace: str = "public") -> dict:
     """
     沉淀一段文本为一个（或零个，若完全重复）记忆。
 
-    返回：{status, memory_id, dedup, near_dup, relations, facts}
+    Returns: {status, memory_id, dedup, near_dup, relations, facts, namespace, error}
     """
     text = (text or "").strip()
     if len(text) < 4:
-        return {"status": "skip", "reason": "too_short"}
+        return {"status": "skip", "reason": "too_short", "namespace": namespace}
 
     toks = embeddings.tokenize(text)
     if not toks:
-        return {"status": "skip", "reason": "no_tokens"}
+        return {"status": "skip", "reason": "no_tokens", "namespace": namespace}
     h = embeddings.norm_hash(toks)
     day = _day_of(day)
 
@@ -68,16 +68,19 @@ def deposit_text(text: str, source: str = "conversation", day: str | None = None
     exist = store.find_by_hash(h)
     if exist:
         store.update_access(exist["id"])
-        return {"status": "dedup", "memory_id": exist["id"]}
+        return {"status": "dedup", "memory_id": exist["id"], "namespace": namespace}
 
     # 2) 近似重复（Jaccard）
     near = _find_near_dup(set(toks))
     if near:
         store.update_access(near["id"])
-        return {"status": "near_dup", "memory_id": near["id"]}
+        return {"status": "near_dup", "memory_id": near["id"], "namespace": namespace}
 
     # 3) 新增
-    mid = store.add_memory(day, source, text, h, toks)
+    try:
+        mid = store.add_memory(day, source, text, h, toks, namespace=namespace)
+    except Exception as e:
+        return {"status": "error", "reason": str(e), "namespace": namespace}
     relations, facts = [], []
     if link_graph:
         relations = graph.auto_relate_from_text(text)
@@ -87,6 +90,7 @@ def deposit_text(text: str, source: str = "conversation", day: str | None = None
         "memory_id": mid,
         "relations": relations,
         "facts": facts,
+        "namespace": namespace,
     }
 
 
