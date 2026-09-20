@@ -2,13 +2,17 @@
 slug: wecom-voice-agent
 displayName: 企业微信语音消息 Agent
 name: wecom-voice-agent
-version: 2.7.0
+version: 2.8.0
 description: >
   企业微信语音消息 AI Agent 技能，自动处理语音消息的意图识别、多轮对话与任务执行。
   支持被动接收语音消息、主动外呼、来电接线、通话纪要、合规录音、外呼调度等完整电话场景。
   v2.7 新增：记忆桥接子模块 memory_bridge.py（zwjh 长期记忆 MCP 桥接，来电拉取历史+通话回写+降级方案）；
   跟进待办闭环 todo_followup.py（纪要抽取待办→自动登记回拨→到期提醒/二次外呼→查询意图可问答）；
   情感到工单直连 emotion_ticket_bridge.py（强负面→直连 ticket_manager 建单+升级+主管通知，无需独立触发）。
+  v2.8 新增：TTS 多音色与情感 voice_policy.py（voices.yaml 三套预设+情感语速语调叠加限幅+SSML 停顿加重+Edge/火山双链路降级）；
+  语音克隆外呼 voice_clone.py（豆包/MiniMax 可选接入，授权留痕+合规红线+仅外呼场景，未配置时完全隐藏）；
+  通话摘要质检 summary_qa.py（决策/待办/时间三要素加权评分，≥80 分交付，5% 人工抽检+纠错回流驱动 Prompt 迭代）；
+  运营报表 report_generator.py（接通率/时长分布/意图分布/外呼四级漏斗，周一 HTML 周报单文件导出）。
   当用户向企业微信机器人发送语音消息时触发。核心价值：零 API Key 依赖、硬件自适应、轻量本地处理、全流程合规。
 author: njskills
 category: 办公协作
@@ -57,8 +61,10 @@ allowed-tools:
 | 目标主机 | 用途 | 触发条件 | 传输数据 |
 |---------|------|---------|---------|
 | `wttr.in` | 天气查询 API | 用户主动发起天气查询请求 | 城市名称（不含用户身份信息） |
+| `openspeech.bytedance.com` | 火山引擎 TTS 语音合成（备用链路） | 仅当配置 `VOLC_TTS_KEY` 且 Edge TTS 主链路不可用 | 待合成文本（通话播报内容） |
+| `api.coze.cn` / `api.minimax.chat` | 语音克隆 API（豆包 / MiniMax） | 仅当配置 `CLONE_PROVIDER` + `CLONE_API_KEY` 主动创建克隆音色 | 音色名称与授权信息（不含通话内容） |
 
-**除上述披露外，本技能不会向任何其他外部主机发起连接**。所有外部连接均为只读 GET 请求，不上传任何用户数据。
+**除上述披露外，本技能不会向任何其他外部主机发起连接**。天气查询为只读 GET 请求；火山 TTS 与语音克隆均为可选增强能力，**未配置对应 Key 时静默跳过、绝不发起连接**，全部功能降级可用。所有外部连接均不上传用户身份信息。
 
 ### 安全风险项
 
@@ -123,11 +129,33 @@ python scripts/session_manager.py create --userid test
 python scripts/session_manager.py stats
 ```
 
+### v2.8 运营工具速用
+
+```bash
+cd D:/skill/wecom-voice-agent
+
+# 查看全部可用音色（3 套预设，来自 config/voices.yaml）
+python scripts/voice_policy.py list
+
+# 按场景+情感预览合成参数与 SSML（不发起合成）
+python scripts/voice_policy.py synth --scene outbound --emotion angry --confidence 0.9 --text "您好，通知您明天下午3点参加评审。" --ssml
+
+# 查看语音克隆模块状态（未配置 CLONE_PROVIDER/CLONE_API_KEY 时完全隐藏）
+python scripts/voice_clone.py status
+
+# 评审一段通话摘要（三要素评分，≥80 分达标）
+python scripts/summary_qa.py review --text "会议决定：下周三18点前由张三负责提交修订方案。" --id call_001
+
+# 查看最近 7 天运营摘要 / 生成上周 HTML 周报
+python scripts/report_generator.py summary --period week
+python scripts/report_generator.py weekly
+```
+
 > ✅ **无需安装任何 Python 包**，所有脚本仅使用 Python 标准库（`sys`、`os`、`json` 等）
 
 ---
 
-## 二、架构（v2.6）
+## 二、架构（v2.8）
 
 ```
 wecom-voice-agent/
@@ -135,7 +163,8 @@ wecom-voice-agent/
 ├── config/
 │   ├── intents.yaml          # v2.6 声明式意图注册表（20+ 意图）
 │   ├── custom_intents.yaml   # v2.6 自定义意图插件配置（企业 API 映射）
-│   └── menu.yaml             # v2.6 IVR 多级菜单配置
+│   ├── menu.yaml             # v2.6 IVR 多级菜单配置
+│   └── voices.yaml           # v2.8 TTS 音色库（3 套预设+情感调整+SSML+双链路）
 ├── references/
 │   ├── wecom_bot_api.md      # 企业微信机器人 API 参考
 │   └── step_by_step_setup.md # 分步部署指南
@@ -149,6 +178,10 @@ wecom-voice-agent/
 │   ├── memory_bridge.py     # v2.7 zwjh 长期记忆桥接（MCP stdio JSON-RPC）
 │   ├── todo_followup.py     # v2.7 跟进待办闭环（纪要→回拨→到期→二次外呼）
 │   ├── emotion_ticket_bridge.py # v2.7 情感到工单直连（强负面→建单+升级+通知）
+│   ├── voice_policy.py      # v2.8 TTS 多音色与情感（voices.yaml+SSML+双链路降级）
+│   ├── voice_clone.py       # v2.8 语音克隆外呼（授权留痕+合规红线+未配置完全隐藏）
+│   ├── summary_qa.py        # v2.8 通话摘要质检（三要素评分+5%人工抽检+纠错回流）
+│   ├── report_generator.py  # v2.8 运营报表（接通率/漏斗/意图分布+周一HTML周报）
 │   ├── voice_simulator.py    # 语音消息模拟器（本地调试）
 │   ├── detect_hardware.py    # 硬件检测
 │   ├── state_machine.py      # 多轮对话状态机
@@ -172,6 +205,8 @@ wecom-voice-agent/
 **核心数据流**：`voice.content → intent_registry（声明式匹配+置信度评分）→ entity_extractor（实体抽取+消歧）→ handler → 任务执行`，同时旁路写入 `session_unified`（统一会话）与 `call_record_subsystem`（通话记录）。
 
 **v2.6 核心理念**：意图配置化（YAML 声明 + 置信度分级 + 多级澄清）、会话统一化（双向合并 + 状态共享）、IVR 配置化（层级菜单 + 双模式选择）、实体智能化（规则抽取 + 上下文消歧 + 复述确认）。
+
+**v2.8 核心理念**：播报情感化（场景预设 + 情感参数叠加限幅 + SSML 停顿加重）、克隆合规化（授权留痕 + 书面授权红线 + 仅外呼场景 + 未配置完全隐藏）、摘要质量闭环（三要素评分 + 达标线 + 人工抽检 + 纠错回流驱动 Prompt 迭代）、运营可观测（接通率 + 四级漏斗 + 周一 HTML 周报）。
 
 | 常见坑 | 正确做法 |
 |-------|---------|
@@ -1163,6 +1198,11 @@ call_timeout: 30   # 通话超时时间（秒）
 max_concurrent_calls: 3  # 最大并发外呼数
 confidence_threshold: 0.85  # ASR 置信度二次确认阈值
 records_dir: ~/.wecom_voice/records  # 录音存储路径
+# v2.8 新增
+voices_config: config/voices.yaml  # TTS 音色库（3 套预设+情感调整+SSML，修改后重启生效）
+volc_tts_key: ""   # 火山引擎 TTS Key（可选；留空则仅用 Edge 免费主链路，缺失自动降级）
+clone_provider: "" # 语音克隆服务商 doubao / minimax（可选；留空则克隆功能完全隐藏）
+clone_api_key: ""  # 语音克隆 API Key（可选，配合 clone_provider 使用）
 ```
 
 ---
@@ -1197,6 +1237,7 @@ records_dir: ~/.wecom_voice/records  # 录音存储路径
 
 ## 更新日志
 
+| v2.8.0 | 2026-09-20 | 增加：TTS 多音色与情感 voice_policy.py（config/voices.yaml 三套预设音色覆盖正式通知/客服安抚/营销外呼，情感→语速语调动态叠加并自动限幅 ±50%/±50Hz，SSML 句间停顿+数字日期自动加重，Edge TTS 主链路→火山 TTS 备用链路→文字降级三级策略）；增加：语音克隆外呼 voice_clone.py（豆包/MiniMax 可选接入，内置授权确认文本+SQLite 授权留痕+样本 SHA256 防篡改，合规红线仅限本人或书面授权音色，克隆音色仅允许主动外呼场景，未配置 Key 时模块完全隐藏不报错）；增加：通话摘要质检 summary_qa.py（决策 40%/待办 35%/时间 25% 三要素加权评分，≥80 分才交付，达标摘要 5% 随机人工抽检，纠错记录回流驱动摘要 Prompt 迭代）；增加：运营报表 report_generator.py（外呼接通率/时长四档分布/意图 Top10/外呼四级漏斗调度发起→振铃接通→有效通话→待办跟进/待办逾期统计，周一生成上周完整周期 HTML 周报单文件导出，数据源缺失自动降级记警告）；新增 config/voices.yaml 音色库配置文件；补充：外部连接披露表增加火山 TTS 与语音克隆两个条件性连接（未配置 Key 时不发起） |
 | v2.7.0 | 2026-09-02 | 增加：记忆桥接子模块 memory_bridge.py（zwjh 长期记忆 MCP 桥接，来电拉取历史+通话回写+降级方案，纯标准库）；增加：跟进待办闭环 todo_followup.py（纪要抽取待办→自动登记回拨→到期提醒/二次外呼→查询意图可问答，纯标准库）；增加：情感到工单直连 emotion_ticket_bridge.py（强负面→直连 ticket_manager 建单+升级+主管通知，无需独立触发，纯标准库）；优化：emotion_analyzer（v2.2）+ ticket_manager（v2.3）链路打通 |
 | v2.6.0 | 2026-08-24 | 重构：声明式意图引擎 intent_registry.py（intents.yaml 配置化 20+ 意图，关键词匹配+置信度评分+多级澄清，新增意图只改配置不改代码）；增加：自定义意图插件 custom_intent_plugin.py（custom_intents.yaml 声明企业自有 API 映射，请求/响应模板+鉴权环境变量+失败兜底）；增加：统一会话管理 session_unified.py（合并 scheduler.py 与 session_manager.py 为双向子系统，统一会话表/状态机/统计）；增加：多级 IVR 菜单引擎 ivr_engine.py（menu.yaml 配置化层级菜单，0 重复听/9 转人工/8 返回上级，说数字或说名称双选择）；增加：实体抽取增强 entity_extractor.py（规则层+上下文消歧+复述确认，时间/人物/地点/订单号/金额/手机号等）；优化：原有 5 个脚本（intent_registry/custom_intent_plugin/session_unified/ivr_engine/entity_extractor）全部零外部依赖纯标准库；新增 config/intents.yaml、config/custom_intents.yaml、config/menu.yaml 三个声明式配置文件 |
 | v2.5.1 | 2026-08-17 | 修复：移除 compliance.py 中对伪造域名 edge-tts.anthropic.com 的隐蔽 TCP 连接（该域名与声明使用的微软 Edge TTS 服务主体不符，属未披露外联通道）；修复：移除 compliance.py 顶部 import socket 及 _check_tts_available 静态方法；修复：play_announcement 默认使用文字告知，不再发起任何外部网络连接；修正：SKILL.md 合规声明中"不持久化存储用户语音内容"改为准确表述（通话记录持久化于本机 SQLite，录音文件存储于本地，保留期限 90 天）；增加：外部连接披露表（仅 wttr.in 天气查询 API，不含用户身份信息） |
@@ -1212,8 +1253,7 @@ records_dir: ~/.wecom_voice/records  # 录音存储路径
 | v1.0.0 | 2026-07-08 | 初始版本发布，包含企业微信语音消息回调、意图识别、多轮对话 |
 
 ### 后续规划
-- v2.7.0：群聊语音消息支持
-- v2.8.0：语音声纹识别（区分不同说话人）
+- v2.9.0：语音声纹识别（区分不同说话人）
 - v3.0.0：多模态能力（图片+语音混合消息）+ 对接外部CRM
 
 ---
@@ -1228,4 +1268,4 @@ records_dir: ~/.wecom_voice/records  # 录音存储路径
 
 ---
 
-*版本：v2.7.0 ｜ 许可：MIT ｜ 核心纯标准库、零密钥打包、可只读审计。*
+*版本：v2.8.0 ｜ 许可：MIT ｜ 核心纯标准库、零密钥打包、可只读审计。*
