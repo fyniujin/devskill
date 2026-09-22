@@ -359,7 +359,7 @@ def cmd_create_excel(args):
 
         if engine == "MSOFFICE":
             ms = get_ms_module()
-            result = ms.ms_create_excel(name, args.get("sheets"))
+            result = ms.ms_create_excel(name, args.get("sheets"), args.get("filepath"))
             release_ms()
             return {**result, "engine": "MSOFFICE"}
 
@@ -470,7 +470,7 @@ def cmd_create_ppt(args):
 
         if engine == "MSOFFICE":
             ms = get_ms_module()
-            result = ms.ms_create_ppt(title)
+            result = ms.ms_create_ppt(title, filepath)
             release_ms()
             return {**result, "engine": "MSOFFICE"}
 
