@@ -55,15 +55,17 @@ from wps_common import (
     safe_path, ensure_desktop_path, release_wps, release_ms, with_retry
 )
 
-# 纯 Python 模式（含排序/筛选/图表/统计/公式）
-from wps_pure import (
-    pure_create_word, pure_edit_word, pure_info_word,
-    pure_create_excel, pure_input_excel, pure_info_excel,
-    pure_create_ppt, pure_info_ppt,
-    pure_sort_excel, pure_filter_excel, pure_chart_excel,
-    pure_statistics_excel, pure_add_excel_sheet, pure_formula_excel,
-    pure_format_word
-)
+# 纯 Python 模式（惰性导入 / 坑13 优化：仅在 PURE/LIBREOFFICE 路径真正调用时加载，
+# 省去每条命令的 wps_pure 模块导入开销；pywin32/python-docx/openpyxl 经核查已在其内部惰性导入）
+_PURE_MOD = None
+
+
+def _pure():
+    global _PURE_MOD
+    if _PURE_MOD is None:
+        import wps_pure
+        _PURE_MOD = wps_pure
+    return _PURE_MOD
 
 # 错误处理模块
 from wps_error import wps_error
@@ -190,7 +192,7 @@ def cmd_create_word(args):
     filepath = args.get("filepath", str(ensure_desktop_path(f"{title}.docx")))
 
     if engine in ("PURE", "LIBREOFFICE"):
-        return pure_create_word(title, filepath, body)
+        return _pure().pure_create_word(title, filepath, body)
 
     try:
         if engine == "WPS":
@@ -234,7 +236,7 @@ def cmd_edit_word(args):
         return {"success": False, "error": wps_error("E010", feature="编辑文档")}
 
     if engine == "PURE":
-        return pure_edit_word(filepath.__str__(), text, position)
+        return _pure().pure_edit_word(filepath.__str__(), text, position)
 
     try:
         if engine == "WPS":
@@ -266,7 +268,7 @@ def cmd_format_word(args):
     filepath = safe_path(args["filepath"])
 
     # 所有引擎走纯 Python（兼容性最好）
-    return pure_format_word(
+    return _pure().pure_format_word(
         filepath.__str__(),
         font_name=args.get("font", ""),
         font_size=args.get("size", 0),
@@ -325,7 +327,7 @@ def cmd_export_word(args):
 
 def cmd_info_word(args):
     filepath = safe_path(args["filepath"])
-    return pure_info_word(filepath.__str__)
+    return _pure().pure_info_word(filepath.__str__)
 
 
 # ==================== Excel ====================
@@ -337,7 +339,7 @@ def cmd_create_excel(args):
     if engine in ("PURE", "LIBREOFFICE"):
         filepath = args.get("filepath", str(ensure_desktop_path(f"{name}.xlsx")))
         sheets = args.get("sheets", ["Sheet1"])
-        result = pure_create_excel(name, sheets, filepath)
+        result = _pure().pure_create_excel(name, sheets, filepath)
         return result
 
     try:
@@ -373,7 +375,7 @@ def cmd_input_excel(args):
     filepath = safe_path(args["filepath"])
     sheet = args.get("sheet", "Sheet1")
     data = args.get("data", [])
-    return pure_input_excel(filepath.__str__(), sheet, data)
+    return _pure().pure_input_excel(filepath.__str__(), sheet, data)
 
 
 def cmd_formula_excel(args):
@@ -385,7 +387,7 @@ def cmd_formula_excel(args):
     engine = get_engine()
     if engine != "WPS":
         # 非 WPS 走纯 Python（openpyxl 支持写公式）
-        return pure_formula_excel(filepath.__str__(), sheet, cell, formula)
+        return _pure().pure_formula_excel(filepath.__str__(), sheet, cell, formula)
 
     try:
         wps = get_wps()
@@ -406,7 +408,7 @@ def cmd_add_sheet_excel(args):
     sheet = args.get("sheet", "Sheet1")
     headers = args.get("headers")
     data = args.get("data")
-    return pure_add_excel_sheet(filepath.__str__(), sheet, headers, data)
+    return _pure().pure_add_excel_sheet(filepath.__str__(), sheet, headers, data)
 
 
 def cmd_stats_excel(args):
@@ -414,14 +416,14 @@ def cmd_stats_excel(args):
     sheet = args.get("sheet", "Sheet1")
     column = args.get("column", "A")
     stat_type = args.get("type", "SUM")
-    return pure_statistics_excel(filepath.__str__(), sheet, column, stat_type)
+    return _pure().pure_statistics_excel(filepath.__str__(), sheet, column, stat_type)
 
 
 def cmd_sort_excel(args):
     filepath = safe_path(args["filepath"])
     sheet = args.get("sheet", "Sheet1")
     sorts = args.get("sorts", [])
-    return pure_sort_excel(filepath.__str__(), sheet, sorts)
+    return _pure().pure_sort_excel(filepath.__str__(), sheet, sorts)
 
 
 def cmd_filter_excel(args):
@@ -429,7 +431,7 @@ def cmd_filter_excel(args):
     sheet = args.get("sheet", "Sheet1")
     conditions = args.get("conditions", [])
     logic = args.get("logic", "AND")
-    return pure_filter_excel(filepath.__str__(), sheet, conditions, logic)
+    return _pure().pure_filter_excel(filepath.__str__(), sheet, conditions, logic)
 
 
 def cmd_chart_excel(args):
@@ -438,12 +440,12 @@ def cmd_chart_excel(args):
     chart_type = args.get("type", "bar")
     data_range = args.get("data", "A1:B10")
     title = args.get("title", "")
-    return pure_chart_excel(filepath.__str__(), sheet, chart_type, data_range, title)
+    return _pure().pure_chart_excel(filepath.__str__(), sheet, chart_type, data_range, title)
 
 
 def cmd_info_excel(args):
     filepath = safe_path(args["filepath"])
-    return pure_info_excel(filepath.__str__)
+    return _pure().pure_info_excel(filepath.__str__)
 
 
 # ==================== PPT ====================
@@ -454,7 +456,7 @@ def cmd_create_ppt(args):
     filepath = args.get("filepath", str(ensure_desktop_path(f"{title}.pptx")))
 
     if engine in ("PURE", "LIBREOFFICE"):
-        return pure_create_ppt(title, filepath)
+        return _pure().pure_create_ppt(title, filepath)
 
     try:
         if engine == "WPS":
@@ -633,7 +635,7 @@ def cmd_export_ppt(args):
 
 def cmd_info_ppt(args):
     filepath = safe_path(args["filepath"])
-    return pure_info_ppt(filepath.__str__)
+    return _pure().pure_info_ppt(filepath.__str__)
 
 
 # ==================== 格式转换 ====================
