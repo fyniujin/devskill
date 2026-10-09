@@ -94,6 +94,10 @@ class UnifiedInvoice:
     project: Optional[str] = None               # 归属项目
     voucher_summary: Optional[str] = None       # 记账凭证摘要
     
+    # === 数电票明细行（v4.5.0 新增）===
+    # 每条明细：项目名称/规格型号/单位/数量/单价/金额/税率/税额
+    detail_lines: List[Dict[str, Any]] = field(default_factory=list)
+
     # === 附加元数据 ===
     confidence: Optional[float] = None        # 识别置信度（OCR用）
     raw_text: Optional[str] = None            # 原始文本/数据（调试用）
