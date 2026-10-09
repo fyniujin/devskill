@@ -1,5 +1,5 @@
 # video-analyzer 配置文件
-# 视频分析处理 Skill v4.4.0
+# 视频分析处理 Skill v4.5.0
 
 # ==================== ASR 语音识别配置 (v3.5 新增) ====================
 asr:
@@ -402,6 +402,40 @@ bgm:
   temp_dir: .temp/bgm
   # 匹配阈值
   match_threshold: 0.7
+
+# ==================== 首跑自检配置 (v4.5 新增) ====================
+doctor:
+  # 检查项配置
+  checks:
+    ffmpeg:
+      description: "ffmpeg 可用"
+      required: true
+      hint: "请安装 ffmpeg"
+    model_cache:
+      description: "whisper 模型缓存"
+      required: true
+      hint: "模型将在首次运行时自动下载"
+    disk_space:
+      description: "磁盘剩余空间 ≥ 2GB"
+      required: true
+      hint: "请清理磁盘空间"
+    memory_available:
+      description: "可用内存 ≥ 2GB"
+      required: true
+      hint: "请关闭其他程序释放内存"
+    gpu_available:
+      description: "GPU 可用性（可选）"
+      required: false
+      hint: "无 GPU 将使用 CPU 模式"
+
+# ==================== 模型下载配置 (v4.5 新增) ====================
+download:
+  # 最大重试次数
+  max_retries: 3
+  # 下载块大小（字节）
+  chunk_size: 8192
+  # 下载超时（秒）
+  timeout: 300
 
 # ==================== 日志配置 ====================
 logging:
