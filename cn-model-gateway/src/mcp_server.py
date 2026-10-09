@@ -1,5 +1,7 @@
 """MCP (Model Context Protocol) server - JSON-RPC 2.0 implementation.
 
+v1.9.0: Added health_report tool + HealthScheduler integration (daily health check,
+        morning report HTML, provider change radar with 3σ anomaly detection).
 v1.8.0: Added batch async (batch_submit/batch_result), SSE heartbeat + reconnect,
         merged resources into single "网关状态" status resource.
 """
@@ -24,6 +26,7 @@ from .router import (
     ERROR_PROVIDER_NOT_FOUND,
 )
 from .monitor import Monitor
+from .scheduler import HealthScheduler
 
 
 # SSE constants
@@ -75,6 +78,7 @@ class MCPServer:
             monitor=monitor,
         )
         self._batch_worker.start()
+        self._health_scheduler = HealthScheduler()
         self._register_defaults()
 
     def _register_defaults(self) -> None:
@@ -230,6 +234,18 @@ class MCPServer:
                 "description": "检查所有已配置模型提供商的连通性。",
                 "inputSchema": {"type": "object", "properties": {}},
             },
+            "health_report": {
+                "name": "health_report",
+                "description": "生成每日健康晨报（本地 HTML），含各厂商成功率/延迟/配额余量 + 厂商变更雷达（3σ 异常检测）。"
+                                "可选参数：save（是否保存到文件，默认 true）、days（统计天数，默认 1）。",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "save": {"type": "boolean", "description": "是否保存 HTML 到本地文件（默认 true）"},
+                        "days": {"type": "integer", "description": "统计天数（默认 1，最大 7）"},
+                    },
+                },
+            },
         }
 
         # v1.8.0: merged config + usage into single status resource
@@ -278,8 +294,8 @@ class MCPServer:
                 },
                 "serverInfo": {
                     "name": "cn-model-gateway",
-                    "version": "1.8.0",
-                    "description": "国产模型 MCP 服务器 - DeepSeek/通义/智谱/Kimi/混元/豆包一站式接入",
+                    "version": "1.9.0",
+                    "description": "国产模型 MCP 服务器 - DeepSeek/通义/智谱/Kimi/混元/豆包/MiniMax/零一万物/百川/阶跃星辰 10 家一站式接入，含每日健康晨报与厂商变更雷达",
                 },
             })
 
@@ -681,6 +697,25 @@ class MCPServer:
             lines.append(f"- {p}: {s}")
         return "\n".join(lines)
 
+    def _tool_health_report(self, args: Dict[str, Any]) -> str:
+        """生成每日健康晨报。"""
+        save = args.get("save", True)
+        days = min(args.get("days", 1), 7)
+        html = self._health_scheduler.generate_morning_report()
+        path = None
+        if save:
+            path = self._health_scheduler.save_report()
+        lines = ["## 每日健康晨报"]
+        if path:
+            lines.append(f"已保存到: {path}")
+        lines.append("")
+        # 提取纯文本摘要（去掉 HTML 标签）
+        import re
+        text = re.sub(r'<[^>]+>', '', html)
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        lines.append(text[:2000])
+        return "\n".join(lines)
+
     def _handle_resource_read(self, req_id: Any, params: Dict[str, Any]) -> Dict[str, Any]:
         uri = params.get("uri", "")
         if uri == "cn-model-gateway://status":
@@ -799,3 +834,4 @@ class MCPServer:
     def shutdown(self) -> None:
         """Gracefully stop the batch worker and cleanup."""
         self._batch_worker.stop()
+        self._health_scheduler.stop_scheduler()
