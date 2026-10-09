@@ -537,8 +537,8 @@ class TestNewToolsV16(unittest.TestCase):
 class TestNewToolCount(unittest.TestCase):
     """Test that v1.8.0 has exactly 10 MCP tools."""
 
-    def test_tool_count_is_10(self):
-        """v1.8.0: Should have 10 tools (added batch_submit, batch_result)."""
+    def test_tool_count_is_11(self):
+        """v1.9.0: Should have 11 tools (added health_report)."""
         router = ModelRouter()
         monitor = Monitor()
         server = MCPServer(router, monitor)
@@ -549,7 +549,7 @@ class TestNewToolCount(unittest.TestCase):
         expected = {
             "ask_model", "describe_image", "embed_text", "rerank",
             "audio_transcribe", "video_understand", "batch_submit", "batch_result",
-            "list_providers", "health_check"
+            "list_providers", "health_check", "health_report"
         }
         self.assertEqual(tool_names, expected)
 
@@ -847,7 +847,7 @@ class TestBatchWorker(unittest.TestCase):
         self.assertEqual(worker.max_concurrency, 2)
 
 
-class TestMCPServerV17(unittest.TestCase):
+class TestMCPServerV19(unittest.TestCase):
     """Tests for v1.8.0 MCPServer features."""
 
     def setUp(self):
@@ -855,8 +855,8 @@ class TestMCPServerV17(unittest.TestCase):
         self.monitor = Monitor()
         self.server = MCPServer(self.router, self.monitor)
 
-    def test_tool_count_is_10(self):
-        """v1.8.0: Should have 10 tools (added batch_submit, batch_result)."""
+    def test_tool_count_is_11(self):
+        """v1.9.0: Should have 11 tools (added health_report)."""
         req = {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
         resp = self.server.handle_request(req)
         tools = resp["result"]["tools"]
@@ -864,7 +864,7 @@ class TestMCPServerV17(unittest.TestCase):
         expected = {
             "ask_model", "describe_image", "embed_text", "rerank",
             "audio_transcribe", "video_understand", "batch_submit", "batch_result",
-            "list_providers", "health_check"
+            "list_providers", "health_check", "health_report"
         }
         self.assertEqual(tool_names, expected)
 
@@ -939,13 +939,168 @@ class TestMCPServerV17(unittest.TestCase):
         self.assertIn("result", resp)
         self.assertIn("不存在", resp["result"]["content"][0]["text"])
 
-    def test_version_is_170(self):
-        """Server version should be 1.8.0."""
+    def test_version_is_190(self):
+        """Server version should be 1.9.0."""
         req = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
         resp = self.server.handle_request(req)
-        self.assertEqual(resp["result"]["serverInfo"]["version"], "1.8.0")
+        self.assertEqual(resp["result"]["serverInfo"]["version"], "1.9.0")
 
     def test_shutdown(self):
         """Server shutdown should stop batch worker."""
         self.server.shutdown()
         self.assertFalse(self.server._batch_worker.is_running())
+
+    def test_health_report_tool_exists(self):
+        """health_report tool should be registered."""
+        self.assertIn("health_report", self.server._tools)
+
+    def test_health_report_has_save_param(self):
+        """health_report tool should have save parameter."""
+        tool = self.server._tools["health_report"]
+        props = tool["inputSchema"]["properties"]
+        self.assertIn("save", props)
+
+    def test_health_report_has_days_param(self):
+        """health_report tool should have days parameter."""
+        tool = self.server._tools["health_report"]
+        props = tool["inputSchema"]["properties"]
+        self.assertIn("days", props)
+
+    def test_health_report_call(self):
+        """health_report tool call should work."""
+        req = {"jsonrpc": "2.0", "id": 20, "method": "tools/call",
+               "params": {"name": "health_report", "arguments": {"save": False}}}
+        resp = self.server.handle_request(req)
+        self.assertIn("result", resp)
+        text = resp["result"]["content"][0]["text"]
+        self.assertIn("每日健康晨报", text)
+
+
+class TestHealthScheduler(unittest.TestCase):
+    """Tests for v1.9.0 HealthScheduler."""
+
+    def setUp(self):
+        import tempfile
+        from src.scheduler import HealthScheduler
+        self._tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self._tmp.close()
+        self.scheduler = HealthScheduler(db_path=self._tmp.name)
+
+    def tearDown(self):
+        import os
+        try:
+            os.unlink(self._tmp.name)
+        except OSError:
+            pass
+
+    def test_init_db(self):
+        """HealthScheduler should initialize database."""
+        self.assertIsNotNone(self.scheduler.db_path)
+
+    def test_check_once_no_providers(self):
+        """check_once with no providers should return empty list."""
+        from src.router import ModelRouter
+        router = ModelRouter()
+        results = self.scheduler.check_once(router)
+        self.assertEqual(results, [])
+
+    def test_generate_morning_report_empty(self):
+        """generate_morning_report with no data should return placeholder."""
+        html = self.scheduler.generate_morning_report()
+        self.assertIn("暂无健康检查数据", html)
+
+    def test_detect_anomaly_no_data(self):
+        """_detect_anomaly with no data should return empty list."""
+        alerts = self.scheduler._detect_anomaly()
+        self.assertEqual(alerts, [])
+
+    def test_save_report(self):
+        """save_report should save HTML to file."""
+        import os
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
+            path = f.name
+        result_path = self.scheduler.save_report(path=path)
+        self.assertEqual(result_path, path)
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        # With no data, should show placeholder text
+        self.assertTrue(len(content) > 0)
+        os.unlink(path)
+
+    def test_start_stop_scheduler(self):
+        """start_scheduler and stop_scheduler should work."""
+        from src.router import ModelRouter
+        router = ModelRouter()
+        self.scheduler.start_scheduler(router, interval_hours=24)
+        self.assertTrue(self.scheduler._running)
+        self.scheduler.stop_scheduler()
+        self.assertFalse(self.scheduler._running)
+
+
+class TestErrorMapYAML(unittest.TestCase):
+    """Tests for v1.9.0 YAML error map."""
+
+    def test_error_map_loaded(self):
+        """ERROR_MAP should be loaded from YAML."""
+        from src.llm_core.error_map import ERROR_MAP
+        self.assertGreater(len(ERROR_MAP), 0)
+
+    def test_all_providers_present(self):
+        """All 10 providers should be in ERROR_MAP."""
+        from src.llm_core.error_map import ERROR_MAP
+        expected = {"deepseek", "tongyi", "zhipu", "kimi", "hunyuan", "doubao",
+                    "minimax", "lingyi", "baichuan", "stepfun"}
+        for p in expected:
+            self.assertIn(p, ERROR_MAP, f"Provider {p} missing from ERROR_MAP")
+
+    def test_new_error_types_present(self):
+        """New error types (429, 451, balance_insufficient, content_audit) should be present."""
+        from src.llm_core.error_map import ERROR_MAP
+        for provider in ["deepseek", "tongyi", "zhipu", "kimi", "hunyuan", "doubao"]:
+            provider_map = ERROR_MAP.get(provider, {})
+            self.assertIn("429", provider_map, f"{provider} missing 429 error")
+            self.assertIn("451", provider_map, f"{provider} missing 451 error")
+            self.assertIn("balance_insufficient", provider_map, f"{provider} missing balance_insufficient error")
+            self.assertIn("content_audit", provider_map, f"{provider} missing content_audit error")
+
+    def test_error_has_suggestion(self):
+        """Each error should have a suggestion field."""
+        from src.llm_core.error_map import ERROR_MAP
+        for provider, patterns in ERROR_MAP.items():
+            for pattern, info in patterns.items():
+                self.assertIn("suggestion", info, f"{provider}/{pattern} missing suggestion")
+
+    def test_map_error_with_suggestion(self):
+        """map_error should include suggestion in output."""
+        from src.llm_core.error_map import map_error
+        result = map_error("deepseek", "Error: invalid_api_key")
+        self.assertIn("处置建议", result)
+
+    def test_map_error_429(self):
+        """map_error should handle 429 rate limit."""
+        from src.llm_core.error_map import map_error
+        result = map_error("deepseek", "HTTP Error 429: Too Many Requests")
+        self.assertIn("-32002", result)
+        self.assertIn("处置建议", result)
+
+    def test_map_error_451(self):
+        """map_error should handle 451 region block."""
+        from src.llm_core.error_map import map_error
+        result = map_error("deepseek", "HTTP Error 451: Unavailable For Legal Reasons")
+        self.assertIn("-32001", result)
+        self.assertIn("处置建议", result)
+
+    def test_map_error_balance_insufficient(self):
+        """map_error should handle balance_insufficient."""
+        from src.llm_core.error_map import map_error
+        result = map_error("deepseek", "Error: balance_insufficient")
+        self.assertIn("-32002", result)
+        self.assertIn("余额不足", result)
+
+    def test_map_error_content_audit(self):
+        """map_error should handle content_audit."""
+        from src.llm_core.error_map import map_error
+        result = map_error("deepseek", "Error: content_audit failed")
+        self.assertIn("-32602", result)
+        self.assertIn("内容审核", result)
