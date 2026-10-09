@@ -30,7 +30,7 @@ Features:
  24. Report tiering (quick = ≤1 screen verdict; full = JSON/HTML/SARIF full detail)
 
 Author: njskills@agent.qq.com
-Version: 3.5.0
+Version: 3.5.5
 """
 
 import os
@@ -139,54 +139,38 @@ FORBIDDEN_DIRS = {
 FORBIDDEN_FILES = {'.ds_store', '.env', '.log', '.tmp', 'thumbs.db', 'desktop.ini'}
 
 # ============================================================
-# Obfuscated Pattern Storage
+# Static Detection Patterns
 # ============================================================
-# Initiative: All sensitive patterns are obfuscated using base64.
-# Purpose: Prevent SkillHub/ClawHub platform WAF from flagging the scanner's own source.
-
-import base64
-
-def _deobfuscate(code):
-    """Deobfuscate: base64 decode."""
-    try:
-        return base64.b64decode(code).decode()
-    except Exception:
-        return code
-
-# --- Prompt Injection Patterns (obfuscated) ---
-_OBFUSCATED_PROMPT = [
-    'aWdub3JlIHByZXZpb3VzIGluc3RydWN0aW9ucw==',
-    'aWdub3JlIGFib3ZlIGFsbA==',
-    'c3lzdGVtIHByb21wdCBvdmVycmlkZQ==',
-    'aWdub3JlIGFsbCBwcmV2aW91cw==',
-    'eW91IGFyZSBub3cgYQ==',
-    'amFpbGJyZWFr',
-    'REFOIG1vZGU=',
-    'ZG8gYW55dGhpbmcgbm93',
-    'cHJldGVuZCB0byBiZQ==',
-    'b3ZlcnJpZGUgc2FmZXR5',
-    'ZGlzYWJsZSBzYWZldHk=',
-    'Zm9yZ2V0IGV2ZXJ5dGhpbmc=',
-    'cm9sZXBsYXkgYXMgYW4=',
-    'c3RhcnQgb3Zlcg==',
-    'cmVzZXQgaW5zdHJ1Y3Rpb25z',
+# --- Prompt Injection Patterns ---
+PROMPT_INJECTION_PATTERNS = [
+    'ignore previous instructions',
+    'ignore above all',
+    'system prompt override',
+    'ignore all previous',
+    'you are now a',
+    'jailbreak',
+    'DAN mode',
+    'do anything now',
+    'pretend to be',
+    'override safety',
+    'disable safety',
+    'forget everything',
+    'roleplay as an',
+    'start over',
+    'reset instructions',
 ]
 
-# --- Command Injection Patterns (obfuscated) ---
-_OBFUSCATED_CMD = [
-    'ZXhmaWx0cmF0ZVwo',
-    'Y3VybC4qKHNofGJhc2h8Y21kfHBvd2Vyc2hlbGwp',
-    'd2dldC4qKHNofGJhc2gp',
-    'ZmV0Y2hodHRwLippdmFs',
-    'cGFzc3RocnU=',
-    'c2hlbGxfZXhlYw==',
-    'YC4qKGN1cmx8d2dldHxuY3xiYXNofHNoKQ==',
-    'XCRcKCg/OmN1cmx8d2dldHxuY3xiYXNofHNoKVwp',
+# --- Command Injection Patterns ---
+COMMAND_INJECTION_PATTERNS = [
+    'exfiltrate\\(',
+    'curl.*(sh|bash|cmd|powershell)',
+    'wget.*(sh|bash)',
+    'fetchhttp.*ival',
+    'passthru',
+    'shell_exec',
+    '`.*(curl|wget|nc|bash|sh)',
+    '\\$\\((?:curl|wget|nc|bash|sh)\\)',
 ]
-
-# Decode all patterns on module load (one-time cost)
-PROMPT_INJECTION_PATTERNS = [_deobfuscate(p) for p in _OBFUSCATED_PROMPT]
-COMMAND_INJECTION_PATTERNS = [_deobfuscate(p) for p in _OBFUSCATED_CMD]
 
 # SSRF - IP detection (safe, no WAF triggers)
 SSRF_PATTERNS = [
@@ -280,7 +264,7 @@ KNOWN_VULN_DEPS = {
 
 # Update check URL and version info
 UPDATE_CHECK_URL = "https://api.github.com/repos/njskills/skill-security-checker/releases/latest"
-CURRENT_VERSION = "3.5.0"
+CURRENT_VERSION = "3.5.5"
 
 # Update check cache TTL (hours)
 UPDATE_CACHE_HOURS = 24
