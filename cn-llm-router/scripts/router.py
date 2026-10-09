@@ -35,6 +35,8 @@ import update_check
 import mock_engine
 import health_check
 import session_manager
+import price_registry
+import price_checker
 from adapters import build, AdapterError
 from adapters.base import AdapterTimeoutError
 from adapters.base import _estimate_tokens as estimate_tokens
@@ -184,8 +186,26 @@ def resolve(strategy, classification, reg, manual_model=None, allow_unconfigured
             multimodal_fallback = True  # 无多模态模型时回退全量，auto 分支标注
 
     if strategy == "cheap":
-        best = min(models, key=lambda pm: _price(pm[1]))
-        reason = "cheap 策略：选择价格最低的模型"
+        # v2.7.0 cheap 策略质量感知：按性价比排序（评分/价格），不再单纯选最便宜
+        pricing = price_registry.load_pricing()
+        if pricing:
+            def cheap_score(pm):
+                p, m = pm
+                price = _price(m)
+                if price <= 0:
+                    return (0, 0)  # 免费模型优先
+                # 获取该模型的评分（从价格档案中取能力画像平均分）
+                model_name = m.get("name", "")
+                pinfo = pricing.get(model_name, {})
+                # 使用静态能力画像作为质量参考
+                quality = (m.get("reason_score", 5) + m.get("code_score", 5) + m.get("long_score", 5)) / 3.0
+                # 性价比 = 质量 / 价格（越高越好）
+                return (quality / price, -price)
+            best = max(models, key=cheap_score)
+            reason = "cheap 策略：性价比最优（评分/价格）"
+        else:
+            best = min(models, key=lambda pm: _price(pm[1]))
+            reason = "cheap 策略：选择价格最低的模型"
         if multimodal_fallback:
             reason = "⚠️ 多模态(" + multimodal + ")需求但无支持模型，回退全量｜" + reason
         return best[0], best[1]["name"], reason
@@ -558,10 +578,12 @@ def cmd_route(args, reg):
 
 def cmd_report(args, reg):
     agg = cost_tracker.aggregate(args.period)
+    # v2.7.0 双轨：加载价格档案
+    pricing = price_registry.load_pricing() if getattr(args, "dual", False) else None
     if args.html:
         path = report_mod.render_html(agg, args.html)
         print("📊 HTML 报表已生成：%s" % path)
-    print(report_mod.render_text(agg))
+    print(report_mod.render_text(agg, pricing=pricing))
 
 
 def cmd_hardware(args, reg):
@@ -606,6 +628,52 @@ def cmd_budget(args, reg):
         return
     exc, spent, bud = cost_tracker.budget_check(cfg["budget_monthly"])
     print(report_mod.budget_alert(exc, spent, bud))
+
+
+def cmd_price_check(args, reg):
+    """v2.7.0 降价检测。"""
+    provider = getattr(args, "price_provider", None)
+    result = price_checker.check_price_changes(provider=provider)
+    
+    print("🔍 价格变更检测")
+    print("  检查厂商数: %d" % result["checked"])
+    
+    if result["changes"]:
+        print("\n⚠️  疑似调价：")
+        for c in result["changes"]:
+            print("   - %s / %s" % (c["provider"], c["model"]))
+            print("     输入价: %.4f → %.4f" % (c["old_in"], c["new_in"]))
+            print("     输出价: %.4f → %.4f" % (c["old_out"], c["new_out"]))
+            print("     来源: %s" % c.get("url", ""))
+    else:
+        print("  ✅ 未检测到价格变化")
+    
+    if result["errors"]:
+        print("\n❌ 抓取失败：")
+        for e in result["errors"]:
+            print("   - %s: %s" % (e["provider"], e.get("reason", "")))
+    
+    if result["stale"]:
+        print("\n📅 档案过期提醒（超过 30 天未更新）：")
+        for s in result["stale"]:
+            print("   - %s: %s" % (s["name"], s.get("reason", "")))
+    
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False))
+
+
+def cmd_price_history(args, reg):
+    """v2.7.0 价格档案查看。"""
+    pricing = price_registry.all_prices()
+    if args.json:
+        print(json.dumps(pricing, ensure_ascii=False, indent=2))
+    else:
+        print("📋 价格档案（%d 个模型）" % len(pricing))
+        for name, info in sorted(pricing.items()):
+            date_str = info.get("date", "无")
+            source_str = info.get("source", "")
+            print("  %-25s 入 %-6.4f 出 %-6.4f 日期 %s %s" % (
+                name, info["in"], info["out"], date_str, source_str))
 
 
 def cmd_version(args, reg):
@@ -748,6 +816,8 @@ def build_parser():
     p_rep.add_argument("--period", default="month", choices=["day", "week", "month"])
     p_rep.add_argument("--html", help="导出 HTML 报表路径")
     p_rep.add_argument("--config", help="config.json 路径")
+    p_rep.add_argument("--dual", action="store_true",
+                       help="v2.7.0 双轨计算：档案价估算 vs 实测回填")
 
     p_hw = sub.add_parser("hardware", help="硬件画像与并发建议")
 
@@ -802,6 +872,15 @@ def build_parser():
 
     # v2.2 健康检查
     sub.add_parser("health-check", help="v2.2 检查各厂商 API 连通性")
+
+    # v2.7.0 降价检测
+    p_pc = sub.add_parser("price-check", help="v2.7.0 降价检测（抓取厂商价目页做哈希比对）")
+    p_pc.add_argument("--provider", help="指定厂商（默认检查全部已配置厂商）")
+    p_pc.add_argument("--json", action="store_true")
+
+    # v2.7.0 价格档案查看
+    p_ph = sub.add_parser("price-history", help="v2.7.0 价格档案查看")
+    p_ph.add_argument("--json", action="store_true")
 
     # v2.2 模型竞技场（v2.4 扩展：--blind 控制盲选/显名对比）
     p_arena = sub.add_parser("arena", help="v2.4 多模型对比（--blind 盲选，否则显名对比）")
@@ -1164,6 +1243,7 @@ def main():
         "mock": cmd_mock, "health-check": health_check.cmd_health_check,
         "arena": cmd_arena, "embed": cmd_embed, "rerank": cmd_rerank,
         "session": cmd_session, "describe": cmd_describe,
+        "price-check": cmd_price_check, "price-history": cmd_price_history,
     }
     dispatch[args.cmd](args, reg)
 
