@@ -2,8 +2,8 @@
 slug: skill-security-checker
 displayName: Skill 安全审计扫描器
 name: skill-security-checker
-description: 'Skill Security — 安全审计扫描器，帮助你快速发现 Skill 中的安全风险。轻量 SAST 污点追踪（Python AST + JS 词法近似，source→sink 证据链降误报）、规则引擎（YAML 规则包热插拔扩展）、社区规则（schema 校验 + 来源记录 + 签名验证）、提示注入 ML 语义检测（ONNX + 正则降级）、系统级行为捕获（eBPF Linux / ETW Windows）、动态沙箱执行扫描、供应链风险分析、OSV.dev 离线数据包（全生态 CVE 覆盖，零密钥）+ 锁文件深度解析（requirements.txt / package-lock.json / poetry.lock，版本区间级精确匹配）、恶意 Skill 指纹库、健康度与合规检查（质量+结构+权限合并）、全局排除配置、CI/CD 集成、JSON/HTML/SARIF 报告生成。'
-version: 3.4.0
+description: 'Skill Security — 安全审计扫描器，审一下这个 skill、装之前帮我查查、这个 skill 安全吗？一键快扫 30 秒出三档裁定（✅干净/⚠️可疑/🚫恶意）+ Top3 风险 + 一句话理由；全量模式覆盖轻量 SAST 污点追踪（Python AST + JS 词法近似，source→sink 证据链降误报）、规则引擎（YAML 规则包热插拔扩展）、社区规则（schema 校验 + 来源记录 + 签名验证）、提示注入 ML 语义检测（ONNX + 正则降级）、系统级行为捕获（eBPF Linux / ETW Windows）、动态沙箱执行扫描、供应链风险分析、OSV.dev 离线数据包（全生态 CVE 覆盖，零密钥）+ 锁文件深度解析（requirements.txt / package-lock.json / poetry.lock，版本区间级精确匹配）、恶意 Skill 指纹库、健康度与合规检查（质量+结构+权限合并）、全局排除配置、CI/CD 集成、JSON/HTML/SARIF 报告生成。'
+version: 3.5.0
 tags: ['security', 'audit', 'skill', 'scanner', 'code-analysis', 'vulnerability']
 icon: '🔒'
 author: 'njskills'
@@ -19,6 +19,16 @@ metadata:
 # Skill Security
 
 > 一键扫描 Skill 安全风险，发布前最后一道安全闸门。
+
+## 快速开始（3 行）
+
+```bash
+# 1. 快扫：30 秒出三档裁定（✅干净/⚠️可疑/🚫恶意）+ Top3 + 一句话理由
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --quick
+# 2. 全量：CI/CD 用 JSON/SARIF，安全工程师看 HTML
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --mode full --format sarif -o report.sarif.json
+# 3. 口语触发：直接对 WorkBuddy 说「审一下这个 skill」+ 路径，自动快扫
+```
 
 ## 概述
 
@@ -296,6 +306,25 @@ v3.4.0 新增 `package-lock.json` / `poetry.lock` 两类锁文件解析器（原
 
 **好处：** 有了 lock 文件即可精确判定「某版本是否落在漏洞影响区间」，大幅降低无版本信息导致的误报；无 lock 时退化为直接依赖 + 近似匹配并明确标注 `approx`。
 
+### 21. 一键快扫 + 三档裁定（新增）
+
+v3.5.0 新增 `--quick` 一键模式，专为「**装之前看一眼**」的大多数用户设计——技术深度远超竞品，但用户要的是一句话价值：
+
+- **只跑 L1 静态层三件套**（≤30 秒）：① 静态指纹（341 条恶意 skill 指纹 hash + 模式匹配）② 6 类规则（prompt_injection / command_injection / SSRF / credential_leak / path_traversal / dangerous_functions，来自 `rules/*.yaml`）③ 权限审计（allowed-tools 过度授权检测）
+- **跳过**沙箱执行、OSV 供应链、污点追踪、ML 检测、社区规则等重能力，换取速度
+- **三档裁定**：🚫恶意（命中 critical / 恶意指纹）、⚠️可疑（命中 high/medium）、✅干净（无命中或仅 info）
+- **Top3 风险** + **一句话理由**（如「检测到 2 条高危或中危风险，建议审查后再安装」）
+- **裁定映射表外置**（`scripts/quick_verdict.json`）：分数→档位的规则不硬编码，可自定义
+
+### 22. 报告分级输出（优化）
+
+| 档位 | 触发 | 输出 | 适用人群 |
+|------|------|------|---------|
+| **quick**（默认） | `--quick` / `--mode quick` / 默认 | 裁定 + Top3 + 一句话理由（≤1 屏） | 装之前看一眼的普通用户 |
+| **full** | `--mode full` | 全部细节（JSON / HTML / SARIF）+ CI/CD 集成 | 安全工程师 / CI 流水线 |
+
+**默认档位可配**：环境变量 `SKILLSEC_MODE=quick|full` 可覆盖默认（默认 quick）。快扫报告与全量报告各取所需，不互相干扰。
+
 ## 使用方法
 
 ### 基本用法（命令行）
@@ -357,6 +386,17 @@ python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能�
 
 # v3.4.0 全功能模式（含锁文件版本区间匹配）
 python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --taint-tracking --community-rules "D:\path\to\community-rules" --rule-engine --ml-detect --malicious-db --global-exclude --supply-chain --refresh-osv
+
+# v3.5.0 一键快扫（默认，30 秒出三档裁定 + Top3 + 一句话理由）
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --quick
+
+# v3.5.0 显式指定档位（quick / full）
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --mode quick
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名" --mode full
+
+# v3.5.0 环境变量覆盖默认档位（默认 quick）
+set SKILLSEC_MODE=full
+python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能名"
 ```
 
 ### 参数快查
@@ -379,8 +419,17 @@ python D:\skill\skill-security-checker\scripts\audit.py "D:\skill\你的技能�
 | `--taint-tracking` | 启用污点追踪（Python AST + JS 词法，source→sink 证据链） | 关闭 |
 | `--community-rules` | 加载第三方社区规则包目录（schema 校验 + 来源记录） | 关闭 |
 | `--refresh-osv` | 强制刷新 OSV 离线数据包索引（v3.4.0，联网重建全生态 CVE 索引） | 关闭 |
+| `--quick` | 一键快扫：仅 L1 静态层（恶意指纹+6类规则+权限审计），30 秒出三档裁定（v3.5.0） | 关闭（但默认档位即为 quick） |
+| `--mode` | 扫描档位：`quick`（快扫三档裁定，≤1屏）/ `full`（全量细节 SARIF/HTML/JSON），可用环境变量 `SKILLSEC_MODE` 覆盖默认 | `quick` |
 
 ### 在 WorkBuddy 中触发
+
+直接告诉 WorkBuddy，口语化触发词命中率最高（v3.5.0 新增对齐钟馗的中文触发语）：
+
+- **「审一下这个 skill」** + 路径 → 自动快扫出三档裁定
+- **「装之前帮我查查」** + 路径 → 安装前安全快扫
+- **「这个 skill 安全吗」** + 路径 → 安全快扫判定
+- **「安全审计」** + 技能路径 → `帮我安全审计 D:\skill\my-skill`
 
 直接告诉 WorkBuddy，触发词覆盖面广：
 
@@ -529,6 +578,15 @@ A: 不需要 API Key。索引由 OSV 公开导出包（PyPI / npm）周期下载
 **Q: 锁文件解析有什么用？没有 lock 文件会怎样？**
 A: 有 `package-lock.json` / `poetry.lock` 时，工具展开完整传递依赖树并按「版本区间」精确判定某版本是否落在漏洞影响区间，误报显著降低。仅有 `requirements.txt` / `package.json`（无 lock）时退化为直接依赖 + 近似匹配，并在结果中标注 `approx`，提示你补充 lock 文件以获得精确结论。
 
+**Q: 一键快扫（--quick）和全量（--mode full）有什么区别？**
+A: 快扫只跑 L1 静态层三件套（恶意指纹 + 6 类规则 + 权限审计），跳过沙箱/OSV/污点/ML 等重能力，30 秒内出「✅干净/⚠️可疑/🚫恶意」三档裁定 + Top3 风险 + 一句话理由（≤1 屏），适合装之前看一眼。全量保留全部细节（JSON/HTML/SARIF）给安全工程师和 CI。默认档位 quick，可用 `--mode full` 或环境变量 `SKILLSEC_MODE=full` 切换。
+
+**Q: 三档裁定准吗？341 条恶意指纹会漏报吗？**
+A: 快扫强制启用恶意指纹匹配（341 条 hash + 模式），命中即直接判 🚫恶意，召回 100%。裁定映射表在 `scripts/quick_verdict.json` 外置，critical / 恶意指纹 → 🚫，high/medium → ⚠️，其余 → ✅，可自定义不硬编码。
+
+**Q: 哪些口语能触发快扫？**
+A: 对齐钟馗的中文触发语：「审一下这个 skill」「装之前帮我查查」「这个 skill 安全吗」+ 路径即可自动快扫。意图路由命中这些口语即走 quick 档。
+
 ## 安全声明
 
 - **默认只做静态分析，不会执行被扫描的代码**（静态模式仅读取文件，不写入）
@@ -549,7 +607,7 @@ A: 有 `package-lock.json` / `poetry.lock` 时，工具展开完整传递依赖�
 
 ## 更新日志
 
-| v3.4.0 | 2026-09-11 | 增加：OSV.dev 离线数据包接入（scripts/osv_offline.py），周期下载 PyPI/npm 导出包并合并进三级缓存，依赖覆盖从 26 包升到全生态，零密钥、离线优先、无网络时标注数据时点；增加：锁文件深度解析（package-lock.json 与 poetry.lock 两类新增解析器 + requirements.txt 升级），传递依赖全树展开，匹配从包名级升级到版本区间级，无 lock 时近似匹配并标注 approx；增加：--refresh-osv 命令行参数（强制刷新 OSV 索引）；优化：supply_chain.py 漏洞查询改为离线优先（OSV 索引 → OSV API → NVD → 本地 26 条三级降级），report meta 区新增 osv_offline 索引时点统计 |
+| v3.5.0 | 2026-10-09 | 增加：一键快扫 --quick / --mode quick 模式，只跑 L1 静态层三件套（恶意指纹 341 条 + 6 类规则 + 权限审计），30 秒内出三档裁定（✅干净/⚠️可疑/🚫恶意）+ Top3 风险 + 一句话理由；增加：scripts/quick_verdict.json 外置裁定映射表（分数→档位可自定义，不硬编码）；增加：报告分级输出（quick 档 ≤1 屏、full 档保留 JSON/HTML/SARIF 全量细节），默认档位可配（环境变量 SKILLSEC_MODE=quick\|full）；优化：description 增补口语触发词（审一下这个 skill / 装之前帮我查查 / 这个 skill 安全吗）对齐钟馗意图路由，快速开始压缩到 3 行；优化：一键快扫强制启用恶意指纹匹配保障 341 条样本 🚫档召回 100% |
 | v3.3.0 | 2026-08-24 | 增加：轻量 SAST 污点追踪（taint_tracker.py），Python AST + JS 词法近似，source→sink 证据链降误报（无完整链降 info）；增加：社区规则扩展（community_rules.py），第三方 YAML 规则包 schema 校验 + 来源记录 + HMAC-SHA256 签名验证，官方/社区规则报告分开统计；增加：健康度与合规检查合并（scan_health + scan_compliance），质量评分+结构检查统一为健康度模块，权限审计+健康度统一挂合规性检查出口；增加：--taint-tracking 和 --community-rules <path> 两个 CLI 参数；优化：report meta 区新增 taint_tracking / community_rules 维度统计 |
 | v3.2.0 | 2026-08-17 | 增加：规则引擎模块（scripts/rules_engine.py），将 6 类静态规则从硬编码重构为 YAML 规则包（rules/*.yaml），支持热插拔扩展，新增规则只需加 YAML 文件不改代码；增加：scripts/rules/ 目录包含 6 个规则包（prompt_injection/command_injection/ssrf/credential_leak/path_traversal/dangerous_functions），共 67 条正则；增加：系统级行为捕获模块（scripts/sandbox/system_monitor.py），支持 eBPF（Linux）/ ETW（Windows）内核级 syscall 监控，无 eBPF/ETW 时自动降级；增加：ML 提示注入语义检测（scripts/sandbox/ml_detect.py），ONNX 模型优先 + 正则降级双模式，含中文规则与结果缓存；增加：scan_rule_engine()、scan_ml_prompt_injection()、scan_syscall_monitor() 三个扫描方法；增加：--rule-engine、--ml-detect、--syscall-monitor 三个 CLI 参数；增加：report meta 区新增 rule_engine / ml_detect / syscall_monitor 维度统计 |
 | v3.1.0 | 2026-08-07 | 增加：实时恶意 Skill 库同步模块，内置 341 条 SHA256 指纹实现 100% 已知恶意 skill 拦截；增加：CVE 离线缓存（7 天全量 + 每日增量），无网络环境仍可扫描依赖漏洞；增加：全局排除配置（.nosec.yml），支持按类别/文件/正则模式批量排除误报；增加：--malicious-db 和 --global-exclude 两个命令行参数；优化：add_result() 集成全局排除过滤逻辑 |
