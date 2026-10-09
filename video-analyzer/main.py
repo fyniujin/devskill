@@ -47,6 +47,8 @@ from core.live_analyzer import LiveAnalyzer
 from core.media_probe import MediaProbe
 from core.queue_manager import QueueManager
 from core.gpu_accelerator import GPUAccelerator
+from core.doctor import Doctor
+from core.model_downloader import ModelDownloader
 
 logger = get_logger(__name__)
 
@@ -165,6 +167,13 @@ def parse_args():
                         help="启用 BGM 识别（需 chromaprint/fpcalc）")
     parser.add_argument("--jianying-v6", action="store_true",
                         help="导出剪映 6.0 draft.json + EDL 导入指南")
+    parser.add_argument("--doctor", action="store_true",
+                        help="首跑自检：探测 ffmpeg/模型/磁盘/内存/GPU，输出修复命令清单")
+    parser.add_argument("--quick", action="store_true",
+                        help="快速模式：仅转写+时间戳摘要，跳过视觉/场景/剪辑链")
+    parser.add_argument("--download-model", default=None,
+                        choices=["tiny", "base", "small", "medium"],
+                        help="下载 Whisper 模型（带进度可视化+断点续传+3次重试）")
     
     return parser.parse_args()
 
@@ -173,7 +182,7 @@ def print_banner():
     """打印启动横幅"""
     banner = """
 ╔══════════════════════════════════════════════════╗
-║          🎬 video-analyzer v4.4.0               ║
+║          🎬 video-analyzer v4.5.0               ║
 ║        视频分析处理 — 本地视频反编译工具         ║
 ╚══════════════════════════════════════════════════╝
     """
@@ -299,7 +308,7 @@ def main():
         # ========== 版本更新检查（非阻塞） ==========
         if not args.no_update_check:
             try:
-                notifier = UpdateNotifier(config, current_version="4.4.0")
+                notifier = UpdateNotifier(config, current_version="4.5.0")
                 update_result = notifier.check_for_updates()
                 update_msg = notifier.format_update_message(update_result)
                 if update_msg:
@@ -894,6 +903,207 @@ def main():
                     pass
 
 
+def run_doctor_mode(args, config):
+    """
+    首跑自检模式（v4.5.0 新增）。
+    
+    一次性探测 ffmpeg / whisper 模型缓存 / 磁盘剩余空间 / 内存水位 / GPU 可用性，
+    输出「缺什么→给什么」修复命令清单。
+    """
+    print_banner()
+    print("🔍 首跑自检模式\n")
+    
+    doctor = Doctor(config)
+    result = doctor.run_self_check()
+    
+    # 格式化输出报告
+    report_text = Doctor.format_report(result["report"])
+    print(report_text)
+    
+    # 输出摘要
+    print(f"\n{result['summary']}")
+    
+    # 如果有需要修复的项，输出修复命令清单
+    if result["fixes_needed"]:
+        print("\n📋 修复命令清单（先清单后确认）：")
+        print("-" * 50)
+        for check_name in result["fixes_needed"]:
+            fix_cmd = doctor.get_fix_instructions(check_name)
+            if fix_cmd:
+                print(f"\n[{check_name}]")
+                print(f"  {fix_cmd}")
+        print("\n" + "-" * 50)
+        print("\n⚠️  以上为建议修复命令，请确认后手动执行。")
+        print("    本工具不自动执行写操作，确保安全可控。")
+    
+    # 输出下一步建议
+    if result["passed"]:
+        print("\n✅ 环境就绪，可以开始分析视频：")
+        print("  python main.py -i <视频路径>")
+        print("\n  快速体验（5分钟出稿）：")
+        print("  python main.py -i <视频路径> --quick")
+    
+    return 0 if result["passed"] else 1
+
+
+def run_quick_mode(args, config):
+    """
+    快速模式（v4.5.0 新增）。
+    
+    仅转写+时间戳摘要，跳过视觉分析/场景切割/剪辑链，
+    产出单文件 Markdown，末尾附 3 条「下一步建议」。
+    
+    目标：低配机与新用户 5 分钟见到第一份成果——先价值后深度。
+    """
+    print_banner()
+    print("⚡ 快速模式（仅转写+摘要）\n")
+    
+    start_time = time.time()
+    
+    # 加载配置
+    if not args.no_adaptive:
+        logger.info("🔍 检测硬件配置...")
+        probe = HardwareProbe(config)
+        config = probe.apply_to_config(config)
+        
+        nice_level = config.get("processing", {}).get("nice_level", 5)
+        apply_process_priority(nice_level)
+    
+    # 输入处理
+    logger.info("📥 处理输入...")
+    input_handler = InputHandler(config)
+    video_path = input_handler.process(args.input)
+    logger.info(f"   视频路径: {video_path}")
+    
+    # 媒体处理
+    media = MediaProcessor(config)
+    media_info = media.get_media_info(video_path)
+    logger.info(f"   分辨率: {media_info['width']}x{media_info['height']}")
+    logger.info(f"   时长: {media_info['duration']:.1f}s")
+    
+    # 提取音频
+    audio_path = media.extract_audio(video_path)
+    logger.info(f"   音频已提取: {audio_path}")
+    
+    # ASR 转写
+    logger.info("🎙️  语音转文字...")
+    asr_engine = args.asr_engine if args.asr_engine else config.get("asr", {}).get("engine", "auto")
+    asr_router = ASRRouter(config)
+    asr_result = asr_router.transcribe(
+        audio_path,
+        preferred_engine=asr_engine,
+        language=args.lang if args.lang else config.get("asr", {}).get("language", "auto"),
+    )
+    
+    transcript = {
+        "text": asr_result.text,
+        "language": asr_result.language,
+        "duration": asr_result.duration,
+        "segments": [
+            {
+                "id": seg.id,
+                "start": seg.start,
+                "end": seg.end,
+                "text": seg.text,
+                "confidence": seg.confidence,
+            }
+            for seg in asr_result.segments
+        ],
+    }
+    
+    logger.info(f"   识别完成: {len(transcript['segments'])} 个语音段")
+    logger.info(f"   语言: {transcript.get('language', 'unknown')}")
+    
+    # 生成时间戳摘要
+    logger.info("📋 生成时间戳摘要...")
+    summary_dir = os.path.join(args.output, "summary")
+    summary_gen = TimestampedSummary(config)
+    summary_result = summary_gen.generate(None, {"scenes": []}, summary_dir)
+    
+    # 输出结果
+    md_path = summary_result.get("markdown_path")
+    if md_path:
+        logger.info(f"   ✅ 摘要已保存: {md_path}")
+    
+    # 首跑「下一步建议」
+    elapsed = time.time() - start_time
+    logger.info(f"\n{'='*50}")
+    logger.info(f"✅ 快速分析完成！耗时: {elapsed:.1f}s")
+    logger.info(f"{'='*50}")
+    
+    # 读取生成的 Markdown 并追加「下一步建议」
+    next_steps = """
+---
+## 📌 下一步建议
+
+1. **深度分析** — 启用完整分析链（视觉/场景/精华提取）：
+   ```bash
+   python main.py -i {input_path}
+   ```
+
+2. **说话人分离** — 识别多人对话中的不同说话人：
+   ```bash
+   python main.py -i {input_path} --diarize
+   ```
+
+3. **平台适配** — 适配抖音/快手/B站/视频号：
+   ```bash
+   python main.py -i {input_path} --platform
+   ```
+"""
+    
+    if md_path and os.path.exists(md_path):
+        with open(md_path, "a", encoding="utf-8") as f:
+            f.write(next_steps.format(input_path=args.input))
+        logger.info(f"   已追加「下一步建议」到: {md_path}")
+    
+    logger.info(f"\n📄 输出文件: {md_path}")
+    
+    return 0
+
+
+def run_download_model_mode(args, config):
+    """
+    模型下载模式（v4.5.0 新增）。
+    
+    带进度可视化 + 3次自动重试 + HTTP Range 断点续传 + 清华镜像交互提示。
+    """
+    print_banner()
+    print("📥 模型下载模式\n")
+    
+    model_name = args.download_model
+    
+    # 显示清华镜像提示
+    downloader = ModelDownloader(config)
+    mirror_hint = downloader.get_mirror_hint()
+    print(mirror_hint)
+    print()
+    
+    # 定义进度回调
+    def progress_callback(downloaded, total_size, speed_kb_s):
+        progress_text = ModelDownloader.format_progress(downloaded, total_size, speed_kb_s)
+        print(f"\r   {progress_text}", end="", flush=True)
+    
+    # 执行下载
+    print(f"⬇️  正在下载 whisper-{model_name} 模型...\n")
+    result = downloader.download(model_name, progress_callback=progress_callback)
+    
+    print()  # 换行
+    
+    if result["success"]:
+        print(f"\n✅ 模型下载完成: {result['model_path']}")
+        print(f"   重试次数: {result['retries']}")
+        return 0
+    else:
+        print(f"\n❌ 模型下载失败: {result['error']}")
+        print(f"   已重试: {result['retries']} 次")
+        print(f"\n💡 建议:")
+        print(f"   1. 检查网络连接")
+        print(f"   2. 使用清华镜像: pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple")
+        print(f"   3. 手动下载: https://huggingface.co/openai/whisper-{model_name}")
+        return 1
+
+
 def run_batch_mode(args, config):
     """
     批量处理模式（v4.3 新增）。
@@ -1002,16 +1212,26 @@ def run_download_ct2_model(args, config):
 
 
 if __name__ == "__main__":
-    # 检查是否是批量模式
     args = parse_args()
+    config = load_config(args.config if os.path.exists(args.config) else None)
     
-    if args.dir:
+    if args.doctor:
+        # 首跑自检模式（v4.5.0）
+        exit_code = run_doctor_mode(args, config)
+        sys.exit(exit_code)
+    elif args.quick:
+        # 快速模式（v4.5.0）
+        exit_code = run_quick_mode(args, config)
+        sys.exit(exit_code)
+    elif args.download_model:
+        # 模型下载模式（v4.5.0）
+        exit_code = run_download_model_mode(args, config)
+        sys.exit(exit_code)
+    elif args.dir:
         # 批量处理模式
-        config = load_config(args.config if os.path.exists(args.config) else None)
         run_batch_mode(args, config)
     elif args.download_ct2_model:
         # 下载 CT2 模型模式
-        config = load_config(args.config if os.path.exists(args.config) else None)
         run_download_ct2_model(args, config)
     else:
         # 单文件处理模式
