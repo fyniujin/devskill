@@ -454,6 +454,7 @@ def text_to_ppt(text: str, output_path: str,
 if __name__ == "__main__":
     import argparse
 
+    print("⚠️ [deprecated] wps_docx_to_ppt 已合并到 python scripts/wps convert，旧脚本仍可用，将于 v6.0.0 移除", file=sys.stderr)
     parser = argparse.ArgumentParser(description="Word → PPT 一键生成器")
     sub = parser.add_subparsers(dest="command", required=True)
 
