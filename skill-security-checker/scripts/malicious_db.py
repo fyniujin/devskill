@@ -86,6 +86,8 @@ def _default_db():
         "c2-server", "botnet-server", "phishing-server", "spam-server",
         "fraud-server", "counterfeit-server", "piracy-server",
         "malware-distribution", "exploit-distribution", "payload-distribution",
+        "pytorch-fake", "sklearn-fake", "cryptography-fake", "matplotlib-fake",
+        "scipy-fake", "fastapi-fake", "uvicorn-fake", "aiohttp-fake", "celery-fake",
     ]
     # Known malicious package names (Node.js)
     malicious_npm = [
@@ -119,7 +121,9 @@ def _default_db():
         "console-fake", "process-fake", "global-fake", "buffer-fake",
         "stream-fake", "events-fake", "util-fake", "assert-fake",
         "tty-fake", "zlib-fake", "gzip-fake", "gunzip-fake", "deflate-fake",
-        "inflate-fake", "brotli-fake", "zstd-fake",
+        "inflate-fake",         "brotli-fake", "zstd-fake",
+        "react-dom-fake", "react-router-fake", "vue-router-fake", "angular-core-fake",
+        "webpack-dev-server-fake", "babel-core-fake", "eslint-plugin-fake", "tailwind-fake",
     ]
     # Generate entries with fingerprint hashes
     for pkg in malicious_pypi + malicious_npm:
