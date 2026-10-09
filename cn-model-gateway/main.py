@@ -1,5 +1,6 @@
 """CLI entry point for CN Model Gateway.
 
+v1.9.0: Added health / report subcommands for daily health check & morning report.
 v1.8.0: Added batch subcommand for async batch task submission/query.
 v1.6.0: Added 4 new subcommands (embed, rerank, transcribe, video)
         via shared llm_core kernel.
@@ -523,6 +524,53 @@ def cmd_batch_result(args: argparse.Namespace) -> None:
                         print(f"      结果: {result_str}")
 
 
+# --- v1.9.0: health check & morning report CLI subcommands ---
+
+def cmd_health(args: argparse.Namespace) -> None:
+    """Run health check for all providers."""
+    config_path = args.config or get_default_config_path()
+    config = load_config(config_path)
+    router = ModelRouter(timeout=args.timeout, failover=not args.no_failover)
+    router.register_all(config)
+    
+    from src.scheduler import HealthScheduler
+    scheduler = HealthScheduler()
+    results = scheduler.check_once(router)
+    
+    print("\n🏥 健康检查结果")
+    print("-" * 50)
+    for r in results:
+        status = "✅ 正常" if r["success"] else f"❌ {r['error_type']}"
+        print(f"  {r['provider']}: {status} ({r['duration_ms']}ms)")
+    print()
+
+
+def cmd_report(args: argparse.Namespace) -> None:
+    """Generate morning report."""
+    from src.scheduler import HealthScheduler
+    scheduler = HealthScheduler()
+    html = scheduler.generate_morning_report()
+    path = scheduler.save_report()
+    
+    print(f"\n📋 晨报已生成: {path}")
+    print(f"文件大小: {len(html)} 字节")
+    
+    if args.webhook:
+        # Optional webhook push
+        import urllib.request
+        payload = json.dumps({"path": path, "html": html[:5000]}).encode()
+        req = urllib.request.Request(
+            args.webhook,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                print(f"Webhook 推送成功: {resp.status}")
+        except Exception as e:
+            print(f"Webhook 推送失败: {e}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="cn-model-gateway",
@@ -619,6 +667,15 @@ def main() -> None:
     cost_parser = subparsers.add_parser("cost-predict", help="预测月度成本")
     cost_parser.add_argument("-t", "--tokens", type=int, help="每月 token 数")
     cost_parser.set_defaults(func=cmd_cost_predict)
+
+    # v1.9.0: health check subcommand
+    health_parser = subparsers.add_parser("health", help="执行健康检查（最小调用，记录延迟/成功率）")
+    health_parser.set_defaults(func=cmd_health)
+
+    # v1.9.0: morning report subcommand
+    report_parser = subparsers.add_parser("report", help="生成每日健康晨报（本地 HTML + 可选 webhook 推送）")
+    report_parser.add_argument("--webhook", help="Webhook URL（可选，推送晨报）")
+    report_parser.set_defaults(func=cmd_report)
 
     # v1.8.0: batch async subcommand
     batch_parser = subparsers.add_parser("batch", help="批量异步任务")
