@@ -26,9 +26,11 @@ Features:
  20. Health check (quality + structure + permission merged into compliance module)
  21. OSV.dev offline data package (full-ecosystem CVE coverage, no API key required)
  22. Lock-file deep parsing (requirements.txt / package-lock.json / poetry.lock, version-range matching)
+ 23. Quick scan (--quick / --mode quick): L1 static layer (malicious fingerprint + 6 rules + permission), 3-tier verdict (✅/⚠️/🚫) + Top3 + one-line reason in ≤30s
+ 24. Report tiering (quick = ≤1 screen verdict; full = JSON/HTML/SARIF full detail)
 
 Author: njskills@agent.qq.com
-Version: 3.4.0
+Version: 3.5.0
 """
 
 import os
@@ -278,7 +280,7 @@ KNOWN_VULN_DEPS = {
 
 # Update check URL and version info
 UPDATE_CHECK_URL = "https://api.github.com/repos/njskills/skill-security-checker/releases/latest"
-CURRENT_VERSION = "3.4.0"
+CURRENT_VERSION = "3.5.0"
 
 # Update check cache TTL (hours)
 UPDATE_CACHE_HOURS = 24
@@ -1208,6 +1210,132 @@ class SecurityAuditor:
         
         return self.get_report()
 
+    # ============================================================
+    # Quick Scan (v3.5.0) — L1 static layer only, 3-tier verdict
+    # ============================================================
+
+    def _load_quick_verdict_map(self):
+        """Load externalized verdict mapping table (分数→档位)."""
+        try:
+            p = Path(__file__).parent / 'quick_verdict.json'
+            with open(p, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {
+                'severity_to_verdict': {
+                    'critical': 'malicious', 'high': 'suspicious',
+                    'medium': 'suspicious', 'low': 'clean', 'info': 'clean',
+                },
+                'categories_force_malicious': ['malicious_skill'],
+                'verdicts': {
+                    'malicious': {'label': '🚫 恶意', 'exit_code': 2,
+                                  'reason_template': '检测到 {count} 条恶意指纹/严重漏洞，强烈建议不要安装'},
+                    'suspicious': {'label': '⚠️ 可疑', 'exit_code': 1,
+                                  'reason_template': '检测到 {count} 条高危或中危风险，建议审查后再安装'},
+                    'clean': {'label': '✅ 干净', 'exit_code': 0,
+                             'reason_template': '未发现明显安全风险，可放心安装'},
+                },
+            }
+
+    def run_quick(self, skip_update=True):
+        """Execute quick scan: L1 static layer only (malicious fingerprint + 6 rules + permission).
+
+        Skips sandbox / OSV / taint tracking / ML / community rules for speed (≤30s target).
+        """
+        # Force-enable L1 detectors
+        self.malicious_db = True
+        self.rule_engine = True
+        # Disable heavy detectors
+        self.supply_chain = False
+        self.taint_tracking = False
+        self.ml_detect = False
+        self.syscall_monitor = False
+        self.community_rules_path = None
+        self.dynamic = False
+
+        if not self.rule_engine_obj and _RULE_ENGINE_AVAILABLE:
+            self.rule_engine_obj = RuleEngine()
+        if not self.malicious_db and _MALICIOUS_DB_AVAILABLE:
+            pass  # scan_malicious_db handles availability internally
+
+        # L1 detectors (independent, parallel for speed)
+        l1_methods = [
+            ('Malicious Fingerprint', self.scan_malicious_db),
+            ('Rule Engine', self.scan_rule_engine),
+            ('Permission Audit', self.scan_permissions),
+        ]
+        workers = min(len(l1_methods), get_optimal_workers())
+        with ThreadPoolExecutor(max_workers=max(1, workers)) as executor:
+            futures = {executor.submit(m): n for n, m in l1_methods}
+            for fut in as_completed(futures):
+                try:
+                    fut.result()
+                except Exception as e:
+                    self.add_result(
+                        category='scan_error', severity='low', file='.', line=0,
+                        message=f'{futures[fut]} execution error: {e}',
+                        pattern='', suggestion='请将该问题反馈给开发者',
+                    )
+
+        self.score = max(0, self.score)
+        return self.get_quick_report()
+
+    def get_quick_report(self):
+        """Build a ≤1-screen quick report: verdict + Top3 + one-line reason."""
+        vmap = self._load_quick_verdict_map()
+        sev_to_v = vmap.get('severity_to_verdict', {})
+        force_mal = set(vmap.get('categories_force_malicious', []))
+        verdicts = vmap.get('verdicts', {})
+
+        severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'info': 4}
+        sorted_results = sorted(self.results, key=lambda r: severity_order.get(r.severity, 5))
+
+        # Determine verdict tier
+        verdict = 'clean'
+        for r in sorted_results:
+            if r.category in force_mal:
+                verdict = 'malicious'
+                break
+            mapped = sev_to_v.get(r.severity, 'clean')
+            # escalation: malicious > suspicious > clean
+            if mapped == 'malicious':
+                verdict = 'malicious'
+                break
+            elif mapped == 'suspicious' and verdict != 'malicious':
+                verdict = 'suspicious'
+
+        vinfo = verdicts.get(verdict, {})
+        label = vinfo.get('label', verdict)
+        # Count findings that contributed to this verdict
+        if verdict == 'malicious':
+            relevant = [r for r in sorted_results if r.category in force_mal or r.severity == 'critical']
+        elif verdict == 'suspicious':
+            relevant = [r for r in sorted_results if r.severity in ('high', 'medium')]
+        else:
+            relevant = []
+        count = len(relevant)
+        reason = vinfo.get('reason_template', '').format(count=count) if verdict != 'clean' else vinfo.get('reason_template', '')
+
+        # Top3 by severity
+        top3 = [r.to_dict() for r in sorted_results[:3]]
+
+        return {
+            'meta': {
+                'tool': 'skill-security-checker',
+                'version': CURRENT_VERSION,
+                'mode': 'quick',
+                'scan_time': datetime.now().isoformat(),
+                'skill_path': str(self.skill_path),
+                'skill_name': self.frontmatter.get('name', 'unknown'),
+                'score': self.score,
+            },
+            'verdict': verdict,
+            'verdict_label': label,
+            'reason': reason,
+            'top3': top3,
+            'total_findings': len(self.results),
+        }
+
     def scan_rule_engine(self):
         """Scan using YAML rule packs (v3.2.0)."""
         if not self.rule_engine_obj:
@@ -1474,6 +1602,38 @@ class ReportGenerator:
         if output_path:
             Path(output_path).write_text(json_str, encoding='utf-8')
         return json_str
+
+    @staticmethod
+    def to_quick(quick_report, output_path=None):
+        """Render the ≤1-screen quick verdict report."""
+        v = quick_report
+        lines = []
+        lines.append('=' * 56)
+        lines.append('  ⚡ Skill 安全快扫（Quick Mode）')
+        lines.append('=' * 56)
+        lines.append(f"  Skill: {v['meta']['skill_name']}  |  得分: {v['meta']['score']}/100")
+        lines.append(f"  裁定: {v['verdict_label']}")
+        lines.append(f"  理由: {v['reason']}")
+        lines.append('-' * 56)
+        if v['top3']:
+            lines.append(f"  Top3 风险:")
+            for i, r in enumerate(v['top3'], 1):
+                sev = r['severity'].upper()
+                fdisp = r['file'][:20] + '..' if len(r['file']) > 22 else r['file']
+                lines.append(f"   {i}. [{sev}] {r['category']}  {fdisp}:{r['line']}")
+                if r.get('suggestion'):
+                    lines.append(f"      → {r['suggestion'][:48]}")
+        else:
+            lines.append('  Top3 风险: 无')
+        lines.append('-' * 56)
+        lines.append(f"  共 {v['total_findings']} 条发现  |  完整扫描用 --mode full")
+        lines.append('  Feedback: njskills@agent.qq.com')
+        lines.append('=' * 56)
+        text = '\n'.join(lines)
+        if output_path:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(text)
+        return text
     
     @staticmethod
     def to_html(report, output_path=None):
@@ -1724,6 +1884,10 @@ Examples:
                         help='Path to directory of community YAML rule packs')
     parser.add_argument('--refresh-osv', action='store_true',
                         help='Force refresh of the OSV offline data package index (v3.4.0)')
+    parser.add_argument('--quick', action='store_true',
+                        help='一键快扫模式：仅跑 L1 静态层（恶意指纹+6类规则+权限审计），30秒内出三档裁定 (v3.5.0)')
+    parser.add_argument('--mode', choices=['quick', 'full'], default=os.environ.get('SKILLSEC_MODE', 'quick'),
+                        help='扫描档位：quick=快扫三档裁定(≤1屏, 默认) / full=全量细节(SARIF/HTML/JSON) (v3.5.0)')
     
     args = parser.parse_args()
     
@@ -1739,6 +1903,22 @@ Examples:
             network=bool(args.allow_domain),
         )
     
+    mode = 'quick' if args.quick else args.mode
+
+    if mode == 'quick':
+        auditor = SecurityAuditor(args.skill_path, refresh_osv=args.refresh_osv)
+        quick_report = auditor.run_quick(skip_update=True)
+        if args.format == 'json':
+            out = ReportGenerator.to_json(quick_report, args.output)
+            if not args.output:
+                print(out)
+        else:
+            out = ReportGenerator.to_quick(quick_report, args.output)
+            if not args.output:
+                print(out)
+        exit_codes = {'malicious': 2, 'suspicious': 1, 'clean': 0}
+        sys.exit(exit_codes.get(quick_report['verdict'], 0))
+
     auditor = SecurityAuditor(args.skill_path, dynamic=args.dynamic, dynamic_options=dyn_opts,
                               supply_chain=args.supply_chain, malicious_db=args.malicious_db,
                               global_exclude=args.global_exclude, rule_engine=args.rule_engine,
