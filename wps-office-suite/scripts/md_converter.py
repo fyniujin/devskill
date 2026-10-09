@@ -378,6 +378,7 @@ class MDConverter:
 
 def _cli():
     """CLI 入口"""
+    print("⚠️ [deprecated] md_converter 已合并到 python scripts/wps convert，旧脚本仍可用，将于 v6.0.0 移除", file=sys.stderr)
     import argparse
     
     parser = argparse.ArgumentParser(description="Markdown → Word/PPT 转换器 v4.7.0")
