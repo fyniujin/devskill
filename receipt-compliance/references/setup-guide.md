@@ -18,7 +18,7 @@
 
 ### 1.2 安装步骤
 
-详见 `scripts/install_tesseract.sh`（Linux/macOS）或 `scripts/install_tesseract.ps1`（Windows）。
+Tesseract 安装：Windows 用 `winget install --id UB-Mannheim.Tesseract` 或 `scoop install tesseract`；macOS 用 `brew install tesseract`；Linux 用 `sudo apt-get install tesseract-ocr tesseract-ocr-chi-sim`。安装后重启终端。
 
 ---
 
