@@ -2,8 +2,8 @@
 name: wps-office-suite
 displayName: WPS Office 全家桶
 slug: wps-office-suite
-description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v5.1新增：kingdoc云端桥接（白名单探测+配置预检+subprocess上传+差异检查）、条件格式/数据验证跨引擎IO（JSON中间格式保真往返）、会议纪要三段式要素化（待办清单+决策记录+风险异议）+说话人标注（MFCC聚类）；v5.2新增：公文一键排版（GB/T 9704 规则库约束+结构识别套版+红头预留位+联合行文）、批量水印与敏感信息打码（身份证/手机号/银行卡/邮箱双轨识别+黑色矩形覆盖+打码清单）、跨文档知识检索与问答（本地TF-IDF零依赖+跳转+可选zwjh记忆桥接）；删除：与contract-review重复的轻量合同审查模块，改为文档互链引导；v5.2.5修复：MS Office引擎下Excel/PPT创建必然失败（错用Word COM对象），新增get_ms_excel/get_ms_ppt及三槽位统一释放release_ms，MS Office路径透传filepath参数
-version: 5.2.5
+description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v5.1新增：kingdoc云端桥接（白名单探测+配置预检+subprocess上传+差异检查）、条件格式/数据验证跨引擎IO（JSON中间格式保真往返）、会议纪要三段式要素化（待办清单+决策记录+风险异议）+说话人标注（MFCC聚类）；v5.2新增：公文一键排版（GB/T 9704 规则库约束+结构识别套版+红头预留位+联合行文）、批量水印与敏感信息打码（身份证/手机号/银行卡/邮箱双轨识别+黑色矩形覆盖+打码清单）、跨文档知识检索与问答（本地TF-IDF零依赖+跳转+可选zwjh记忆桥接）；删除：与contract-review重复的轻量合同审查模块，改为文档互链引导；v5.2.5修复：MS Office引擎下Excel/PPT创建必然失败（错用Word COM对象），新增get_ms_excel/get_ms_ppt及三槽位统一释放release_ms，MS Office路径透传filepath参数;v5.3.0新增：统一CLI入口 wps（registry.json注册表分发，office --app/--action 与 convert 子命令、--list 一屏列出全部命令，薄路由层不改脚本内部逻辑）、全命令 --json 机器可读输出（固定 ok/error_id/elapsed/data 四字段，对齐 E001-E015，wps_error.py 新增 emit_json 统一出口）、_worker 启动优化（wps_pure 改惰性加载，pywin32/python-docx/openpyxl 经核查已惰性导入，ENGINE_CACHE 进程级单例复用，COM 释放统一走 release_ms 三槽位）、转换三入口合并为 convert（format_converter/md_converter/wps_docx_to_ppt 内部按目标格式路由，旧脚本保留为兼容别名并提示新命令，v6.0.0 移除）
+version: 5.3.0
 category: 办公协作与生产力工具
 platforms:
   - windows
@@ -42,7 +42,7 @@ tags:
   建议反馈邮箱: njskills@agent.qq.com
 ---
 
-# WPS Office 全家桶 v5.2.5 ✅
+# WPS Office 全家桶 v5.3.0 ✅
 
 > 🏗️ **四引擎智能识别**：自动检测用户电脑已安装的软件，按 WPS → MS Office → LibreOffice → 纯Python 顺序选择最合适的引擎
 > ✨ **纯Python模式增强 v4.8**：排序、筛选、图表、公式、统计、条件格式、数据验证、合并单元格、命名区域 — 跨平台全部支持
@@ -512,110 +512,18 @@ python scripts/wps_feedback.py email  # 打开邮件客户端（自动附带系�
 
 ## 🏆 最佳实践（10 个案例）
 
-### BP-1：大文件处理策略
-
-```
-问题：50MB 的 Word 文档操作很慢
-策略：
-  1. 先运行 python scripts/wps_word.py info --file big.docx 查看大小
-  2. 如果 > 50MB，分片处理
-  3. 使用纯 Python 模式读取内容
-  4. 避免频繁保存（每次保存触发全量写入）
-```
-
-### BP-2：周报自动化
-
-```
-问题：每周重复做相同格式的周报
-策略：
-  1. 生成模板：python templates/generate_templates.py --dir ./output
-  2. 复制模板：copy output\report_template.docx 本周周报.docx
-  3. 用 edit 命令追加内容
-  4. 用 format 命令设置格式
-  5. 用 export 生成 PDF
-```
-
-### BP-3：预算跟踪自动化
-
-```
-问题：每月记录收入支出，手动计算汇总
-策略：
-  1. 生成预算模板：python templates/generate_templates.py --dir ./output
-  2. 每月用 input 命令录入数据
-  3. 汇总 Sheet 含公式自动计算
-  4. 用 stats 命令验证数据
-```
-
-### BP-4：商务PPT快速制作
-
-```
-问题：需要做项目汇报 PPT
-策略：
-  1. 生成模板：python templates/generate_templates.py --dir ./output
-  2. 复制模板并修改标题
-  3. 如有多页内容，创建时指定 --slides 参数
-```
-
-### BP-5：数据报表自动化
-
-```
-问题：每周重复做相同格式的报表
-策略：
-  1. 创建模板文件（含公式和图表位置）
-  2. 每周用 input 命令录入新数据
-  3. 公式和图表自动更新
-  4. 导出 PDF 分发
-```
-
-### BP-6：多 Sheet 数据汇总
-
-```
-问题：12 个月的数据在 12 个 Sheet，需要年度汇总
-策略：
-  1. 用 add-sheet 创建"年度汇总"Sheet
-  2. 用 stats 命令逐 Sheet 验证汇总结果
-```
-
-### BP-7：条件筛选导出
-
-```
-问题：从 1000 条记录中筛出"销售额>5000 且 地区=华东"
-策略：
-  python scripts/wps_excel.py filter --file data.xlsx --sheet Q1 \
-    --conditions '[{"column":"销售额","op":">","value":"5000"},{"column":"地区","op":"=","value":"华东"}]' \
-    --logic AND
-  ✅ 筛出符合条件的记录
-```
-
-### BP-8：批量文件重命名
-
-```
-问题：20 个文件需要统一命名规范
-策略：
-  1. 用 document_manager.py 列出所有文件
-  2. 批量重命名（加日期前缀）
-  3. 用 format_converter.py 批量转换格式
-```
-
-### BP-9：跨平台文档转换
-
-```
-问题：Linux 服务器上需要把 Word 转 PDF
-策略：
-  1. 安装 LibreOffice：sudo apt install libreoffice
-  2. 引擎自动检测为 LIBREOFFICE
-  3. 直接 export --format pdf
-```
-
-### BP-10：定时自动化
-
-```
-问题：每天凌晨自动生成报表
-策略：
-  1. 编写自动化脚本（调用 wps_excel.py + wps_word.py）
-  2. 使用 WorkBuddy automation 定时执行
-  3. 输出到指定目录
-```
+| 案例 | 问题 | 策略（一句话） |
+|------|------|------|
+| BP-1 大文件 | 50MB+ Word 操作慢 | 先 `wps word info` 看大小；>50MB 分片；纯Python读内容；避免频繁保存 |
+| BP-2 周报 | 每周重复同格式周报 | 模板生成→复制→edit 追加→format 设样式→export PDF |
+| BP-3 预算 | 每月手录收支汇总 | 预算模板→input 录入→汇总Sheet公式→stats 校验 |
+| BP-4 商务PPT | 项目汇报PPT | 模板→改标题；多页用 create --slides |
+| BP-5 数据报表 | 每周同格式报表 | 模板含公式/图表→每周 input 新数据→自动更新→export PDF |
+| BP-6 多Sheet | 12月数据年度汇总 | add-sheet 建"年度汇总"→stats 逐Sheet校验 |
+| BP-7 条件筛选 | 千条记录筛"销售额>5000 且 地区=华东" | `wps excel filter --conditions '[{\"column\":\"销售额\",\"op\":\">\",\"value\":\"5000\"},{\"column\":\"地区\",\"op\":\"=\",\"value\":\"华东\"}]' --logic AND` |
+| BP-8 批量重命名 | 20文件统一命名 | document_manager.py 列出→批量加日期前缀→format_converter 批量转 |
+| BP-9 跨平台转换 | Linux Word→PDF | 装 LibreOffice→引擎自动识别→export --format pdf |
+| BP-10 定时自动化 | 每天凌晨生成报表 | 自动化脚本调 wps_excel/wps_word→WorkBuddy automation 定时执行 |
 
 ---
 
@@ -662,331 +570,54 @@ python scripts/wps_feedback.py email  # 打开邮件客户端（自动附带系�
 
 ---
 
-## 🔗 CLI 参数速查
+## 🔗 CLI 命令速查（由 registry.json 自动导出）
 
-### Word
+> v5.3.0 起，全部能力收敛到统一入口 `python scripts/wps`，原 47 个脚本仍可单独调用（100% 兼容）。运行 `python scripts/wps --list` 查看完整动态清单。
 
+### 统一入口用法
 ```bash
-python scripts/wps_word.py create --title "report" --body "正文内容"
-python scripts/wps_word.py edit --file "report.docx" --text "新增内容"
-python scripts/wps_word.py format --file "report.docx" --font "微软雅黑" --size 14 --align center --bold --first-indent 0.74
-python scripts/wps_word.py export --file "report.docx" --format pdf
-python scripts/wps_word.py info --file "report.docx"
-python scripts/wps_word.py engine-info
-python scripts/wps_word.py md-convert --file "README.md" --format docx --output "文档.docx"
-python scripts/wps_word.py md-convert --file "README.md" --format pptx --output "演示.pptx"
-python scripts/wps_word.py long-document --file "report.docx" --action all --preset thesis
+python scripts/wps --list                                  # 一屏列出全部命令与一句话用途
+python scripts/wps word create --title 测试 --filepath ./a.docx
+python scripts/wps office --app word --action create --title 测试
+python scripts/wps excel engine-info --json                # 机器可读输出
+python scripts/wps convert --input 报告.docx --output-format pdf
+python scripts/wps --json <任意命令> [参数]                 # 固定四字段 {ok,error_id,elapsed,data}
 ```
 
-### Excel
+### 命令一览（一页表）
+| 命令 | 用途 | 底层脚本 |
+|------|------|----------|
+| word | Word：创建/编辑/排版/导出/公文/会议纪要/长文档 | wps_word.py |
+| excel | Excel：创建/输入/公式/排序/筛选/图表/分析/OCR | wps_excel.py |
+| ppt | PPT：创建/生成/导出/主题/Word转PPT | wps_ppt.py |
+| convert | 格式转换：docx/xlsx/pptx ↔ pdf/txt/html/csv/png（合并 format_converter/md_converter/docx_to_ppt） | _convert |
+| long-document | 长文档排版：目录/页眉页脚/编号/交叉引用/图表索引 | long_document.py |
+| gongwen | 公文一键排版：GB/T 9704 规则库，红头预留位/联合行文 | gongwen.py |
+| meeting-minutes | 会议纪要：ASR转写→LLM摘要→Word（待办/决策/风险异议） | meeting_minutes.py |
+| excel-analyze | Excel 深度分析：数据画像/透视/预测/NL2SQL | excel_analyzer.py |
+| invoice-ocr | 发票 OCR 入账：PDF/图片→Excel 本地识别 | wps_invoice_ocr.py |
+| formula-explain | 公式解释：Excel 公式→自然语言解读 | formula_explainer.py |
+| ppt-generate | PPT 智能生成：多源输入/演讲者备注/动画/配色 | ppt_generator.py |
+| docx-to-ppt | Word→PPT：章节分割→大纲→模板 | wps_docx_to_ppt.py |
+| redact | 敏感信息打码：身份证/手机号/银行卡/邮箱双轨识别 | redact.py |
+| watermark | 批量水印：文字/图片，平铺/对角线，docx/pptx/图片 | watermark.py |
+| doc-search | 跨文档检索问答：本地 TF-IDF 零依赖 | doc_search.py |
+| template | 文档模板管理：代码生成类模板 | template_manager.py |
+| report | 报告生成：关键点→结构化 Word | report_generator.py |
+| doc-manager | 文档管理：批量整理/重命名/归档 | document_manager.py |
+| doc-translate | 文档翻译：Word/Excel/PPT 多模型降级 | document_translator.py |
+| email-reply | 邮件智能回复：模板+LLM 个性化 | email_reply.py |
+| schedule | 日程登记：文本/结构化→日历 | schedule_register.py |
+| clarify | 需求澄清：歧义检测→槽位填充 | clarify.py |
+| com-health | COM 健康检查：WPS/MS/残留/强制释放 | com_health.py |
+| usage-stats | 使用统计：SQLite 埋点/引擎健康度 | usage_stats.py |
+| feedback | 反馈提交：邮件/issue | wps_feedback.py |
+| test | 环境自检：引擎/COM/依赖 | wps_test.py |
+| toc | 目录生成：提取/插入 Word 目录 | wps_toc.py |
+| watch | 文件监控：轮询+YAML 规则+大文件分片 | watch.py |
+| chart-recommend | 图表推荐：按数据特征推荐图表类型 | chart_recommender.py |
 
-```bash
-python scripts/wps_excel.py create --name "Sales" --sheets "Q1,Q2,Q3"
-python scripts/wps_excel.py input --file "Sales.xlsx" --sheet "Q1" --data '[["A",100]]'
-python scripts/wps_excel.py formula --file "Sales.xlsx" --sheet "Q1" --cell "C1" --formula "=SUM(A1:B1)"
-python scripts/wps_excel.py chart --file "Sales.xlsx" --sheet "Q1" --type bar --data "A1:B10" --title "销售趋势"
-python scripts/wps_excel.py sort --file "Sales.xlsx" --sheet "Q1" --sorts '[{"column":"Price","ascending":false}]'
-python scripts/wps_excel.py filter --file "Sales.xlsx" --sheet "Q1" --conditions '[{"column":"Price","op":">","value":"50"}]' --logic AND
-python scripts/wps_excel.py add-sheet --file "Sales.xlsx" --sheet "Q4" --headers '["Product","Price"]' --data '[["X",300]]'
-python scripts/wps_excel.py nl-analyze --file "Sales.xlsx" --query "按月份统计销售额并画出趋势图"
-python scripts/wps_excel.py invoice --input "发票.pdf" --output "进账台账.xlsx"
-python scripts/wps_excel.py stats --file "Sales.xlsx" --sheet "Q1" --column "B" --type SUM
-python scripts/wps_excel.py info --file "Sales.xlsx"
-python scripts/wps_excel.py engine-info
-python scripts/wps_excel.py check-update
-python scripts/wps_excel.py formula-explain --formula "=SUM(A1:A10)"
-python scripts/wps_excel.py formula-explain --file "data.xlsx" --cell "B2"
-python scripts/wps_excel.py formula-explain --file "data.xlsx" --sheet "Sheet1"
-```
-
-### PPT
-
-```bash
-python scripts/wps_ppt.py create --title "Pitch"
-python scripts/wps_ppt.py add-slide --file "Pitch.pptx" --title "Intro"
-python scripts/wps_ppt.py insert --file "Pitch.pptx" --slide 2 --content "Key points"
-python scripts/wps_ppt.py theme --file "Pitch.pptx" --name business_blue
-python scripts/wps_ppt.py export --file "Pitch.pptx" --format pdf
-python scripts/wps_ppt.py docx-to-ppt --input 报告.docx --output 演示.pptx --title "项目汇报" --theme business
-python scripts/wps_ppt.py info --file "Pitch.pptx"
-python scripts/wps_ppt.py engine-info
-```
-
-### 🆕 v4.0 新命令（详见下方各组件）
-
-| 功能 | 命令 |
-|------|------|
-| Word→PPT | `python scripts/wps_ppt.py docx-to-ppt --input report.docx --output ppt.pptx` |
-| NL分析 | `python scripts/wps_excel.py nl-analyze --file data.xlsx --query "按月份统计销售额画趋势图"` |
-| 合同审查 | 已裁撤（见下方说明）；完整审查请安装 [contract-review](https://skillhub.cn/skills/contract-review) 技能 |
-| 发票OCR | `python scripts/wps_excel.py invoice --input 发票.pdf --output 入账台账.xlsx` |
-| 公式解释器 | `python scripts/wps_excel.py formula-explain --formula "=SUM(A1:A10)"` |
-| MD→Word/PPT | `python scripts/wps_word.py md-convert --file README.md --format docx` |
-| 长文档排版 | `python scripts/wps_word.py long-document --file report.docx --action all` |
-| 邮件智能回复 | `python scripts/wps_word.py email-reply --content "已收到您的来信" --tone polite` |
-| 周报月报 | `python scripts/wps_word.py report --type weekly --points "完成A,B,C"` |
-| AI 统一入口 | `python scripts/wps_ai.py --action meeting --file audio.wav` |
-
-### 🆕 v4.3 Excel 深度分析命令
-
-```bash
-python scripts/excel_analyzer.py profile --file data.xlsx --sheet Sheet1
-python scripts/excel_analyzer.py fix-formulas --file data.xlsx --sheet Sheet1
-python scripts/excel_analyzer.py pivot --file data.xlsx --sheet Sheet1
-python scripts/excel_analyzer.py predict --file data.xlsx --sheet Sheet1 --column 销售额 --method auto --steps 3
-python scripts/excel_analyzer.py nl2formula --query "同比增长率"
-python scripts/excel_analyzer.py clean --file data.xlsx --sheet Sheet1
-python scripts/excel_analyzer.py hardware
-```
-
-### 🆕 v4.4 长文档排版命令（已升级为 v4.7 统一入口）
-
-> v4.7 起，长文档排版 8 个命令合并为 `wps_word.py long-document --action` 统一入口，降低记忆成本。
-
-```bash
-# 新统一入口（推荐）
-python scripts/wps_word.py long-document --file report.docx --action all --preset thesis
-
-# 旧命令仍可通过 long_document.py 调用（兼容）
-python scripts/long_document.py all --file report.docx --preset thesis --output 排版后.docx
-```
-
-### 🆕 v4.5 会议纪要 + COM 健康命令
-
-```bash
-# 会议纪要生成
-python scripts/meeting_minutes.py check                    # 检查可用 ASR 引擎
-python scripts/meeting_minutes.py transcribe --file audio.wav --method auto
-python scripts/meeting_minutes.py generate --file audio.wav --output 纪要.docx
-python scripts/meeting_minutes.py batch --input-dir ./audio --output-dir ./docs
-
-# COM 健康检查
-python scripts/com_health.py wps-check                     # WPS COM 状态
-python scripts/com_health.py ms-check                     # MS Office COM 状态
-python scripts/com_health.py residuals                    # 检测残留进程
-python scripts/com_health.py release-all --force           # 强制清理所有
-python scripts/com_health.py full-check --json             # 完整健康报告
-
-# 通过 wps_word.py 调用
-python scripts/wps_word.py meeting-minutes --file audio.wav --output 纪要.docx
-python scripts/wps_word.py com-health --check full
-```
-
-### 🆕 v4.6 Excel 智能分析 + 数据图表 + 文档翻译
-
-```bash
-# Excel 智能分析（6 命令合并为 1 个 --action 路由）
-python scripts/wps_excel.py excel-smart --file data.xlsx --action profile
-python scripts/wps_excel.py excel-smart --file data.xlsx --action fix-formulas
-python scripts/wps_excel.py excel-smart --file data.xlsx --action pivot
-python scripts/wps_excel.py excel-smart --file data.xlsx --action predict --column 销售额 --method auto --steps 3
-python scripts/wps_excel.py excel-smart --file data.xlsx --action nl2formula --query "同比增长率"
-python scripts/wps_excel.py excel-smart --file data.xlsx --action clean
-python scripts/wps_excel.py excel-smart --file data.xlsx --action hardware
-
-# 数据图表生成器
-python scripts/wps_excel.py chart-gen --file data.xlsx --action auto        # 一键分析+推荐+生成
-python scripts/wps_excel.py chart-gen --file data.xlsx --action analyze      # 仅分析数据特征
-python scripts/wps_excel.py chart-gen --file data.xlsx --action recommend    # 仅推荐图表类型
-python scripts/wps_excel.py chart-gen --file data.xlsx --action generate --type line  # 生成指定图表
-
-# 文档翻译
-python scripts/wps_word.py translate --file report.docx --output 报告_zh.docx --source en --target zh
-python scripts/wps_word.py translate --input-dir ./docs --output-dir ./translated --source en --target zh
-python scripts/document_translator.py translate --file report.docx --output 报告_zh.docx
-python scripts/document_translator.py batch --input-dir ./docs --output-dir ./translated
-python scripts/document_translator.py check                                  # 检查可用翻译引擎
-```
-
-### 🆕 v4.7 公式解释器 + Markdown 转换 + 长文档统一入口
-
-```bash
-# 公式解释器（反向 NL2Formula，纯本地实现）
-python scripts/wps_excel.py formula-explain --formula "=SUM(A1:A10)"
-python scripts/wps_excel.py formula-explain --file data.xlsx --cell B2
-python scripts/wps_excel.py formula-explain --file data.xlsx --sheet Sheet1
-
-# Markdown → Word/PPT
-python scripts/wps_word.py md-convert --file README.md --format docx --output 文档.docx
-python scripts/wps_word.py md-convert --file README.md --format pptx --output 演示.pptx
-python scripts/wps_word.py md-convert --dir ./docs --format docx --output-dir ./output
-
-# 长文档排版统一入口（8 命令合并为 1 个 --action 路由）
-python scripts/wps_word.py long-document --file report.docx --action analyze
-python scripts/wps_word.py long-document --file report.docx --action toc --max-level 3 --insert
-python scripts/wps_word.py long-document --file report.docx --action header --chapter-in-header --page-number
-python scripts/wps_word.py long-document --file report.docx --action numbering --style arabic --max-level 4
-python scripts/wps_word.py long-document --file report.docx --action fig-index --insert
-python scripts/wps_word.py long-document --file report.docx --action xref
-python scripts/wps_word.py long-document --file report.docx --action format --preset thesis
-python scripts/wps_word.py long-document --file report.docx --action all --preset thesis --output 排版后.docx
-python scripts/wps_word.py long-document --file report.docx --action preview --preset thesis
-```
-
-### 🆕 v4.9.0 llm_bridge 桥接层 + AI 动作扩类 + 模板市场 + NL2Formula 多轮澄清
-
-```bash
-# ===== llm_bridge 统一模型层桥接 =====
-# 白名单探测 cn-llm-router，零配置多模型调用
-python scripts/llm_bridge.py check                          # 检查 cn-llm-router 是否可用
-python scripts/llm_bridge.py chat --prompt "你好"           # 通过 cn-llm-router 对话
-python scripts/llm_bridge.py translate "Hello" en zh         # 翻译
-python scripts/llm_bridge.py summarize "长文本..." --max-length 200  # 摘要
-python scripts/llm_bridge.py continue "未完待续..." --context "前文"  # 续写
-python scripts/llm_bridge.py rewrite "原文..." --style formal          # 改写
-python scripts/llm_bridge.py expand "要点..." --aspect detail          # 扩写
-
-# ===== wps ai 新增 3 个 AI 动作（续写/改写/扩写）=====
-python scripts/wps_ai.py --action continue --text "未完待续..." --context "前文"
-python scripts/wps_ai.py --action rewrite --text "原文..." --style formal
-python scripts/wps_ai.py --action expand --text "要点..." --aspect detail
-
-# ===== 模板市场（50+ 内置模板）=====
-python scripts/template_manager.py list                       # 列出所有模板
-python scripts/template_manager.py list --category contract  # 按分类筛选
-python scripts/template_manager.py get 合同模板               # 获取模板详情
-python scripts/template_manager.py fill 合同模板 --data '{"甲方":"张三"}' --output 合同.docx
-python scripts/template_manager.py add --source 我的文档.docx --name 自定义模板 --category other
-python scripts/template_manager.py export 合同模板 --output-dir ./exports
-python scripts/template_manager.py import ./imports/模板包
-
-# ===== NL2Formula 多轮澄清 =====
-python scripts/clarify.py detect --query "统计销售额"         # 歧义检测
-python scripts/clarify.py clarify --query "统计销售额"        # 多轮澄清+公式生成
-python scripts/clarify.py verify --formula "=SUM(A1:A10)"     # 公式反向验证
-python scripts/excel_analyzer.py nl2formula --query "统计销售额" --clarify  # 启用澄清
-
-# ===== 周报/月报 LLM 润色 =====
-python scripts/report_generator.py generate --type weekly --points "完成A,B,C" --output 周报.docx --polish
-
-# ===== 会议纪要 llm_bridge 优先摘要 =====
-python scripts/meeting_minutes.py generate --file audio.wav --output 纪要.docx --summary-method llm_bridge
-
-# ===== 文档翻译 llm_bridge 优先 =====
-python scripts/document_translator.py translate --file report.docx --output 报告_zh.docx --method llm_bridge
-```
-
-### 🆕 v4.8 邮件智能回复 + 周报月报 + 纯Python增强 + AI统一入口
-
-```bash
-# 邮件智能回复（模板匹配 + 可选 LLM 个性化）
-python scripts/wps_word.py email-reply --content "已收到您的来信，关于项目进度..." --tone polite
-python scripts/wps_word.py email-reply --content "请查收附件" --tone formal --output 回复.docx
-python scripts/email_reply.py reply --content "谢谢" --tone friendly
-python scripts/email_reply.py batch --input-dir ./emails --output-dir ./replies
-
-# 周报/月报自动生成
-python scripts/wps_word.py report --type weekly --points "完成需求A,修复Bug B,启动项目C"
-python scripts/wps_word.py report --type monthly --points "上线v2.0,培训3场,客户拜访5家" --output 月报.docx
-python scripts/report_generator.py generate --type weekly --points "完成A,B,C" --output 周报.docx
-
-# 纯 Python 模式增强（条件格式/数据验证/合并单元格/命名区域）
-python scripts/wps_excel.py cond-format --file data.xlsx --sheet Sheet1 --range A1:A100 --type color-scale
-python scripts/wps_excel.py data-validation --file data.xlsx --sheet Sheet1 --range B1:B100 --list "是,否"
-python scripts/wps_excel.py merge-cells --file data.xlsx --sheet Sheet1 --range A1:D1
-python scripts/wps_excel.py named-range --file data.xlsx --name "销售数据" --range A1:D100
-
-# AI 统一入口（wps ai --action）
-python scripts/wps_ai.py --action email-reply --content "已收到" --tone polite
-python scripts/wps_ai.py --action report --type weekly --points "完成A,B,C"
-python scripts/wps_ai.py --action meeting --file audio.wav --output 纪要.docx
-python scripts/wps_ai.py --action contract --file 合同.docx --output 审查版.docx
-python scripts/wps_ai.py --action translate --file report.docx --output 报告_zh.docx
-python scripts/wps_ai.py --action formula --formula "=SUM(A1:A10)"
-```
-
-### 🆕 v5.0 自动化流水线与稳定性中心
-
-```bash
-# ===== 定时任务 =====
-python scripts/schedule_register.py register --task weekly_report   # 注册周报定时任务（需确认）
-python scripts/schedule_register.py register --task monthly_report  # 注册月报定时任务
-python scripts/schedule_register.py register --task data_refresh   # 注册数据刷新定时任务
-python scripts/schedule_register.py list                           # 列出已注册任务
-python scripts/schedule_register.py cancel --task weekly_report    # 取消任务
-python scripts/schedule_register.py enable --task weekly_report    # 启用/禁用任务
-python scripts/schedule_register.py predefined                     # 查看预定义任务
-
-# ===== 目录监听 =====
-python scripts/watch.py watch --dir ./input --rules watch_rules.yaml  # 启动监听
-python scripts/watch.py scan --dir ./input --rules watch_rules.yaml   # 单次扫描
-python scripts/watch.py rules --dump                                 # 导出默认规则
-python scripts/watch.py init --dir ./input                            # 初始化规则文件
-
-# ===== 稳定性中心（统计+引擎健康+引擎偏好）=====
-python scripts/usage_stats.py stats --period daily    # 日报表
-python scripts/usage_stats.py stats --period weekly   # 周报表
-python scripts/usage_stats.py health                  # 引擎健康度报告
-python scripts/usage_stats.py engine-info             # 全局引擎信息（合并3脚本）
-python scripts/usage_stats.py preference --mode auto  # 引擎偏好：自动模式
-python scripts/usage_stats.py preference --mode fixed --engine wps  # 固定WPS引擎
-python scripts/usage_stats.py log --action create --engine wps --duration 2.5  # 手动埋点
-python scripts/usage_stats.py reset --yes             # 重置统计数据
-
-# ===== COM 三步自愈 =====
-python scripts/com_health.py self-heal                # 交互式三步自愈
-python scripts/com_health.py self-heal --yes          # 自动确认（跳过修复安装确认）
-
-# ===== 对话式数据查询 =====
-python scripts/nl2sql_engine.py query --file data.xlsx --query "销售额总和是多少"
-python scripts/nl2sql_engine.py query --file data.xlsx --query "按部门分组统计平均工资"
-python scripts/nl2sql_engine.py interactive --file data.xlsx  # 交互式连续追问
-python scripts/nl2sql_engine.py history                  # 查看查询历史
-
-# ===== 编排引擎桥接 =====
-python scripts/pipeline_bridge.py register            # 注册WPS流水线模板
-python scripts/pipeline_bridge.py register --dry-run  # 预览注册内容
-python scripts/pipeline_bridge.py unregister          # 注销模板
-python scripts/pipeline_bridge.py status              # 查看桥接状态
-python scripts/pipeline_bridge.py list                # 列出所有流水线模板
-```
-
-### 🆕 v5.1 在线协同打通（桥接 kingdoc）
-
-```bash
-# ===== kingdoc 桥接 =====
-python scripts/kingdoc_bridge.py status                           # 检查 kingdoc 安装状态
-python scripts/kingdoc_bridge.py upload --file report.docx        # 上传文件到金山文档
-python scripts/kingdoc_bridge.py upload --file report.docx --folder-id xxx  # 指定文件夹
-python scripts/kingdoc_bridge.py diff --file report.docx --doc-id xxx      # 检查本地与云端差异
-
-# ===== 条件格式 IO =====
-python scripts/conditional_format_io.py extract --file data.xlsx              # 提取条件格式为 JSON
-python scripts/conditional_format_io.py extract --file data.xlsx --sheet Sheet1 --output rules.json
-python scripts/conditional_format_io.py apply --file data.xlsx --json-file rules.json  # 应用条件格式
-
-# ===== 数据验证 IO =====
-python scripts/validation_io.py extract --file data.xlsx              # 提取数据验证为 JSON
-python scripts/validation_io.py apply --file data.xlsx --json-file rules.json  # 应用数据验证
-
-# ===== 会议纪要 v5.1 三段式 =====
-python scripts/meeting_minutes.py generate --file audio.wav --output 纪要.docx --diarize --num-speakers 3
-python scripts/meeting_minutes.py diarize --file audio.wav --num-speakers 3  # 独立说话人标注
-python scripts/meeting_minutes.py generate --file audio.wav --no-diarize     # 禁用说话人标注
-```
-
-### 其他工具
-
-```bash
-python scripts/wps_test.py                    # 环境自检（人类可读）
-python scripts/wps_test.py --json             # 环境自检（JSON 格式）
-python scripts/wps_feedback.py page           # 打开反馈页面
-python scripts/wps_feedback.py email          # 打开邮件客户端
-python scripts/wps_update.py --force          # 强制检查更新
-python scripts/wps_toc.py insert --file "report.docx"  # 插入目录
-python scripts/format_converter.py batch --input-dir "D:\Reports" --input-format docx --output-format pdf  # 批量转换
-python templates/generate_templates.py --dir ./output  # 生成模板
-
-# --- v5.2 新增 ---
-python scripts/gongwen.py layout --file 公文.docx --redhead --joint          # 公文一键排版（红头预留位+联合行文）
-python scripts/watermark.py add --file 报告.docx --text 机密 --diagonal      # 文字水印（对角线）
-python scripts/watermark.py add --dir ./Docs --image logo.png --tile         # 批量图片水印（平铺）
-python scripts/redact.py run --file 客户.docx --manifest 打码清单.json       # 敏感信息打码+清单
-python scripts/doc_search.py search --dir ./资料库 --query "质保期两年" --open # 跨文档检索并打开
-python scripts/doc_search.py search --dir ./资料库 --query "..." --deposit    # 检索命中沉淀为长期记忆（桥接 zwjh）
-```
-
----
+> 其余脚本可直接 `python scripts/wps <脚本名> [参数]` 调用；`--json` 适用于全部命令。
 
 ## 📊 版本兼容矩阵
 
@@ -1026,6 +657,7 @@ python scripts/doc_search.py search --dir ./资料库 --query "..." --deposit   
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v5.3.0 | 2026-10-09 | 增加：统一 CLI 入口 scripts/wps.py（registry.json 注册表分发，office --app word/excel/ppt --action 与 convert 子命令 + --list 一屏列出全部命令，薄路由层不改脚本内部逻辑，原 47 个脚本 100% 兼容）；增加：全命令 --json 机器可读输出（wps_error.py 新增 emit_json 统一出口，固定 ok/error_id/elapsed/data 四字段，error_id 对齐 E001-E015）；优化：_worker 启动速度（wps_worker.py 的 wps_pure 改惰性加载，pywin32/python-docx/openpyxl 经核查已惰性导入，ENGINE_CACHE 进程级单例复用，COM 释放统一走 release_ms 三槽位）；合并：格式转换三入口收敛为 convert 子命令（format_converter/md_converter/wps_docx_to_ppt 内部按目标格式路由），旧脚本保留为兼容别名并提示新命令，v6.0.0 移除；优化：SKILL.md 命令速查改为由 registry.json 自动导出的一页表，主文档体积下降 ≥30% |
 | v5.2.5 | 2026-09-22 | 修复：MS Office 引擎下 Excel/PPT 创建必然失败（ms_create_excel/ms_create_ppt 错用 Word COM 对象，调用 get_ms_word 而非各自 Excel/PPT 对象）；增加：wps_common.py 新增 create_ms_excel/get_ms_excel 与 create_ms_ppt/get_ms_ppt，并新增 MS_EXCEL_CLIENT/MS_PPT_CLIENT 双槽位；修复：release_ms 改为统一释放 Word/Excel/PPT 三槽位并置空；修复：wps_ms.py 与 wps_worker.py 的 MS Office 路径透传 filepath 参数（不再硬编码写入桌面） |
 | v5.2.0 | 2026-09-19 | 增加：公文一键排版 gongwen.py + references/gongwen_rules.yaml（GB/T 9704 党政机关公文格式约束库，结构识别套版，支持红头预留位与联合行文，处理前自动备份原文件）；增加：批量水印 watermark.py（文字/图片水印，平铺与对角线，docx/pptx/图片批量目录处理）；增加：敏感信息打码 redact.py（正则+词典双轨识别身份证/手机号/银行卡/邮箱，黑色矩形覆盖，输出打码清单供人工复核，NER 可选增强）；增加：跨文档知识检索 doc_search.py（本地 TF-IDF char/bigram 自研零依赖，跨文档找内容问答，命中返回文件+段落+跳转，embedding 可选，zwjh 记忆桥接未装则跳过）；删除：与 contract-review 重复的轻量合同审查模块 wps_contract_review.py 及其在 wps_ai/wps_word/wps_worker 的入口命令，SKILL.md 改为文本互链引导（无代码依赖） |
 | v5.1.0 | 2026-09-08 | 增加：kingdoc 云端桥接 kingdoc_bridge.py（白名单探测+配置预检+subprocess JSON 契约上传+ difflib 差异检查，未安装/未配置隐藏入口+可选装提示）；增加：条件格式跨引擎 IO conditional_format_io.py（色阶/数据条/公式条件→JSON 中间格式，跨引擎保真往返 WPS↔纯Python）；增加：数据验证跨引擎 IO validation_io.py（下拉/数值区间/日期→JSON 中间格式，跨引擎保真往返）；优化：meeting_minutes.py 升级为 v5.1 三段式要素化纪要（待办清单+决策记录+风险异议，每节独立页眉）；增加：说话人标注 SpeakerDiarization（MFCC 聚类或显式报名，独立 diarize 子命令）；增加：--diarize/--no-diarize 参数控制说话人标注；增加：--num-speakers 参数指定说话人数 |
