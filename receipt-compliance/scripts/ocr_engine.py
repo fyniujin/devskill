@@ -128,7 +128,7 @@ class OCREngine:
         raise RuntimeError(
             "未检测到可用的OCR引擎。请安装 PaddleOCR 或 Tesseract：\n"
             "  PaddleOCR: pip install paddlepaddle paddleocr\n"
-            "  Tesseract: 运行 install_tesseract.sh 或 install_tesseract.ps1"
+            "  Tesseract: 用包管理器安装（Windows: winget/scoop；Mac: brew；Linux: apt）"
         )
     
     def _init_paddle(self):
