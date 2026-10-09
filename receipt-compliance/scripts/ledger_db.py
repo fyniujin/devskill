@@ -27,6 +27,12 @@ except ImportError:  # 允许从其他目录调用
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from unified_invoice import UnifiedInvoice
 
+try:
+    from dedup_engine import DedupEngine
+except ImportError:  # 允许从其他目录调用
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from dedup_engine import DedupEngine
+
 
 DEFAULT_DB_PATH = Path.home() / ".workbuddy" / "output" / "receipt_ledger.db"
 
@@ -86,12 +92,40 @@ class LedgerDB:
         source_file            TEXT,
         raw_json               TEXT,
         created_at             TEXT,
-        UNIQUE(invoice_code, invoice_number, direction)
+        UNIQUE(invoice_code, invoice_number, direction, source_file)
     );
     CREATE INDEX IF NOT EXISTS idx_inv_month     ON invoices(month);
     CREATE INDEX IF NOT EXISTS idx_inv_seller    ON invoices(seller_name);
     CREATE INDEX IF NOT EXISTS idx_inv_direction ON invoices(direction);
     CREATE INDEX IF NOT EXISTS idx_inv_deadline  ON invoices(certification_deadline);
+
+    -- 查重复核工单（v4.5.0 新增）
+    CREATE TABLE IF NOT EXISTS review (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind         TEXT NOT NULL DEFAULT 'dedup',   -- dedup / manual
+        group_key    TEXT,                             -- 去重组哈希，幂等防重复建单
+        signal       TEXT,                             -- exact / fuzzy
+        confidence   REAL,
+        diff_fields  TEXT,                             -- JSON list
+        members_json TEXT,                             -- JSON list of members
+        status       TEXT NOT NULL DEFAULT 'pending',  -- pending / confirmed_dup / exempt
+        note         TEXT,
+        resolver     TEXT,
+        created_at   TEXT,
+        resolved_at  TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_review_status ON review(status);
+    CREATE INDEX IF NOT EXISTS idx_review_key    ON review(group_key);
+
+    -- 查重误报豁免规则沉淀（v4.5.0 新增）
+    CREATE TABLE IF NOT EXISTS exempt_rules (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        seller_contains TEXT,
+        amount          REAL,
+        date_window     INTEGER,
+        note            TEXT,
+        created_at      TEXT
+    );
     """
 
     def __init__(self, db_path: Optional[str] = None):
@@ -135,8 +169,9 @@ class LedgerDB:
 
         cur = self.conn.execute(
             "SELECT id, certification_deadline, certification_source FROM invoices "
-            "WHERE invoice_code IS ? AND invoice_number IS ? AND direction = ?",
-            (row["invoice_code"], row["invoice_number"], direction),
+            "WHERE invoice_code IS ? AND invoice_number IS ? AND direction = ? "
+            "  AND source_file IS ?",
+            (row["invoice_code"], row["invoice_number"], direction, row["source_file"]),
         )
         exist = cur.fetchone()
 
@@ -262,6 +297,146 @@ class LedgerDB:
             args.append(end)
         sql += " ORDER BY billing_date, id"
         return [dict(r) for r in self.conn.execute(sql, args).fetchall()]
+
+    # ---------- 查重复核工单（v4.5.0 新增）----------
+
+    @staticmethod
+    def _review_group_key(group: Dict[str, Any]) -> str:
+        """去重组哈希：成员 id + 信号，保证同组重建工单幂等"""
+        import hashlib
+        ids = sorted(str(m.get("id")) for m in group.get("members", []))
+        raw = f"{group.get('signal')}|" + "|".join(ids)
+        return hashlib.md5(raw.encode("utf-8")).hexdigest()
+
+    def run_dedup(self, exempt_rules: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """
+        对台账全部票据跑查重，未处理过的重复组自动生成复核工单。
+        返回 {groups, created_reviews, skipped}
+        """
+        rows = self.query_invoices()
+        items = [{
+            "id": r["id"],
+            "invoice_number": r["invoice_number"],
+            "seller_name": r["seller_name"],
+            "amount": r["amount"],
+            "total": r["total"],
+            "billing_date": r["billing_date"],
+            "source_file": r["source_file"],
+        } for r in rows]
+        if exempt_rules is None:
+            exempt_rules = self.get_exempt_rules()
+        groups = DedupEngine(exempt_rules).find_duplicates(items)
+
+        created, skipped = [], 0
+        for g in groups:
+            key = self._review_group_key(g)
+            if self._review_exists(key):
+                skipped += 1
+                continue
+            rid = self.add_review(
+                kind="dedup",
+                group_key=key,
+                signal=g.get("signal"),
+                confidence=g.get("confidence"),
+                diff_fields=g.get("diff_fields", []),
+                members=g.get("members", []),
+            )
+            created.append(rid)
+        return {"groups": groups, "created_reviews": created, "skipped": skipped}
+
+    def add_review(self, kind: str, group_key: Optional[str],
+                   signal: Optional[str], confidence: Optional[float],
+                   diff_fields: List[Any], members: List[Any]) -> int:
+        """新增一条复核工单，返回主键 id"""
+        cur = self.conn.execute(
+            """INSERT INTO review
+               (kind, group_key, signal, confidence, diff_fields, members_json, status, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)""",
+            (kind, group_key, signal, confidence,
+             json.dumps(diff_fields, ensure_ascii=False),
+             json.dumps(members, ensure_ascii=False), _now()),
+        )
+        self.conn.commit()
+        return cur.lastrowid
+
+    def _review_exists(self, group_key: Optional[str]) -> bool:
+        if not group_key:
+            return False
+        row = self.conn.execute(
+            "SELECT 1 FROM review WHERE group_key = ? AND status IN ('pending','confirmed_dup')",
+            (group_key,),
+        ).fetchone()
+        return row is not None
+
+    def list_reviews(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
+        sql = "SELECT * FROM review WHERE 1=1"
+        args: List[Any] = []
+        if status:
+            sql += " AND status = ?"
+            args.append(status)
+        sql += " ORDER BY created_at DESC, id DESC"
+        out = []
+        for r in self.conn.execute(sql, args).fetchall():
+            d = dict(r)
+            try:
+                d["diff_fields"] = json.loads(d["diff_fields"]) if d["diff_fields"] else []
+            except (json.JSONDecodeError, TypeError):
+                d["diff_fields"] = []
+            try:
+                d["members"] = json.loads(d["members_json"]) if d["members_json"] else []
+            except (json.JSONDecodeError, TypeError):
+                d["members"] = []
+            out.append(d)
+        return out
+
+    def resolve_review(self, review_id: int, decision: str,
+                       note: Optional[str] = None, resolver: Optional[str] = None) -> bool:
+        """
+        处置工单：decision ∈ {confirmed_dup, exempt}
+        confirmed_dup → 标记为重复（财务确认后相关票据不进台账/人工剔除）
+        exempt        → 误报豁免，并沉淀为豁免规则（后续同组合不再告警）
+        """
+        decision = decision if decision in ("confirmed_dup", "exempt") else "exempt"
+        row = self.conn.execute(
+            "SELECT members_json FROM review WHERE id = ?", (review_id,)
+        ).fetchone()
+        if not row:
+            return False
+        self.conn.execute(
+            """UPDATE review SET status = ?, note = ?, resolver = ?, resolved_at = ?
+               WHERE id = ?""",
+            (decision, note, resolver, _now(), review_id),
+        )
+        self.conn.commit()
+        if decision == "exempt":
+            try:
+                members = json.loads(row["members_json"]) if row["members_json"] else []
+            except (json.JSONDecodeError, TypeError):
+                members = []
+            sellers = {m.get("seller_name") for m in members if m.get("seller_name")}
+            amts = {m.get("amount") for m in members if m.get("amount")}
+            seller_kw = sorted(sellers)[0] if sellers else None
+            amt = sorted(amts)[0] if amts else None
+            self.add_exempt_rule(seller_contains=seller_kw, amount=amt, date_window=3,
+                                 note=f"由工单 #{review_id} 误报沉淀")
+        return True
+
+    # ---------- 豁免规则 ----------
+
+    def add_exempt_rule(self, seller_contains: Optional[str] = None,
+                        amount: Optional[float] = None, date_window: Optional[int] = None,
+                        note: Optional[str] = None) -> int:
+        cur = self.conn.execute(
+            """INSERT INTO exempt_rules (seller_contains, amount, date_window, note, created_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            (seller_contains, amount, date_window, note, _now()),
+        )
+        self.conn.commit()
+        return cur.lastrowid
+
+    def get_exempt_rules(self) -> List[Dict[str, Any]]:
+        return [dict(r) for r in self.conn.execute(
+            "SELECT * FROM exempt_rules ORDER BY id").fetchall()]
 
     # ---------- 报表视图 ----------
 
@@ -538,6 +713,14 @@ def main():
     parser.add_argument("--report", action="store_true", help="输出完整报表 JSON")
     parser.add_argument("--export-excel", nargs="?", const="", help="导出 Excel 月度附件")
     parser.add_argument("--output", help="报表 JSON 输出路径")
+    # v4.5.0 查重与复核工单
+    parser.add_argument("--dedup", action="store_true", help="对台账跑查重并生成复核工单")
+    parser.add_argument("--list-reviews", nargs="?", const="pending",
+                        help="列出复核工单（可传 all / pending / confirmed_dup / exempt）")
+    parser.add_argument("--resolve-review", nargs=2, metavar=("ID", "DECISION"),
+                        help="处置工单：--resolve-review 工单ID confirmed_dup|exempt")
+    parser.add_argument("--render-review", nargs=2, metavar=("ID", "HTML"),
+                        help="渲染工单为移动端可读 HTML：--render-review 工单ID 输出.html")
     args = parser.parse_args()
 
     db = LedgerDB(args.db)
@@ -554,6 +737,31 @@ def main():
         ok = db.set_certification_deadline(args.set_deadline[0], args.set_deadline[1])
         print("补录成功" if ok else "未找到该发票号码，请确认")
 
+    if args.dedup:
+        res = db.run_dedup()
+        print(f"查重完成：发现 {len(res['groups'])} 个重复组，"
+              f"新建工单 {len(res['created_reviews'])} 条，跳过已存在 {res['skipped']} 条")
+
+    if args.list_reviews is not None:
+        rows = db.list_reviews(None if args.list_reviews == "all" else args.list_reviews)
+        print(json.dumps(rows, ensure_ascii=False, indent=2))
+
+    if args.resolve_review:
+        rid = int(args.resolve_review[0])
+        ok = db.resolve_review(rid, args.resolve_review[1])
+        print("处置成功" if ok else "工单不存在，请确认 ID")
+
+    if args.render_review:
+        rid = int(args.render_review[0])
+        from review_render import render_review_html
+        rows = db.list_reviews()
+        target = next((r for r in rows if r["id"] == rid), None)
+        if not target:
+            print("工单不存在，请确认 ID")
+        else:
+            out = render_review_html(target, args.render_review[1])
+            print(f"工单 HTML 已生成：{out}")
+
     if args.report or args.output:
         report = db.full_report()
         text = json.dumps(report, ensure_ascii=False, indent=2)
@@ -567,7 +775,8 @@ def main():
         res = db.export_excel(args.export_excel or None)
         print(json.dumps(res, ensure_ascii=False, indent=2))
 
-    if not any([args.import_json, args.fill_deadlines, args.set_deadline,
+    if not any([args.import_json, args.fill_deadlines, args.set_deadline, args.dedup,
+                args.list_reviews is not None, args.resolve_review, args.render_review,
                 args.report, args.output, args.export_excel is not None]):
         parser.print_help()
 
