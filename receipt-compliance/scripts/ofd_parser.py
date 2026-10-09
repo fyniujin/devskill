@@ -162,6 +162,49 @@ class OFDParser:
         result = self.parse()
         return result.get('structure', {})
 
+    def to_invoice(self) -> Dict[str, Any]:
+        """
+        数电票 OFD 版式直读（v4.5.0）
+        文字层可取时转 UnifiedInvoice；不可取时返回结构化降级信息。
+
+        Returns:
+            dict: {supported, data, validation_errors, message, ...}
+        """
+        result = self.parse()
+
+        if not result.get('extractable'):
+            return {
+                "type": "full_electronic_ofd",
+                "receipt_type": "vat_invoice",
+                "supported": False,
+                "data": result,
+                "message": "OFD 文字层不可用，请安装 ofdparser 或转为 PDF 后直读",
+                "alternatives": result.get('install_hint', ''),
+            }
+
+        try:
+            from digital_invoice_reader import DigitalInvoiceTextParser
+            text = self.extract_text()
+            inv = DigitalInvoiceTextParser().parse(text)
+            inv.source_format = "ofd"
+            return {
+                "type": "full_electronic_ofd",
+                "receipt_type": "vat_invoice",
+                "supported": True,
+                "data": inv.to_dict(),
+                "validation_errors": inv.validate(),
+                "message": "数电票 OFD 直读完成",
+            }
+        except Exception as e:
+            return {
+                "type": "full_electronic_ofd",
+                "receipt_type": "vat_invoice",
+                "supported": False,
+                "data": result,
+                "message": f"OFD 转结构化失败: {e}",
+                "alternatives": result.get('install_hint', ''),
+            }
+
 
 class PDFallbackExtractor:
     """
