@@ -11,7 +11,7 @@ import sys
 import json
 import re
 from pathlib import Path
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Optional
 
 from unified_invoice import UnifiedInvoice, RECEIPT_TYPES
 from xml_parser import FullElectronicInvoiceParser
@@ -73,7 +73,13 @@ class InvoiceDetector:
             return "full_electronic_ofd"
         
         # 2. 图片/PDF 文件需要通过 OCR 内容判断
-        if self.extension in self.TRADITIONAL_IMAGE_EXTENSIONS | self.TRADITIONAL_PDF_EXTENSIONS:
+        if self.extension in self.TRADITIONAL_PDF_EXTENSIONS:
+            # 数电票 PDF 优先尝试直读判定（文本层含 20 位票号/全电特征）
+            pdf_type = self._detect_pdf_type()
+            if pdf_type:
+                return pdf_type
+            return self._detect_image_type()
+        if self.extension in self.TRADITIONAL_IMAGE_EXTENSIONS:
             return self._detect_image_type()
         
         # 3. 未知类型，尝试读取文件头判断
@@ -102,6 +108,32 @@ class InvoiceDetector:
         except Exception:
             return "traditional"
     
+    def _detect_pdf_type(self) -> Optional[str]:
+        """
+        数电票 PDF 直读判定（v4.5.0）
+        若 PDF 文本层含数电票特征（20 位票号/全电标志词），直接路由直读，
+        避免误走通用 OCR 造成要素错位。
+        """
+        try:
+            from digital_invoice_reader import DigitalInvoiceTextParser
+        except Exception:
+            return None
+        try:
+            from pypdf import PdfReader as PR
+        except ImportError:
+            try:
+                from PyPDF2 import PdfReader as PR
+            except ImportError:
+                return None
+        try:
+            reader = PR(str(self.file_path))
+            text = "\n".join((p.extract_text() or "") for p in reader.pages[:2])
+            if DigitalInvoiceTextParser.looks_like_digital(text):
+                return "full_electronic_pdf"
+        except Exception:
+            return None
+        return None
+
     def _detect_image_type(self) -> str:
         """通过 OCR 文本特征判断票据类型"""
         # 尝试 OCR 提取文本
@@ -204,6 +236,7 @@ class InvoiceDetector:
             "vat_invoice": ("vat_invoice", self._handle_traditional),
             "full_electronic_xml": ("full_electronic_xml", self._handle_full_electronic_xml),
             "full_electronic_ofd": ("full_electronic_ofd", self._handle_full_electronic_ofd),
+            "full_electronic_pdf": ("full_electronic_pdf", self._handle_full_electronic_pdf),
             "train_ticket": ("train_ticket", self._handle_train_ticket),
             "flight_itinerary": ("flight_itinerary", self._handle_flight_itinerary),
             "taxi_receipt": ("taxi_receipt", self._handle_taxi_receipt),
@@ -252,28 +285,24 @@ class InvoiceDetector:
             }
     
     def _handle_full_electronic_ofd(self) -> Dict[str, Any]:
-        """全电发票OFD处理入口"""
+        """全电发票OFD处理入口（v4.5.0 升级为结构化直读）"""
+        from ofd_parser import OFDParser
         parser = OFDParser(str(self.file_path))
-        result = parser.parse()
-        
-        if result.get('extractable'):
+        return parser.to_invoice()
+
+    def _handle_full_electronic_pdf(self) -> Dict[str, Any]:
+        """数电票 PDF 直读处理入口（v4.5.0）"""
+        try:
+            from digital_invoice_reader import read_digital_pdf
+            return read_digital_pdf(str(self.file_path))
+        except Exception as e:
             return {
-                "type": "full_electronic_ofd",
+                "type": "full_electronic_pdf",
                 "receipt_type": "vat_invoice",
-                "message": "检测到全电发票OFD格式",
-                "next_step": "文字提取成功",
-                "supported": True,
-                "data": result,
-            }
-        else:
-            return {
-                "type": "full_electronic_ofd",
-                "receipt_type": "vat_invoice",
-                "message": "检测到全电发票OFD格式，但文字提取能力有限",
-                "next_step": "建议使用 ofdparser 库或转换为PDF后OCR",
+                "message": f"数电票 PDF 直读失败: {e}",
                 "supported": False,
-                "data": result,
-                "alternatives": result.get('install_hint', ''),
+                "error": str(e),
+                "next_step": "建议确认 PDF 含文本层或安装 pypdf 后重试",
             }
     
     def _handle_train_ticket(self) -> Dict[str, Any]:
