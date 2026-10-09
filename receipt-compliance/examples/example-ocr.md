@@ -51,7 +51,7 @@ python scripts/ocr_engine.py --input D:\invoices\20260628_001.png --output D:\in
 
 | 错误 | 解决 |
 |------|------|
-| `Tesseract not found` | 运行 `.\scripts\install_tesseract.ps1` 并重启终端 |
+| `Tesseract not found` | 用包管理器安装 Tesseract（Windows: winget/scoop；Mac: brew；Linux: apt）并重启终端 |
 | `empty result` | 检查图片质量，确保光线均匀、平整 |
 | `chi_sim not found` | 重新安装Tesseract，勾选中文语言包 |
 | 识别率低 | 提高DPI（建议≥300），重新拍摄 |
