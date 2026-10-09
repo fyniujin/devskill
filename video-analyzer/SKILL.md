@@ -2,9 +2,9 @@
 slug: video-analyzer-local
 displayName: 视频分析处理
 name: video-analyzer
-description: "视频分析处理 — 本地视频反编译分析工具。将视频拆解为时间轴剧本、语音转文字、场景分析、跨模态关联和精华摘要，支持多ASR引擎切换（Whisper/Paraformer/SenseVoice）、中文NLP增强、PaddleOCR中文识别。v4.0 新增短视频平台适配（抖音/快手/B站/视频号）和自动剪辑建议（高光检测/冗余标记/EDL导出/字幕样式）。v4.1 新增tiny模型优先体验（75MB低门槛）、说话人分离质量评分、剪映draft.json导出。v4.2 新增场景管理（detect→slice一条链）、短视频爆款预测、实时直播分析（流式ASR+敏感词检测）。v4.3 新增纯音频输入（mp3/m4a/wav播客与录音）、批量队列（SQLite+硬件档位并发）、GPU自动加速（CT2 int8量化）、ASR配置统一（--asr-engine单参数）。v4.4 新增一键成片（ffmpeg filter_complex 自动剪辑+平台规格包导出）、封面帧智能选取（Laplacian+人脸+三分法构图）、自动字幕翻译（cn-llm-router桥接，EN/JP/KO）、BGM识别（chromaprint指纹+本地库匹配）、剪映6.0适配+EDL导入指南。"
-version: 4.4.0
-tags: ["video", "analysis", "transcription", "local-offline", "chinese", "asr", "auto-edit", "subtitle-translate", "bgm-detect"]
+description: "视频分析处理 — 本地视频反编译分析工具。将视频拆解为时间轴剧本、语音转文字、场景分析、跨模态关联和精华摘要，支持多ASR引擎切换（Whisper/Paraformer/SenseVoice）、中文NLP增强、PaddleOCR中文识别。v4.0 新增短视频平台适配（抖音/快手/B站/视频号）和自动剪辑建议（高光检测/冗余标记/EDL导出/字幕样式）。v4.1 新增tiny模型优先体验（75MB低门槛）、说话人分离质量评分、剪映draft.json导出。v4.2 新增场景管理（detect→slice一条链）、短视频爆款预测、实时直播分析（流式ASR+敏感词检测）。v4.3 新增纯音频输入（mp3/m4a/wav播客与录音）、批量队列（SQLite+硬件档位并发）、GPU自动加速（CT2 int8量化）、ASR配置统一（--asr-engine单参数）。v4.4 新增一键成片（ffmpeg filter_complex 自动剪辑+平台规格包导出）、封面帧智能选取（Laplacian+人脸+三分法构图）、自动字幕翻译（cn-llm-router桥接，EN/JP/KO）、BGM识别（chromaprint指纹+本地库匹配）、剪映6.0适配+EDL导入指南。v4.5.0 新增首跑自检（doctor 探测 ffmpeg/模型/磁盘/内存/GPU + 修复命令清单）、模型下载链路（进度可视化+3次重试+断点续传+清华镜像交互提示）、--quick 快速模式（仅转写+摘要，5分钟出稿）、首跑「下一步建议」（功能发现引导）。"
+version: 4.5.0
+tags: ["video", "analysis", "transcription", "local-offline", "chinese", "asr", "auto-edit", "subtitle-translate", "bgm-detect", "doctor", "quick-mode"]
 icon: "🎬"
 author: "njskills"
 license: "MIT"
@@ -36,6 +36,8 @@ license: "MIT"
 > pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 > ```
 > 下载完成后后续使用无需重复下载。
+> 
+> 💡 **v4.5.0 新增**：首次使用前建议先运行 `--doctor` 自检环境，缺什么一目了然。快速体验用 `--quick` 5分钟出稿。
 
 ### 基本用法
 ```bash
@@ -145,6 +147,9 @@ output/
 | `--translate-format` |  | 翻译字幕输出格式：`srt`/`ass`/`vtt`（默认 srt） |
 | `--bgm-detect` |  | 启用 BGM 识别（需 chromaprint/fpcalc，v4.4 新增） |
 | `--quality-score` |  | 启用说话人分离质量评分 |
+| `--doctor` |  | 首跑自检：探测 ffmpeg/模型/磁盘/内存/GPU，输出修复命令清单（v4.5.0 新增） |
+| `--quick` |  | 快速模式：仅转写+时间戳摘要，跳过视觉/场景/剪辑链（v4.5.0 新增） |
+| `--download-model` |  | 下载 Whisper 模型（带进度可视化+断点续传+3次重试，v4.5.0 新增） |
 
 ## 功能说明
 
@@ -330,6 +335,20 @@ A: tiny 模型（75MB）识别速度更快但准确率略低；small 模型（46
 **Q: 为什么优先推荐 tiny 模型？**
 A: v4.1 新增 tiny 模型优先体验（75MB），首次使用门槛从 466MB 降至 75MB。低配电脑也会自动使用 tiny 模型。如需更高精度，可手动切换 `--model small/medium`。
 
+### v4.5.0 新增功能 FAQ
+
+**Q: 首跑自检怎么用？**
+A: 运行 `--doctor` 即可。工具会一次性探测 ffmpeg 可用性、whisper 模型缓存、磁盘剩余空间、内存水位和 GPU 可用性，输出检查报告。如果有问题项，会给出「缺什么→给什么」的修复命令清单，但不会自动执行写操作（先清单后确认）。
+
+**Q: 模型下载失败怎么办？**
+A: 使用 `--download-model tiny` 下载。工具会自动重试 3 次，支持断点续传（HTTP Range），并显示进度条和下载速度。国内用户建议先执行 `pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple`。
+
+**Q: --quick 模式有什么用？**
+A: 快速模式仅做语音转文字 + 时间戳摘要，跳过视觉分析、场景切割和剪辑链，5 分钟内产出单文件 Markdown。适合低配机与新用户快速体验，末尾自动附加 3 条「下一步建议」引导发现更多功能。
+
+**Q: 医生模式会修改我的系统吗？**
+A: 不会。doctor 模式只读探测，输出修复命令清单供用户参考。所有写操作（安装 ffmpeg、下载模型等）都需要用户手动执行或使用 `--download-model` 参数。
+
 ### v4.4.0 新增功能 FAQ
 
 **Q: 一键成片怎么用？**
@@ -358,7 +377,12 @@ A: 升级了 draft.json 生成器以对齐剪映 6.0 新 schema（materials/trac
 
 ## 更新日志
 
-| v4.4.0 | 2026-09-08 | 增加：一键成片（ffmpeg filter_complex 链，含片段拼接+转场+ASS字幕烧录+BGM+人声闪避，3种成片风格：口播精简/高光集锦/预告片，导出平台规格包：抖音9:16/B站横屏/快手/视频号，含BGM建议库与EDL映射表，仅导出不自动发布）；增加：封面帧智能选取（Laplacian锐度+人脸数量/位置+三分法构图+亮度评分，输出Top3 PNG并附理由）；增加：自动字幕翻译（白名单桥接 cn-llm-router 翻译任务，subprocess 调用 router.py chat --task translate --json，按字幕批量+术语表约束，生成EN/JP/KO/FR/DE/ES/RU的SRT/ASS/VTT，未安装则降级为仅输出中文字幕+提示安装）；增加：BGM识别（可选依赖 chromaprint/fpcalc 计算音频指纹，匹配本地小参考库，输出版权风险提示：low/medium/high/unknown，无依赖则隐藏）；优化：剪映6.0适配+EDL导入指南（升级 draft.json 生成器对齐新schema：materials/tracks/segments，失败自动降级为SRT+EDL，输出Premiere Pro/DaVinci Resolve/Final Cut Pro导入指南文档）；增加：--auto-edit / --edit-style / --edit-platform / --bgm-path / --cover-select / --translate-subs / --translate-format / --bgm-detect / --jianying-v6 参数 |
+| v4.5.0 | 2026-09-11 | 增加：首跑自检（doctor 模块，一次性探测 ffmpeg/模型缓存/磁盘空间/内存水位/GPU 可用性，输出「缺什么→给什么」修复命令清单，检查项 YAML 可配，先清单后确认交互范式）；增加：模型下载链路（进度可视化+3次自动重试+HTTP Range 断点续传+清华 PyPI 镜像交互提示）；增加：--quick 快速模式（仅转写+时间戳摘要，跳过视觉/场景/剪辑链，单文件 Markdown 产出）；增加：首跑「下一步建议」（quick 结果末尾附 3 条可继续命令：--editing-suggest / --diarize / --platform）；增加：--doctor / --quick / --download-model 参数 |
+
+<details>
+<summary>历史版本</summary>
+
+### v4.4.0 增加：一键成片（ffmpeg filter_complex 链，含片段拼接+转场+ASS字幕烧录+BGM+人声闪避，3种成片风格：口播精简/高光集锦/预告片，导出平台规格包：抖音9:16/B站横屏/快手/视频号，含BGM建议库与EDL映射表，仅导出不自动发布）；增加：封面帧智能选取（Laplacian锐度+人脸数量/位置+三分法构图+亮度评分，输出Top3 PNG并附理由）；增加：自动字幕翻译（白名单桥接 cn-llm-router 翻译任务，subprocess 调用 router.py chat --task translate --json，按字幕批量+术语表约束，生成EN/JP/KO/FR/DE/ES/RU的SRT/ASS/VTT，未安装则降级为仅输出中文字幕+提示安装）；增加：BGM识别（可选依赖 chromaprint/fpcalc 计算音频指纹，匹配本地小参考库，输出版权风险提示：low/medium/high/unknown，无依赖则隐藏）；优化：剪映6.0适配+EDL导入指南（升级 draft.json 生成器对齐新schema：materials/tracks/segments，失败自动降级为SRT+EDL，输出Premiere Pro/DaVinci Resolve/Final Cut Pro导入指南文档）；增加：--auto-edit / --edit-style / --edit-platform / --bgm-path / --cover-select / --translate-subs / --translate-format / --bgm-detect / --jianying-v6 参数 |
 
 <details>
 <summary>历史版本</summary>
