@@ -3,7 +3,7 @@ name: receipt-compliance
 slug: receipt-compliance
 displayName: 会计助手
 description: 会计助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。
-version: 4.4.0
+version: 4.5.0
 category: 财税管理
 appName: 财税合规
 platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
@@ -38,6 +38,9 @@ platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
 | 17. 异常检测 | 轻量 Isolation Forest，金额/间隔/供应商三维打分 | ✅ 直接可用 | 票据列表 | 二级预警+触发维度 |
 | 18. 合规管理出口 | 规则预警 + 归档四性检测合并为一次执行 | ✅ 直接可用 | 票据 + 文件 | 统一合规报告 |
 | 19. 审批连接器 | 钉钉/企微/飞书统一接口（发送/查状态/回调验签） | ⚠️ 需配置密钥 | 报销单+配置 | 审批结果 |
+| 20. 数电票直读 | PDF/OFD 文本层结构化（pypdf 优先，缺失降级 OFD/PDF 文本）+ 二维码 TLV 解码核对 | ✅ 直接可用 | 数电票 PDF/OFD | 结构化 JSON（含明细行） |
+| 21. 重复报销查重 | 三信号两阶段：票号精确哈希 + 金额（±0.01）+ 日期（±3 天）近似比对，检出 P 图改抬头重复 | ✅ 直接可用 | 台账/票据列表 | 重复组清单 |
+| 22. 查重复工单 | 可疑项生成复核清单（两张原始凭证缩略图对照+差异标注，移动端可读），财务确认后进台账/误报标记豁免 | ⚠️ 需台账 | 复核清单 | HTML 对照页 |
 
 > ✅ = 装即用 ｜ ⚠️ = 需在 config.yaml 中配置对应API密钥
 >
@@ -394,8 +397,8 @@ python scripts/check_env.py
 
 | 系统 | 操作 |
 |------|------|
-| **Windows** | 双击运行 `scripts\install_tesseract.ps1`（右键→使用PowerShell运行） |
-| **Mac** | 终端执行 `bash ./scripts/install_tesseract.sh` |
+| **Windows** | 包管理器安装：`winget install --id UB-Mannheim.Tesseract`（或 `scoop install tesseract`），安装后重启终端 |
+| **Mac** | 终端执行 `brew install tesseract` |
 | **Linux** | `sudo apt-get install tesseract-ocr tesseract-ocr-chi-sim pip install Pillow pytesseract openpyxl pyyaml` |
 
 **第2步 — 识别发票（30秒）**：
@@ -687,7 +690,7 @@ python scripts/approval_engine.py --config config.yaml --expense D:\output\报�
 
 | 错误代码 | 问题描述 | 解决方案 |
 |---------|---------|---------|
-| `Tesseract not found` | Tesseract未安装或未加入PATH | 运行 `install_tesseract.ps1` 并重启终端 |
+| `Tesseract not found` | Tesseract未安装或未加入PATH | 用包管理器安装（Windows: winget/scoop；Mac: brew；Linux: apt）并重启终端 |
 | `chi_sim not found` | 中文语言包未安装 | 重新安装Tesseract，勾选Chinese语言包 |
 | `PIL not found` | Pillow未安装 | `pip install Pillow` |
 | `pytesseract not found` | pytesseract未安装 | `pip install pytesseract` |
@@ -1011,7 +1014,7 @@ logs/
 | 类型 | 扩展名 | 解析方式 |
 |------|--------|---------|
 | 传统纸质发票 | `.png`、`.jpg`、`.jpeg`、`.bmp` | OCR 引擎识别 |
-| 传统电子发票（PDF） | `.pdf` | OCR 引擎识别（需 poppler） |
+| 传统电子发票（PDF） | `.pdf` | 数电票走直读（pypdf 文本层，无需 poppler），非数电走通用 OCR |
 | 全电发票（XML） | `.xml` | 专用 XML Schema 解析器，提取结构化数据 |
 | 全电发票（OFD） | `.ofd` | OFD 解析器或转换为 PDF 后 OCR |
 
@@ -1059,6 +1062,65 @@ python scripts/invoice_detector.py path/to/any_invoice
 - 发票查验（国税总局）：https://inv-veri.chinatax.gov.cn/
 
 > ⚠️ **注意**：税务数字账户对接以企业自主配置为原则，本 Skill 提供标准接口框架，企业需根据实际税局接口规范自行实现具体调用逻辑。
+
+## 数电票直读与查重强化（v4.5.0）
+
+### 20. 数电票直读（PDF/OFD 不依赖通用 OCR）
+
+数电票 PDF/OFD 含结构化文本层，本版提供直读通道，跳过通用 OCR 的版面漂移问题：
+
+- **PDF 文本层直读**：优先 `pypdf` 抽取文本，`pdfminer.six` 次之，再降级 OCR；文本层缺失（扫描件 PDF）时退回通用 OCR 流程
+- **OFD 文字层直读**：优先 `ofdparser` 取文字，缺失则返回结构信息并提示安装
+- **票面要素 + 明细行**：发票号码/日期/价税合计/税额/税率/买卖方，以及数电票明细行（项目名称/规格/数量/单价/金额/税率/税额）一并结构化
+- **二维码 TLV 解码核对**：从 PDF 内嵌二维码提取 `pyzbar` 解码（缺失则跳过），与票面号码/代码交叉校验，不一致明确告警
+
+```bash
+# 数电票 PDF 直读
+python scripts/digital_invoice_reader.py pdf path/to/invoice.pdf
+
+# 数电票 OFD 直读
+python scripts/digital_invoice_reader.py ofd path/to/invoice.ofd
+
+# 自动识别（数电票 PDF 将走直读而非通用 OCR）
+python scripts/invoice_detector.py path/to/any_invoice
+```
+
+> 依赖策略（死规则 #9）：`pypdf` / `pdfminer.six` / `ofdparser` / `pyzbar` 均「优先 import、缺失即降级」，不强制安装；未装时功能降级但主流程不中断。
+
+### 21. 重复报销查重（三信号两阶段）
+
+针对报销重复（含 P 图改抬头）做两阶段检测：
+
+| 阶段 | 信号 | 逻辑 | 覆盖场景 |
+|------|------|------|---------|
+| 一 | 票号精确哈希 | 同号即重复 | 原样重复报销 |
+| 二 | 金额 ±0.01 + 日期 ±3 天 + 销售方/票号前缀相似 | 近似比对 | 改了抬头/票号但金额日期一致的变造重复 |
+
+```bash
+# 对台账全部票据跑查重，自动生成复核工单（幂等，已建单不重复）
+python scripts/ledger_db.py --dedup
+
+# 查看复核工单（pending / confirmed_dup / exempt / all）
+python scripts/ledger_db.py --list-reviews pending
+```
+
+查全率目标：20 组重复样本 ≥ 95%；数电票 PDF/OFD 各 10 份要素抽取准确率 ≥ 98%。
+
+### 22. 查重复工单化（复核清单 + 移动端对照）
+
+每次查重命中的可疑组生成一条复核工单，财务在桌面端确认、移动端查阅：
+
+```bash
+# 渲染工单为移动端可读 HTML（双原始凭证缩略图对照 + 差异标注）
+python scripts/ledger_db.py --render-review 工单ID 复核对照.html
+
+# 财务确认：confirmed_dup（重复，相关票据不进台账）/ exempt（误报，沉淀为豁免规则）
+python scripts/ledger_db.py --resolve-review 工单ID confirmed_dup
+python scripts/ledger_db.py --resolve-review 工单ID exempt
+```
+
+- 数电票渲染首页缩略图，纸票用扫描图；渲染失败仅展示要素差异表，不影响查阅
+- 误报标记 `exempt` 后自动沉淀为豁免规则，后续同组合不再重复告警
 
 ## 台账与合规管理（v4.4.0）
 
@@ -1202,6 +1264,7 @@ whitelist:
 
 ## 更新日志
 
+| v4.5.0 | 2026-10-09 | 新增：数电票直读模块 digital_invoice_reader.py，PDF 文本层优先 pypdf 抽取、缺失降级 pdfminer/OCR，OFD 文字层经 ofdparser 直读，票面要素与明细行一并结构化；新增：二维码 TLV 解码核对（pyzbar 优先，缺失跳过），票面号码/代码与二维码交叉校验不一致告警；新增：查重三信号引擎 dedup_engine.py，票号精确哈希 + 金额 ±0.01 + 日期 ±3 天两阶段近似比对，检出 P 图改抬头重复；新增：查重复工单化，ledger_db.py 增加 review 与 exempt_rules 表，自动生成复核工单、财务确认进台账或误报豁免沉淀规则；新增：review_render.py 生成移动端可读双原始凭证缩略图对照 HTML，渲染失败仅展示要素差异表；优化：unified_invoice.py 增加 detail_lines 明细行字段；优化：xml_parser.py 实现数电票明细行结构化提取；优化：invoice_detector.py 数电票 PDF 路由直读（非通用 OCR）；修复：ledger_db.py 台账同号不同源文件被误合并为单行导致原样重复漏检，存在性判定补 source_file 区分 |
 | v4.4.0 | 2026-09-08 | 新增：进销项台账引擎 ledger_db.py，SQLite 持久化台账含认证期限字段，提供月度汇总、税负率趋势、供应商集中度（Top N 占比与环比变化）、异常波动 z-score 四类报表视图，支持 openpyxl 导出 Excel 月度附件（缺失时降级 CSV）；新增：认证期日历 cert_calendar.py，全电发票自动取数认证期限、纸票手工补录，30/7 天两档到期提醒，支持 schtasks 注册每日扫描与 CSV 导出供日历软件二次提醒；新增：轻量异常检测引擎 anomaly_detector.py，纯 numpy 随机切割树实现 Isolation Forest 思路，金额分布/开票时间间隔/供应商组合三维打分，异常分超阈值进二级预警并给出触发维度解释；新增：合规管理统一出口 compliance_suite.py，风险预警与归档四性检测合并为一次执行，输出统一合规报告；新增：统一审批连接器 approval_connector.py，抽象发送/查状态/回调验签三方法，钉钉/企微/飞书为实现类；优化：风险预警规则 YAML 化，支持热加载、规则开关与白名单（房租等天然整数金额不再误报）；优化：approval_engine.py 改造为兼容层，原有调用方式不受影响 |
 | v4.3.0 | 2026-08-24 | 新增：PaddleOCR 双引擎降级层（ocr_engine.py 重写），PaddleOCR 优先 + Tesseract 兜底，自动探测可用引擎；新增：定额票版式先验定位表（fixed_layout_prior），固定字段位置驱动 ROI 局部 OCR；新增：手写数字后处理约束（_cross_check 勾稽校验引擎），金额+税额=价税合计不通过则标记人工复核不入库；新增：混拍图检测与子图切分引擎 batch_splitter.py，行距聚类切分 + 边界接触边框特征二次切分，保持原图-子图索引；升级：invoice_detector.py 集成 PaddleOCR 双引擎 |
 | v4.2.2 | 2026-08-16 | 修复：移除 secure_config.py CLI 中 --show-keys 参数（仍有凭据外泄特征）；改为 validate_before_call() 仅返回字段名列表和布尔状态，绝不输出任何形态的密钥值到 stdout，彻底消除凭据泄露风险 |
