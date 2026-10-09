@@ -1,10 +1,10 @@
 ---
 name: dgngjx-skill
 slug: dgngjx-skill
-displayName: "多功能工具箱 v4.0"
-description: "多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐、实用小工具、系统工具、AI办公。11大模块49个工具。v4.0 数据准确性：个税五险全国化（tax_2026.yaml 查表累进引擎）+ 汇率缓存时效治理（72h TTL + 陈旧标注）。"
-description_zh: "多功能免费工具箱 - 11大模块49个工具。v4.0 数据准确性：个税五险全国化（13城市查表累进引擎）+ 汇率缓存时效治理（72h TTL + 陈旧标注）。"
-version: 4.0.0
+displayName: "多功能工具箱 v4.1"
+description: "多功能免费工具箱 - 图片处理、PDF转换、数据换算、文本工具、开发工具、视频工具、教育、生活娱乐、实用小工具、系统工具、AI办公。11大模块49个工具。v4.1 包化架构：SKILL.md 129KB→30KB + 11模块外置 + 四包机制（core/dev/ent/media）+ 首次体检报告。"
+description_zh: "多功能免费工具箱 - 11大模块49个工具。v4.1 包化架构：四包按需加载 + 首次体检报告。"
+version: 4.1.0
 category: office-efficiency
 platforms:
   - windows
@@ -50,16 +50,19 @@ tags:
   - tax-calculation
   - social-insurance
   - exchange-rate-ttl
+  - pack
+  - health-check
+  - modular
 requires_api_key: false
 ---
 
-# 多功能工具箱 dgngjx-skill v4.0.0
+# 多功能工具箱 dgngjx-skill v4.1.0
 
 ## 🚀 dgngjx CLI 统一入口 ⭐ v3.9.0 新增
 
 **✅ 开箱即用**（纯 Python 标准库 argparse，零依赖）
 
-> v3.9.0 起提供统一命令行入口 `dgngjx`，49 个工具均可通过 `模块.工具` 子命令直接调用，无需进入交互模式。无参数启动则进入交互向导，保留旧体验。
+> v4.1.0 新增：`--install-pack` 安装可选包、`--list-packs` 列出可用包、`--health` 首次体检报告。
 
 <details>
 <summary>📋 CLI 使用方式</summary>
@@ -80,6 +83,15 @@ dgngjx file.rename --dir ./photos/ --prefix "vacation_" --yes
 # 或设置环境变量
 export DGNGJX_ASSUME_YES=1
 dgngjx img.convert --path ./photos/ --format PNG
+
+# 包管理（v4.1.0 新增）
+dgngjx --list-packs          # 列出所有可用包
+dgngjx --install-pack ent    # 安装娱乐包
+dgngjx --install-pack media  # 安装媒体包
+dgngjx --install-pack ai     # 安装 AI 包
+
+# 体检报告（v4.1.0 新增）
+dgngjx --health              # 首次运行体检
 
 # 无参数启动 → 进入交互向导（兼容旧体验）
 dgngjx
@@ -108,6 +120,7 @@ def build_tool_index(registry):
         for tool_id, tool_info in mod.get("tools", {}).items():
             tool_info["module_id"] = mod["id"]
             tool_info["module_name"] = mod["name"]
+            tool_info["pack"] = mod.get("pack", "core")
             index[tool_id] = tool_info
     return index
 
@@ -117,21 +130,61 @@ def main():
     parser.add_argument("--json", action="store_true", help="输出机器可解析 JSON")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过非危险确认点")
     parser.add_argument("--help-tools", action="store_true", help="列出所有可用工具")
+    parser.add_argument("--list-packs", action="store_true", help="列出所有可用包（v4.1.0）")
+    parser.add_argument("--install-pack", metavar="PACK", help="安装指定包（v4.1.0）")
+    parser.add_argument("--health", action="store_true", help="运行体检报告（v4.1.0）")
     
-    # 解析已知参数，剩余参数传递给工具
     args, remaining = parser.parse_known_args()
     
-    # 环境变量支持
     if os.environ.get("DGNGJX_ASSUME_YES"):
         args.yes = True
     
     registry = load_registry()
+    
+    # 包管理命令
+    if args.list_packs:
+        packs = registry.get("packs", {})
+        print("📦 可用包：")
+        for pid, pinfo in packs.items():
+            default = "（默认）" if pinfo.get("default") else ""
+            print(f"  {pid}: {pname}{default} — {pinfo.get('description','')}")
+        return
+    
+    if args.install_pack:
+        pack_id = args.install_pack
+        packs = registry.get("packs", {})
+        if pack_id not in packs:
+            print(f"❌ 未知包: {pack_id}。可用: {', '.join(packs.keys())}")
+            return
+        # 标记包已安装（写入配置文件）
+        config_path = os.path.join(os.path.expanduser("~"), ".workbuddy", "dgngjx_config.json")
+        config = {}
+        if os.path.exists(config_path):
+            with open(config_path, encoding="utf-8") as f:
+                config = json.load(f)
+        installed_packs = config.get("installed_packs", ["core"])
+        if pack_id not in installed_packs:
+            installed_packs.append(pack_id)
+        config["installed_packs"] = installed_packs
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+        print(f"✅ 已安装包: {packs[pack_id]['name']}")
+        return
+    
+    if args.health:
+        # 运行体检
+        health_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "health_check.py")
+        if os.path.exists(health_path):
+            os.system(f"{sys.executable} {health_path} --force")
+        else:
+            print("❌ 未找到 health_check.py")
+        return
+    
     tool_index = build_tool_index(registry)
     
     if args.help_tools or not args.tool:
-        # 列出所有工具或进入交互向导
         if args.tool:
-            # 显示特定工具帮助
             tool_info = tool_index.get(args.tool)
             if tool_info:
                 print(f"工具: {args.tool}")
@@ -140,7 +193,6 @@ def main():
             else:
                 print(f"❌ 未找到工具: {args.tool}")
         else:
-            # 交互向导模式
             print("🔧 dgngjx-skill 交互向导")
             print("=" * 40)
             for mod in registry.get("modules", []):
@@ -149,14 +201,12 @@ def main():
                     print(f"  {tool_id}: {tool_info.get('description','')}")
         return
     
-    # 查找工具
     tool_info = tool_index.get(args.tool)
     if not tool_info:
         print(f"❌ 未找到工具: {args.tool}")
         print(f"可用工具: {', '.join(list(tool_index.keys())[:10])}...")
         sys.exit(1)
     
-    # 构建工具参数
     tool_args = {}
     i = 0
     while i < len(remaining):
@@ -171,23 +221,17 @@ def main():
         else:
             i += 1
     
-    # 注入全局标志
     tool_args["_json"] = args.json
     tool_args["_yes"] = args.yes
     
-    # 执行工具（延迟加载）
     module = tool_info.get("module_id")
     print(f"▶ 运行: {args.tool} (模块 {module})")
-    # 实际工具执行由 SKILL.md 中的代码块完成
-    # 此处仅做路由，AI 根据 tool_id 执行对应代码块
 
 if __name__ == "__main__":
     main()
 ```
 
 </details>
-
-> **无人值守支持**：设置环境变量 `DGNGJX_ASSUME_YES=1` 或传递 `--yes` 参数，可跳过所有非危险确认点。危险操作（删除/覆盖）仍强制交互确认。`--json` 输出机器可解析 JSON，供计划任务与 CI 场景使用。
 
 ---
 
@@ -199,13 +243,11 @@ if __name__ == "__main__":
 | 日期 / 单位换算 | `"日期计算"` `"公里转英里"` `"MB转GB"` `"100美元换人民币"` |
 | 统计字数 / 编码 | `"字数统计"` `"Base64编码"` `"算MD5"` `"进制转换"` |
 | 词频分析 / 差异 | `"词频统计"` `"对比两段文本"` |
-| 词频分析 | `"词频统计"` |
 | JSON / HTTP / Token | `"JSON格式化"` `"测试接口"` |
 | 查知识 / 下壁纸 | `"查勾股定理"` `"下壁纸"` |
 | 压缩 / 修复图片 | `"帮我压缩 D:\photo.jpg"` `"修复老照片"` |
 | 合并 / 拆分 PDF | `"合并这几个PDF"` `"拆分第5-10页"` |
 | 视频格式转换 | `"MP4转GIF"` |
-| 视频编辑 | `"给视频加水印"` `"提取视频帧"` |
 | 二维码 / 密码 / 正则 | `"生成二维码"` `"生成随机密码"` `"测试正则 \d+"` `"检测密码强度"` |
 | 文件哈希 / UUID | `"校验文件哈希"` `"生成UUID"` |
 | 时间戳 / IP工具 | `"时间戳转换"` `"查本机IP"` `"算子网"` |
@@ -219,16 +261,15 @@ if __name__ == "__main__":
 
 ---
 
-## 🆕 v4.0.0 更新提醒
+## 🆕 v4.1.0 更新提醒
 
-> 🔔 **您正在使用 dgngjx-skill v4.0.0**
+> 🔔 **您正在使用 dgngjx-skill v4.1.0**
 > 
 > 检查更新：`skillhub search dgngjx-skill`
 > 
 > 升级命令：`skillhub upgrade dgngjx-skill`
 > 
 > 📧 **有任何建议？联系作者邮箱：njskills@agent.qq.com**
-> dgngjx-skill 欢迎你的反馈！无论是新功能建议、bug 报告还是使用困惑，都可以发邮件到 njskills@agent.qq.com，作者会认真阅读每一条。
 
 ---
 
@@ -269,142 +310,31 @@ if __name__ == "__main__":
 > 49 个工具的元数据注册表，包含模块/参数 schema/依赖声明/示例/安全等级。CLI 启动时只加载此文件（轻量），工具代码延迟加载。
 
 <details>
-<summary>📋 registry.json（完整 49 工具注册表）</summary>
+<summary>📋 registry.json 结构说明</summary>
 
 ```json
 {
-  "version": "3.9.0",
+  "version": "4.1.0",
   "total_tools": 49,
-  "modules": [
-    {
-      "id": "calc",
-      "name": "数据换算",
-      "tools": {
-        "calc.mortgage":   {"description": "房贷计算器", "deps": [], "safety": "safe"},
-        "calc.insurance":  {"description": "五险一金计算器", "deps": [], "safety": "safe"},
-        "calc.date":       {"description": "日期计算器", "deps": [], "safety": "safe"},
-        "calc.unit":       {"description": "单位换算器（28种）", "deps": [], "safety": "safe"},
-        "calc.exchange":   {"description": "汇率查询（30+货币）", "deps": [], "safety": "safe"}
-      }
-    },
-    {
-      "id": "text",
-      "name": "文本工具",
-      "tools": {
-        "text.stats":      {"description": "文本统计", "deps": [], "safety": "safe"},
-        "text.encode":     {"description": "编码转换（Base64/URL/Unicode/进制）", "deps": [], "safety": "safe"},
-        "text.hash":       {"description": "哈希校验（MD5/SHA1/SHA256）", "deps": [], "safety": "safe"},
-        "text.wordfreq":   {"description": "词频统计", "deps": ["jieba"], "safety": "safe"},
-        "text.diff":       {"description": "文本差异对比", "deps": [], "safety": "safe"}
-      }
-    },
-    {
-      "id": "edu",
-      "name": "教育工具",
-      "tools": {
-        "edu.knowledge":   {"description": "知识查询", "deps": [], "safety": "safe"}
-      }
-    },
-    {
-      "id": "life",
-      "name": "生活娱乐",
-      "tools": {
-        "life.entertain":  {"description": "娱乐小工具", "deps": [], "safety": "safe"},
-        "life.wallpaper":  {"description": "壁纸中心", "deps": [], "safety": "safe"},
-        "life.bmi":        {"description": "BMI计算器", "deps": [], "safety": "safe"},
-        "life.pomodoro":   {"description": "番茄钟", "deps": [], "safety": "safe"}
-      }
-    },
-    {
-      "id": "dev",
-      "name": "开发工具",
-      "tools": {
-        "dev.json":        {"description": "JSON工具", "deps": [], "safety": "safe"},
-        "dev.http":        {"description": "HTTP接口测试", "deps": [], "safety": "safe"},
-        "dev.token":       {"description": "Token计算器", "deps": [], "safety": "safe"},
-        "dev.photoshop":   {"description": "在线Photoshop", "deps": [], "safety": "safe"},
-        "dev.mermaid":     {"description": "Mermaid时序图", "deps": [], "safety": "safe"}
-      }
-    },
-    {
-      "id": "img",
-      "name": "图片工具",
-      "tools": {
-        "img.compress":    {"description": "图片压缩", "deps": ["Pillow"], "safety": "safe"},
-        "img.convert":     {"description": "格式转换（JPEG/PNG/WebP/BMP）", "deps": ["Pillow"], "safety": "safe"},
-        "img.removebg":    {"description": "人像抠图", "deps": ["rembg"], "safety": "safe"},
-        "img.idphoto":     {"description": "证件照生成", "deps": ["Pillow"], "safety": "safe"},
-        "img.repair":      {"description": "图片修复", "deps": ["Pillow"], "safety": "safe"}
-      }
-    },
-    {
-      "id": "pdf",
-      "name": "PDF转换",
-      "tools": {
-        "pdf.merge":       {"description": "PDF合并", "deps": ["PyPDF2"], "safety": "safe"},
-        "pdf.split":       {"description": "PDF拆分", "deps": ["PyPDF2"], "safety": "safe"},
-        "pdf.encrypt":     {"description": "PDF加密/解密", "deps": ["PyPDF2"], "safety": "safe"}
-      }
-    },
-    {
-      "id": "video",
-      "name": "视频工具",
-      "tools": {
-        "video.convert":   {"description": "视频格式转换", "deps": ["ffmpeg"], "safety": "safe"},
-        "video.edit":      {"description": "视频编辑（6大功能）", "deps": ["ffmpeg"], "safety": "safe"},
-        "video.record":    {"description": "在线录屏", "deps": [], "safety": "safe"}
-      }
-    },
-    {
-      "id": "util",
-      "name": "实用小工具",
-      "tools": {
-        "util.qrcode":     {"description": "二维码生成", "deps": [], "safety": "safe"},
-        "util.password":   {"description": "密码生成", "deps": [], "safety": "safe"},
-        "util.regex":      {"description": "正则测试", "deps": [], "safety": "safe"},
-        "util.hashfile":   {"description": "文件哈希校验", "deps": [], "safety": "safe"},
-        "util.uuid":       {"description": "UUID生成器", "deps": [], "safety": "safe"},
-        "util.timestamp":  {"description": "时间戳转换", "deps": [], "safety": "safe"},
-        "util.ip":         {"description": "IP工具", "deps": [], "safety": "safe"},
-        "util.csv":        {"description": "CSV查看器", "deps": [], "safety": "safe"},
-        "util.pwdcheck":   {"description": "密码强度检测", "deps": [], "safety": "safe"},
-        "util.color":      {"description": "颜色值转换", "deps": [], "safety": "safe"},
-        "util.random":     {"description": "随机数生成器", "deps": [], "safety": "safe"}
-      }
-    },
-    {
-      "id": "sys",
-      "name": "系统工具",
-      "tools": {
-        "sys.monitor":     {"description": "系统资源监控", "deps": [], "safety": "safe"},
-        "sys.rename":      {"description": "批量文件重命名", "deps": [], "safety": "warn"},
-        "sys.md2html":     {"description": "Markdown转HTML", "deps": [], "safety": "safe"},
-        "sys.history":     {"description": "历史记录系统", "deps": [], "safety": "safe"},
-        "sys.config":      {"description": "配置持久化", "deps": [], "safety": "safe"},
-        "sys.report":      {"description": "周报/月报生成", "deps": [], "safety": "safe"}
-      }
-    },
-    {
-      "id": "ai",
-      "name": "AI办公",
-      "tools": {
-        "ai.meeting":      {"description": "会议纪要生成器", "deps": ["whisper"], "safety": "safe"}
-      }
-    }
-  ],
-  "tools": {}
+  "packs": {
+    "core": {"name": "核心包", "description": "默认加载", "default": true},
+    "ent": {"name": "娱乐包", "description": "娱乐/生活模块", "default": false},
+    "media": {"name": "媒体包", "description": "图片/PDF/视频", "default": false},
+    "ai": {"name": "AI包", "description": "AI 办公", "default": false}
+  },
+  "modules": [...]
 }
 ```
 
-</details>
+> **字段说明**：`deps` 为空表示零依赖；`safety` 为 `warn` 表示需用户确认；`pack` 表示所属包（core 默认加载，其余按需安装）。
 
-> **字段说明**：`deps` 为空表示零依赖；`safety` 为 `warn` 表示需用户确认（如批量重命名可能覆盖文件）；危险操作（删除/覆盖）即使标记为 `safe` 也强制交互确认。
+</details>
 
 ---
 
 ## 🔒 安全规则（v3.9.0 分级重构）
 
-> **dgngjx-skill v3.9.0 起采用三级安全策略**：🔴 硬拦截（可执行类）/ 🟡 警告+确认（办公文档类）/ 🟢 自由读写（非风险类）。旧版一律硬拦改为分级处理，消除合法办公文件误伤。
+> **dgngjx-skill v3.9.0 起采用三级安全策略**：🔴 硬拦截 / 🟡 警告+确认 / 🟢 自由读写。
 
 ### 🔴 硬拦截（不处理，即使明确要求也拒绝）
 
@@ -439,7 +369,6 @@ import os
 
 # === v3.9.0 安全规则：三级分级策略 ===
 
-# 🔴 硬拦截（永不处理）
 BLOCKED_EXTENSIONS = {
     '.bat', '.cmd', '.ps1', '.vbs', '.exe', '.dll', '.lnk', '.msi',
     '.sh', '.com', '.scr', '.hta', '.reg',
@@ -447,7 +376,6 @@ BLOCKED_EXTENSIONS = {
     '.ds_store', '.env', '.log', '.tmp',
 }
 
-# 🟡 警告+确认（需用户确认）
 WARN_EXTENSIONS = {
     '.docx', '.xlsx', '.pptx', '.doc', '.xls', '.ppt', '.xlsm', '.docm', '.pptm',
 }
@@ -478,16 +406,6 @@ def _is_safe_output(filepath: str) -> tuple:
     if ext in {'.exe', '.dll', '.bat', '.cmd', '.ps1', '.vbs', '.sh', '.com', '.scr', '.hta', '.reg', '.msi', '.apk', '.jar'}:
         return False, f"安全规则禁止生成 {ext} 文件"
     return True, ""
-
-# === 使用示例 ===
-# safe, reason = _is_safe_file(user_input_path, assume_yes=("--yes" in sys.argv))
-# if safe == "block":
-#     print(f"🚫 {reason}")
-#     return
-# elif safe == "warn":
-#     print(f"⚠️ {reason}")
-#     if input("确认继续？(yes/no): ").strip().lower() != "yes":
-#         return
 ```
 
 </details>
@@ -515,7 +433,6 @@ def get_hardware_info() -> dict:
         'max_file_size_mb': 100,
     }
     
-    # 检测内存
     try:
         if info['platform'] == 'Windows':
             result = subprocess.run(
@@ -532,16 +449,15 @@ def get_hardware_info() -> dict:
                 for line in f:
                     if line.startswith('MemTotal'):
                         info['ram_mb'] = int(line.split()[1]) // 1024
-                        break
-        elif info['platform'] == 'Darwin':  # macOS
+                    break
+        elif info['platform'] == 'Darwin':
             result = subprocess.run(
                 ['sysctl', '-n', 'hw.memsize'], capture_output=True, text=True, timeout=5
             )
             info['ram_mb'] = int(result.stdout.strip()) // (1024 * 1024)
     except Exception:
-        info['ram_mb'] = 4096  # 默认值
+        info['ram_mb'] = 4096
     
-    # 自动判定配置级别
     if info['ram_mb'] < 4096 or info['cpu_count'] <= 2:
         info['is_low_end'] = True
         info['max_workers'] = 1
@@ -555,16 +471,6 @@ def get_hardware_info() -> dict:
     
     return info
 
-def smart_task_split(file_size_mb: int, hw: dict) -> int:
-    """根据文件大小和硬件智能计算任务分片数"""
-    if file_size_mb <= 50:
-        return 1
-    # 每 100MB 或每 2GB RAM 分配 1 个 worker
-    by_ram = max(1, hw['ram_mb'] // 2048)
-    by_size = max(1, file_size_mb // 100)
-    return min(by_ram, by_size, hw['max_workers'])
-
-# === 初始化（整个 skill 生命周期只跑一次）===
 _HW = get_hardware_info()
 print(f"🖥️ 系统检测: {_HW['cpu_count']}核 | {_HW['ram_mb']}MB RAM | {_HW['platform']}")
 if _HW['is_low_end']:
@@ -651,2739 +557,178 @@ pip install Pillow PyPDF2 jieba
 
 ---
 
+## 📦 包化架构（v4.1.0 新增）
+
+> v4.1.0 引入四包机制，SKILL.md 从 129KB 瘦身至 30KB，模块详情外置到 `references/modules/*.md`。
+
+### 四包一览
+
+| 包 ID | 名称 | 默认加载 | 包含模块 | 依赖 |
+|-------|------|:--------:|---------|------|
+| `core` | 核心包 | ✅ | 数据换算/文本/教育/开发/实用/系统工具 | 零依赖 |
+| `ent` | 娱乐包 | ❌ | 生活娱乐（笑话/壁纸/BMI/番茄钟） | 零依赖 |
+| `media` | 媒体包 | ❌ | 图片/PDF/视频 | Pillow/PyPDF2/FFmpeg |
+| `ai` | AI包 | ❌ | AI办公（会议纪要） | whisper（可选） |
+
+### 包安装方式
+
+```bash
+# CLI 安装
+dgngjx --install-pack ent
+dgngjx --install-pack media
+dgngjx --install-pack ai
+
+# 查看已安装包
+dgngjx --list-packs
+```
+
+### 模块详情文件
+
+| 模块 | 文件路径 |
+|------|---------|
+| 模块 1：数据换算 | `references/modules/calc.md` |
+| 模块 2：文本工具 | `references/modules/text.md` |
+| 模块 3：教育工具 | `references/modules/edu.md` |
+| 模块 4：生活娱乐 | `references/modules/life.md` |
+| 模块 5：开发工具 | `references/modules/dev.md` |
+| 模块 6：图片工具 | `references/modules/img.md` |
+| 模块 7：PDF转换 | `references/modules/pdf.md` |
+| 模块 8：视频工具 | `references/modules/video.md` |
+| 模块 9：实用小工具 | `references/modules/util.md` |
+| 模块 10：系统工具 | `references/modules/sys.md` |
+| 模块 11：AI办公 | `references/modules/ai.md` |
+
+---
+
+## 🏥 首次运行体检报告（v4.1.0 新增）
+
+> 首次运行时自动检测环境，输出就绪率和缺失依赖一键安装命令。
+
+<details>
+<summary>📋 体检报告代码</summary>
+
+```python
+#!/usr/bin/env python3
+"""dgngjx-skill 首次运行体检报告 v4.1.0"""
+import sys, subprocess, os, json, platform
+
+HEALTH_FILE = os.path.join(os.path.expanduser("~"), ".workbuddy", "dgngjx_health.json")
+
+def check_python():
+    v = sys.version_info
+    ok = v >= (3, 8)
+    return {"name": "Python", "status": "ok" if ok else "warn",
+            "version": f"{v.major}.{v.minor}.{v.micro}", "required": "≥ 3.8",
+            "fix": None if ok else "请升级 Python 到 3.8+"}
+
+def check_module(pkg_name, import_name=None):
+    import_name = import_name or pkg_name
+    try:
+        __import__(import_name)
+        return {"name": pkg_name, "status": "ok", "version": "", "required": "", "fix": None}
+    except ImportError:
+        return {"name": pkg_name, "status": "missing", "version": "", "required": "", "fix": f"pip install {pkg_name}"}
+
+def check_ffmpeg():
+    try:
+        r = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, timeout=5)
+        if r.returncode == 0:
+            return {"name": "FFmpeg", "status": "ok", "version": r.stdout.split(chr(10))[0][:50], "required": "", "fix": None}
+    except: pass
+    return {"name": "FFmpeg", "status": "missing", "version": "", "required": "视频转换/编辑", "fix": "winget install ffmpeg"}
+
+def check_network():
+    try:
+        import urllib.request
+        req = urllib.request.Request("https://api.github.com", headers={"User-Agent":"dgngjx/4.1"})
+        urllib.request.urlopen(req, timeout=5)
+        return {"name": "网络连接", "status": "ok", "version": "", "required": "", "fix": None}
+    except Exception as e:
+        return {"name": "网络连接", "status": "warn", "version": "", "required": "汇率/知识查询", "fix": f"网络受限: {type(e).__name__}"}
+
+def run_health_check(force=False):
+    if not force and os.path.exists(HEALTH_FILE):
+        try:
+            with open(HEALTH_FILE, encoding="utf-8") as f:
+                prev = json.load(f)
+            if prev.get("skipped", False):
+                return None
+        except: pass
+
+    checks = [
+        check_python(),
+        check_module("Pillow", "PIL"),
+        check_module("PyPDF2"),
+        check_module("rembg"),
+        check_module("jieba"),
+        check_ffmpeg(),
+        check_network(),
+    ]
+
+    ok_count = sum(1 for c in checks if c["status"] == "ok")
+    missing = [c for c in checks if c["status"] == "missing"]
+
+    print("=" * 50)
+    print("  🏥 dgngjx-skill 首次运行体检报告")
+    print("=" * 50)
+    for c in checks:
+        icon = "✅" if c["status"] == "ok" else ("⚠️" if c["status"] == "warn" else "❌")
+        ver = f" ({c['version']})" if c["version"] else ""
+        print(f"  {icon} {c['name']}{ver}")
+    print(f"  就绪率: {ok_count}/{len(checks)} ({ok_count*100//len(checks)}%)")
+    if missing:
+        print("  📦 缺失依赖（一键安装）：")
+        cmds = []
+        for c in missing:
+            if c["fix"]:
+                print(f"    • {c['name']}: {c['fix']}")
+                if "pip install" in c["fix"]:
+                    cmds.append(c["fix"].replace("pip install ", ""))
+        if cmds:
+            print(f"  快速安装: pip install {' '.join(cmds)}")
+    print("=" * 50)
+
+    os.makedirs(os.path.dirname(HEALTH_FILE), exist_ok=True)
+    with open(HEALTH_FILE, "w", encoding="utf-8") as f:
+        json.dump({"checked": True, "skipped": False, "ok_count": ok_count, "total": len(checks)}, f)
+    return checks
+
+if __name__ == "__main__":
+    force = "--force" in sys.argv
+    run_health_check(force=force)
+```
+
+</details>
+
+---
+
 ## 功能模块
 
----
+> **v4.1.0 起模块详情外置**，主文档只保留模块名称索引，完整代码见 `references/modules/*.md`。
 
-### 📊 模块 1：数据换算
-
----
-
-#### 1.1 房贷计算器
-
-**✅ 开箱即用** ｜ 🌐 [在线房贷计算器](https://www.zhujisuanqi.com/)
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import math
-try:
-    P = float(input("贷款总额(万元): ") or 100) * 10000
-    n = int(float(input("贷款年限: ") or 30) * 12)
-    r = float(input("年利率(%): ") or 4.2) / 100 / 12
-    method = input("方式(等额本息/等额本金): ").strip() or "等额本息"
-    if n <= 0:
-        print("❌ 贷款年限必须大于0")
-    elif r <= 0:
-        print("❌ 年利率必须大于0")
-    elif method == "等额本息":
-        m = P*r*(1+r)**n / ((1+r)**n-1)
-        total = m * n
-        print(f"月供: {m:.2f}元 | 总利息: {total-P:.2f}元 | 还款总额: {total:.2f}元")
-    else:
-        tot = sum(P/n + (P-P*i/n)*r for i in range(n))
-        print(f"首月: {P/n+P*r:.2f}元 | 末月: {P/n+r*(P/n):.2f}元 | 总利息: {tot-P:.2f}元")
-except ValueError:
-    print("❌ 输入错误：请输入有效数字。例如：贷款100万输 100，年限30年输 30")
-```
-
-</details>
+| 模块 | 名称 | 包 | 文件 |
+|------|------|:--:|------|
+| 1 | 数据换算 | core | [calc.md](references/modules/calc.md) |
+| 2 | 文本工具 | core | [text.md](references/modules/text.md) |
+| 3 | 教育工具 | core | [edu.md](references/modules/edu.md) |
+| 4 | 生活娱乐 | ent | [life.md](references/modules/life.md) |
+| 5 | 开发工具 | core | [dev.md](references/modules/dev.md) |
+| 6 | 图片工具 | media | [img.md](references/modules/img.md) |
+| 7 | PDF转换 | media | [pdf.md](references/modules/pdf.md) |
+| 8 | 视频工具 | media | [video.md](references/modules/video.md) |
+| 9 | 实用小工具 | core | [util.md](references/modules/util.md) |
+| 10 | 系统工具 | core | [sys.md](references/modules/sys.md) |
+| 11 | AI办公 | ai | [ai.md](references/modules/ai.md) |
 
 ---
 
-#### 1.2 五险一金计算器 ⭐ v4.0.0 查表累进引擎
-
-**✅ 开箱即用** ｜ 🌐 [个税计算器](https://www.taxcalculator.com)
-
-> v4.0 重写计算引擎：数据与引擎分离，读取 `references/tax_2026.yaml` 数据驱动计算。支持 13 个城市，查表确定基数上下限，7 级超额累进个税。
-
-<details>
-<summary>📋 五险一金 + 个税计算器（查表 + 分段累进）</summary>
-
-```python
-import os, yaml, math
-
-def calc_insurance_tax(salary, city_code="beijing"):
-    """读取 tax_2026.yaml，查表+分段累进计算五险一金和个税"""
-    # 加载数据包
-    yaml_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "references", "tax_2026.yaml")
-    with open(yaml_path, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    
-    meta = data.get("meta", {})
-    bases = data.get("social_insurance_bases", {})
-    rates = data.get("insurance_rates", {})
-    overrides = rates.get("overrides", {})
-    tax_brackets = data.get("individual_income_tax", {}).get("brackets", [])
-    monthly_threshold = data.get("individual_income_tax", {}).get("monthly_threshold", 5000)
-    
-    if city_code not in bases:
-        city_name = city_code
-        supported = [f"{v.get('name', k)} ({k})" for k, v in bases.items()]
-        return None, f"❌ 不支持的城市: {city_name}。支持: {', '.join(supported)}"
-    
-    city_data = bases[city_code]
-    city_name = city_data.get("name", city_code)
-    
-    # 获取城市差异化比例
-    city_overrides = overrides.get(city_code, {})
-    personal_rates = {**rates.get("default", {}).get("personal", {}), **city_overrides.get("personal", {})}
-    company_rates = {**rates.get("default", {}).get("company", {}), **city_overrides.get("company", {})}
-    
-    # 计算各项社保缴费基数（在上下限之间）
-    def get_base(insurance_type):
-        base_info = city_data.get(insurance_type, {})
-        lower = base_info.get("lower", 0)
-        upper = base_info.get("upper", float("inf"))
-        return max(lower, min(salary, upper))
-    
-    # 计算个人社保缴费
-    personal_items = {}
-    personal_total = 0
-    for insurance_type in ["pension", "medical", "unemployed", "injury", "maternity"]:
-        base = get_base(insurance_type)
-        rate = personal_rates.get(insurance_type, 0)
-        amount = base * rate
-        if amount > 0:
-            names = {"pension": "养老", "medical": "医疗", "unemployed": "失业", "injury": "工伤", "maternity": "生育"}
-            personal_items[names.get(insurance_type, insurance_type)] = round(amount, 2)
-        personal_total += amount
-    
-    # 公积金
-    hf_base = get_base("housing_fund")
-    hf_rate = personal_rates.get("housing_fund", 0.12)
-    hf_amount = hf_base * hf_rate
-    personal_items["公积金"] = round(hf_amount, 2)
-    personal_total += hf_amount
-    
-    # 应纳税所得额 = 工资 - 社保公积金 - 起征点
-    taxable_income = max(0, salary - personal_total - monthly_threshold)
-    
-    # 7级超额累进税率
-    tax = 0
-    tax_detail = None
-    for bracket in tax_brackets:
-        if taxable_income <= 0:
-            break
-        taxable_at_bracket = min(taxable_income, bracket["limit"])
-        tax += taxable_at_bracket * bracket["rate"]
-        taxable_income -= taxable_at_bracket
-        if taxable_at_bracket > 0:
-            tax_detail = f"{bracket['rate']*100:.0f}%"
-    
-    # 到手工资
-    net_salary = salary - personal_total - tax
-    
-    # 计算单位缴费（仅供展示）
-    company_total = 0
-    for insurance_type in ["pension", "medical", "unemployed", "injury", "maternity"]:
-        base = get_base(insurance_type)
-        rate = company_rates.get(insurance_type, 0)
-        company_total += base * rate
-    company_total += hf_base * company_rates.get("housing_fund", 0.12)
-    
-    return {
-        "city": city_name,
-        "data_version": meta.get("version", "unknown"),
-        "data_effective": meta.get("effective_date", "unknown"),
-        "salary": salary,
-        "personal_insurance": personal_items,
-        "personal_total": round(personal_total, 2),
-        "housing_fund_employee": round(hf_amount, 2),
-        "housing_fund_employer": round(hf_base * company_rates.get("housing_fund", 0.12), 2),
-        "tax": round(tax, 2),
-        "tax_rate_used": tax_detail,
-        "net_salary": round(net_salary, 2),
-        "company_total": round(company_total, 2),
-    }, None
-
-# 城市名称到代码映射
-CITY_MAP = {
-    "北京": "beijing", "上海": "shanghai", "广州": "guangzhou", "深圳": "shenzhen",
-    "杭州": "hangzhou", "成都": "chengdu", "南京": "nanjing", "武汉": "wuhan",
-    "西安": "xian", "重庆": "chongqing", "天津": "tianjin", "苏州": "suzhou",
-    "郑州": "zhengzhou", "长沙": "changsha"
-}
-
-try:
-    s = float(input("税前月薪: ") or 15000)
-    city_input = input("城市(北京/上海/广州/深圳/杭州/成都/南京/武汉/西安/重庆/天津/苏州/郑州/长沙): ").strip() or "北京"
-    
-    if s <= 0:
-        print("❌ 月薪必须大于0")
-    else:
-        city_code = CITY_MAP.get(city_input, city_input.lower())
-        result, err = calc_insurance_tax(s, city_code)
-        if err:
-            print(err)
-        else:
-            print(f"=== {result['city']} 五险一金计算明细 (数据版本: {result['data_version']}, 生效: {result['data_effective']}) ===")
-            print(f"税前月薪: ¥{result['salary']:,.2f}")
-            print(f"\n--- 个人缴纳 ---")
-            for name, amount in result["personal_insurance"].items():
-                if name == "公积金":
-                    print(f"  {name}: ¥{amount:,.2f} (单位另缴 ¥{result['housing_fund_employer']:,.2f})")
-                else:
-                    print(f"  {name}: ¥{amount:,.2f}")
-            print(f"  个人社保合计: ¥{result['personal_total']:,.2f}")
-            print(f"\n--- 个税 ---")
-            print(f"  应缴个税: ¥{result['tax']:,.2f}")
-            print(f"\n实发工资: ¥{result['net_salary']:,.2f}")
-            print(f"  (相当于税前 {result['net_salary']/result['salary']*100:.1f}%)")
-            print(f"\n--- 单位缴纳（供参考）---")
-            print(f"  单位社保公积金合计: ¥{result['company_total']:,.2f}")
-except ValueError:
-    print("❌ 输入错误：月薪请输入纯数字。例如：15000")
-except Exception as e:
-    print(f"❌ 计算失败: {e}")
-```
-
-</details>
-
----
-
-#### 1.2.1 个税计算器（单独查询）
-
-**✅ 开箱即用**
-
-<details>
-<summary>📋 个税计算器</summary>
-
-```python
-import os, yaml
-
-def calc_personal_tax_only(salary, social_insurance_deduction=0, special_deduction=0):
-    """单独计算个税（7级超额累进）"""
-    yaml_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "references", "tax_2026.yaml")
-    with open(yaml_path, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    
-    monthly_threshold = data.get("individual_income_tax", {}).get("monthly_threshold", 5000)
-    tax_brackets = data.get("individual_income_tax", {}).get("brackets", [])
-    
-    taxable_income = max(0, salary - social_insurance_deduction - special_deduction - monthly_threshold)
-    tax = 0
-    bracket_used = "0%"
-    for bracket in tax_brackets:
-        if taxable_income <= 0:
-            break
-        taxable_at_bracket = min(taxable_income, bracket["limit"])
-        tax += taxable_at_bracket * bracket["rate"]
-        taxable_income -= taxable_at_bracket
-        if taxable_at_bracket > 0:
-            bracket_used = f"{bracket['rate']*100:.0f}%"
-    
-    return round(tax, 2), bracket_used
-
-try:
-    s = float(input("税前月薪: ") or 20000)
-    ins = float(input("社保公积金扣除(默认0): ") or 0)
-    special = float(input("专项附加扣除(默认0): ") or 0)
-    
-    if s <= 0:
-        print("❌ 月薪必须大于0")
-    else:
-        tax, bracket = calc_personal_tax_only(s, ins, special)
-        net = s - ins - tax
-        print(f"应纳税: ¥{tax:,.2f} (适用 {bracket} 税率)")
-        print(f"税后工资: ¥{net:,.2f}")
-except ValueError:
-    print("❌ 请输入数字")
-```
-
-</details>
-
----
-
-#### 1.3 日期计算器
-
-**✅ 开箱即用**
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-from datetime import date
-try:
-    a = date.today()
-    b = input("目标日期 YYYY-MM-DD: ").strip() or "2026-10-01"
-    y,m,d = map(int, b.split("-"))
-    target = date(y,m,d)
-    diff = (target - a).days
-    print(f"相差: {diff} 天 ({diff//7} 周)")
-    if diff < 0:
-        print("⚠️ 目标日期已经过去了")
-except ValueError:
-    print("❌ 日期格式错误。正确格式：年-月-日，例如：2026-10-01")
-```
-
-</details>
-
----
-
-#### 1.4 单位换算器
-
-**✅ 开箱即用**
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-c = {
-    # 长度
-    "km_mi":  (lambda v: v*0.621371,  "公里", "英里"),
-    "mi_km":  (lambda v: v/0.621371,  "英里", "公里"),
-    "m_ft":   (lambda v: v*3.28084,   "米",   "英尺"),
-    "ft_m":   (lambda v: v/3.28084,   "英尺", "米"),
-    "cm_in":  (lambda v: v/2.54,      "厘米", "英寸"),   # v3.6.0 新增
-    "in_cm":  (lambda v: v*2.54,      "英寸", "厘米"),   # v3.6.0 新增
-    # 重量
-    "kg_lb":  (lambda v: v*2.20462,   "公斤", "磅"),
-    "lb_kg":  (lambda v: v/2.20462,   "磅",   "公斤"),
-    "g_oz":   (lambda v: v/28.3495,   "克",   "盎司"),   # v3.6.0 新增
-    "oz_g":   (lambda v: v*28.3495,   "盎司", "克"),     # v3.6.0 新增
-    # 温度
-    "c_f":    (lambda v: v*9/5+32,    "°C",   "°F"),
-    "f_c":    (lambda v: (v-32)*5/9,  "°F",   "°C"),
-    "c_k":    (lambda v: v+273.15,    "°C",   "K"),      # v3.6.0 新增
-    "k_c":    (lambda v: v-273.15,    "K",    "°C"),     # v3.6.0 新增
-    # 面积  v3.6.0 新增
-    "sqm_sqft": (lambda v: v*10.7639, "平方米", "平方英尺"),
-    "mu_sqm":   (lambda v: v*666.667, "亩",     "平方米"),
-    "ha_mu":    (lambda v: v*15,       "公顷",   "亩"),
-    # 速度  v3.6.0 新增
-    "kmh_mph":  (lambda v: v*0.621371, "km/h",  "mph"),
-    "ms_kmh":   (lambda v: v*3.6,      "m/s",   "km/h"),
-    "knot_kmh": (lambda v: v*1.852,    "节",    "km/h"),
-    # 数据存储  v3.6.0 新增
-    "mb_gb":  (lambda v: v/1024,       "MB",   "GB"),
-    "gb_mb":  (lambda v: v*1024,       "GB",   "MB"),
-    "gb_tb":  (lambda v: v/1024,       "GB",   "TB"),
-    "byte_mb":(lambda v: v/1048576,    "字节", "MB"),
-    # 压力  v3.6.0 新增
-    "bar_psi":(lambda v: v*14.5038,    "bar",  "psi"),
-    "atm_kpa":(lambda v: v*101.325,    "atm",  "kPa"),
-    # 能量  v3.6.0 新增
-    "kcal_kj":(lambda v: v*4.184,      "千卡", "千焦"),
-    "kwh_kj": (lambda v: v*3600,       "度电", "千焦"),
-}
-try:
-    m = input("类型(如km_mi/mb_gb/mu_sqm):").strip() or "km_mi"
-    v = float(input("数值: ") or 100)
-    if m not in c:
-        print(f"❌ 不支持的换算：'{m}'")
-        print(f"支持的类型：{', '.join(c.keys())}")
-    else:
-        r, uf, ut = c[m]
-        print(f"✅ {v} {uf} = {r(v):.4f} {ut}")
-except ValueError:
-    print("❌ 请输入纯数字，例如：100")
-```
-
-</details>
-
----
-
-#### 1.5 汇率查询 ⭐ v4.0.0 时效治理
-
-**✅ 开箱即用**（零依赖：内置常见汇率缓存 + 联网实时查询可选）
-
-> v4.0 时效治理：缓存条目带抓取时间戳，超 72 小时标注陈旧 + 警示横幅。在线刷新失败保留旧值 + 陈旧标注，绝不静默用旧值冒充新值。
-
-<details>
-<summary>📋 汇率查询（时效感知版）</summary>
-
-```python
-import urllib.request, json, os, time
-from datetime import datetime, timedelta
-
-# 内置常见汇率缓存（以 1 USD 为基准），联网失败时降级
-CACHE = {
-    "USD": 1.0, "CNY": 7.24, "EUR": 0.92, "GBP": 0.79, "JPY": 157.35, "KRW": 1385.0,
-    "HKD": 7.81, "TWD": 32.37, "SGD": 1.34, "AUD": 1.53, "CAD": 1.37, "CHF": 0.89,
-    "INR": 83.45, "RUB": 91.5, "THB": 36.2, "VND": 25100, "MYR": 4.72, "PHP": 58.6,
-    "IDR": 16250, "BRL": 5.43, "MXN": 17.15, "ZAR": 18.75, "AED": 3.67, "SAR": 3.75,
-    "NZD": 1.65, "SEK": 10.6, "NOK": 10.9, "DKK": 6.88, "PLN": 4.05, "TRY": 32.8,
-    "UAH": 40.5, "EGP": 48.5
-}
-
-CACHE_FILE = os.path.join(os.path.expanduser("~"), ".workbuddy", "dgngjx_exchange_cache.json")
-TTL_HOURS = 72
-
-def load_cache():
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, encoding="utf-8") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            pass
-    return {}
-
-def save_cache(cache):
-    os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
-    with open(CACHE_FILE, "w", encoding="utf-8") as f:
-        json.dump(cache, f, ensure_ascii=False, indent=2)
-
-def is_stale(timestamp_str):
-    try:
-        ts = datetime.fromisoformat(timestamp_str)
-        return datetime.now() - ts > timedelta(hours=TTL_HOURS)
-    except (ValueError, TypeError):
-        return True
-
-def get_cached_rate(cur):
-    cache = load_cache()
-    entry = cache.get(cur)
-    if entry:
-        rate = entry.get("rate")
-        ts = entry.get("timestamp")
-        if rate and ts:
-            stale = is_stale(ts)
-            return rate, ts, stale
-    return None, None, False
-
-def fetch_live_rate(fr, to):
-    try:
-        url = f"https://api.exchangerate-api.com/v4/latest/{fr}"
-        req = urllib.request.Request(url, headers={"User-Agent": "dgngjx/4.0"})
-        data = json.loads(urllib.request.urlopen(req, timeout=6).read())
-        if "rates" in data and to in data["rates"]:
-            rate = data["rates"][to]
-            cache = load_cache()
-            cache[to] = {"rate": rate, "timestamp": datetime.now().isoformat(), "base": fr}
-            cache[fr] = {"rate": 1.0, "timestamp": datetime.now().isoformat(), "base": fr}
-            save_cache(cache)
-            return rate, True
-    except Exception:
-        pass
-    return None, False
-
-def convert_currency(amt, fr, to):
-    fr = fr.upper()
-    to = to.upper()
-    rate, live = fetch_live_rate(fr, to)
-    if live:
-        return rate, "实时汇率", False, None
-    if fr == to:
-        return 1.0, "同币种", False, None
-    fr_rate, fr_ts, fr_stale = get_cached_rate(fr)
-    to_rate, to_ts, to_stale = get_cached_rate(to)
-    if fr_rate and to_rate:
-        cross_rate = to_rate / fr_rate
-        stale = fr_stale or to_stale
-        older_ts = min(fr_ts, to_ts) if fr_ts and to_ts else (fr_ts or to_ts)
-        days_old = (datetime.now() - datetime.fromisoformat(older_ts)).days if older_ts else "?"
-        tag = f"缓存汇率({days_old}天前)"
-        return cross_rate, tag, stale, older_ts
-    if fr in CACHE and to in CACHE:
-        cross_rate = CACHE[to] / CACHE[fr]
-        return cross_rate, "静态缓存(离线)", True, None
-    return None, None, False, None
-
-s = input("输入(如 100 USD CNY，或回车查汇率表):").strip()
-if not s:
-    print("=== 常见货币汇率 (1 USD 基准) ===")
-    cache = load_cache()
-    for cur, rate in sorted(CACHE.items()):
-        cached_rate, ts, stale = get_cached_rate(cur)
-        if cached_rate and not stale:
-            print(f"  1 USD = {cached_rate:>10.2f} {cur}  (实时)")
-        elif cached_rate:
-            days = (datetime.now() - datetime.fromisoformat(ts)).days
-            print(f"  1 USD = {cached_rate:>10.2f} {cur}  ({days}天前)")
-        else:
-            print(f"  1 USD = {rate:>10.2f} {cur}  (静态)")
-else:
-    parts = s.split()
-    try:
-        amt = float(parts[0])
-        fr = (parts[1] if len(parts) > 1 else "USD").upper()
-        to = (parts[2] if len(parts) > 2 else "CNY").upper()
-        rate, tag, stale, ts = convert_currency(amt, fr, to)
-        if rate is None:
-            print(f"❌ 不支持 {fr}→{to}。可用：{', '.join(sorted(CACHE.keys()))}")
-        else:
-            result = amt * rate
-            print(f"✅ {amt:.2f} {fr} = {result:.2f} {to}  ({tag})")
-            if stale:
-                print(f"   ⚠️ 数据更新于 {ts[:10] if ts else 'N/A'}，可能已过期")
-                print(f"   💡 联网后可获取实时汇率")
-    except (ValueError, IndexError):
-        print("❌ 格式：100 USD CNY（金额 源货币 目标货币）")
-```
-
-</details>
-
----
-
-### 📝 模块 2：文本工具
-
----
-
-#### 2.1 文本统计
-
-**✅ 开箱即用**
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-t = input("输入文本:")
-if not t or not t.strip():
-    print("❌ 没有检测到输入。请程序运行时输入一段文字")
-else:
-    total = len(t)
-    cn = sum(1 for c in t if '一' <= c <= '鿿')
-    en = len(t.split())
-    lines = t.split(chr(10))
-    print(f"总字符: {total} | 中文: {cn} | 英文词: {en}")
-    print(f"非空行: {len([l for l in lines if l.strip()])}")
-    print(f"去重后: {len(list(dict.fromkeys(lines)))}行 (原{len(lines)}行)")
-```
-
-</details>
-
----
-
-#### 2.2 编码转换 ⭐ v3.9.0 拆分为 encode + hash
-
-> v3.9.0 将编码转换拆分为两个独立工具：`text.encode`（Base64/URL/Unicode/进制）和 `text.hash`（MD5/SHA1/SHA256）。
-
-<details>
-<summary>📋 text.encode（Base64/URL/Unicode/进制）</summary>
-
-```python
-import base64, urllib.parse
-try:
-    t = input("文本:") or "Hello"
-    m = input("方法(Base64/URL/Unicode/进制):").strip() or "Base64"
-    op = input("编码/解码:").strip() or "编码"
-    if m == "Base64":
-        print(base64.b64encode(t.encode()).decode() if op == "编码" else base64.b64decode(t.encode()).decode())
-    elif m == "URL":
-        print(urllib.parse.quote(t) if op == "编码" else urllib.parse.unquote(t))
-    elif m == "Unicode":
-        print(" ".join(f"\\u{ord(c):04x}" for c in t))
-    elif m == "进制":
-        base_from = input("原进制(2/8/10/16):").strip() or "10"
-        try:
-            n = int(t, int(base_from))
-            print(f"✅ {t} (原{base_from}进制) =")
-            print(f"   二进制: {bin(n)[2:]}")
-            print(f"   八进制: {oct(n)[2:]}")
-            print(f"   十进制: {n}")
-            print(f"   十六进制: {hex(n)[2:].upper()}")
-        except ValueError:
-            print(f"❌ '{t}' 不是有效的{base_from}进制数字")
-    else:
-        print(f"❌ 不支持 {m}。可选: Base64 / URL / Unicode / 进制")
-except Exception as e:
-    print(f"❌ 处理失败: {e}")
-```
-
-</details>
-
-<details>
-<summary>📋 text.hash（MD5/SHA1/SHA256）</summary>
-
-```python
-import hashlib
-try:
-    t = input("文本:") or "Hello"
-    algos = {"md5": hashlib.md5(), "sha1": hashlib.sha1(), "sha256": hashlib.sha256()}
-    for name, h in algos.items():
-        h.update(t.encode())
-        print(f"  {name.upper():7}: {h.hexdigest()}")
-except Exception as e:
-    print(f"❌ {e}")
-```
-
-</details>
-
----
-
-#### 2.3 词频统计
-
-**✅ 开箱即用**
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-from collections import Counter
-import re
-
-STOPWORDS = {'的','了','和','是','在','我','有','也','不','就','都','而','及','与','着','或','一个','没有',
-    '我们','你们','他们','她们','但是','然而','因为','所以','如果','虽然','不过','而且','或者','还是',
-    '既','又','并','等','把','被','让','往','从','对','于','以','为','比','此','那','这','她','他','它',
-    '们','些','什么','哪','怎么','多','很','最','更','太','非常','每','当','起','已','将','能','会','应',
-    '可','得','过','给','来','去','说','看','知道','做','想','问','请','好','再','还','只','如','真的',
-    '自己','人','事','时','地','今天','现在','一些','这样','那样','怎么样','可以','这个','那个','不是',
-    '可能','已经','之后','之前','然后','不过','比较','其实','其他','其中','所有','虽然','由于','因此'}
-
-def _smart_segment(text):
-    try:
-        import jieba
-        return list(jieba.lcut(text, cut_all=False))
-    except ImportError:
-        return re.findall(r'[一-鿿\w]+', text)
-
-try:
-    t = input("输入文本:")
-    if not t.strip():
-        print("❌ 没有检测到输入")
-    else:
-        raw = _smart_segment(t)
-        words = []
-        for w in raw:
-            w = w.strip()
-            if len(w) <= 1: continue
-            if re.match(r'^[a-zA-Z]+$', w): w = w.lower()
-            if w in STOPWORDS: continue
-            words.append(w)
-        if not words:
-            print("❌ 没有找到有效词")
-        else:
-            for i,(word,cnt) in enumerate(Counter(words).most_common(15),1):
-                print(f"  {i:2d}. {word}: {cnt} {'█'*min(cnt*2,30)}")
-            unique = len(set(words))
-            print(f"\n📊 共 {len(words)} 个有效词，{unique} 个不重复词")
-            d = unique/len(words)*100
-            print(f"   词汇丰富度: {d:.1f}%", end="")
-            print("（用词多样）" if d>80 else "（正常范围）" if d>50 else "（同词重复较多）")
-            try:
-                import jieba; print("   ✅ 已使用 jieba 精准分词")
-            except: print("   💡 安装 jieba 可获得更精准分词: pip install jieba")
-except Exception as e:
-    print(f"❌ {e}")
-```
-
-</details>
-
----
-
-#### 2.4 文本差异对比 ⭐ v3.7.0 新增
-
-**✅ 开箱即用**（纯 Python 标准库 difflib，零依赖）
-
-> 逐行比对两段文本的差异，高亮显示新增、删除、修改行。支持直接输入文本或读取文件。
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import difflib, os
-
-def _read(src):
-    """支持文件路径或直接文本"""
-    if os.path.isfile(src):
-        with open(src, encoding="utf-8") as f:
-            return f.read().splitlines()
-    return src.split("\n")
-
-src_a = input("文本A(内容或文件路径):").strip()
-src_b = input("文本B(内容或文件路径):").strip()
-if not src_a or not src_b:
-    print("❌ 文本A和B均不能为空")
-else:
-    lines_a = _read(src_a)
-    lines_b = _read(src_b)
-    diff = list(difflib.unified_diff(lines_a, lines_b, lineterm="", fromfile="A", tofile="B"))
-    if not diff:
-        print("✅ 两段文本完全相同，无差异")
-    else:
-        # 着色：-红 +绿
-        for line in diff:
-            if line.startswith("-") and not line.startswith("---"):
-                print(f"🔴 {line}")
-            elif line.startswith("+") and not line.startswith("+++"):
-                print(f"🟢 {line}")
-            elif line.startswith("@@"):
-                print(f"🔵 {line}")
-            else:
-                print(f"   {line}")
-        # 统计
-        adds = sum(1 for l in diff if l.startswith("+") and not l.startswith("+++"))
-        dels = sum(1 for l in diff if l.startswith("-") and not l.startswith("---"))
-        print(f"\n📊 新增 {adds} 行，删除 {dels} 行")
-```
-
-</details>
-
----
-
-### 📚 模块 3：教育工具
-
----
-
-#### 3.1 知识查询
-
-**✅ 开箱即用**
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import urllib.request, urllib.parse, json, socket, re
-
-def _wiki_fallback(query: str) -> list[dict]:
-    url = f"https://baike.deno.dev/item/{urllib.parse.quote(query)}?encode=json"
-    req = urllib.request.Request(url, headers={"User-Agent":"dgngjx/3.5"})
-    resp = urllib.request.urlopen(req, timeout=10)
-    data = json.loads(resp.read())
-    results = []
-    if isinstance(data, list):
-        for item in data:
-            title = item.get("title", "")
-            abstract = item.get("abstract", "").replace("\n", " ").strip()
-            if title: results.append({"title": title, "snippet": abstract[:200]})
-    elif isinstance(data, dict):
-        title = data.get("title", query)
-        abstract = data.get("abstract", data.get("description", ""))
-        results = [{"title": title, "snippet": str(abstract)[:200]}]
-    return results
-
-try:
-    q = input("关键词:") or "勾股定理"
-    if not q.strip():
-        print("❌ 关键词不能为空")
-    else:
-        results = []
-        try:
-            url = f"https://zh.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(q)}&format=json&srlimit=3"
-            req = urllib.request.Request(url, headers={"User-Agent":"dgngjx/3.5"})
-            resp = urllib.request.urlopen(req, timeout=10)
-            data = json.loads(resp.read())
-            results = data.get("query",{}).get("search",[])
-        except Exception as e:
-            print(f"⚠️ Wikipedia 失败（{type(e).__name__}），切换到百度百科...")
-        if not results:
-            try: results = _wiki_fallback(q)
-            except Exception as e2: print(f"⚠️ 百度百科也失败: {e2}")
-        if not results:
-            print(f"❌ 没有找到关于「{q}」的内容")
-            print(f"   百度搜索: https://www.baidu.com/s?wd={urllib.parse.quote(q)}")
-        else:
-            for r in results:
-                t = r.get('title','')
-                s = re.sub(r'<[^>]+>', '', r.get('snippet',''))[:200]
-                print(f"\n📖 {t}\n   {s}...")
-except Exception as e:
-    print(f"❌ 意外错误: {e}")
-```
-
-</details>
-
----
-
-### 🎮 模块 4：生活娱乐
-
----
-
-#### 4.1 娱乐小工具
-
-**✅ 开箱即用**
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import urllib.request, json, random
-
-def _joke_cn():
-    apis = [
-        ("https://api.apiopen.top/getJoke?page=1&count=1&type=txt", lambda d: d.get("result",[{}])[0].get("content","")),
-        ("https://v1.hitokoto.cn/?c=a", lambda d: f"{d.get('hitokoto','')} —— {d.get('from','')}")),
-        ("https://api.oioweb.cn/api/common/Hitokoto", lambda d: f"{d.get('result',{}).get('content','')} —— {d.get('result',{}).get('from','')}")),
-    ]
-    for url, extract in apis:
-        try:
-            r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/3.5"}), timeout=5)
-            data = json.loads(r.read())
-            text = extract(data)
-            if text.strip(): return text
-        except: continue
-    return ""
-
-try:
-    c = input("选择(1笑话/2一言/3运势):").strip() or "1"
-    if c == "1":
-        joke = _joke_cn()
-        if joke: print(f"😄 {joke}")
-        else:
-            jokes = [
-                ("程序员为什么喜欢用暗色主题？", "因为光明会引来 bug！"),
-                ("老婆问程序员丈夫：你到底爱不爱我？", "当然爱。老婆：那你能不能不在'当然爱'后面加分号？感觉像执行完就结束。"),
-            ]
-            s, p = random.choice(jokes)
-            print(f"📶 联网失败，给你讲个本地笑话：\n   {s}\n   → {p}")
-    elif c == "2":
-        for url, extract in [
-            ("https://v1.hitokoto.cn/", lambda d: f"{d.get('hitokoto','')} —— {d.get('from','')}"),
-            ("https://tenapi.cn/v2/yiyan", lambda d: d.get("data","") or d.get("content","")),
-        ]:
-            try:
-                r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/3.5"}), timeout=5)
-                t = extract(json.loads(r.read()))
-                if t: print(f"✨ {t}"); break
-            except: continue
-        else: print("📶 一言API不可用，试试 https://hitokoto.cn/")
-    elif c == "3":
-        print(random.choice(["大吉","中吉","小吉","吉","末吉","凶","大凶"]))
-    else: print("❌ 请输入 1、2 或 3")
-except Exception as e: print(f"❌ {e}")
-```
-
-</details>
-
----
-
-#### 4.2 壁纸中心
-
-**✅ 开箱即用**
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import urllib.request, urllib.parse, json
-
-def _wallpaper_cn():
-    for url, src in [
-        ("https://imgapi.cn/api.php?zd=pc&fl=fengjing&gs=jpg", "风景随机"),
-        ("https://picsum.photos/1920/1080", "随机摄影"),
-    ]:
-        try:
-            r = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"dgngjx/3.5"}), timeout=8)
-            final = r.geturl()
-            if final and final != url: return (final, src)
-        except: continue
-    return None
-
-try:
-    _ = input("关键词:").strip() or "nature"
-    result = _wallpaper_cn()
-    if result:
-        print(f"📷 来源: {result[1]}\n   下载: {result[0]}")
-        print("   💡 右键→图片另存为")
-    else:
-        print("❌ 壁纸源不可用")
-        print("   • https://unsplash.com/s/photos/nature")
-        print("   • https://pixabay.com/zh/images/search/nature/")
-except Exception as e: print(f"❌ {e}")
-```
-
-</details>
-
----
-
-#### 4.3 BMI 计算器 ⭐ v3.7.0 新增
-
-**✅ 开箱即用**（纯数学运算，零依赖）
-
-> 计算体质指数 BMI，按中国标准给出偏瘦/正常/偏胖/肥胖判定，附理想体重范围。
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-try:
-    w = float(input("体重(kg):"))
-    h = float(input("身高(cm):"))
-    if w <= 0 or h <= 0:
-        print("❌ 体重和身高必须大于0")
-    elif h > 300 or w > 700:
-        print("❌ 请输入合理的体重(kg)和身高(cm)")
-    else:
-        bmi = w / ((h/100) ** 2)
-        # 中国成人标准
-        if bmi < 18.5:
-            label = "偏瘦"; advice = "适当增加营养摄入"
-        elif bmi < 24:
-            label = "正常"; advice = "保持良好生活习惯"
-        elif bmi < 28:
-            label = "偏胖"; advice = "建议控制饮食+增加运动"
-        else:
-            label = "肥胖"; advice = "建议就医评估+制定减重计划"
-        ideal_low = 18.5 * (h/100)**2
-        ideal_high = 24 * (h/100)**2
-        print(f"✅ BMI: {bmi:.1f}  [{label}]")
-        print(f"   理想体重范围: {ideal_low:.1f} - {ideal_high:.1f} kg")
-        print(f"   建议: {advice}")
-        print(f"   ⚠️ BMI 仅供筛查，不替代医学诊断")
-except ValueError:
-    print("❌ 请输入数字，如 70 和 175")
-```
-
-</details>
-
----
-
-#### 4.4 番茄钟 ⭐ v3.7.0 新增
-
-**✅ 开箱即用**（纯 Python 标准库 time，零依赖）
-
-> 经典番茄工作法：25分钟专注 + 5分钟休息。可自定义时长，到点响铃提醒。
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import time, sys
-
-print("🍅 番茄工作法：专注25分钟 + 休息5分钟")
-print("   Ctrl+C 可随时退出")
-try:
-    work_min = int(input("专注时长(分钟,默认25):") or 25)
-    rest_min = int(input("休息时长(分钟,默认5):") or 5)
-    rounds = int(input("轮数(默认4):") or 4)
-except ValueError:
-    print("❌ 请输入整数"); sys.exit()
-
-work_sec = max(1, work_min) * 60
-rest_sec = max(1, rest_min) * 60
-
-def _countdown(seconds, label):
-    for remaining in range(seconds, 0, -1):
-        m, s = divmod(remaining, 60)
-        print(f"\r   {label}: {m:02d}:{s:02d}", end="", flush=True)
-        time.sleep(1)
-    print()
-
-try:
-    for r in range(1, rounds + 1):
-        print(f"\n=== 第 {r}/{rounds} 轮 ===")
-        _countdown(work_sec, "⏳ 专注中")
-        print("🔔 时间到！休息一下吧~")
-        try:
-            # 响铃（终端 bell）
-            print("\a", end="", flush=True)
-        except Exception:
-            pass
-        if r < rounds:
-            _countdown(rest_sec, "☕ 休息中")
-            print("✅ 休息结束，准备下一轮")
-        else:
-            print(f"🎉 全部完成！共专注 {rounds * work_min} 分钟")
-except KeyboardInterrupt:
-    print("\n\n⏹️ 已手动退出")
-```
-
-</details>
-
----
-
-### 💻 模块 5：开发工具
-
----
-
-#### 5.1 JSON 工具
-
-**✅ 开箱即用**
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import json
-try:
-    r = input("输入JSON:").strip() or '{"key":"value"}'
-    if not r: print("❌ 没有输入")
-    else:
-        p = json.loads(r)
-        print(f"✅ 合法\n格式化: {json.dumps(p,ensure_ascii=False,indent=2)}")
-        print(f"压缩: {json.dumps(p,ensure_ascii=False,separators=(',',':'))}")
-except json.JSONDecodeError as e:
-    print(f"❌ JSON错误: {e}")
-```
-
-</details>
-
----
-
-#### 5.2 HTTP 接口测试
-
-**✅ 开箱即用**
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import urllib.request, socket, ssl
-try:
-    u = input("URL:").strip() or "https://api.github.com"
-    if not u: print("❌ URL不能为空")
-    elif not u.startswith("http"): print("❌ 应以 http:// 或 https:// 开头")
-    else:
-        req = urllib.request.Request(u, headers={"User-Agent":"dgngjx/3.5"})
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        resp = urllib.request.urlopen(req, timeout=15, context=ctx)
-        body = resp.read()
-        print(f"✅ 状态: {resp.status} ({len(body)} bytes)")
-except urllib.error.HTTPError as e:
-    print(f"❌ HTTP {e.code}: {e.reason}")
-except urllib.error.URLError as e:
-    print(f"❌ 网络错误: {e.reason}")
-except Exception as e:
-    print(f"❌ {e}")
-```
-
-</details>
-
----
-
-#### 5.3 Token 计算器
-
-**✅ 开箱即用**
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-t = input("文本:") or "计算Token数"
-if not t.strip(): print("❌ 请输入文字")
-else:
-    cn = sum(1 for c in t if '一' <= c <= '鿿')
-    en = len(t) - cn
-    print(f"中文: {cn} ≈{int(cn/1.5)} | 英文: {en} ≈{int(en/4)} | 总计 ≈{int(cn/1.5+en/4)}")
-```
-
-</details>
-
----
-
-#### 5.4 在线 Photoshop
-
-📦 **需 Pillow**
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-from PIL import Image, ImageEnhance
-try:
-    f = input("图片路径:").strip().strip('"').replace("\\","/") or "photo.jpg"
-    img = Image.open(f)
-    w,h = map(int, input("裁剪 宽,高:").strip() or "200,200").split(","))
-    if w > img.width or h > img.height: w,h = min(w,img.width), min(h,img.height)
-    img2 = img.crop(((img.width-w)//2,(img.height-h)//2,w+img.width//2,h+img.height//2))
-    img2.save("cropped.jpg")
-    e = ImageEnhance.Brightness(img).enhance(float(input("亮度(1.2):") or 1.2))
-    e.save("bright.jpg")
-    print("✅ 已保存 cropped.jpg, bright.jpg")
-except Exception as e: print(f"❌ {e}")
-```
-
-</details>
-
----
-
-#### 5.5 Mermaid 时序图
-
-**✅ 开箱即用**
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-seq = input("时序图代码:").strip() or "A->B: Hello"
-if seq: print(f"sequenceDiagram\n{seq}")
-else: print("❌ 代码不能为空")
-```
-
-</details>
-
----
-
-### 🖼️ 模块 6：图片工具
-
----
-
-#### 6.1 img 统一入口 ⭐ v3.9.0 合并为子命令
-
-> v3.9.0 将图片 5 功能合并为 `img` 统一入口，通过子命令调用：`compress`（压缩）、`convert`（格式转换）、`removebg`（抠图）、`idphoto`（证件照）、`repair`（修复）。
-
-<details>
-<summary>📋 img.compress（图片压缩）</summary>
-
-```python
-from PIL import Image, ImageFile
-import os, multiprocessing
-ImageFile.LOAD_TRUNCATED_IMAGES = True
-Image.MAX_IMAGE_PIXELS = 180_000_000
-
-def _fix_path(p):
-    return p.strip().strip('"').strip("'").replace("\\","/").replace("//","/")
-
-def _auto_workers():
-    cpus = multiprocessing.cpu_count() or 2
-    try:
-        import psutil
-        ram_gb = psutil.virtual_memory().total / (1024**3)
-    except ImportError:
-        ram_gb = 8
-    if ram_gb < 4 or cpus <= 2:
-        return 1
-    elif ram_gb < 8 or cpus <= 4:
-        return min(cpus - 1, 2)
-    else:
-        return min(cpus, 4)
-
-EXTS = {".jpg",".jpeg",".png",".webp",".bmp",".tiff",".gif"}
-OUT_FMT = {"JPEG":".jpg", "PNG":".png", "WEBP":".webp", "BMP":".bmp"}
-
-path = _fix_path(input("图片路径或目录:").strip() or "photos")
-if not os.path.exists(path):
-    print(f"❌ 不存在: {path}")
-else:
-    if os.path.isdir(path):
-        files = [os.path.join(path, f) for f in os.listdir(path)
-                 if os.path.splitext(f)[1].lower() in EXTS]
-    else:
-        files = [path]
-    if not files:
-        print("⚠️ 未找到图片文件")
-    else:
-        print(f"📁 共 {len(files)} 张图片")
-        q = int(input("质量(1-100,建议75-85):") or 80)
-        q = max(1, min(q, 100))
-        fmt = input("输出格式(JPEG/PNG/WebP/BMP,默认JPEG):").strip().upper() or "JPEG"
-        if fmt not in OUT_FMT:
-            print(f"❌ 不支持 {fmt}，使用 JPEG")
-            fmt = "JPEG"
-        workers = _auto_workers()
-        print(f"⚡ 并发数: {workers}（自动硬件适配）")
-        ok = fail = saved_total = 0
-        for i, f in enumerate(files, 1):
-            try:
-                img = Image.open(f)
-                if img.mode in ('RGBA','PA') and fmt != 'PNG':
-                    img = img.convert('RGB')
-                base = os.path.splitext(os.path.basename(f))[0]
-                out = os.path.join(os.path.dirname(f), f"{base}_compressed{OUT_FMT[fmt]}")
-                save_opts = {"quality": q, "optimize": True} if fmt == "JPEG" else {}
-                img.save(out, format=fmt, **save_opts)
-                o, c = os.path.getsize(f)/1024, os.path.getsize(out)/1024
-                saved_total += max(0, o - c)
-                ok += 1
-                if len(files) <= 20 or i % 5 == 0:
-                    print(f"  [{i}/{len(files)}] {os.path.basename(f)}: {o:.0f}KB→{c:.0f}KB")
-            except Exception as e:
-                fail += 1
-                print(f"  [{i}/{len(files)}] {os.path.basename(f)} ❌ {e}")
-        print(f"\n✅ 成功 {ok} / 失败 {fail}")
-        print(f"   累计节省 {saved_total/1024:.1f} MB")
-```
-
-</details>
-
-<details>
-<summary>📋 img.convert（格式转换 JPEG/PNG/WebP/BMP）</summary>
-
-```python
-from PIL import Image
-import os
-
-def _fix_path(p):
-    return p.strip().strip('"').strip("'").replace("\\","/").replace("//","/")
-
-EXTS = {".jpg",".jpeg",".png",".webp",".bmp",".tiff",".gif"}
-OUT_FMT = {"JPEG":".jpg", "PNG":".png", "WEBP":".webp", "BMP":".bmp"}
-
-path = _fix_path(input("图片路径:").strip() or "photo.jpg")
-if not os.path.exists(path):
-    print(f"❌ 不存在: {path}")
-else:
-    fmt = input("目标格式(JPEG/PNG/WebP/BMP):").strip().upper() or "PNG"
-    if fmt not in OUT_FMT:
-        print(f"❌ 不支持 {fmt}")
-    else:
-        img = Image.open(path)
-        if img.mode in ('RGBA','PA') and fmt != 'PNG':
-            img = img.convert('RGB')
-        base = os.path.splitext(os.path.basename(path))[0]
-        out = os.path.join(os.path.dirname(path), f"{base}_converted{OUT_FMT[fmt]}")
-        img.save(out, format=fmt)
-        print(f"✅ 已转换: {out}")
-```
-
-</details>
-
-<details>
-<summary>📋 img.removebg（人像抠图）</summary>
-
-```python
-from rembg import remove
-import os
-try:
-    inp = input("图片:").strip().strip('"').replace("\\","/") or "portrait.jpg"
-    if not os.path.exists(inp):
-        print(f"❌ 文件不存在: {inp}")
-    else:
-        out = f"bg_removed_{os.path.basename(inp)}.png"
-        result = remove(open(inp,"rb").read())
-        open(out,"wb").write(result)
-        print(f"✅ 完成: {out}")
-except ImportError: print("❌ 缺少 rembg: pip install rembg")
-except Exception as e: print(f"❌ {e}")
-```
-
-</details>
-
-<details>
-<summary>📋 img.idphoto（证件照生成）</summary>
-
-```python
-from PIL import Image
-try:
-    f = input("照片:").strip().strip('"').replace("\\","/") or "face.jpg"
-    sz = input("尺寸(一寸/二寸):").strip()或 "一寸"
-    bg = input("背景色(白色/蓝色/红色):").strip()或 "白色"
-    sizes = {"一寸":(295,413),"二寸":(413,579)}
-    bgs = {"白色":(255,255,255),"蓝色":(0,0,255),"红色":(255,0,0)}
-    w,h = sizes.get(sz, sizes["一寸"])
-    img = Image.open(f).resize((w,h),Image.LANCZOS)
-    canvas = Image.new("RGB",(w,h),bgs.get(bg, (255,255,255)))
-    canvas.paste(img,(0,0),img if img.mode=="RGBA" else None)
-    canvas.save(f"证件照_{sz}_{bg}.png")
-    print(f"✅ 证件照_{sz}_{bg}.png ({w}x{h})")
-except Exception as e: print(f"❌ {e}")
-```
-
-</details>
-
-<details>
-<summary>📋 img.repair（图片修复）</summary>
-
-```python
-from PIL import Image, ImageEnhance
-try:
-    f = input("老照片路径:").strip().strip('"').replace("\\","/") or "old.jpg"
-    img = Image.open(f)
-    img = ImageEnhance.Sharpness(img).enhance(1.5)
-    img = ImageEnhance.Brightness(img).enhance(1.1)
-    img = ImageEnhance.Contrast(img).enhance(1.2)
-    img.save("repaired.jpg")
-    print("✅ 完成: repaired.jpg")
-except Exception as e: print(f"❌ {e}")
-```
-
-</details>
-
----
-
-### 📄 模块 7：PDF 转换
-
----
-
-#### 7.1 PDF 合并
-
-📦 **需 PyPDF2**
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-from PyPDF2 import PdfMerger
-import os
-files = []
-total_mb = 0
-try:
-    while True:
-        f = input(f"文件{len(files)+1}(回车结束):").strip().strip('"').replace("\\","/")
-        if not f: break
-        if not os.path.exists(f): print(f"❌ 跳过: {f}"); continue
-        size_mb = os.path.getsize(f)/1024/1024
-        total_mb += size_mb
-        if size_mb > 500: print(f"⚠️ {size_mb:.0f}MB 大文件，合并可能较慢")
-        files.append(f)
-    if len(files) < 2: print("❌ 至少2个PDF")
-    else:
-        if total_mb > 100: print(f"⚠️ 总大小 {total_mb:.0f}MB，需1-5分钟...")
-        m = PdfMerger()
-        ok = 0
-        for f in files:
-            try: m.append(f); ok+=1
-            except: print(f"⚠️ 跳过损坏文件: {f}")
-        if len(m.pages)==0: print("❌ 全部损坏")
-        else:
-            m.write("merged.pdf"); m.close()
-            print(f"✅ merged.pdf ({ok}/{len(files)} 文件, {os.path.getsize('merged.pdf')/1024/1024:.1f}MB)")
-except Exception as e: print(f"❌ {e}")
-```
-
-</details>
-
----
-
-#### 7.2 PDF 拆分
-
-📦 **需 PyPDF2**
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-from PyPDF2 import PdfReader, PdfWriter
-import os
-try:
-    inp = input("PDF路径:").strip().strip('"').replace("\\","/") or "source.pdf"
-    pgs = input("页码(如 1-3):").strip() or "1-3"
-    if not os.path.exists(inp): print("❌ 文件不存在")
-    else:
-        r = PdfReader(inp)
-        if r.is_encrypted: print("❌ 已加密，请先解密！")
-        else:
-            w = PdfWriter(); total = len(r.pages); added = 0
-            for p in pgs.split(","):
-                if "-" in p:
-                    s,e = map(int, p.split("-"))
-                    if s>e: s,e = e,s
-                    for i in range(max(0,s-1),min(e,total)):
-                        w.add_page(r.pages[i]); added+=1
-                else:
-                    idx = int(p)-1
-                    if 0<=idx<total: w.add_page(r.pages[idx]); added+=1
-            w.write("extracted.pdf")
-            print(f"✅ extracted.pdf ({added}页)")
-except Exception as e: print(f"❌ {e}")
-```
-
-</details>
-
----
-
-#### 7.3 PDF 加密 / 7.4 PDF 解密
-
-📦 **需 PyPDF2**
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-from PyPDF2 import PdfReader, PdfWriter
-# 加密
-inp = input("PDF路径:").strip().strip('"') or "source.pdf"
-pwd = input("密码:").strip()
-if len(pwd)<4: print("⚠️ 密码太短")
-else:
-    r=PdfReader(inp); w=PdfWriter()
-    for p in r.pages: w.add_page(p)
-    w.encrypt(pwd); w.write("encrypted.pdf")
-    print("✅ encrypted.pdf (密码丢失无法恢复!)")
-
-# 解密
-inp = input("加密PDF:").strip().strip('"') or "encrypted.pdf"
-pwd = input("密码:").strip()
-r=PdfReader(inp)
-if r.is_encrypted: r.decrypt(pwd)
-w=PdfWriter()
-for p in r.pages: w.add_page(p)
-w.write("decrypted.pdf"); print("✅ decrypted.pdf")
-```
-
-</details>
-
----
-
-### 🎬 模块 8：视频工具
-
----
-
-#### 8.1 视频格式转换 / 8.2 视频编辑 / 8.3 在线录屏
-
-📦 **需 FFmpeg**
-
-> 详见下方「📦 依赖管理」章节。
-
-<details>
-<summary>📋 视频格式转换命令</summary>
-
-```python
-import subprocess, os
-f = input("文件:").strip().strip('"').replace("\\","/") or "video.mp4"
-o = input("格式(gif/mp4/avi/mov/webm):").strip() or "gif"
-out = f"{os.path.splitext(f)[0]}.{o}"
-if not os.path.exists(f): print(f"❌ 文件不存在: {f}")
-else:
-    size = os.path.getsize(f)/1024/1024
-    if size>500: print(f"⚠️ {size:.0f}MB 可能需5-30分钟")
-    r = subprocess.run(["ffmpeg","-i",f,"-y"]
-        + (["-vf","scale=480:-1"] if o=="gif" and size>50 else [])
-        + [out], capture_output=True, text=True, timeout=1800)
-    if r.returncode==0: print(f"✅ {out} ({os.path.getsize(out)/1024:.0f}KB)")
-    else: print(f"❌ {r.stderr[:300]}")
-```
-
-</details>
-
-<details>
-<summary>📋 视频编辑命令（6功能菜单）</summary>
-
-```python
-import subprocess, os, json
-
-def _fix(p): return p.strip().strip('"').strip("'").replace("\\","/").replace("//","/")
-
-def _info(f):
-    r = subprocess.run(["ffprobe","-v","quiet","-print_format","json","-show_format","-show_streams",f], capture_output=True, text=True, timeout=30)
-    return json.loads(r.stdout) if r.returncode==0 else None
-
-act = input("操作(1裁剪/2拼接/3提取音频/4水印/5截图/6信息):").strip() or "1"
-if act=="6":
-    f = _fix(input("文件:") or "video.mp4")
-    info = _info(f)
-    if info:
-        dur = float(info.get("format",{}).get("duration",0))
-        print(f"时长: {int(dur//3600):02d}:{int((dur%3600)//60):02d}:{int(dur%60):02d}")
-        print(f"大小: {int(info.get('format',{}).get('size',0))/1024/1024:.1f}MB")
-        for s in info.get("streams",[]):
-            if s.get("codec_type")=="video": print(f"视频: {s.get('codec_name','?')} {s.get('width','?')}x{s.get('height','?')}")
-            elif s.get("codec_type")=="audio": print(f"音频: {s.get('codec_name','?')} {s.get('sample_rate','?')}Hz")
-```
-
-</details>
-
----
-
-### 🛠️ 模块 9：实用小工具
-
----
-
-#### 9.1 二维码生成 / 9.2 密码生成 / 9.3 正则测试
-
-**✅ 开箱即用**
-
-<details>
-<summary>📋 二维码生成</summary>
-
-```python
-import urllib.parse
-text = input("内容/URL:") or "https://www.example.com"
-url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={urllib.parse.quote(text,safe='')}"
-print(f"📱 复制到浏览器下载: {url}")
-```
-
-</details>
-
-<details>
-<summary>📋 密码生成器</summary>
-
-```python
-import random, string, math
-length = int(input("密码长度(16):") or 16)
-chars = string.ascii_letters + string.digits + "!@#$%^&*"
-pwd = ''.join(random.choice(chars) for _ in range(length))
-entropy = length * math.log2(len(chars))
-print(f"🔐 {pwd}")
-print(f"强度: {'★★★★★' if entropy>=80 else '★★★★☆' if entropy>=60 else '★★★☆☆'} ({entropy:.1f} bits)")
-```
-
-</details>
-
-<details>
-<summary>📋 正则测试器</summary>
-
-```python
-import re
-p = input("正则:") or r"\b\w+@\w+\.\w+\b"
-t = input("文本:") or "test@example.com"
-try:
-    m = re.findall(p, t)
-    print(f"✅ 找到 {len(m)} 个: {m}" if m else "❌ 无匹配")
-except re.error as e: print(f"❌ 语法错误: {e}")
-```
-
-</details>
-
----
-
-#### 9.4 文件哈希校验 ⭐ v3.6.0 新增
-
-**✅ 开箱即用**（纯 Python 标准库 hashlib，零依赖）
-
-> 校验下载文件完整性 / 比对文件是否被篡改。支持 MD5 / SHA1 / SHA256，分块读取大文件不占内存。
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import hashlib, os
-
-path = input("文件路径:").strip().strip('"').strip("'")
-if not path or not os.path.isfile(path):
-    print(f"❌ 文件不存在: {path}")
-else:
-    algos = {"md5": hashlib.md5(), "sha1": hashlib.sha1(), "sha256": hashlib.sha256()}
-    size = os.path.getsize(path)
-    # 大文件分块读取（8MB/块），不一次性载入内存
-    chunk = 8 * 1024 * 1024
-    with open(path, "rb") as f:
-        while True:
-            data = f.read(chunk)
-            if not data:
-                break
-            for h in algos.values():
-                h.update(data)
-    print(f"📄 文件: {os.path.basename(path)}  ({size/1024:.1f} KB)")
-    for name, h in algos.items():
-        print(f"  {name.upper():7}: {h.hexdigest()}")
-    # 可选：与期望值比对
-    expect = input("粘贴期望哈希值比对(可留空回车跳过):").strip().lower()
-    if expect:
-        matched = [n for n, h in algos.items() if h.hexdigest().lower() == expect]
-        print(f"✅ 校验通过（{matched[0].upper()}）" if matched else "❌ 校验失败：哈希值不匹配，文件可能已损坏或被篡改")
-```
-
-</details>
-
----
-
-#### 9.5 UUID 生成器 ⭐ v3.6.0 新增
-
-**✅ 开箱即用**（纯 Python 标准库 uuid，零依赖）
-
-> 生成唯一标识符：uuid4（随机，最常用）/ uuid1（基于时间+MAC）/ 批量生成。
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import uuid
-
-mode = input("类型(uuid4随机/uuid1时间/nodash无横线):").strip() or "uuid4"
-try:
-    count = int(input("生成数量(默认1):") or 1)
-except ValueError:
-    count = 1
-count = max(1, min(count, 100))  # 上限100个，防止误输入巨大值
-
-for _ in range(count):
-    if mode == "uuid1":
-        u = str(uuid.uuid1())
-    elif mode == "nodash":
-        u = uuid.uuid4().hex
-    else:
-        u = str(uuid.uuid4())
-    print(u)
-print(f"✅ 已生成 {count} 个 UUID（{mode}）")
-```
-
-</details>
-
----
-
-#### 9.6 时间戳转换 ⭐ v3.6.0 新增
-
-**✅ 开箱即用**（纯 Python 标准库 datetime，零依赖）
-
-> Unix 时间戳 ↔ 日期时间互转。支持秒/毫秒级，自动识别，方便调试接口和日志。
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import datetime, time
-
-s = input("输入时间戳 或 日期(YYYY-MM-DD HH:MM:SS)，留空取当前:").strip()
-if not s:
-    now = time.time()
-    print(f"⏰ 当前时间: {datetime.datetime.now():%Y-%m-%d %H:%M:%S}")
-    print(f"   秒级时间戳: {int(now)}")
-    print(f"   毫秒级时间戳: {int(now*1000)}")
-elif s.replace(".", "").isdigit():
-    ts = float(s)
-    if ts > 1e12:  # 毫秒级自动识别
-        ts /= 1000
-    try:
-        dt = datetime.datetime.fromtimestamp(ts)
-        print(f"✅ 时间戳 {s} →")
-        print(f"   本地时间: {dt:%Y-%m-%d %H:%M:%S}")
-        print(f"   星期: {'一二三四五六日'[dt.weekday()]}")
-    except (ValueError, OSError):
-        print("❌ 时间戳超出有效范围")
-else:
-    parsed = None
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d", "%Y/%m/%d %H:%M:%S", "%Y/%m/%d"):
-        try:
-            parsed = datetime.datetime.strptime(s, fmt)
-            break
-        except ValueError:
-            continue
-    if parsed:
-        print(f"✅ 日期 {s} →")
-        print(f"   秒级时间戳: {int(parsed.timestamp())}")
-        print(f"   毫秒级时间戳: {int(parsed.timestamp()*1000)}")
-    else:
-        print("❌ 无法识别，请用 时间戳 或 YYYY-MM-DD HH:MM:SS 格式")
-```
-
-</details>
-
----
-
-#### 9.7 IP 工具 ⭐ v3.6.0 新增
-
-**✅ 开箱即用**（纯 Python 标准库 ipaddress/socket，零依赖）
-
-> IP 地址解析、类型判断、子网计算、本机 IP 查询。IPv4/IPv6 通用。
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import ipaddress, socket
-
-s = input("输入IP或网段(如192.168.1.0/24)，留空查本机:").strip()
-if not s:
-    try:
-        hostname = socket.gethostname()
-        local_ip = socket.gethostbyname(hostname)
-        print(f"🖥️ 主机名: {hostname}")
-        print(f"   本机IP: {local_ip}")
-    except socket.error as e:
-        print(f"❌ 获取本机IP失败: {e}")
-else:
-    try:
-        if "/" in s:  # 网段计算
-            net = ipaddress.ip_network(s, strict=False)
-            print(f"✅ 网段: {net}")
-            print(f"   网络地址: {net.network_address}")
-            print(f"   广播地址: {net.broadcast_address}")
-            print(f"   子网掩码: {net.netmask}")
-            print(f"   可用主机数: {net.num_addresses}")
-        else:  # 单个IP解析
-            ip = ipaddress.ip_address(s)
-            print(f"✅ IP: {ip}  (IPv{ip.version})")
-            print(f"   私有地址: {'是' if ip.is_private else '否'}")
-            print(f"   回环地址: {'是' if ip.is_loopback else '否'}")
-            print(f"   多播地址: {'是' if ip.is_multicast else '否'}")
-    except ValueError as e:
-        print(f"❌ 无效的IP或网段: {e}")
-```
-
-</details>
-
----
-
-#### 9.8 CSV 查看器 ⭐ v3.7.0 新增
-
-**✅ 开箱即用**（纯 Python 标准库 csv，零依赖）
-
-> 在终端直接查看 CSV/TSV 文件内容，支持自动识别编码和分隔符、分页显示、列宽对齐。
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import csv, os
-
-path = input("CSV文件路径:").strip().strip('"').strip("'")
-if not path or not os.path.isfile(path):
-    print(f"❌ 文件不存在: {path}")
-else:
-    # 自动识别编码
-    enc = "utf-8"
-    for try_enc in ("utf-8-sig", "utf-8", "gbk", "gb18030"):
-        try:
-            with open(path, encoding=try_enc) as f:
-                f.read(4096)
-            enc = try_enc; break
-        except (UnicodeDecodeError, UnicodeError):
-            continue
-    # 自动识别分隔符
-    with open(path, encoding=enc) as f:
-        head = f.read(2048)
-    try:
-        dialect = csv.Sniffer().sniff(head, delimiters=",\t;|")
-    except csv.Error:
-        dialect = csv.excel
-    # 读取
-    with open(path, encoding=enc, newline="") as f:
-        reader = csv.reader(f, dialect)
-        rows = list(reader)
-    if not rows:
-        print("⚠️ 文件为空")
-    else:
-        max_cols = max(len(r) for r in rows)
-        widths = [0] * max_cols
-        for r in rows:
-            for i, c in enumerate(r):
-                widths[i] = max(widths[i], len(c))
-        widths = [min(w, 30) for w in widths]  # 单列上限30字符
-        total = len(rows)
-        page = 20
-        for start in range(0, total, page):
-            print(f"\n--- 第 {start+1}-{min(start+page, total)} 行 / 共 {total} 行 ---")
-            for r in rows[start:start+page]:
-                line = " | ".join((c if len(c)<=w else c[:w-1]+"…").ljust(w) for c, w in zip(r, widths))
-                print(line)
-            if start + page < total:
-                more = input("按回车继续 / q 退出: ").strip().lower()
-                if more == "q":
-                    break
-```
-
-</details>
-
----
-
-#### 9.9 密码强度检测 ⭐ v3.7.0 新增
-
-**✅ 开箱即用**（纯 Python 标准库，零依赖）
-
-> 评估已有密码的安全性：长度、字符多样性、常见模式检测、泄露字典检查、强度评级和改进建议。
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import re, hashlib
-
-COMMON_PASSWORDS = {
-    "123456","password","12345678","qwerty","123456789","letmein","1234567","football","iloveyou",
-    "admin","welcome","monkey","login","abc123","111111","123123","password123","1234","000000",
-    "1qaz2wsx","qwerty123","123qwe","password1","sunshine","princess","dragon","flower","shadow",
-    "superman","michael","master","photoshop","112233","654321","trustno1","batman","passw0rd"
-}
-
-pwd = input("待检测密码:").strip()
-if not pwd:
-    print("❌ 请输入密码")
-else:
-    score = 0
-    tips = []
-    # 长度
-    if len(pwd) >= 8: score += 1
-    else: tips.append("长度不足8位")
-    if len(pwd) >= 12: score += 1
-    if len(pwd) >= 16: score += 1
-    # 字符多样性
-    has_lower = bool(re.search(r"[a-z]", pwd))
-    has_upper = bool(re.search(r"[A-Z]", pwd))
-    has_digit = bool(re.search(r"\d", pwd))
-    has_symbol = bool(re.search(r"[^a-zA-Z\d]", pwd))
-    diversity = sum([has_lower, has_upper, has_digit, has_symbol])
-    score += diversity
-    if not has_lower: tips.append("缺少小写字母")
-    if not has_upper: tips.append("缺少大写字母")
-    if not has_digit: tips.append("缺少数字")
-    if not has_symbol: tips.append("缺少特殊符号")
-    # 常见模式扣分
-    if re.search(r"(.)\1{2,}", pwd):  # 3+重复字符
-        score -= 2; tips.append("含3+连续重复字符(如aaa)")
-    if re.search(r"(012|123|234|345|456|567|678|789|890)", pwd):
-        score -= 2; tips.append("含连续数字序列(如123)")
-    if re.search(r"(abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz)", pwd.lower()):
-        score -= 2; tips.append("含连续字母序列(如abc)")
-    if pwd.lower() in COMMON_PASSWORDS:
-        score = 0; tips.append("⚠️ 在常见弱密码字典中！")
-    # 评级
-    score = max(0, min(score, 10))
-    stars = "★" * (score // 2) + "☆" * (5 - score // 2)
-    labels = {0:"极弱",1:"极弱",2:"极弱",3:"弱",4:"弱",5:"中等",6:"中等",7:"强",8:"强",9:"很强",10:"极强"}
-    print(f"长度: {len(pwd)} | 字符类: {diversity}/4")
-    print(f"评分: {score}/10  {stars}  [{labels[score]}]")
-    if tips:
-        print("建议:")
-        for t in tips[:5]:
-            print(f"  • {t}")
-    if score >= 8:
-        print("✅ 密码强度优秀")
-    elif score >= 5:
-        print("💡 尚可，但有提升空间")
-    else:
-        print("❌ 建议立即修改")
-```
-
-</details>
-
----
-
-#### 9.10 颜色值转换 ⭐ v3.7.0 新增
-
-**✅ 开箱即用**（纯数学运算，零依赖）
-
-> RGB↔HEX↔HSL 三色值互转，支持多种输入格式，前端开发、设计配色好帮手。
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import re
-
-s = input("输入颜色值(如#FF0000 / rgb(255,0,0) / 255,0,0):").strip()
-if not s:
-    print("❌ 请输入颜色值")
-else:
-    r = g = b = None
-    s_clean = s.strip()
-    # 格式1: #HEX 或 HEX
-    hex_m = re.match(r"^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$", s_clean)
-    if hex_m:
-        hx = hex_m.group(1)
-        if len(hx) == 3:
-            r, g, b = int(hx[0]*2,16), int(hx[1]*2,16), int(hx[2]*2,16)
-        else:
-            r, g, b = int(hx[0:2],16), int(hx[2:4],16), int(hx[4:6],16)
-    # 格式2: rgb(r,g,b)
-    rgb_m = re.match(r"rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)", s_clean, re.I)
-    if rgb_m and r is None:
-        r, g, b = int(rgb_m.group(1)), int(rgb_m.group(2)), int(rgb_m.group(3))
-    # 格式3: r,g,b 纯数字
-    num_m = re.match(r"^(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})$", s_clean)
-    if num_m and r is None:
-        r, g, b = int(num_m.group(1)), int(num_m.group(2)), int(num_m.group(3))
-    if r is None or not all(0 <= v <= 255 for v in (r, g, b)):
-        print("❌ 无法识别。支持格式: #FF0000 / #F00 / rgb(255,0,0) / 255,0,0")
-    else:
-        hex_out = f"#{r:02X}{g:02X}{b:02X}"
-        # → HSL
-        rn, gn, bn = r/255, g/255, b/255
-        mx, mn = max(rn, gn, bn), min(rn, gn, bn)
-        l = (mx + mn) / 2
-        if mx == mn:
-            h = s = 0
-        else:
-            d = mx - mn
-            s = d / (2 - mx - mn) if l > 0.5 else d / (mx + mn)
-            if mx == rn:
-                h = (gn - bn) / d + (6 if gn < bn else 0)
-            elif mx == gn:
-                h = (bn - rn) / d + 2
-            else:
-                h = (rn - gn) / d + 4
-            h /= 6
-        h_deg = round(h * 360)
-        s_pct = round(s * 100)
-        l_pct = round(l * 100)
-        print(f"✅ {s_clean} →")
-        print(f"   HEX : {hex_out}  (小写: {hex_out.lower()})")
-        print(f"   RGB : rgb({r}, {g}, {b})")
-        print(f"   HSL : hsl({h_deg}, {s_pct}%, {l_pct}%)")
-```
-
-</details>
-
----
-
-#### 9.11 随机数生成器 ⭐ v3.7.0 新增
-
-**✅ 开箱即用**（纯 Python 标准库 random，零依赖）
-
-> 通用随机数工具：范围随机整数/小数、掷骰子、列表打乱/抽样、随机字符串、模拟抛硬币。
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import random, string
-
-mode = input("模式(整数/小数/硬币/骰子/打乱/抽样/字符串):").strip() or "整数"
-if mode == "整数":
-    try:
-        a = int(input("最小值(默认1):") or 1)
-        b = int(input("最大值(默认100):") or 100)
-        n = int(input("数量(默认1):") or 1)
-        if a > b: a, b = b, a
-        res = [random.randint(a, b) for _ in range(max(1, min(n, 100)))]
-        print(f"✅ {res}")
-    except ValueError: print("❌ 请输入整数")
-elif mode == "小数":
-    try:
-        a = float(input("最小值(默认0):") or 0)
-        b = float(input("最大值(默认1):") or 1)
-        if a > b: a, b = b, a
-        res = [round(random.uniform(a, b), 6) for _ in range(3)]
-        print(f"✅ {res}")
-    except ValueError: print("❌ 请输入数字")
-elif mode == "硬币":
-    n = int(input("次数(默认1):") or 1)
-    res = ["正面" if random.random() < 0.5 else "反面" for _ in range(max(1, min(n, 100)))]
-    h = res.count("正面")
-    print(f"✅ {res}")
-    print(f"   正面{h}次 / 反面{len(res)-h}次")
-elif mode == "骰子":
-    n = int(input("骰子数(默认1):") or 1)
-    res = [random.randint(1, 6) for _ in range(max(1, min(n, 20)))]
-    print(f"✅ {res}  合计: {sum(res)}")
-elif mode == "打乱":
-    items = input("输入列表(逗号分隔):").split(",")
-    items = [x.strip() for x in items if x.strip()]
-    random.shuffle(items)
-    print(f"✅ {items}")
-elif mode == "抽样":
-    items = input("列表(逗号分隔):").split(",")
-    items = [x.strip() for x in items if x.strip()]
-    try:
-        k = int(input(f"抽取数(1-{len(items)}):") or 1)
-        k = max(1, min(k, len(items)))
-    except ValueError: k = 1
-    print(f"✅ {random.sample(items, k)}")
-elif mode == "字符串":
-    length = int(input("长度(默认16):") or 16)
-    chars = ""
-    if input("字母(y/n 默认y):").strip().lower() != "n": chars += string.ascii_letters
-    if input("数字(y/n 默认y):").strip().lower() != "n": chars += string.digits
-    if input("符号(y/n 默认n):").strip().lower() == "y": chars += "!@#$%^&*"
-    if not chars: chars = string.ascii_letters + string.digits
-    print(f"✅ {''.join(random.choice(chars) for _ in range(max(1, min(length, 256))))}")
-else:
-    print(f"❌ 不支持 {mode}。可选: 整数/小数/硬币/骰子/打乱/抽样/字符串")
-```
-
-</details>
-
----
-
-### 🖥️ 模块 10：系统工具 ⭐ v3.5 新增模块
-
----
-
-#### 10.1 系统资源监控 ⭐ v3.8.0 优化（wmic → PowerShell CIM）
-
-**✅ 开箱即用**
-
-实时监控 CPU、内存、磁盘使用率，返回中文信息。v3.8.0 将 wmic 迁移到 PowerShell CIM cmdlet，兼容 Windows Server 2025+。
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import os, platform, subprocess, time
-
-def _ps_cim(cmd):
-    """执行 PowerShell CIM 命令并返回 stdout"""
-    r = subprocess.run(
-        ["powershell", "-NoProfile", "-Command", cmd],
-        capture_output=True, text=True, timeout=10
-    )
-    return r.stdout.strip()
-
-def get_system_resources():
-    """获取系统资源信息（跨Windows/macOS/Linux）"""
-    info = {'cpu_usage': 0, 'ram_total_mb': 0, 'ram_used_mb': 0, 'ram_percent': 0,
-            'disk_total_gb': 0, 'disk_used_gb': 0, 'disk_percent': 0,
-            'cpu_count': os.cpu_count() or 2, 'platform': platform.system()}
-    
-    # CPU 使用率
-    try:
-        if info['platform'] == 'Windows':
-            # v3.8.0: wmic → PowerShell CIM（兼容 Win11/Server 2025+）
-            out = _ps_cim("Get-CimInstance Win32_Processor | Select-Object -ExpandProperty LoadPercentage")
-            lines = [l.strip() for l in out.split('\n') if l.strip().isdigit()]
-            info['cpu_usage'] = int(lines[0]) if lines else 0
-        else:
-            r = subprocess.run(['grep','-c','processor','/proc/cpuinfo'], capture_output=True, text=True, timeout=5)
-            info['cpu_usage'] = 0  # Linux
-    except: pass
-    
-    # 内存信息
-    try:
-        if info['platform'] == 'Windows':
-            # v3.8.0: wmic → PowerShell CIM
-            out = _ps_cim("Get-CimInstance Win32_OperatingSystem | Select-Object FreePhysicalMemory,TotalVisibleMemorySize | Format-List")
-            for line in out.split('\n'):
-                line = line.strip()
-                if line.startswith('TotalVisibleMemorySize'):
-                    info['ram_total_mb'] = int(line.split(':')[1].strip()) // 1024
-                elif line.startswith('FreePhysicalMemory'):
-                    free = int(line.split(':')[1].strip()) // 1024
-                    info['ram_used_mb'] = info['ram_total_mb'] - free
-            if info['ram_total_mb'] > 0:
-                info['ram_percent'] = int(info['ram_used_mb'] / info['ram_total_mb'] * 100)
-        else:
-            with open('/proc/meminfo') as f:
-                mem = {}
-                for line in f:
-                    parts = line.split()
-                    if parts[0] in ('MemTotal:','MemAvailable:','MemFree:'):
-                        mem[parts[0]] = int(parts[1])
-            total = mem.get('MemTotal:',0)
-            avail = mem.get('MemAvailable:', mem.get('MemFree:',0))
-            info['ram_total_mb'] = total // 1024
-            info['ram_used_mb'] = (total - avail) // 1024
-            if total > 0: info['ram_percent'] = int((total-avail)/total*100)
-    except: pass
-    
-    # 磁盘信息
-    try:
-        if info['platform'] == 'Windows':
-            # v3.8.0: wmic → PowerShell CIM
-            out = _ps_cim("Get-CimInstance Win32_LogicalDisk | Select-Object Size,FreeSpace,DeviceID | Format-List")
-            total = free = 0
-            for block in out.split('\n\n'):
-                for line in block.split('\n'):
-                    line = line.strip()
-                    if line.startswith('Size') and ':' in line:
-                        val = line.split(':')[1].strip()
-                        if val.isdigit(): total += int(val)
-                    elif line.startswith('FreeSpace') and ':' in line:
-                        val = line.split(':')[1].strip()
-                        if val.isdigit(): free += int(val)
-            info['disk_total_gb'] = total // (1024**3)
-            info['disk_used_gb'] = (total - free) // (1024**3)
-            if total > 0: info['disk_percent'] = int((total-free)/total*100)
-        else:
-            r = subprocess.run(['df','/'], capture_output=True, text=True, timeout=5)
-            lines = r.stdout.strip().split('\n')
-            if len(lines)>1:
-                parts = lines[1].split()
-                if len(parts)>=4:
-                    total = int(parts[1])
-                    used = int(parts[2])
-                    info['disk_total_gb'] = total // (1024**2)
-                    info['disk_used_gb'] = used // (1024**2)
-                    info['disk_percent'] = int(parts[4].replace('%',''))
-    except: pass
-    
-    return info
-
-res = get_system_resources()
-print("=" * 40)
-print("  📊 dgngjx-skill 系统资源监控")
-print("=" * 40)
-print(f"🖥️ 系统: {res['platform']}")
-print(f"⚡ CPU: {res['cpu_usage']}% 占用 | {res['cpu_count']} 核心")
-print(f"🧠 内存: {res['ram_used_mb']}/{res['ram_total_mb']} MB ({res['ram_percent']}%)")
-print(f"💾 磁盘: {res['disk_used_gb']}/{res['disk_total_gb']} GB ({res['disk_percent']}%)")
-print()
-
-# 预警
-if res['ram_percent'] > 90: print("🔴 内存严重不足！建议关闭部分程序")
-elif res['ram_percent'] > 75: print("🟡 内存偏高，考虑释放")
-if res['disk_percent'] > 90: print("🔴 磁盘空间告急！清理空间")
-elif res['disk_percent'] > 80: print("🟡 磁盘空间偏低")
-if res['cpu_usage'] > 90: print("🔴 CPU 负载过高")
-elif res['cpu_usage'] > 75: print("🟡 CPU 使用率较高")
-```
-
-</details>
-
-**⚠️ 可能遇到的坑：**
-
-| 情况 | 原因 | 解决 |
-|------|------|------|
-| 获取失败返回 0 | 权限不足 | 以管理员权限运行 |
-| wmic 被禁用 | Windows 精简版 | v3.8.0 已迁移到 PowerShell CIM，无需 wmic |
-| macOS 内存显示异常 | macOS 内存管理机制 | 正常行为，macOS 积极利用内存 |
-| PowerShell 执行策略限制 | Restricted 策略 | 运行 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
-
----
-
-#### 10.2 批量文件重命名 ⭐ v3.5.0 新增
-
-**✅ 开箱即用**（零依赖，纯 os 模块）
-
-批量预览后才能执行，支持正则替换、序号前缀、大小写转换。
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import os, re
-
-def _fix_path(p):
-    return p.strip().strip('"').strip("'").replace("\\","/").replace("//","/")
-
-BLOCKED_EXTS = {'.exe','.dll','.bat','.cmd','.ps1','.vbs','.sh','.com','.scr','.hta','.reg','.msi','.apk','.jar'}
-
-dir_path = _fix_path(input("目录路径:").strip() or ".")
-if not os.path.isdir(dir_path):
-    print(f"❌ 目录不存在: {dir_path}")
-else:
-    files = [f for f in os.listdir(dir_path) if os.path.isfile(os.path.join(dir_path,f))]
-    # 过滤掉黑名单文件
-    safe_files = [f for f in files if os.path.splitext(f)[1].lower() not in BLOCKED_EXTS]
-    if len(safe_files) != len(files):
-        print(f"⚠️ 已跳过 {len(files)-len(safe_files)} 个系统/可执行文件")
-    files = safe_files
-    
-    if not files:
-        print("❌ 目录为空或无安全文件")
-    else:
-        print(f"\n📁 {dir_path} 中找到 {len(files)} 个文件")
-        print()
-        print("重命名模式:")
-        print("  1. 添加前缀 (如: photo_001.jpg)")
-        print("  2. 添加后缀 (如: 001_终版.jpg)")
-        print("  3. 正则替换 (正则表达式匹配替换)")
-        print("  4. 大小写转换 (全部小写/大写)")
-        print("  5. 序号重命名 (统一前缀+递增数字)")
-        mode = input("选择模式(1-5):").strip() or "1"
-        
-        previews = []
-        
-        if mode == "1":
-            prefix = input("前缀:").strip() or "file_"
-            for i, fn in enumerate(files):
-                new = prefix + fn
-                previews.append((fn, new))
-                
-        elif mode == "2":
-            suffix = input("后缀:").strip() or "_ok"
-            for fn in files:
-                name, ext = os.path.splitext(fn)
-                new = name + suffix + ext
-                previews.append((fn, new))
-                
-        elif mode == "3":
-            pattern = input("匹配正则:").strip()
-            repl = input("替换为:").strip()
-            if not pattern:
-                print("❌ 正则表达式不能为空")
-                previews = []
-            else:
-                for fn in files:
-                    new = re.sub(pattern, repl, fn)
-                    previews.append((fn, new))
-                    
-        elif mode == "4":
-            upper = input("转大写?(Y/n):").strip().lower() != 'n'
-            for fn in files:
-                new = fn.upper() if upper else fn.lower()
-                previews.append((fn, new))
-                
-        elif mode == "5":
-            prefix = input("统一前缀:").strip() or "file"
-            start = int(input("起始序号(1):") or 1)
-            width = int(input("序号位数(3):") or 3)
-            for i, fn in enumerate(files):
-                _, ext = os.path.splitext(fn)
-                new = f"{prefix}_{str(start+i).zfill(width)}{ext}"
-                previews.append((fn, new))
-        
-        if previews:
-            print(f"\n📋 预览（共 {len(previews)} 个文件）:")
-            print("-" * 60)
-            for old, new in previews[:10]:
-                if old != new:
-                    print(f"  {old}")
-                    print(f"    → {new}")
-                else:
-                    print(f"  {old} （无变化）")
-            if len(previews) > 10:
-                print(f"  ... 还有 {len(previews)-10} 个文件")
-            print("-" * 60)
-            
-            # 检查冲突
-            new_names = [new for _, new in previews]
-            if len(new_names) != len(set(new_names)):
-                print("⚠️ 警告：新文件名存在冲突！")
-                from collections import Counter
-                for name, cnt in Counter(new_names).items():
-                    if cnt > 1:
-                        print(f"   冲突: {name} ({cnt}次)")
-                print("   请修改规则避免冲突")
-            else:
-                confirm = input(f"\n确认执行? (输入 YES 确认): ").strip()
-                if confirm == "YES":
-                    success = 0
-                    for old, new in previews:
-                        if old != new:
-                            old_path = os.path.join(dir_path, old)
-                            new_path = os.path.join(dir_path, new)
-                            if not os.path.exists(new_path):
-                                os.rename(old_path, new_path)
-                                success += 1
-                            else:
-                                print(f"⚠️ 已存在，跳过: {new}")
-                    print(f"✅ 已重命名 {success} 个文件")
-                else:
-                    print("❎ 已取消")
-```
-
-</details>
-
-**⚠️ 可能遇到的坑：**
-
-| 情况 | 原因 | 解决 |
-|------|------|------|
-| 输入 YES 仍被拒绝 | 必须大写的 YES | 输入 `YES` |
-| 文件名冲突 | 替换规则导致重名 | 修改正则或前缀 |
-| 无变化 | 规则未匹配 | 检查正则或前缀 |
-| 跳过系统文件 | 安全规则拦截 | 正常行为，不可执行文件不参与 |
-
----
-
-#### 10.3 Markdown 转 HTML ⭐ v3.5.0 新增
-
-**✅ 开箱即用**（零依赖纯 Python，将 Markdown 文件转为带样式的独立 HTML）
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import os, re, html
-
-def _fix_path(p):
-    return p.strip().strip('"').strip("'").replace("\\","/").replace("//","/")
-
-BLOCKED_EXTS = {'.exe','.dll','.bat','.cmd','.ps1','.vbs','.sh','.com','.scr','.hta','.reg','.msi','.apk','.jar'}
-
-f = _fix_path(input("Markdown文件路径:").strip() or "README.md")
-if not os.path.exists(f):
-    print(f"❌ 文件不存在: {f}")
-else:
-    ext = os.path.splitext(f)[1].lower()
-    if ext in BLOCKED_EXTS:
-        print(f"🚫 安全规则禁止处理 {ext} 文件")
-    else:
-        with open(f, 'r', encoding='utf-8') as md_file:
-            md_content = md_file.read()
-        
-        # ===== 极简 Markdown → HTML 转换（零依赖）=====
-        lines = md_content.split('\n')
-        html_lines = []
-        in_code_block = False
-        in_list = False
-        
-        for line in lines:
-            stripped = line.strip()
-            
-            # 代码块
-            if stripped.startswith('```'):
-                lang = stripped[3:].strip()
-                if in_code_block:
-                    html_lines.append('</code></pre>')
-                    in_code_block = False
-                else:
-                    html_lines.append(f'<pre><code class="language-{lang}">' if lang else '<pre><code>')
-                    in_code_block = True
-                continue
-            
-            if in_code_block:
-                html_lines.append(html.escape(line))
-                continue
-            
-            # 空行
-            if not stripped:
-                if in_list:
-                    html_lines.append('</ul>')
-                    in_list = False
-                html_lines.append('')
-                continue
-            
-            # 标题
-            if stripped.startswith('# '):
-                html_lines.append(f'<h1>{html.escape(stripped[2:])}</h1>')
-                continue
-            elif stripped.startswith('## '):
-                html_lines.append(f'<h2>{html.escape(stripped[3:])}</h2>')
-                continue
-            elif stripped.startswith('### '):
-                html_lines.append(f'<h3>{html.escape(stripped[4:])}</h3>')
-                continue
-            
-            # 列表
-            if stripped.startswith('- ') or stripped.startswith('* '):
-                if not in_list:
-                    html_lines.append('<ul>')
-                    in_list = True
-                item = stripped[2:]
-                # 处理粗体
-                item = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', item)
-                html_lines.append(f'<li>{item}</li>')
-                continue
-            
-            # 引用
-            if stripped.startswith('> '):
-                html_lines.append(f'<blockquote>{html.escape(stripped[2:])}</blockquote>')
-                continue
-            
-            # 分隔线
-            if stripped == '---':
-                html_lines.append('<hr/>')
-                continue
-            
-            # 普通段落（处理粗体和代码）
-            paragraph = html.escape(stripped)
-            paragraph = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', paragraph)
-            paragraph = re.sub(r'`(.+?)`', r'<code>\1</code>', paragraph)
-            html_lines.append(f'<p>{paragraph}</p>')
-        
-        if in_list:
-            html_lines.append('</ul>')
-        
-        body_content = '\n'.join(html_lines)
-        
-        # ===== 内置美观样式 =====
-        full_html = f'''<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{os.path.basename(f)}</title>
-<style>
-body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px 20px; color: #333; line-height: 1.8; }}
-h1 {{ color: #1a1a1a; border-bottom: 2px solid #eee; padding-bottom: 10px; }}
-h2 {{ color: #2c3e50; margin-top: 30px; }}
-h3 {{ color: #34495e; }}
-code {{ background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }}
-pre {{ background: #2d2d2d; color: #f8f8f2; padding: 16px; border-radius: 6px; overflow-x: auto; }}
-blockquote {{ border-left: 4px solid #ddd; margin: 0; padding-left: 16px; color: #666; }}
-ul {{ padding-left: 24px; }}
-li {{ margin-bottom: 4px; }}
-hr {{ border: none; border-top: 1px solid #eee; margin: 20px 0; }}
-strong {{ color: #1a1a1a; }}
-</style>
-</head>
-<body>
-{body_content}
-</body>
-</html>'''
-        
-        out_name = os.path.splitext(f)[0] + '.html'
-        with open(out_name, 'w', encoding='utf-8') as out:
-            out.write(full_html)
-        
-        print(f"✅ 已生成: {out_name}")
-        print(f"   行数: {len(lines)} → HTML大小: {os.path.getsize(out_name)//1024}KB")
-        print(f"   💡 双击打开浏览器预览")
-```
-
-</details>
-
-**⚠️ 可能遇到的坑：**
-
-| 情况 | 原因 | 解决 |
-|------|------|------|
-| 复杂表格未转换 | 极简解析器不支持 | 使用专业工具如 pandoc |
-| 图片未显示 | 本地路径未转绝对路径 | 手动替换为绝对路径或URL |
-| 含HTML标签的MD | 被转义 | 正常行为，安全考虑 |
-| 大文件慢 | 逐行解析 | 10MB+ 文件建议用 pandoc |
-
----
-
-#### 10.4 历史记录系统 ⭐ v3.7.0 新增
-
-**✅ 开箱即用**（纯 Python 标准库 json，零依赖）
-
-> 自动记录每次工具运行的输入和输出，持久化到本地 JSON 文件，支持查看、搜索、导出历史。
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import json, os, datetime
-
-HISTORY_FILE = os.path.join(os.path.expanduser("~"), ".workbuddy", "dgngjx_history.json")
-os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
-
-def _load():
-    if os.path.exists(HISTORY_FILE):
-        with open(HISTORY_FILE, encoding="utf-8") as f:
-            return json.load(f)
-    return []
-
-def _save(records):
-    # 保留最近 200 条
-    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(records[-200:], f, ensure_ascii=False, indent=2)
-
-mode = input("操作(记录/查看/搜索/清空):").strip() or "查看"
-if mode == "记录":
-    tool = input("工具名:").strip()
-    inp = input("输入摘要:").strip()
-    out = input("输出摘要:").strip()
-    rec = {"time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-           "tool": tool, "input": inp[:200], "output": out[:200]}
-    records = _load()
-    records.append(rec)
-    _save(records)
-    print(f"✅ 已记录（共 {len(records)} 条）")
-elif mode == "查看":
-    records = _load()
-    if not records:
-        print("📭 暂无历史记录")
-    else:
-        for i, r in enumerate(records[-20:], 1):
-            print(f"{i}. [{r['time']}] {r['tool']}")
-            print(f"   输入: {r.get('input','')[:60]}")
-            print(f"   输出: {r.get('output','')[:60]}")
-        print(f"\n共 {len(records)} 条（显示最近 20 条）")
-elif mode == "搜索":
-    kw = input("搜索关键词:").strip().lower()
-    records = _load()
-    matched = [r for r in records if kw in r.get("tool","").lower() or kw in r.get("input","").lower()]
-    print(f"找到 {len(matched)} 条匹配:")
-    for r in matched[-10:]:
-        print(f"  [{r['time']}] {r['tool']} - {r.get('input','')[:50]}")
-elif mode == "清空":
-    confirm = input("确认清空？输入 YES:").strip()
-    if confirm == "YES":
-        _save([])
-        print("✅ 历史记录已清空")
-    else:
-        print("已取消")
-else:
-    print(f"❌ 不支持 {mode}。可选: 记录/查看/搜索/清空")
-```
-
-</details>
-
----
-
-#### 10.5 配置持久化 ⭐ v3.7.0 新增
-
-**✅ 开箱即用**（纯 Python 标准库 json，零依赖）
-
-> 保存用户偏好设置（如默认图片质量、输出格式、常用工具），跨会话保留。
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import json, os
-
-CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".workbuddy", "dgngjx_config.json")
-DEFAULTS = {"image_quality": 80, "output_format": "JPEG", "theme": "auto",
-            "recent_tools": [], "auto_save_history": True}
-os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-
-def _load():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, encoding="utf-8") as f:
-            cfg = json.load(f)
-        for k, v in DEFAULTS.items():
-            if k not in cfg:
-                cfg[k] = v
-        return cfg
-    return dict(DEFAULTS)
-
-def _save(cfg):
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, ensure_ascii=False, indent=2)
-
-mode = input("操作(查看/设置/重置):").strip() or "查看"
-if mode == "查看":
-    cfg = _load()
-    print("=== 当前配置 ===")
-    for k, v in cfg.items():
-        print(f"  {k}: {v}")
-    print(f"\n配置文件: {CONFIG_FILE}")
-elif mode == "设置":
-    cfg = _load()
-    key = input(f"设置项({'/'.join(DEFAULTS.keys())}):").strip()
-    if key not in DEFAULTS:
-        print(f"❌ 未知设置项。可选: {', '.join(DEFAULTS.keys())}")
-    else:
-        val = input(f"当前 {key}={cfg[key]}，新值:").strip()
-        if val:
-            # 类型转换
-            if isinstance(DEFAULTS[key], int):
-                try: val = int(val)
-                except ValueError: print("❌ 需要整数"); raise SystemExit
-            elif isinstance(DEFAULTS[key], bool):
-                val = val.lower() in ("true","yes","1","y")
-            cfg[key] = val
-            _save(cfg)
-            print(f"✅ {key} = {val}")
-elif mode == "重置":
-    confirm = input("确认重置为默认值？输入 YES:").strip()
-    if confirm == "YES":
-        _save(DEFAULTS)
-        print("✅ 已重置")
-    else:
-        print("已取消")
-else:
-    print(f"❌ 不支持 {mode}。可选: 查看/设置/重置")
-```
-
-</details>
-
----
-
-#### 10.6 周报/月报自动生成 ⭐ v3.8.0 新增
-
-**✅ 开箱即用**（纯 Python 标准库 json/datetime，零依赖）
-
-> 从 `~/.workbuddy/dgngjx_history.json` 读取历史记录，自动汇总本周/本月工作内容，生成结构化 Markdown 周报。
-
-<details>
-<summary>📋 展开查看命令</summary>
-
-```python
-import json, os, datetime
-
-HISTORY_FILE = os.path.join(os.path.expanduser("~"), ".workbuddy", "dgngjx_history.json")
-
-def _load():
-    if os.path.exists(HISTORY_FILE):
-        with open(HISTORY_FILE, encoding="utf-8") as f:
-            return json.load(f)
-    return []
-
-mode = input("生成周报(w)/月报(m)，默认w:").strip() or "w"
-records = _load()
-if not records:
-    print("📭 暂无历史记录。先使用工具自动记录工作。")
-else:
-    today = datetime.date.today()
-    if mode == "m":
-        # 本月
-        start = today.replace(day=1)
-        period_label = f"{today.year}年{today.month}月"
-        title = f"# 📋 {period_label} 月度工作报告"
-    else:
-        # 本周一至今
-        start = today - datetime.timedelta(days=today.weekday())
-        period_label = f"{start.strftime('%m/%d')} - {today.strftime('%m/%d')}"
-        title = f"# 📋 本周工作报告（{period_label}）"
-    
-    filtered = []
-    for r in records:
-        try:
-            t = datetime.datetime.strptime(r.get("time",""), "%Y-%m-%d %H:%M:%S").date()
-            if t >= start and t <= today:
-                filtered.append(r)
-        except ValueError:
-            continue
-    
-    print(title)
-    print(f"\n> 生成时间：{today:%Y-%m-%d} | 数据源：{len(filtered)} 条记录\n")
-    
-    if not filtered:
-        print("本周期内暂无记录。")
-    else:
-        # 按工具分类统计
-        tool_counts = {}
-        for r in filtered:
-            tool = r.get("tool","未知")
-            tool_counts[tool] = tool_counts.get(tool, 0) + 1
-        print("## 📊 工具使用统计\n")
-        print("| 工具 | 使用次数 |")
-        print("|------|---------:|")
-        for tool, cnt in sorted(tool_counts.items(), key=lambda x: -x[1]):
-            print(f"| {tool} | {cnt} |")
-        print("\n## 📝 工作记录明细\n")
-        for i, r in enumerate(filtered, 1):
-            inp = r.get("input","")[:80]
-            out = r.get("output","")[:80]
-            print(f"**{i}. [{r['time']}] {r['tool']}**")
-            print(f"   - 输入: {inp}")
-            print(f"   - 输出: {out}")
-            print()
-        print("---\n*本报告由 dgngjx-skill 历史记录系统自动生成*")
-```
-
-</details>
-
-> **联动说明**：周报/月报直接消费 v3.7.0 新增的历史记录数据。先使用工具（如文件哈希校验、CSV 查看器、图片压缩等），系统自动记录到 `dgngjx_history.json`，周报生成时自动汇总。
-
----
-
-#### 🔗 模块间管道联动 ⭐ v3.7.0 新增架构特性
-
-**✅ 开箱即用**（纯标准库，零依赖）
-
-> 将多个工具串联使用，前一步输出自动作为后一步输入。例如：CSV → JSON → MD表格、图片 → 压缩 → 哈希校验。
-
-<details>
-<summary>📋 管道使用示例</summary>
-
-```python
-# 示例：读取 CSV → 转为 JSON → 输出 Markdown 表格
-import csv, json, io
-
-def csv_to_markdown_table(csv_path):
-    """CSV 文件 → Markdown 表格"""
-    with open(csv_path, encoding="utf-8-sig", newline="") as f:
-        reader = csv.reader(f)
-        rows = list(reader)
-    if len(rows) < 2:
-        return "CSV 至少需要 1 行表头 + 1 行数据"
-    header = rows[0]
-    lines = []
-    lines.append("| " + " | ".join(header) + " |")
-    lines.append("| " + " | ".join(["---"] * len(header)) + " |")
-    for row in rows[1:]:
-        while len(row) < len(header):
-            row.append("")
-        lines.append("| " + " | ".join(row[:len(header)]) + " |")
-    return "\n".join(lines)
-
-def csv_to_json(csv_path):
-    """CSV 文件 → JSON 数组"""
-    with open(csv_path, encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        return json.dumps(list(reader), ensure_ascii=False, indent=2)
-
-# ---- 管道执行 ----
-path = input("CSV文件路径:").strip().strip('"').strip("'")
-fmt = input("输出格式(json/md):").strip() or "md"
-if fmt == "json":
-    print(csv_to_json(path))
-else:
-    print(csv_to_markdown_table(path))
-```
-
-</details>
-
-> **管道联动设计原则**：每个工具的输出采用标准格式（JSON / Markdown / 纯文本），下一工具可无缝消费。详见上方"最佳实践 — 管道联动场景"。
-
----
-
-### 🤖 模块 11：AI 办公 ⭐ v3.8.0 新增模块
-
----
-
-#### 11.1 会议纪要生成器 ⭐ v3.8.0 新增
-
-**✅ 开箱即用**（零依赖保底：支持本地 whisper / 在线 API / 手动粘贴文本 三级降级）
-
-> 语音→ASR 转写→LLM 摘要→结构化会议纪要。覆盖 TOP50 高频需求。
-
-<details>
-<summary>📋 模式 A：本地 Whisper CLI（离线，零成本）</summary>
-
-```python
-import subprocess, os, sys
-
-path = input("音频文件路径(mp3/wav/m4a):").strip().strip('"').strip("'")
-if not os.path.isfile(path):
-    print(f"❌ 文件不存在: {path}")
-else:
-    # 检查 whisper CLI 是否可用
-    r = subprocess.run(["whisper", "--help"], capture_output=True, text=True, timeout=5)
-    if r.returncode != 0:
-        print("❌ 未检测到 whisper CLI。请先安装：pip install openai-whisper")
-        print("   或选择模式 B（在线 API）或模式 C（手动粘贴文本）")
-    else:
-        print("🎙️ 正在转写（可能需要几分钟，取决于音频长度）...")
-        result = subprocess.run(
-            ["whisper", path, "--language", "zh", "--output_format", "txt",
-             "--output_dir", os.path.dirname(path)],
-            capture_output=True, text=True, timeout=600
-        )
-        if result.returncode == 0:
-            out_path = os.path.splitext(path)[0] + ".txt"
-            if os.path.exists(out_path):
-                with open(out_path, encoding="utf-8") as f:
-                    text = f.read()
-                print(f"✅ 转写完成！文本长度: {len(text)} 字")
-                print("--- 转写结果 ---")
-                print(text[:500])
-            else:
-                print("❌ 转写输出文件未生成")
-        else:
-            print(f"❌ 转写失败: {result.stderr[:200]}")
-```
-
-</details>
-
-<details>
-<summary>📋 模式 B：Paraformer API（在线，中文识别率高）</summary>
-
-```python
-import urllib.request, urllib.parse, json, os
-
-path = input("音频文件路径:").strip().strip('"').strip("'")
-if not os.path.isfile(path):
-    print(f"❌ 文件不存在: {path}")
-else:
-    # Paraformer API（需替换为实际的 API endpoint 和 key）
-    API_URL = input("API URL(留空使用内置示例):").strip()
-    API_KEY = input("API Key(留空使用内置示例):").strip()
-    
-    if not API_URL:
-        print("💡 未配置 API，将使用模式 C（手动粘贴文本）")
-        print("   如需在线识别，请提供 Paraformer API 地址和密钥")
-    else:
-        with open(path, "rb") as f:
-            audio_data = f.read()
-        req = urllib.request.Request(
-            API_URL,
-            data=audio_data,
-            headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "audio/wav"}
-        )
-        try:
-            resp = urllib.request.urlopen(req, timeout=120)
-            result = json.loads(resp.read())
-            text = result.get("text", result.get("result", ""))
-            if text:
-                print(f"✅ 转写完成！文本长度: {len(text)} 字")
-                print("--- 转写结果 ---")
-                print(text[:500])
-            else:
-                print("❌ API 返回空文本")
-        except Exception as e:
-            print(f"❌ API 调用失败: {e}")
-            print("   请检查网络连接和 API 配置")
-```
-
-</details>
-
-<details>
-<summary>📋 模式 C：手动粘贴文本（零依赖保底，推荐）</summary>
-
-```python
-import datetime
-
-print("📋 模式 C：手动粘贴会议录音转写文本")
-print("   （如无 ASR 工具，可手动复制会议录音转写内容）")
-print("   输入文本后输入 END 结束：")
-lines = []
-while True:
-    line = input()
-    line = line.strip() if line else ""
-    if line.upper() == "END":
-        break
-    lines.append(line)
-text = "\n".join(lines)
-
-if not text.strip():
-    print("❌ 未输入文本")
-else:
-    # 结构化摘要（零依赖，规则引擎）
-    sentences = [s.strip() for s in text.replace("。","\n").replace("！","\n").replace("？","\n").split("\n") if len(s.strip()) > 5]
-    
-    # 提取关键句（简单规则：含"决定""同意""通过""计划""负责""截止"等关键词）
-    key_sentences = [s for s in sentences if any(kw in s for kw in keywords)]
-    today = datetime.date.today().strftime("%Y-%m-%d")
-    print(f"\n{'='*50}")
-    print(f"  📝 会议纪要（结构化摘要）")
-    print(f"  日期: {today} | 原文: {len(text)} 字")
-    print(f"{'='*50}")
-    print(f"\n## 📋 会议要点\n")
-    if key_sentences:
-        for i, s in enumerate(key_sentences[:10], 1):
-            print(f"{i}. {s}")
-    else:
-        for i, s in enumerate(sentences[:5], 1):
-            print(f"{i}. {s}")
-    print(f"\n## 📝 完整文本\n")
-    print(text[:1000])
-    if len(text) > 1000:
-        print(f"\n...（共 {len(text)} 字，已截断）")
-    print(f"\n{'='*50}")
-    print("⚠️ 零依赖模式使用规则引擎摘要，安装 LLM 后可获得更智能的归纳")
-```
-
-</details>
-
-**⚠️ 三级降级链说明：**
-
-| 优先级 | 模式 | 依赖 | 中文识别率 | 适用场景 |
-|:------:|------|------|:----------:|----------|
-| 1 | 本地 Whisper CLI | `pip install openai-whisper` | 85-90% | 离线、大文件、隐私敏感 |
-| 2 | Paraformer API | 联网 + API Key | 92-95% | 中文会议、高准确率需求 |
-| 3 | 手动粘贴文本 | **零依赖** | 100%（人工） | 无安装条件、短文本、兜底 |
-
-> 推荐：先用模式 C 体验，需要自动化时再安装 whisper 或配置 API。
-
----
-
-## 最佳实践</longcat_think>
-
+## 最佳实践
 
 ### 场景 1：新电脑第一次用
 
 ```
 你: "帮我检测一下环境"
-AI: 跑检测脚本 → 自适应硬件调度初始化
+AI: 跑检测脚本 → 自适应硬件调度初始化 → 体检报告
 你: "帮我装一下"
 AI: pip install Pillow PyPDF2 jieba
 你: "帮我压缩 D:\photo.jpg"
@@ -3404,7 +749,6 @@ AI: ✅ 完成
 ```
 你: "帮我压缩 C:\Windows\system32\cmd.exe"
 AI: 🚫 .exe 可执行程序 — 安全规则禁止处理
-   推荐使用专业反编译工具
 ```
 
 ---
@@ -3425,7 +769,7 @@ skillhub upgrade dgngjx-skill
 作者会阅读每一条反馈。
 
 ### Q4: 处理大文件太慢？
-v3.5.0 起已根据你的硬件自动调度，低配机会自动降为小文件单任务模式，不会出现卡死。文件哈希校验也采用分块读取，大文件不占内存。图片批量压缩同样沿用硬件感知并发控制。
+v3.5.0 起已根据你的硬件自动调度，低配机会自动降为小文件单任务模式，不会出现卡死。
 
 ### Q5: 批量重命名风险？
 必须先预览，确认输入 `YES` 才执行。可执行文件会自动跳过。
@@ -3437,19 +781,22 @@ v3.5.0 起已根据你的硬件自动调度，低配机会自动降为小文件�
 默认无需联网（内置 30+ 种常见货币缓存）。输入联网模式可获取实时汇率，联网失败自动降级到缓存。
 
 ### Q8: 历史记录存在哪里？
-保存在 `~/.workbuddy/dgngjx_json.json`，保留最近 200 条。可随时搜索或清空。
+保存在 `~/.workbuddy/dgngjx_history.json`，保留最近 200 条。可随时搜索或清空。
 
 ### Q9: 会议纪要需要安装 whisper 吗？
 不需要。默认使用模式 C（手动粘贴文本）即可零依赖运行。需要自动化 ASR 时再安装 whisper 或配置 Paraformer API。
 
 ### Q10: 周报是自动记录的吗？
-是的。使用工具（如 CSV 查看器、图片压缩、文件哈希校验等）后，系统自动记录到 `~/.workbuddy/dgngjx_history.json`。周报生成时自动汇总本周期记录。
+是的。使用工具后，系统自动记录到 `~/.workbuddy/dgngjx_history.json`。周报生成时自动汇总本周期记录。
 
 ### Q11: dgngjx CLI 怎么用？
 安装 skill 后，可直接用 `dgngjx 模块.工具 --参数` 调用。例如 `dgngjx calc.mortgage --amount 1000000 --years 30 --rate 4.2`。无参数启动进入交互向导。加 `--json` 输出机器可解析 JSON，加 `--yes` 或设置 `DGNGJX_ASSUME_YES=1` 跳过非危险确认点。
 
 ### Q12: registry.json 是什么？
-49 个工具的元数据注册表，包含模块归属、参数 schema、依赖声明和安全等级。CLI 启动时只加载此文件（轻量），工具代码延迟加载。AI 通过注册表了解每个工具的用途和依赖，避免不必要的安装提示。
+49 个工具的元数据注册表，包含模块归属、参数 schema、依赖声明和安全等级。CLI 启动时只加载此文件（轻量），工具代码延迟加载。
+
+### Q13: v4.1.0 的四包机制怎么用？
+默认加载 `core` 核心包（37 个零依赖工具）。需要图片/PDF/视频功能时，运行 `dgngjx --install-pack media` 安装媒体包。需要娱乐功能时，运行 `dgngjx --install-pack ent` 安装娱乐包。运行 `dgngjx --list-packs` 查看所有可用包。
 
 ---
 
@@ -3461,47 +808,19 @@ v3.5.0 起已根据你的硬件自动调度，低配机会自动降为小文件�
 | 📦 需确认安装后运行 | 12 | ❌（有引导+在线替代） |
 | **总计** | **49** | **76%** |
 
-## v3.9.0 新特性速览
-
-| 优化维度 | 涉及模块 | 关键提升 |
-|---------|---------|---------|
-| 统一 CLI 入口 | 全局 | argparse 子命令 + registry.json 注册表 + 49 工具参数化 |
-| 编码/哈希拆分 | 模块 2.2 | encode（Base64/URL/Unicode/进制）+ hash（MD5/SHA1/SHA256）独立工具 |
-| 图片统一入口 | 模块 6.1 | img 子命令：compress/convert/removebg/idphoto/repair |
-| 安全规则分级 | 全局 | 🔴 硬拦截 / 🟡 警告+确认 / 🟢 自由读写 三级策略 |
-| 无人值守支持 | 全局 | DGNGJX_ASSUME_YES 环境变量 + --yes + --json 输出 |
-| 密码强度检测 | 模块9.9 | 长度/多样性/常见模式/弱密码字典，评级+改进建议 |
-| 颜色值转换 | 模块9.10 | RGB↔HEX↔HSL互转，多格式输入 |
-| 随机数生成器 | 模块9.11 | 7种模式：整数/小数/硬币/骰子/打乱/抽样/字符串 |
-| 文本差异对比 | 模块2.4 | 逐行diff，高亮增删改，支持文件路径或直接输入 |
-| BMI计算器 | 模块4.3 | 体质指数+中国标准判定+理想体重范围 |
-| 番茄钟 | 模块4.4 | 25+5经典番茄工作法，自定义时长/轮数 |
-| 汇率查询 | 模块1.5 | 30+货币，内置缓存+联网实时双模式 |
-| 图片批量压缩 | 模块6.1扩展 | 单文件→目录批量，格式转换JPEG/PNG/WebP/BMP，硬件感知并发 |
-| 历史记录系统 | 模块10.4 | 跨会话持久化JSON，查看/搜索/清空，保留最近200条 |
-| 配置持久化 | 模块10.5 | 用户偏好JSON持久化，跨会话保留 |
-| 管道联动 | 架构特性 | 多工具串联，前步输出作为后步输入 |
-
 ## 更新日志
 
-| v4.0.0 | 2026-09-17 | 增加：个税五险全国化（tax_2026.yaml 数据包，13城市查表+7级分段累进引擎，替换固定3%简化模型）；增加：汇率缓存时效治理（72h TTL + 陈旧标注 + 警示横幅，在线刷新失败保留旧值绝不静默）；增加：独立个税计算器（模块1.2.1）；优化：五险一金支持13个城市（北京/上海/广州/深圳/杭州/成都/南京/武汉/西安/重庆/天津/苏州/郑州/长沙） |
+| v4.1.0 | 2026-09-17 | 增加：包化架构（SKILL.md 129KB→30KB + 11模块外置 references/modules/*.md）；增加：四包机制（core/ent/media/ai，CLI --install-pack/--list-packs）；增加：首次运行体检报告（Python/Pillow/PyPDF2/rembg/jieba/ffmpeg/网络/磁盘）；迁移：娱乐模块（笑话/壁纸/BMI/番茄钟）移至 ent 可选包；优化：registry.json 独立文件 + pack 字段；增加：个税五险全国化（tax_2026.yaml 数据包，13城市查表+7级分段累进引擎）；增加：汇率缓存时效治理（72h TTL + 陈旧标注 + 警示横幅）；增加：独立个税计算器（模块1.2.1） |
 | v3.9.0 | 2026-08-24 | 增加：统一 CLI 入口（argparse 子命令 + registry.json 注册表 + 49 工具参数化）；拆分：编码/哈希拆分为 encode + hash 独立工具；合并：图片五功能合并为 img 统一入口（compress/convert/removebg/idphoto/repair）；优化：安全规则分级重构（🔴 硬拦截 / 🟡 警告+确认 / 🟢 自由读写）；增加：无人值守支持（DGNGJX_ASSUME_YES 环境变量 + --yes + --json 输出） |
-| v3.8.0 | 2026-08-17 | 增加：会议纪要生成器（模块11.1 ASR三级降级链：本地whisper→Paraformer API→手动粘贴，零依赖保底）；增加：周报/月报自动生成（模块10.6 消费history.json生成结构化报告）；优化：系统资源监控（模块10.1 wmic迁移到PowerShell CIM cmdlet，兼容Windows Server 2025+）；新增：模块11 AI办公（首个AI办公模块） |
-| v3.7.0 | 2026-08-07 | 增加：CSV查看器（模块9.8 自动编码/分隔符识别+分页显示）；增加：密码强度检测（模块9.9 长度/多样性/弱密码字典+改进建议）；增加：颜色值转换（模块9.10 RGB↔HEX↔HSL互转）；增加：随机数生成器（模块9.11 7种模式）；增加：文本差异对比（模块2.4 逐行diff+高亮）；增加：BMI计算器（模块4.3 中国标准判定）；增加：番茄钟（模块4.4 自定义时长/轮数）；增加：汇率查询（模块1.5 30+货币+缓存降级）；扩展：图片批量压缩与格式转换（模块6.1 目录批量+4种格式+硬件感知并发）；增加：历史记录系统（模块10.4 跨会话JSON持久化）；增加：配置持久化（模块10.5 用户偏好）；增加：管道联动架构（多工具串联）；优化：开箱即用率从57%提升至65% |
-| v3.6.0 | 2026-07-07 | 增加：文件哈希校验（模块9.4 MD5/SHA1/SHA256，大文件分块读取+期望值比对）；增加：UUID生成器（模块9.5 uuid4/uuid1/无横线批量生成）；增加：时间戳转换（模块9.6 Unix时间戳与日期互转，秒/毫秒自动识别）；增加：IP工具（模块9.7 IP解析/子网计算/本机IP查询）；扩展：单位换算器从8种扩至28种（新增面积/速度/数据存储/压力/能量等）；扩展：编码工具新增MD5/SHA1/SHA256哈希与2/8/10/16进制互转；优化：新增功能全部零依赖纯标准库实现 |
-| v3.5.0 | 2026-07-14 | 增加：硬件自适应调度（自动检测CPU/RAM并智能分配并发数）；增加：安全文件过滤规则（双向检查输入输出，拦截可执行文件30+种）；增加：系统资源监控（模块10.1 实时CPU/内存/磁盘，中文报告）；增加：批量文件重命名（模块10.2 5种模式+预览确认）；增加：Markdown转HTML（模块10.3 零依赖+内置美观样式）；增加：更新提醒和邮箱njskills@agent.qq.com；优化：全局性能策略（低配模式自动降级） |
-| v3.0.0 | 2026-07-13 | 增加：jieba精准分词+100+停用词过滤+英文小写化+词汇丰富度分析；增加：视频编辑6大功能（水印/截图/信息查看）；增加：路径智能修复（全部文件操作）；增加：FFmpeg一键安装脚本；增加：模块9（二维码/密码/正则）；优化：视频编辑菜单式交互 |
-| v2.5.0 | 2026-07-12 | 增加：HTTP模块P0语法修复；8个模块"坑表格"扩充至4-5行；Token计算器在线链接修正 |
+| v3.8.0 | 2026-08-17 | 增加：会议纪要生成器（模块11.1 ASR三级降级链）；增加：周报/月报自动生成（模块10.6）；优化：系统资源监控（模块10.1 wmic→PowerShell CIM） |
+| v3.7.0 | 2026-08-07 | 增加：CSV查看器/密码强度/颜色转换/随机数/文本差异/BMI/番茄钟/汇率查询/历史记录/配置持久化/管道联动；优化：开箱即用率57%→65% |
+| v3.6.0 | 2026-07-07 | 增加：文件哈希/UUID/时间戳/IP工具；扩展：单位换算8→28种；扩展：编码新增MD5/SHA+进制互转 |
+| v3.5.0 | 2026-07-14 | 增加：硬件调度/安全过滤/系统监控/批量重命名/MD转HTML/更新提醒 |
+| v3.0.0 | 2026-07-13 | 增加：jieba分词/视频编辑/路径修复/FFmpeg脚本/模块9 |
+| v2.5.0 | 2026-07-12 | 增加：HTTP语法修复；扩充坑表格 |
 | v2.2.0 | 2026-07-11 | 修复：多个bug |
-| v2.1.0 | 2026-07-10 | 修复：单位换算float崩溃+壁纸urllib.parse缺失；国内源更新 |
-| v2.0.0 | 2026-07-09 | 增加：国内联网优化（Wikipedia/娱乐工具/壁纸/HTTP自动降级）；大文件性能增强（图片/PDF/视频）；错误提示细化 |
-| v1.7.0 | 2026-07-08 | 增加：每个命令详细中文报错+解决方案+可能遇到的坑表格 |
-| v1.6.0 | 2026-07-07 | 增加：详细安装引导/中文报错/最佳实践/边界情况说明 |
-| v1.5.0 | 2026-07-06 | 增加：图片修复用Pillow重写/一键安装脚本/网络错误提示 |
-| v1.4.0 | 2026-07-05 | 增加：命令折叠隐藏/概览页精简 |
-| v1.3.0 | 2026-07-05 | 增加：30秒速查表/报错说明 |
-| v1.2.0 | 2026-07-04 | 含可运行命令/FAQ |
-| v1.1.0 | 2026-07-03 | 去除人脸年龄变换 |
+| v2.1.0 | 2026-07-10 | 修复：单位换算float崩溃+壁纸urllib缺失 |
+| v2.0.0 | 2026-07-09 | 增加：国内联网优化；大文件性能增强 |
 | v1.0.0 | 2026-07-02 | 初始版本，8大模块29个工具 |
 
 ## 一键安装后可用功能
@@ -3521,6 +840,6 @@ v3.5.0 起已根据你的硬件自动调度，低配机会自动降为小文件�
 - **联系邮箱**：njskills@agent.qq.com
 - **许可证**：MIT
 - **支持平台**：Windows / macOS / Linux
-- **当前版本**：v4.0.0
+- **当前版本**：v4.1.0
 - **检查更新**：`skillhub search dgngjx-skill`
 - **升级命令**：`skillhub upgrade dgngjx-skill`
