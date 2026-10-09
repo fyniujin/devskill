@@ -2,8 +2,8 @@
 slug: cn-model-gateway
 displayName: 国产模型 MCP 服务器
 name: cn-model-gateway
-description: "国产大模型统一 MCP 服务器，通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline 等 Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包、MiniMax、零一万物、百川智能、阶跃星辰十家模型的统一调用接口。10 个 MCP 工具（ask_model/describe_image/embed_text/rerank/audio_transcribe/video_understand/batch_submit/batch_result/list_providers/health_check）+ 单一网关状态资源 + 2 个 prompt 模板。内置统一错误映射、流式 SSE 输出+心跳保活+断线重连、使用量统计、硬件感知并发控制、SQLite WAL 批量任务队列、自动故障转移、环境变量优先读取 API key。支持 Function Calling、多模态视觉、5 个非 MCP 框架适配器（LangChain/AutoGPT/CrewAI/Coze/Dify）、性能基准测试和 Token 价格追踪。config.json 填写 api_key 即可启动，无需 GPU、不做微调、不做私有部署，只做标准 MCP 协议网关。"
-version: 1.8.0
+description: "国产大模型统一 MCP 服务器，通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline 等 Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包、MiniMax、零一万物、百川智能、阶跃星辰十家模型的统一调用接口。11 个 MCP 工具（ask_model/describe_image/embed_text/rerank/audio_transcribe/video_understand/batch_submit/batch_result/list_providers/health_check/health_report）+ 单一网关状态资源 + 2 个 prompt 模板。内置统一错误映射（v1.9.0 新增 429/451/余额不足/内容审查四类错误 + 中文处置建议）、流式 SSE 输出+心跳保活+断线重连、每日健康晨报 + 厂商变更雷达（3σ 异常检测）、使用量统计、硬件感知并发控制、SQLite WAL 批量任务队列、自动故障转移、环境变量优先读取 API key。支持 Function Calling、多模态视觉、5 个非 MCP 框架适配器（LangChain/AutoGPT/CrewAI/Coze/Dify）、性能基准测试和 Token 价格追踪。config.json 填写 api_key 即可启动，无需 GPU、不做微调、不做私有部署，只做标准 MCP 协议网关。"
+version: 1.9.0
 tags: ["mcp", "llm", "deepseek", "tongyi", "zhipu", "kimi", "hunyuan", "doubao", "minimax", "lingyi", "baichuan", "stepfun", "agent", "json-rpc", "claude-code", "cursor", "model-gateway", "chinese-ai", "embedding", "rerank", "audio", "video"]
 icon: "🔌"
 author: "njskills"
@@ -36,8 +36,10 @@ CN Model Gateway 是一个**纯 Python、零运行时依赖**的国产大模型�
 | 你想将语音转为文字 | ✅ `audio_transcribe` 工具 |
 | 你想理解视频内容 | ✅ `video_understand` 工具（关键帧+视觉描述） |
 | 你想统计调用量、token 消耗、各模型使用占比 | ✅ 内置 SQLite 统计 + 周报功能 |
-| 你希望错误信息是中文的、不暴露原始英文 API 报错 | ✅ 统一错误映射，全部返回中文 |
+| 你希望错误信息是中文的、不暴露原始英文 API 报错 | ✅ 统一错误映射（v1.9.0 新增 429/451/余额不足/内容审查四类 + 中文处置建议） |
 | 你希望在低配电脑上用，不希望 AI 把你的内存吃满 | ✅ 硬件感知并发控制（自动采集 CPU/内存 → 动态限制并发数） |
+| 你希望每天自动检查各厂商 API 是否可用，晨报推送异常 | ✅ 每日健康晨报（最小调用控制成本 <0.1 元/天，本地 HTML + 可选 webhook） |
+| 你希望厂商接口变更或故障时第一时间知道 | ✅ 厂商变更雷达（滑动窗口 + 3σ 异常检测，晨报置顶告警） |
 | 你有一个国产模型 API key，想把它接到你的 Agent 工作流里 | ✅ 填 config.json 启动即可 |
 
 ---
@@ -117,6 +119,13 @@ python main.py status
 # 查看使用统计
 python main.py stats
 
+# 执行健康检查（最小调用，记录延迟/成功率）
+python main.py health
+
+# 生成每日健康晨报（本地 HTML + 可选 webhook 推送）
+python main.py report
+python main.py report --webhook https://your-webhook-url
+
 # 启动 MCP 服务器
 python main.py run
 ```
@@ -153,6 +162,7 @@ print(resp.content)
 | `batch_result` | 查询批量任务状态和结果 | `task_id`（必填）, `include_items`（可选，默认 false） |
 | `list_providers` | 列出所有已配置且可用的模型提供商 | 无 |
 | `health_check` | 检查所有已配置提供商的连通性 | 无 |
+| `health_report` | 生成每日健康晨报（本地 HTML），含各厂商成功率/延迟/配额余量 + 厂商变更雷达（3σ 异常检测） | `save`（可选，默认 true）、`days`（可选，默认 1，最大 7） |
 
 ---
 
@@ -208,11 +218,22 @@ print(resp.content)
 | MCP 错误码 | 含义 | 触发场景 |
 |-----------|------|---------|
 | `-32602` | 参数错误 | API key 无效、内容审核未通过、请求参数缺失 |
-| `-32001` | 模型不可用 | 提供商未配置或已过期 |
-| `-32002` | 速率限制 | 调用频率超限、额度不足 |
+| `-32001` | 模型不可用 | 提供商未配置或已过期、地区限制（451） |
+| `-32002` | 速率限制 | 调用频率超限（429）、额度不足、余额不足 |
 | `-32603` | 内部错误 | 网络超时、响应解析失败 |
 
 所有错误信息均为**中文**，便于排查。
+
+### v1.9.0 新增错误类型
+
+| 错误类型 | 错误码 | 处置建议 |
+|---------|--------|---------|
+| 429 限流 | `-32002` | 等待 60 秒后重试，或降低调用频率 |
+| 451 地区限制 | `-32001` | 检查地区设置，或联系厂商客服 |
+| 余额不足 | `-32002` | 检查余额页充值 |
+| 内容审查触发 | `-32602` | 修改提示词重试，避免敏感内容 |
+
+错误映射表已 YAML 外置（`references/error_map.yaml`），支持热更新。
 
 ---
 
@@ -259,6 +280,8 @@ gh release list --repo your-org/cn-model-gateway
 - 支持 Function Calling / Tool Use（v1.5.0 新增，通过 `tools` 参数传入）
 - 支持批量异步调用（v1.8.0 新增）：`batch_submit` 提交任务列表 → 后台顺序执行 → `batch_result` 轮询结果；失败自动重试一次
 - 支持 SSE 心跳保活（30s ping）+ 断线重连（v1.8.0 新增）：客户端断开后凭请求 ID 重连续传，网络抖动不导致长回答作废重计费
+- 支持每日健康晨报（v1.9.0 新增）：最小真实调用（"hi" ~2 token/厂商），SQLite 记录延迟/成功率/配额余量，异常晨报置顶告警
+- 支持厂商变更雷达（v1.9.0 新增）：滑动窗口（24h vs 7d 基线）+ 3σ 异常检测，自动标注"疑似接口变更/故障"
 - 不支持本地模型推理或 GPU 部署
 - auto 模式支持故障转移（v1.4.0 新增），默认按能力画像排序 + 超时自动切备用
 
@@ -299,6 +322,15 @@ A: 使用 `batch_submit` 工具提交任务列表（每项指定 `tool` 和 `arg
 **Q: 网络断开后正在进行的调用会作废吗？**
 A: 不会。v1.8.0 新增 SSE 心跳保活（30s ping）+ 断线重连：服务端缓冲最近 200 个 chunk，客户端凭请求 ID 重连后从断点续传，避免长回答作废重计费。
 
+**Q: 如何查看每日健康晨报？**
+A: 使用 `health_report` MCP 工具，或命令行 `python main.py report`。晨报保存在 `~/.cn-model-gateway/health_report_YYYY-MM-DD.html`，含各厂商成功率/延迟/配额余量。可选 `--webhook` 参数推送至企业微信/飞书等。
+
+**Q: 厂商变更雷达是如何工作的？**
+A: 系统持续记录每次健康检查结果到 SQLite。晨报生成时，对比 24h 错误率与 7d 基线错误率，若 24h 错误率 > 基线 + 3σ（且 >30%），自动标注"疑似接口变更/故障"并置顶告警。覆盖场景：厂商 API 路径变更、认证策略调整、模型下线等。
+
+**Q: 健康检查的成本是多少？**
+A: 每次健康检查对每家已配 Key 的厂商发送最小 prompt（"hi"，~2 token），10 家厂商单次约 20 token。按每日一次计算，日均成本 <0.1 元（以 DeepSeek 为例，20 token ≈ ¥0.00004）。可在 `config.json` 中设置 `health_check.enabled: false` 关闭。
+
 **Q: 各家模型的默认模型是什么？**
 A: deepseek-chat / qwen-turbo / glm-4-flash / moonshot-v1-8k / hunyuan-standard / doubao 系列。可通过 `model` 参数覆盖。
 
@@ -326,6 +358,7 @@ A: 完全不需要。本 skill 只做 API 网关，不进行本地推理。
 
 ## 更新日志
 
+| v1.9.0 | 2026-10-09 | 新增每日健康晨报：HealthScheduler 调度器对已配 Key 厂商做最小真实调用（"hi" ~2 token），SQLite WAL 记录延迟/成功率/配额余量，异常晨报置顶告警；新增厂商变更雷达：滑动窗口（24h vs 7d 基线）+ 3σ 异常检测，自动标注"疑似接口变更/故障"；新增 health_report MCP 工具 + health/report CLI 子命令；统一错误映射扩容：新增 429 限流/451 地区限制/余额不足/内容审查触发四类错误，全部附带中文处置建议（"等 60 秒重试""检查余额页""修改提示词重试"）；错误映射表 YAML 外置（references/error_map.yaml），支持热更新；SKILL.md 更新工具列表（11 个工具）、FAQ、能力边界、错误映射说明 |
 | v1.8.0 | 2026-08-24 | 新增批量异步任务引擎：batch_submit 提交任务列表立即返回 ID，后台顺序执行（复用硬件自适应并发），batch_result 轮询状态与结果，失败自动重试一次并保留错误详情；新增 SSE 心跳保活（30s ping）+ 断线重连（chunk ring buffer，凭请求 ID 从断点续传，保护长输出与成本）；MCP 资源合并：config + usage 两个资源合并为 cn-model-gateway://status 单一资源（配置+使用统计+配额告警一屏汇总）；新增 batch_queue.py 任务队列模块（SQLite WAL + 后台 worker 线程）；MCPServer 启动时自动启动 batch_worker，新增 shutdown() 优雅停止；SKILL.md 更新工具列表（10 个工具）、资源列表、能力边界、FAQ |
 | v1.6.0 | 2026-08-24 | 新增共享内核（llm-core monorepo）：抽取 src/llm_core/ 共享内核模块，支持 MCP 形态与 CLI 形态共用同一份 core（adapters/router/error_map/cost/cache/monitor/benchmark），构建时注入同版副本+版本锁；新增 4 个 MCP 工具：embed_text（文本向量嵌入，支持 deepseek/zhipu/doubao/tongyi）、rerank（文档重排序，支持 zhipu）、audio_transcribe（语音转文字）、video_understand（关键帧抽取+视觉模型描述→视频摘要）；BaseAdapter 新增 4 个抽象方法（embed_text/rerank/audio_transcribe/video_understand）+ 降级 NotImplementedError 机制；CLI 新增 4 个子命令（embed/rerank/transcribe/video）；SKILL.md 全面更新工具列表/能力边界/FAQ |
 | v1.5.0 | 2026-08-16 | 合并 MCP 工具：ask_model + compare_models → ask_model（新增可选 providers 参数，空=单家，≥2 家=对比）；新增多模态视觉支持：ChatMessage 加 image 字段 + describe_image MCP 工具 + 视觉适配器多模态 payload（Qwen-VL/GLM-4V/豆包视觉）；新增 Function Calling / Tool Use：ChatResponse 加 tool_calls 字段 + BaseAdapter 加 format_tools/parse_tool_calls 方法 + ask_model 支持 tools 参数；SKILL.md 全面更新工具列表/能力边界/FAQ |
