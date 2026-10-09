@@ -3,7 +3,7 @@ slug: skill-security-checker
 displayName: Skill 安全审计扫描器
 name: skill-security-checker
 description: 'Skill Security — 安全审计扫描器，审一下这个 skill、装之前帮我查查、这个 skill 安全吗？一键快扫 30 秒出三档裁定（✅干净/⚠️可疑/🚫恶意）+ Top3 风险 + 一句话理由；全量模式覆盖轻量 SAST 污点追踪（Python AST + JS 词法近似，source→sink 证据链降误报）、规则引擎（YAML 规则包热插拔扩展）、社区规则（schema 校验 + 来源记录 + 签名验证）、提示注入 ML 语义检测（ONNX + 正则降级）、系统级行为捕获（eBPF Linux / ETW Windows）、动态沙箱执行扫描、供应链风险分析、OSV.dev 离线数据包（全生态 CVE 覆盖，零密钥）+ 锁文件深度解析（requirements.txt / package-lock.json / poetry.lock，版本区间级精确匹配）、恶意 Skill 指纹库、健康度与合规检查（质量+结构+权限合并）、全局排除配置、CI/CD 集成、JSON/HTML/SARIF 报告生成。'
-version: 3.5.0
+version: 3.5.5
 tags: ['security', 'audit', 'skill', 'scanner', 'code-analysis', 'vulnerability']
 icon: '🔒'
 author: 'njskills'
@@ -607,7 +607,9 @@ A: 对齐钟馗的中文触发语：「审一下这个 skill」「装之前帮�
 
 ## 更新日志
 
+| v3.5.5 | 2026-10-09 | 修复：移除静态检测模式列表的 base64 编码存储，全部还原为明文常量，消除平台安全扫描「代码混淆」误报；删除：base64 解码函数与相关注释 |
 | v3.5.0 | 2026-10-09 | 增加：一键快扫 --quick / --mode quick 模式，只跑 L1 静态层三件套（恶意指纹 341 条 + 6 类规则 + 权限审计），30 秒内出三档裁定（✅干净/⚠️可疑/🚫恶意）+ Top3 风险 + 一句话理由；增加：scripts/quick_verdict.json 外置裁定映射表（分数→档位可自定义，不硬编码）；增加：报告分级输出（quick 档 ≤1 屏、full 档保留 JSON/HTML/SARIF 全量细节），默认档位可配（环境变量 SKILLSEC_MODE=quick\|full）；优化：description 增补口语触发词（审一下这个 skill / 装之前帮我查查 / 这个 skill 安全吗）对齐钟馗意图路由，快速开始压缩到 3 行；优化：一键快扫强制启用恶意指纹匹配保障 341 条样本 🚫档召回 100% |
+| v3.4.0 | 2026-09-11 | 增加：OSV.dev 离线数据包接入（scripts/osv_offline.py），周期下载 PyPI/npm 导出包并合并进三级缓存，依赖覆盖从 26 包升到全生态，零密钥、离线优先、无网络时标注数据时点；增加：锁文件深度解析（package-lock.json 与 poetry.lock 两类新增解析器 + requirements.txt 升级），传递依赖全树展开，匹配从包名级升级到版本区间级，无 lock 时近似匹配并标注 approx；增加：--refresh-osv 命令行参数（强制刷新 OSV 索引）；优化：supply_chain.py 漏洞查询改为离线优先（OSV 索引 → OSV API → NVD → 本地 26 条三级降级），report meta 区新增 osv_offline 索引时点统计 |
 | v3.3.0 | 2026-08-24 | 增加：轻量 SAST 污点追踪（taint_tracker.py），Python AST + JS 词法近似，source→sink 证据链降误报（无完整链降 info）；增加：社区规则扩展（community_rules.py），第三方 YAML 规则包 schema 校验 + 来源记录 + HMAC-SHA256 签名验证，官方/社区规则报告分开统计；增加：健康度与合规检查合并（scan_health + scan_compliance），质量评分+结构检查统一为健康度模块，权限审计+健康度统一挂合规性检查出口；增加：--taint-tracking 和 --community-rules <path> 两个 CLI 参数；优化：report meta 区新增 taint_tracking / community_rules 维度统计 |
 | v3.2.0 | 2026-08-17 | 增加：规则引擎模块（scripts/rules_engine.py），将 6 类静态规则从硬编码重构为 YAML 规则包（rules/*.yaml），支持热插拔扩展，新增规则只需加 YAML 文件不改代码；增加：scripts/rules/ 目录包含 6 个规则包（prompt_injection/command_injection/ssrf/credential_leak/path_traversal/dangerous_functions），共 67 条正则；增加：系统级行为捕获模块（scripts/sandbox/system_monitor.py），支持 eBPF（Linux）/ ETW（Windows）内核级 syscall 监控，无 eBPF/ETW 时自动降级；增加：ML 提示注入语义检测（scripts/sandbox/ml_detect.py），ONNX 模型优先 + 正则降级双模式，含中文规则与结果缓存；增加：scan_rule_engine()、scan_ml_prompt_injection()、scan_syscall_monitor() 三个扫描方法；增加：--rule-engine、--ml-detect、--syscall-monitor 三个 CLI 参数；增加：report meta 区新增 rule_engine / ml_detect / syscall_monitor 维度统计 |
 | v3.1.0 | 2026-08-07 | 增加：实时恶意 Skill 库同步模块，内置 341 条 SHA256 指纹实现 100% 已知恶意 skill 拦截；增加：CVE 离线缓存（7 天全量 + 每日增量），无网络环境仍可扫描依赖漏洞；增加：全局排除配置（.nosec.yml），支持按类别/文件/正则模式批量排除误报；增加：--malicious-db 和 --global-exclude 两个命令行参数；优化：add_result() 集成全局排除过滤逻辑 |
