@@ -243,10 +243,80 @@ class FullElectronicInvoiceParser:
         if invoice.total is None and invoice.amount is not None and invoice.tax_amount is not None:
             invoice.total = round(invoice.amount + invoice.tax_amount, 2)
     
+    # === 数电票明细行标签映射（v4.5.0 新增）===
+    _DETAIL_NAME_TAGS = {'ProjectName', 'Xmmc', 'XMMC', '项目名称', 'ItemName',
+                         'GoodsName', 'Spmc', 'SPMC', 'Goods'}
+    _DETAIL_SPEC_TAGS = {'Specification', 'Ggxh', 'GGXH', '规格型号', 'Spec', 'Gg'}
+    _DETAIL_UNIT_TAGS = {'Unit', 'Dw', 'DW', '单位', 'MeasureUnit', 'Jldw', 'JLDW'}
+    _DETAIL_QTY_TAGS = {'Quantity', 'Sl', 'SL', '数量', 'Qty', 'Xmsl', 'XMSL'}
+    _DETAIL_PRICE_TAGS = {'UnitPrice', 'Dj', 'DJ', '单价', 'Price', 'Xmdj', 'XMDJ'}
+    _DETAIL_AMOUNT_TAGS = {'Amount', 'Je', 'JE', '金额', 'DetailAmount', 'Xmje', 'XMJE',
+                           'ProjectAmount', 'Hjje', 'HJJE'}
+    _DETAIL_RATE_TAGS = {'TaxRate', 'Slv', 'SLV', '税率', 'TaxRates', 'TaxRateNew'}
+    _DETAIL_TAX_TAGS = {'TaxAmount', 'Se', 'SE', '税额', 'Tax', 'Xmse', 'XMSE'}
+
     def _extract_tax_details(self, invoice: UnifiedInvoice):
-        """提取明细税额信息（完整项目列表）"""
-        # TODO: 解析发票明细行项目（项目名称、数量、单价、税率等）
-        pass
+        """提取数电票明细行项目（项目名称/规格/单位/数量/单价/金额/税率/税额）"""
+        lines = []
+        for elem in self.root.iter():
+            if elem is self.root:
+                continue
+            child_tags = {c.tag.split('}')[-1] for c in elem if c is not None}
+
+            def _child(tags):
+                for c in elem:
+                    if c.tag.split('}')[-1] in tags:
+                        if c.text and c.text.strip():
+                            return c.text.strip()
+                return None
+
+            # 仅当该节点同时含「名称」与「金额」子节点时，视为一条明细行
+            name = _child(self._DETAIL_NAME_TAGS)
+            amount = _child(self._DETAIL_AMOUNT_TAGS)
+            if not name or not amount:
+                continue
+
+            line = {
+                "name": name,
+                "spec": _child(self._DETAIL_SPEC_TAGS),
+                "unit": _child(self._DETAIL_UNIT_TAGS),
+                "quantity": self._safe_float(_child(self._DETAIL_QTY_TAGS)),
+                "unit_price": self._safe_float(_child(self._DETAIL_PRICE_TAGS)),
+                "amount": self._safe_float(amount),
+                "tax_rate": self._safe_rate(_child(self._DETAIL_RATE_TAGS)),
+                "tax_amount": self._safe_float(_child(self._DETAIL_TAX_TAGS)),
+            }
+            lines.append(line)
+
+        # 去重（同一父容器可能同时被父与子匹配，保留叶子级）
+        invoice.detail_lines = self._dedup_lines(lines)
+
+    @staticmethod
+    def _dedup_lines(lines: list) -> list:
+        """按字段集合去重，避免父子节点双重命中"""
+        seen = set()
+        out = []
+        for ln in lines:
+            key = tuple((k, ln.get(k)) for k in
+                        ("name", "amount", "tax_amount", "quantity"))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(ln)
+        return out
+
+    def _safe_rate(self, value: Optional[str]) -> Optional[float]:
+        """税率安全转换：支持 0.13 / 13% / 13 等写法"""
+        if not value:
+            return None
+        s = value.strip().replace('%', '').replace('％', '')
+        try:
+            f = float(s)
+        except ValueError:
+            return None
+        if f > 1 and f <= 100:
+            return round(f / 100.0, 4)
+        return round(f, 4)
     
     def _search_in_subtree(self, root, party_type: str, field_type: str) -> Optional[str]:
         """在子树中搜索字段（如 seller subtree）"""
