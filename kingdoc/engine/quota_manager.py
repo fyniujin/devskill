@@ -34,6 +34,13 @@ DEFAULT_MAX_BACKOFF_RETRIES = 5    # 最大退避次数
 DEFAULT_BACKOFF_BASE = 1.0         # 退避基数（秒）
 DEFAULT_BACKOFF_MAX = 60.0         # 最大退避时间（秒）
 
+# 配额阈值告警（v4.3.0 新增）：用量越级经 webhook 三通道推送
+QUOTA_ALERT_THRESHOLDS = [
+    ("warning", 0.80),   # 80% 警告
+    ("critical", 0.95),  # 95% 严重
+]
+QUOTA_ALERT_EVENT_TYPE = "quota_alert"
+
 
 class TokenBucket:
     """令牌桶限速器
@@ -151,6 +158,14 @@ class QuotaManager:
                     error_other_count INTEGER DEFAULT 0,
                     avg_response_time_ms REAL DEFAULT 0.0,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS quota_alert_dedup (
+                    date TEXT NOT NULL,
+                    level TEXT NOT NULL,
+                    alerted_at TEXT,
+                    PRIMARY KEY (date, level)
                 )
             """)
             conn.commit()
@@ -304,6 +319,9 @@ class QuotaManager:
             status = "ok"
             suggestion = "配额充足"
 
+        # 阈值告警（v4.3.0）：越 80% / 95% 经 webhook 三通道推送，按天+级去重幂等
+        alerts = self._maybe_alert(usage)
+
         return {
             "date": date,
             "daily_count": daily_count,
@@ -312,7 +330,71 @@ class QuotaManager:
             "usage_percent": round(usage, 3),
             "status": status,
             "suggestion": suggestion,
+            "alerts": alerts,
         }
+
+    def _maybe_alert(self, usage: float) -> List[Dict]:
+        """用量越阈值时触发 webhook 告警（按天+级别幂等去重）。"""
+        sent: List[Dict] = []
+        triggered_level = None
+        for level, thr in QUOTA_ALERT_THRESHOLDS:
+            if usage >= thr:
+                triggered_level = level
+        if triggered_level is None:
+            return sent
+        date = self._today()
+        if self._already_alerted(date, triggered_level):
+            return sent
+        try:
+            payload = {
+                "event_type": QUOTA_ALERT_EVENT_TYPE,
+                "table_id": "system",
+                "record_id": f"{date}:{triggered_level}",
+                "level": triggered_level,
+                "usage_percent": round(usage, 3),
+                "daily_limit": self.max_requests_per_day,
+            }
+            from engine import webhook_center
+            import hmac as _hmac
+            import hashlib as _hl
+            body = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
+            secret = getattr(webhook_center, "DEFAULT_SIGNING_SECRET", "kingdoc_webhook_secret_v4")
+            signature = _hmac.new(secret.encode(), body, _hl.sha256).hexdigest()
+            result = webhook_center.process_event(payload, signature=signature)
+            ok = result.get("success", False)
+            self._mark_alerted(date, triggered_level)
+            sent.append({
+                "level": triggered_level,
+                "usage_percent": round(usage, 3),
+                "pushed": ok,
+                "status": result.get("status", "n/a"),
+            })
+        except Exception:
+            sent.append({"level": triggered_level, "usage_percent": round(usage, 3),
+                         "pushed": False, "status": "error"})
+        return sent
+
+    def _already_alerted(self, date: str, level: str) -> bool:
+        conn = sqlite3.connect(self.db_path)
+        try:
+            row = conn.execute(
+                "SELECT date FROM quota_alert_dedup WHERE date = ? AND level = ?",
+                (date, level),
+            ).fetchone()
+            return row is not None
+        finally:
+            conn.close()
+
+    def _mark_alerted(self, date: str, level: str) -> None:
+        conn = sqlite3.connect(self.db_path)
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO quota_alert_dedup (date, level, alerted_at) VALUES (?, ?, ?)",
+                (date, level, datetime.now().isoformat()),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
     def get_hourly_distribution(self, date: str = "") -> Dict:
         """获取按小时分布的请求统计
