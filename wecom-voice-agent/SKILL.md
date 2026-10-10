@@ -2,7 +2,7 @@
 slug: wecom-voice-agent
 displayName: 企业微信语音消息 Agent
 name: wecom-voice-agent
-version: 2.8.0
+version: 2.9.0
 description: >
   企业微信语音消息 AI Agent 技能，自动处理语音消息的意图识别、多轮对话与任务执行。
   支持被动接收语音消息、主动外呼、来电接线、通话纪要、合规录音、外呼调度等完整电话场景。
@@ -13,7 +13,8 @@ description: >
   语音克隆外呼 voice_clone.py（豆包/MiniMax 可选接入，授权留痕+合规红线+仅外呼场景，未配置时完全隐藏）；
   通话摘要质检 summary_qa.py（决策/待办/时间三要素加权评分，≥80 分交付，5% 人工抽检+纠错回流驱动 Prompt 迭代）；
   运营报表 report_generator.py（接通率/时长分布/意图分布/外呼四级漏斗，周一 HTML 周报单文件导出）。
-  当用户向企业微信机器人发送语音消息时触发。核心价值：零 API Key 依赖、硬件自适应、轻量本地处理、全流程合规。
+  v2.9 新增：群聊语音助手模式（@机器人触发群消息路由，复用单聊意图引擎并注入说话人身份上下文；语音指派任务三元组抽取「指派人/被指派人/期限」→自动建待办+确认回执+到期提醒闭环；群场景合规默认值 record:false 磁盘零语音落盘，voices.yaml 可开启落盘但需管理员确认）。
+  当用户向企业微信机器人发送语音消息（单聊或群聊 @机器人）时触发。核心价值：零 API Key 依赖、硬件自适应、轻量本地处理、全流程合规。
 author: njskills
 category: 办公协作
 platforms:
@@ -155,7 +156,7 @@ python scripts/report_generator.py weekly
 
 ---
 
-## 二、架构（v2.8）
+## 二、架构（v2.9）
 
 ```
 wecom-voice-agent/
@@ -169,19 +170,21 @@ wecom-voice-agent/
 │   ├── wecom_bot_api.md      # 企业微信机器人 API 参考
 │   └── step_by_step_setup.md # 分步部署指南
 ├── scripts/
-│   ├── wecom_webhook_server.py # 主服务（回调接收+意图路由+任务执行）
+│   ├── wecom_webhook_server.py # 主服务（回调接收+意图路由+任务执行+ v2.9 群消息路由@机器人触发）
 │   ├── intent_registry.py    # v2.6 声明式意图引擎（YAML 配置+多级澄清）
 │   ├── custom_intent_plugin.py # v2.6 自定义意图插件（企业自有 API 声明式映射）
-│   ├── session_unified.py    # v2.6 统一会话管理（双向子系统，合并原 scheduler+session_manager）
+│   ├── session_unified.py    # v2.6 统一会话管理（双向子系统；v2.9 新增群维度 chat_id 隔离+说话人身份）
 │   ├── ivr_engine.py         # v2.6 多级 IVR 菜单引擎（YAML 配置+数字/名称双选）
-│   ├── entity_extractor.py   # v2.6 实体抽取增强（规则+消歧+复述确认）
+│   ├── entity_extractor.py   # v2.6 实体抽取增强（规则+消歧+复述确认；v2.9 新增群任务三元组指派抽取）
 │   ├── memory_bridge.py     # v2.7 zwjh 长期记忆桥接（MCP stdio JSON-RPC）
-│   ├── todo_followup.py     # v2.7 跟进待办闭环（纪要→回拨→到期→二次外呼）
+│   ├── todo_followup.py     # v2.7 跟进待办闭环（纪要→回拨→到期→二次外呼；v2.9 新增群任务指派+确认回执闭环）
 │   ├── emotion_ticket_bridge.py # v2.7 情感到工单直连（强负面→建单+升级+通知）
 │   ├── voice_policy.py      # v2.8 TTS 多音色与情感（voices.yaml+SSML+双链路降级）
 │   ├── voice_clone.py       # v2.8 语音克隆外呼（授权留痕+合规红线+未配置完全隐藏）
 │   ├── summary_qa.py        # v2.8 通话摘要质检（三要素评分+5%人工抽检+纠错回流）
 │   ├── report_generator.py  # v2.8 运营报表（接通率/漏斗/意图分布+周一HTML周报）
+│   ├── group_compliance.py  # v2.9 群场景合规默认值（record:false 磁盘零语音落盘+落盘需管理员确认+降级）
+│   ├── group_e2e_test.py    # v2.9 群聊 E2E 自测（群维度/三元组/群任务闭环/群路由/身份准确率/降级）
 │   ├── voice_simulator.py    # 语音消息模拟器（本地调试）
 │   ├── detect_hardware.py    # 硬件检测
 │   ├── state_machine.py      # 多轮对话状态机
@@ -208,12 +211,14 @@ wecom-voice-agent/
 
 **v2.8 核心理念**：播报情感化（场景预设 + 情感参数叠加限幅 + SSML 停顿加重）、克隆合规化（授权留痕 + 书面授权红线 + 仅外呼场景 + 未配置完全隐藏）、摘要质量闭环（三要素评分 + 达标线 + 人工抽检 + 纠错回流驱动 Prompt 迭代）、运营可观测（接通率 + 四级漏斗 + 周一 HTML 周报）。
 
+**v2.9 核心理念**：群聊语音化（@机器人触发群消息路由，复用单聊意图引擎零重构 + 注入说话人身份上下文）、群任务闭环化（语音指派三元组抽取「指派人/被指派人/期限」→ 自动建待办 + 确认回执 + 到期提醒复用 todo_followup）、群合规最小化（默认 record:false 磁盘零语音落盘，开启落盘需管理员确认，voices.yaml group 块可配）、会话维度隔离化（群会话以 chat_id 为维度主键，与单聊 userid 物理隔离避免上下文污染）。
+
 | 常见坑 | 正确做法 |
 |-------|---------|
 | ❌ 在嘈杂环境发送语音指令 | ✅ 在安静环境说话，距离手机/麦克风 20-30cm |
 | ❌ 一次说多句话（如"查日程然后帮我订会议室"） | ✅ 一次只做一件事，分开发送 |
 | ❌ 发送超过60秒的语音 | ✅ 控制在 60 秒以内，长内容请打字 |
-| ❌ 在群聊中发语音 | ✅ 只对机器人**私聊**发语音 |
+| ❌ 群聊中发语音却没 @机器人 | ✅ 群聊里 **@机器人** 后发语音/文字指令，未 @ 的消息会被静默忽略（防刷屏） |
 | ❌ 发送方言（福建话、河南话等） | ✅ 支持**粤语、四川话、上海话、东北话、闽南话**，直接用方言对话即可，无需切换普通话 |
 | ❌ 说话时周围有电视/音乐 | ✅ 关掉背景音再说话，会被误认为指令 |
 | ❌ 以为能自动打电话/发短信 | ✅ v2.0 起支持外呼，但需管理员授权 |
@@ -659,6 +664,35 @@ skillhub install wecom-voice-agent --force
 好的，已为您提交退订申请。受理编号：TK20260715001。我们会在3个工作日内处理。还有其他需要帮助的吗？
 ```
 
+### 场景8：v2.9 群聊 @机器人 语音指派任务
+
+**前提**：群内已 @机器人，张三、李四、机器人同处一个群。
+
+**用户（语音，@机器人）**：@李四 周五前把季度汇报PPT发我
+
+**机器人处理**：
+1. 群路由判定 `@李四` 命中 → 进入处理
+2. 三元组抽取：指派人=发言者（你）、被指派人=李四、期限=周五、内容=季度汇报PPT
+3. 落库待办（来源：群），向李四发送确认回执
+
+**李四 收到回执（私聊机器人）**：
+```
+📋 收到群内任务指派：
+• 指派自：张三（群：项目攻坚群）
+• 任务：季度汇报PPT
+• 期限：本周五 18:00 前
+请回复「确认」接受或「拒绝」转交回指派人。
+```
+
+**李四 回复「确认」**：
+```
+✅ 已确认任务，已为您登记待办并设到期提醒。
+```
+
+**到期前机器人自动提醒李四**，闭环复用 todo_followup。
+
+> 💡 群内语音默认不落盘（仅转写），磁盘零语音文件；如需落盘录音请在 `config/voices.yaml` 的 `group` 块开启并由管理员确认（详见上文「群聊合规配置」）。
+
 ---
 
 ## 错误处理
@@ -714,8 +748,9 @@ skillhub install wecom-voice-agent --force
 v2.0 起外呼录音存储在本机 `~/.wecom_voice/records/`，永不外传。
 
 ### Q5：支持群聊吗？
-**A**：当前仅支持单聊（`chattype: single`），以确保语音转写准确率和隐私安全。
-群聊支持将在后续版本中评估后决定。
+**A**：v2.9.0 起支持群聊语音助手模式。在群聊中 **@机器人** 后发送语音或文字指令即可触发（未 @ 的消息会被静默忽略，防止刷屏）。群聊复用单聊意图引擎，并自动注入说话人身份上下文（谁在说话、什么角色），因此查日程、建待办、查天气等能力群内同样可用。
+群内还支持**语音指派任务**：说「@张三 周三前交方案」会自动建待办、向张三发送确认回执、到期提醒，闭环复用 todo_followup。
+群场景合规默认值：语音默认不落盘、仅转写（磁盘零语音文件），如需落盘请在 `config/voices.yaml` 的 `group` 块开启并由管理员确认。
 
 ### Q6：能在手机上使用吗？
 **A**：可以。只要您的 WorkBuddy 客户端运行并连接到企业微信，手机端和 PC 端均可使用。
@@ -1203,7 +1238,28 @@ voices_config: config/voices.yaml  # TTS 音色库（3 套预设+情感调整+SS
 volc_tts_key: ""   # 火山引擎 TTS Key（可选；留空则仅用 Edge 免费主链路，缺失自动降级）
 clone_provider: "" # 语音克隆服务商 doubao / minimax（可选；留空则克隆功能完全隐藏）
 clone_api_key: ""  # 语音克隆 API Key（可选，配合 clone_provider 使用）
+# v2.9 新增：群聊合规配置（仅作用于群场景，单聊不受影响）
+group_admins: ""    # 群管理员 userid 列表（逗号分隔），开启落盘需其中至少一人确认；留空则无任何人可开启落盘
 ```
+
+#### config/voices.yaml 的 group 块（v2.9 新增）
+
+群聊场景的合规默认值集中配置在此块，全部为可选，缺省即最保守策略：
+
+```yaml
+# 群聊语音助手合规配置（v2.9）
+group:
+  record: false               # 默认不落盘任何语音文件（磁盘零语音，仅转写文本）
+  transcribe_only: true       # 仅做语音转写，转写结果按保留策略清理
+  retention_days: 1           # 群转写文本保留天数（默认 1 天，到期自动清理）
+  opt_in_requires_admin: true # 开启 record:true 落盘前，必须由 group_admins 中的管理员确认
+```
+
+**行为说明**：
+- 默认 `record: false` + `transcribe_only: true`：群内语音永不写入磁盘音频文件，仅留存转写文本且按 `retention_days` 自动清理，满足验收「默认配置下磁盘零语音文件」。
+- 如需群内落盘录音：先将 `record` 改为 `true`，但 `opt_in_requires_admin: true` 时仍须由 `group_admins` 列表中的管理员在运行时显式确认，否则 `record_audio_disabled()` 始终返回 True（禁止落盘）。
+- 模块缺失（pyyaml 未安装）时自动降级为内置最保守默认值（record:false），绝不因依赖缺失而意外落盘。
+- 单聊场景不受此块影响，沿用原 `compliance.py` 的录音告知+本地存储逻辑。
 
 ---
 
@@ -1237,6 +1293,7 @@ clone_api_key: ""  # 语音克隆 API Key（可选，配合 clone_provider 使�
 
 ## 更新日志
 
+| v2.9.0 | 2026-10-10 | 增加：群聊语音助手模式（wecom_webhook_server.py 新增群消息路由，@机器人触发、未@静默忽略防刷屏，复用单聊意图引擎零重构并注入说话人身份上下文 chat_type/chat_id/speaker_userid/speaker_role）；增加：群维度会话隔离（session_unified.py 新增 chat_id 列与索引，群会话以 chat_id 为维度主键与单聊 userid 物理隔离避免上下文污染，存量库 PRAGMA 追加列兼容）；增加：群任务分发闭环（entity_extractor.py 三元组抽取指派人/被指派人/期限，todo_followup.py 新增确认回执 confirm_todo 与被指派人查询，群指派自动建待办+回执+到期提醒）；增加：群场景合规默认值（group_compliance.py 默认 record:false 磁盘零语音落盘、开启落盘需管理员确认，voices.yaml 新增 group 块，pyyaml 缺失降级最保守策略）；新增 group_e2e_test.py 群聊 E2E 自测（群维度/三元组/群任务闭环/群路由/说话人身份准确率抽检/降级七模块全绿）；优化：FAQ Q5 与避坑指南翻转为支持群聊 @机器人触发 |
 | v2.8.0 | 2026-09-20 | 增加：TTS 多音色与情感 voice_policy.py（config/voices.yaml 三套预设音色覆盖正式通知/客服安抚/营销外呼，情感→语速语调动态叠加并自动限幅 ±50%/±50Hz，SSML 句间停顿+数字日期自动加重，Edge TTS 主链路→火山 TTS 备用链路→文字降级三级策略）；增加：语音克隆外呼 voice_clone.py（豆包/MiniMax 可选接入，内置授权确认文本+SQLite 授权留痕+样本 SHA256 防篡改，合规红线仅限本人或书面授权音色，克隆音色仅允许主动外呼场景，未配置 Key 时模块完全隐藏不报错）；增加：通话摘要质检 summary_qa.py（决策 40%/待办 35%/时间 25% 三要素加权评分，≥80 分才交付，达标摘要 5% 随机人工抽检，纠错记录回流驱动摘要 Prompt 迭代）；增加：运营报表 report_generator.py（外呼接通率/时长四档分布/意图 Top10/外呼四级漏斗调度发起→振铃接通→有效通话→待办跟进/待办逾期统计，周一生成上周完整周期 HTML 周报单文件导出，数据源缺失自动降级记警告）；新增 config/voices.yaml 音色库配置文件；补充：外部连接披露表增加火山 TTS 与语音克隆两个条件性连接（未配置 Key 时不发起） |
 | v2.7.0 | 2026-09-02 | 增加：记忆桥接子模块 memory_bridge.py（zwjh 长期记忆 MCP 桥接，来电拉取历史+通话回写+降级方案，纯标准库）；增加：跟进待办闭环 todo_followup.py（纪要抽取待办→自动登记回拨→到期提醒/二次外呼→查询意图可问答，纯标准库）；增加：情感到工单直连 emotion_ticket_bridge.py（强负面→直连 ticket_manager 建单+升级+主管通知，无需独立触发，纯标准库）；优化：emotion_analyzer（v2.2）+ ticket_manager（v2.3）链路打通 |
 | v2.6.0 | 2026-08-24 | 重构：声明式意图引擎 intent_registry.py（intents.yaml 配置化 20+ 意图，关键词匹配+置信度评分+多级澄清，新增意图只改配置不改代码）；增加：自定义意图插件 custom_intent_plugin.py（custom_intents.yaml 声明企业自有 API 映射，请求/响应模板+鉴权环境变量+失败兜底）；增加：统一会话管理 session_unified.py（合并 scheduler.py 与 session_manager.py 为双向子系统，统一会话表/状态机/统计）；增加：多级 IVR 菜单引擎 ivr_engine.py（menu.yaml 配置化层级菜单，0 重复听/9 转人工/8 返回上级，说数字或说名称双选择）；增加：实体抽取增强 entity_extractor.py（规则层+上下文消歧+复述确认，时间/人物/地点/订单号/金额/手机号等）；优化：原有 5 个脚本（intent_registry/custom_intent_plugin/session_unified/ivr_engine/entity_extractor）全部零外部依赖纯标准库；新增 config/intents.yaml、config/custom_intents.yaml、config/menu.yaml 三个声明式配置文件 |
@@ -1253,7 +1310,7 @@ clone_api_key: ""  # 语音克隆 API Key（可选，配合 clone_provider 使�
 | v1.0.0 | 2026-07-08 | 初始版本发布，包含企业微信语音消息回调、意图识别、多轮对话 |
 
 ### 后续规划
-- v2.9.0：语音声纹识别（区分不同说话人）
+- v2.10.0：语音声纹识别（区分不同说话人）
 - v3.0.0：多模态能力（图片+语音混合消息）+ 对接外部CRM
 
 ---
@@ -1268,4 +1325,4 @@ clone_api_key: ""  # 语音克隆 API Key（可选，配合 clone_provider 使�
 
 ---
 
-*版本：v2.8.0 ｜ 许可：MIT ｜ 核心纯标准库、零密钥打包、可只读审计。*
+*版本：v2.9.0 ｜ 许可：MIT ｜ 核心纯标准库、零密钥打包、可只读审计。*
