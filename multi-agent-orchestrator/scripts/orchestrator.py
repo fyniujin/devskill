@@ -612,11 +612,17 @@ def cmd_cost(args):
     cost_bridge.main()
 
 
+def cmd_init(args):
+    """新手向导：交互式创建第一条流水线"""
+    import template_lib
+    template_lib.newbie_wizard()
+
+
 def cmd_template(args):
-    """预置流水线模板库：list/show/check/render"""
+    """预置流水线模板库：list/show/check/render/validate"""
     import template_lib
     if not args:
-        print("用法：python orchestrator.py template <list|show|check|render> [template_file]")
+        print("用法：python orchestrator.py template <list|show|check|render|validate> [template_file]")
         sys.exit(1)
     sub = args[0]
     if sub == 'list':
@@ -656,6 +662,28 @@ def cmd_template(args):
             else:
                 import json as _json
                 print(_json.dumps(pipeline, ensure_ascii=False, indent=2))
+    elif sub == 'validate':
+        if len(args) < 2:
+            # 校验所有模板
+            all_valid = True
+            for fname in os.listdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'templates')):
+                if not fname.endswith('.json') or fname in ('template_schema.json', 'state_schema.json'):
+                    continue
+                valid, errors = template_lib.validate_template(fname)
+                if not valid:
+                    all_valid = False
+                    print(f"❌ {fname}: {', '.join(errors)}")
+            if all_valid:
+                print("✅ 所有模板校验通过")
+            else:
+                sys.exit(1)
+        else:
+            valid, errors = template_lib.validate_template(args[1])
+            if valid:
+                print(f"✅ {args[1]} 校验通过")
+            else:
+                print(f"❌ {args[1]} 校验失败：{', '.join(errors)}")
+                sys.exit(1)
     else:
         print(f"未知 template 子命令：{sub}")
 
@@ -689,6 +717,7 @@ if __name__ == '__main__':
         'dashboard': cmd_dashboard,
         'mcp': cmd_mcp,
         'cost': cmd_cost,
+        'init': cmd_init,
         # 旧命令别名（向后兼容）
         'retry': lambda a: cmd_recover(['retry'] + a),
         'fallback': lambda a: cmd_recover(['fallback'] + a),
