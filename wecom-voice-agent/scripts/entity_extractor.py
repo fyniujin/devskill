@@ -156,6 +156,53 @@ class EntityExtractor:
 
         return entities
 
+    # === 群任务三元组抽取（v2.9）===
+
+    ASSIGN_VERBS = ("交", "做", "负责", "跟进", "处理", "安排", "指派", "交给",
+                   "落实", "完成", "写", "准备", "提交", "回复", "确认", "对接")
+
+    def extract_assignment(self, text: str, speaker_userid: str = None) -> Dict[str, Any]:
+        """
+        群任务三元组抽取（v2.9）：指派人 + 被指派人 + 期限
+
+        - 指派人（assigner）：发言者（speaker_userid），即「谁说的」
+        - 被指派人（assignee）：文本中 @XXX 提及，或抽取到的人名
+        - 期限（due_date/due_time）：复用日期/时间抽取
+
+        Args:
+            text: 用户输入文本
+            speaker_userid: 群内发言者 userid
+
+        Returns:
+            dict: {
+                "assigner", "assignee", "due_date", "due_time",
+                "content", "is_assignment"
+            }
+        """
+        entities = self.extract(text)
+        mention = self._extract_mention(text)
+        assignee = mention or entities.get("person")
+        due_date = entities.get("date")
+        due_time = entities.get("time")
+        has_verb = any(v in text for v in self.ASSIGN_VERBS)
+        # 指派意图：有明确被指派人且（有 @提及 或 含指派动词）
+        is_assignment = bool(assignee and (mention or has_verb))
+        return {
+            "assigner": speaker_userid,
+            "assignee": assignee,
+            "due_date": due_date,
+            "due_time": due_time,
+            "content": text,
+            "is_assignment": is_assignment,
+        }
+
+    def _extract_mention(self, text: str) -> Optional[str]:
+        """提取 @提及对象（群聊 @某人 / @userid）"""
+        m = re.search(r'@([A-Za-z0-9_\u4e00-\u9fff]{1,20})', text)
+        if m:
+            return m.group(1).strip()
+        return None
+
     def format_for_confirmation(self, entities: Dict[str, Any]) -> str:
         """
         格式化实体用于复述确认
