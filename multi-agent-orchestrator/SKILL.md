@@ -2,8 +2,8 @@
 name: multi-agent-pro
 slug: multi-agent-pro
 displayName: 多Agent协作编排引擎
-description: 支持多Agent流水线编排（采集→分析→报告），基于DAG调度实现跨技能状态共享、错误重断点续传、执行报告生成、HTML甘特图可视化、人工审批节点（含超时策略）、历史执行对比、硬件自适应参数、版本更新提醒、官方流水线模板库、任务级重试策略、节点类型归组、统一错误恢复命令、条件表达式增强、Web控制台（ECharts甘特图+人工审批按钮）、MCP stdio JSON-RPC暴露（3个工具）、成本实测化桥接（cn-llm-router实测回填+估算分离展示）。AI即编排器，脚本提供基础设施。
-version: 5.4.0
+description: 支持多Agent流水线编排（采集→分析→报告），基于DAG调度实现跨技能状态共享、错误重断点续传、执行报告生成、HTML甘特图可视化、人工审批节点（含超时策略）、历史执行对比、硬件自适应参数、版本更新提醒、官方流水线模板库（10类预置模板）、任务级重试策略、节点类型归组、统一错误恢复命令、条件表达式增强、Web控制台、MCP Server暴露、成本实测化桥接、新手向导（orchestrator init）。AI即编排器，脚本提供基础设施。
+version: 5.5.0
 category: developer-tools
 platforms:
   - windows
@@ -1090,10 +1090,90 @@ python orchestrator.py cost <state_file> --summary
 
 ---
 
+### 模块 26：模板库扩容（10 类官方模板） 🆕
+
+**功能**：预置流水线模板库从 4 类扩容至 10 类，覆盖更多高频场景。每类模板含 pipeline 定义、依赖声明、示例数据、三要素声明（耗时/依赖/产物）。
+
+**触发词**：`模板`、`template`、`预置`、`示例`
+
+**10 类官方模板**：
+
+| # | 模板名 | 分类 | 耗时预估 | API Key | 核心能力 |
+|---|--------|------|---------|---------|---------|
+| 1 | 政采日报 | data-processing | 5-10 分钟 | 不需要 | 政采信息抓取→筛选→分析→日报 |
+| 2 | 视频批量分析 | content-generation | 10-20 分钟 | 可选 | 视频加载→关键帧提取→画面分析→摘要 |
+| 3 | 周报生成 | analysis | 3-5 分钟 | 不需要 | 执行记录汇总→成本分析→周报排版 |
+| 4 | 巡检汇总 | monitoring | 5-15 分钟 | 不需要 | 巡检项发现→状态检查→异常分析→报告 |
+| 5 | 竞对监控日报 | monitoring | 8-15 分钟 | 可选 | 官网/价格/社媒监控→变动分析→日报 |
+| 6 | 发票批量处理 | office | 10-30 分钟 | 可选 | OCR→真伪查验→分类→报销单填充→申报 |
+| 7 | 文件整理归档 | office | 5-15 分钟 | 不需要 | 文件扫描→分类→重复检测→重命名→归档 |
+| 8 | 考试刷题统计 | analysis | 3-5 分钟 | 不需要 | 刷题数据→正确率→薄弱点→趋势→报告 |
+| 9 | 直播复盘 | media | 5-10 分钟 | 可选 | 直播数据采集→指标计算→高光/低谷→复盘 |
+| 10 | 知识库周更 | content-generation | 10-20 分钟 | 可选 | 信息源扫描→变更检测→质量检查→更新→日志 |
+
+**使用方式**：
+```bash
+python orchestrator.py template list                    # 列出所有模板（含三要素摘要）
+python orchestrator.py template show <template_file>    # 查看模板详情（含三要素头部）
+python orchestrator.py template render <template_file>  # 渲染为可执行 pipeline.json
+python orchestrator.py template validate [template]     # CI 校验（三要素齐全 + 结构完整）
+```
+
+---
+
+### 模块 27：newbie 向导 🆕
+
+**功能**：交互式新手向导（`orchestrator init`），帮助新用户在 5 分钟内创建第一条流水线。全程"先清单后确认"（对齐 winskill 交互基因）。
+
+**触发词**：`init`、`新手``向导`、`创建流水线`、`开始`
+
+**流程**：
+1. 列出所有可用模板（含三要素摘要）
+2. 用户选择模板编号
+3. 展示模板详情（含依赖状态）
+4. 收集参数（流水线名称、输出目录）
+5. Dry-run 预览（节点序列 + 依赖状态）
+6. 确认生成 pipeline.json
+
+**使用方式**：
+```bash
+python orchestrator.py init
+```
+
+---
+
+### 模块 28：模板三要素化与 CI 校验 🆕
+
+**功能**：每个模板头部强制标注三要素（耗时预估/依赖需求/产物清单），元数据 schema 扩展，CI 校验检查三要素齐全。
+
+**触发词**：`三要素`、`校验`、`validate`、`CI`
+
+**三要素元数据**（`template_schema.json` 扩展）：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `three_elements.time_estimate` | string | 跑一次大概多久（如 5-10 分钟） |
+| `three_elements.api_key_required` | enum | 不需要 / 可选 / 必需 |
+| `three_elements.output_files` | array | 产生什么文件列表 |
+
+**CI 校验规则**：
+- 三要素字段齐全（time_estimate、api_key_required、output_files）
+- pipeline 结构完整（含 agents 列表）
+- 必需字段存在（name、description、category、version）
+
+**使用方式**：
+```bash
+python orchestrator.py template validate                    # 校验所有模板
+python orchestrator.py template validate <template_file>    # 校验单个模板
+```
+
+---
+
 ## 更新日志
 
 | 版本 | 日期 | 更新内容 |
 |------|------|---------|
+| v5.5.0 | 2026-10-10 | 增加：模板库扩容 4→10（新增竞对监控日报/发票批量处理/文件整理归档/考试刷题统计/直播复盘/知识库周更 6 类官方模板），每类模板含 pipeline 定义+依赖声明+示例数据+三要素声明（耗时/依赖/产物）；增加：newbie 向导（orchestrator init），交互式选模板→填参数→dry-run预览→确认生成，全程先清单后确认；增加：模板详情页三要素化（template_schema.json 扩展 three_elements 元数据，CI 校验检查三要素齐全）；增加：template validate 子命令（CI 校验入口）；增加：init 命令（新手向导入口）；优化：template list 展示三要素摘要；优化：template show 展示三要素头部信息 |
 | v5.4.0 | 2026-08-07 | 增加：Web 控制台（web_dashboard.py），内置 http.server 只读服务（仅本机 127.0.0.1:7788）+ ECharts 甘特图，支持点击节点查看输入输出、人工审批按钮（POST 带 X-Local-Token 防误触）；增加：MCP Server（mcp_server.py），stdio JSON-RPC 暴露 pipeline_run/pipeline_status/pipeline_approve 三个工具，其他 Agent 框架可调用整条流水线为单工具；增加：成本实测化桥接（cost_bridge.py），白名单探测 cn-llm-router，命中则子进程调用成本报告回填真实 token/cost，未安装保留估算值加 est 前缀，报告分实测/估算两列展示；增加：cost 命令（cost_bridge 入口），支持 --check/--summary/--pipeline 参数；增加：dashboard 命令（Web 控制台入口），支持 [state_dir] [port] 参数；增加：mcp 命令（MCP Server 入口）；优化：pipeline_reporter 成本概览分实测/估算两列，节点成本分布表增加来源标签（🔵实测/⚪估算） |
 | v5.3.0 | 2026-08-24 | 增加：官方流水线模板库（4类预置模板：政采日报/视频分析/周报/巡检），模板元数据声明依赖 skill，运行时探测缺失则标灰+安装链接，单包合规不自动安装；增加：任务级重试策略（节点级 retry 块：count/backoff_base/fallback_chain），未配置走旧全局策略向后兼容；增加：节点类型归组（7类→4类：任务/控制/人工/复用），仅认知层文档归组 Schema 零变更；增加：统一错误恢复命令 recover（retry/fallback/impact 三合一），旧命令向后兼容；增加：条件表达式增强（re_safe 正则子集 + contains/startswith/split/join 等字符串函数），AST 白名单机制不变 |
 | v5.2.0 | 2026-08-07 | 增加：统一可视化命令 visualize（--format md|html|both），整合执行报告与甘特图为单一入口，消除 report/gantt 命令重复代码；增加：evaluate 控制流节点（Self-Improving 循环），支持质量表达式评估 + 自动重试目标节点 + 最大轮次限制；增加：节点级成本追踪（cost_data 字段），在 complete_node 自动提取 _cost 字段，报告展示总 token/费用/节点分布；增加：HTML 甘特图费用概览区块，展示总消耗与节点成本分布；优化：dag_validator 校验 evaluate 节点字段与 retry_targets 引用完整性；优化：flow_controller 扩展 evaluate 类型调度，复用 while-loop 迭代模式；优化：state_store 持久化 quality_expr/retry_targets/max_eval_rounds 控制流字段 |
