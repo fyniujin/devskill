@@ -124,6 +124,30 @@ try:
 except ImportError:
     from urllib2 import urlopen, Request, URLError
 
+# 群聊语音合规模块（v2.9 新增）
+try:
+    from group_compliance import GroupCompliance, get_compliance
+    GROUP_COMPLIANCE_AVAILABLE = True
+except ImportError:
+    GROUP_COMPLIANCE_AVAILABLE = False
+    logger.warning("群合规模块不可用，群语音将默认不落盘")
+
+# 实体抽取增强（v2.9 群任务三元组）
+try:
+    from entity_extractor import EntityExtractor
+    ENTITY_EXTRACTOR_AVAILABLE = True
+except ImportError:
+    ENTITY_EXTRACTOR_AVAILABLE = False
+    logger.warning("实体抽取模块不可用，群任务三元组将降级")
+
+# 跟进待办闭环（v2.9 复用）
+try:
+    from todo_followup import TodoFollowupManager
+    TODO_AVAILABLE = True
+except ImportError:
+    TODO_AVAILABLE = False
+    logger.warning("待办闭环模块不可用，群任务分发将降级")
+
 # ==========================================
 # 配置
 # ==========================================
@@ -817,6 +841,16 @@ class MessageHandler:
         self.weather = WeatherService()
         self.time_svc = TimeService()
         self.msgid_cache = set()
+        # v2.9 群聊相关依赖（缺失时降级，不阻断单聊）
+        self.entity_extractor = EntityExtractor() if ENTITY_EXTRACTOR_AVAILABLE else None
+        self.todo_mgr = TodoFollowupManager() if TODO_AVAILABLE else None
+        self.compliance = get_compliance() if GROUP_COMPLIANCE_AVAILABLE else None
+        # 群管理员列表（发言者角色判定），环境变量逗号分隔 userid
+        self.group_admins = set(
+            a.strip() for a in os.environ.get("WECOM_GROUP_ADMINS", "").split(",") if a.strip()
+        )
+        # 群聊上下文暂存（供 _dispatch 的处理器读取身份/群维度）
+        self._chat_ctx = {}
     
     def handle(self, callback):
         """
@@ -847,7 +881,13 @@ class MessageHandler:
             self.msgid_cache.clear()
         
         logger.info(f"收到 {msgtype} 消息, userid={userid}")
-        
+
+        # v2.9 群聊路由：识别群消息，仅响应 @机器人 的指令（未被 @ 静默忽略，防刷屏）
+        chattype = callback.get("chattype") or callback.get("chat_type") or ""
+        chatid = callback.get("chatid") or callback.get("chat_id") or ""
+        if chattype == "group" or chatid:
+            return self._handle_group(callback, chattype=chattype, chat_id=chatid)
+
         # 语音留言处理（v2.5 新增）
         if msgtype == "voicemail":
             return self._handle_voicemail(callback)
@@ -885,22 +925,79 @@ class MessageHandler:
                 "• 控制在 60 秒内"
             )
         
+        # 单聊路径：复用统一内容处理（v2.9 抽出，便于群聊复用单聊引擎）
+        return self._process_content(content, userid, chat_type="single")
+
+    def _try_handle_confirm(self, content: str, userid: str):
+        """
+        群任务确认回执闭环（v2.9）：被指派人在单聊或群 @机器人 回复时闭环
+
+        当消息内容是一句简短的确认/拒绝，且该用户存在 pending_confirm 的群任务时，
+        拦截并调用 confirm_todo 完成回执闭环，避免进入通用意图引擎造成误回复。
+        """
+        if not (self.todo_mgr and userid):
+            return None
+        c = (content or "").strip()
+        if not c:
+            return None
+        # 低误判：仅当内容简短且命中确认/拒绝关键词才拦截
+        stripped = re.sub(r'[\s，。、！？!?.,]+', '', c)
+        if len(stripped) > 12:
+            return None
+        is_reject = any(w in stripped for w in ("拒绝", "不接受", "不同意", "不要", "不行", "驳回"))
+        is_confirm = any(w in stripped for w in ("确认", "接受", "同意", "好的", "可以", "ok", "OK", "没问题"))
+        if not (is_reject or is_confirm):
+            return None
+        # 查找该用户待确认的群任务
+        try:
+            todos = self.todo_mgr.query_by_assignee(userid, keyword="")
+        except Exception:
+            return None
+        pending = [t for t in todos if t.get("confirm_status") == "pending_confirm"]
+        if not pending:
+            return None
+        # 取最近一条待确认任务闭环
+        pending.sort(key=lambda t: t.get("created_at", ""), reverse=True)
+        accept = not is_reject
+        receip = self.todo_mgr.confirm_todo(pending[0].get("todo_id"), accept=accept)
+        if receip.get("ok"):
+            return self._text_resp(receip.get("receipt", "已处理。"))
+        return None
+
+    def _process_content(self, content: str, userid: str, chat_type: str = "single",
+                         chat_id: str = "", speaker_role: str = "", speaker_userid: str = ""):
+        """
+        统一内容处理（v2.9 抽出）：情感分析→方言→工单→意图→策略→分发
+        单聊与群聊共用此引擎，仅 chat_type / 身份上下文不同。
+
+        Args:
+            content: 已清理的文本内容
+            userid: 用户ID（群聊时为发言者）
+            chat_type: single / group
+            chat_id: 群聊ID
+            speaker_role: 发言者角色（member/admin/unknown）
+            speaker_userid: 发言者 userid（群聊，用于身份注入）
+        """
+        # v2.9 群任务确认回执闭环：被指派人回复「确认/拒绝」优先拦截闭环
+        confirm_resp = self._try_handle_confirm(content, userid)
+        if confirm_resp is not None:
+            return confirm_resp
+
         # 情感分析（v2.2 新增）
         emotion_result = self._analyze_emotion(content, userid)
-        
+
         # 情感升级检测
         if emotion_result.get("should_escalate"):
             return self._text_resp(
                 "为了更好地解决您的问题，我现在为您转接专属人工客服，请稍等... 🙏\n\n"
                 "您也可以留下联系方式，我们会尽快回复。"
             )
-        
+
         # 方言检测（v2.3 新增）
         dialect_result = dialect_manager.detect(content)
         dialect = dialect_result.get("dialect", "mandarin")
-        # 统一为字符串（兼容枚举和字符串两种返回）
         dialect_str = dialect.value if hasattr(dialect, 'value') else str(dialect)
-        
+
         # 自动工单创建（v2.3 新增）
         ticket_id = None
         emotion = emotion_result.get("emotion", "neutral")
@@ -914,21 +1011,23 @@ class MessageHandler:
             if ticket_result.get("success") or ticket_result.get("id"):
                 ticket_id = ticket_result.get("id")
                 logger.info(f"自动创建工单: {ticket_id}")
-        
+
         # 意图分析
         intent, confidence, entities = self.parser.parse(content)
-        logger.info(f"意图: {intent}, 置信度: {confidence:.2f}, 情感: {emotion}, 方言: {dialect_str}")
-        
+        logger.info(f"意图: {intent}, 置信度: {confidence:.2f}, 情感: {emotion}, 方言: {dialect_str}, 类型: {chat_type}")
+
         # 根据情感调整回复策略
         strategy = emotion_manager.get_strategy(emotion, emotion_result.get("confidence", 0.5))
-        
+
         # 置信度低时，用智能确认策略
         if confidence < 0.25:
             return self._smart_clarify(content, emotion=emotion, strategy=strategy,
                                        dialect=dialect_str, ticket_id=ticket_id)
-        
+
         return self._dispatch(intent, entities, content, emotion=emotion, strategy=strategy,
-                              dialect=dialect_str, ticket_id=ticket_id)
+                              dialect=dialect_str, ticket_id=ticket_id,
+                              chat_type=chat_type, chat_id=chat_id, speaker_role=speaker_role,
+                              speaker_userid=speaker_userid or userid)
     
     def _handle_voicemail(self, callback):
         """
@@ -1045,53 +1144,147 @@ class MessageHandler:
         if content in ["帮助", "能做什么", "怎么用", "?"]:
             return self._help_response()
         
-        # 情感分析（v2.2 新增）
-        emotion_result = self._analyze_emotion(content, userid)
-        
-        # 情感升级检测
-        if emotion_result.get("should_escalate"):
-            return self._text_resp(
-                "为了更好地解决您的问题，我现在为您转接专属人工客服，请稍等... 🙏\n\n"
-                "您也可以留下联系方式，我们会尽快回复。"
-            )
-        
-        # 方言检测（v2.3 新增）
-        dialect_result = dialect_manager.detect(content)
-        dialect = dialect_result.get("dialect", "mandarin")
-        # 统一为字符串
-        dialect_str = dialect.value if hasattr(dialect, 'value') else str(dialect)
-        
-        # 自动工单创建（v2.3 新增）
-        ticket_id = None
-        emotion = emotion_result.get("emotion", "neutral")
-        if ticket_integration.should_create_ticket(content, emotion):
-            ticket_result = ticket_integration.auto_create(
-                text=content,
-                userid=userid,
-                emotion_tag=emotion,
-                dialect_tag=dialect_str
-            )
-            if ticket_result.get("success") or ticket_result.get("id"):
-                ticket_id = ticket_result.get("id")
-                logger.info(f"自动创建工单: {ticket_id}")
-        
-        # 其他文本→按语音流程处理
-        intent, confidence, entities = self.parser.parse(content)
-        logger.info(f"意图: {intent}, 置信度: {confidence:.2f}, 情感: {emotion}, 方言: {dialect_str}")
-        
-        # 根据情感调整回复策略
-        strategy = emotion_manager.get_strategy(emotion, emotion_result.get("confidence", 0.5))
-        
-        if confidence >= 0.25:
-            return self._dispatch(intent, entities, content, emotion=emotion, strategy=strategy,
-                                  dialect=dialect_str, ticket_id=ticket_id)
+        # 单聊路径：复用统一内容处理（v2.9 抽出）
+        return self._process_content(content, userid, chat_type="single")
+
+    # === 群聊处理（v2.9）===
+
+    def _handle_group(self, callback, chattype="group", chat_id=""):
+        """
+        群聊消息处理（v2.9）
+
+        仅响应 @机器人 的指令；未被 @ 静默忽略（防刷屏）。
+        复用单聊内容引擎（_process_content），并注入发言者身份上下文
+        （谁在说话 / 什么角色），使意图识别与应答能区分群内不同成员。
+
+        Args:
+            callback: 回调 JSON
+            chattype: 会话类型标识
+            chat_id: 群聊ID
+        """
+        msgtype = callback.get("msgtype", "")
+        userid = callback.get("from", {}).get("userid", "")
+        speaker_role = "admin" if userid in self.group_admins else "member"
+
+        # 群聊合规：默认不落盘（磁盘零语音文件），仅即时转写处理
+        if self.compliance and self.compliance.record_audio_disabled():
+            logger.info(f"群聊合规：语音不落盘，仅转写处理 chat_id={chat_id}")
+
+        # 未被 @机器人 则静默忽略（防刷屏，企微机制已保证群推送必 @）
+        if not self._is_mentioned(callback):
+            logger.info(f"群消息未 @机器人，静默忽略 userid={userid}")
+            return None
+
+        # 提取并清理内容（去掉 @机器人 前缀，便于意图解析）
+        if msgtype == "voice":
+            content = callback.get("voice", {}).get("content", "").strip()
         else:
-            return self._smart_clarify(content, emotion=emotion, strategy=strategy,
-                                       dialect=dialect_str, ticket_id=ticket_id)
-    
+            content = callback.get("text", {}).get("content", "").strip()
+        content = self._strip_mention(content)
+
+        # v2.9 群内 @机器人 确认回执闭环（被指派人确认/拒绝）
+        confirm_resp = self._try_handle_confirm(content, userid)
+        if confirm_resp is not None:
+            return confirm_resp
+
+        if not content:
+            return self._text_resp(
+                "您好！我已收到您的 @，请告诉我具体需求，例如「@我 周三前交方案」。"
+            )
+
+        # 设置群聊上下文（发言者身份 + 群维度），供处理器与群任务分发使用
+        self._chat_ctx = {
+            "chat_type": "group", "chat_id": chat_id,
+            "speaker_role": speaker_role, "speaker_userid": userid,
+        }
+
+        # 群任务指派优先：识别「@某人 期限 任务」三元组，独立于意图引擎
+        if self.entity_extractor and self.todo_mgr:
+            assign = self.entity_extractor.extract_assignment(content, userid)
+            if assign.get("is_assignment") and assign.get("assignee"):
+                return self._dispatch_group_assignment(assign, content)
+
+        # 否则复用单聊引擎，注入发言者身份（谁在说话 / 角色），零重构
+        return self._process_content(
+            content, userid,
+            chat_type="group", chat_id=chat_id,
+            speaker_role=speaker_role, speaker_userid=userid,
+        )
+
+    def _dispatch_group_assignment(self, assign: Dict[str, Any], content: str):
+        """
+        群任务指派分发（v2.9）：落库 + 指派确认回执
+
+        把群里的口头安排从「说了」变成「记了 + 认了」：
+        - 建群待办（assigner=发言者, assignee=被指派人）
+        - 向被指派人推送确认回执，待其确认/拒绝闭环
+        """
+        due_date = assign.get("due_date")
+        if not due_date:
+            due_date = (datetime.now() + timedelta(days=1)).date().isoformat()
+        todo = {
+            "call_id": self._chat_ctx.get("chat_id", ""),
+            "userid": assign.get("assigner", ""),
+            "content": content,
+            "due_date": due_date,
+        }
+        ok = self.todo_mgr.register_todo(
+            todo, assigner=assign["assigner"], assignee=assign["assignee"],
+            chat_id=self._chat_ctx.get("chat_id", ""), source_group=True,
+            auto_schedule=False,
+        )
+        if ok:
+            return self._text_resp(
+                f"📌 已在群里建立任务\n\n"
+                f"• 内容：{content}\n"
+                f"• 指派给：@{assign['assignee']}\n"
+                f"• 指派方：{assign.get('assigner', '')}\n"
+                f"• 截止：{due_date}\n\n"
+                f"@{assign['assignee']} 请确认是否接受（回复「确认」/「拒绝」）。"
+            )
+        return self._text_resp("任务登记失败，请稍后再试。")
+
+    def _is_mentioned(self, callback: dict) -> bool:
+        """
+        判断是否 @机器人（群聊防刷屏）
+
+        企微机制：群聊中仅 @机器人 的消息才会推送给机器人。
+        若回调显式给出 mention_list 则按列表判定；否则群语音信任企微推送，
+        群文本按内容是否含 @ 判定。
+        """
+        mention_list = (callback.get("text", {}).get("mention_list")
+                       or callback.get("mention_list") or [])
+        if mention_list:
+            bot_userid = os.environ.get("WECOM_BOT_USERID", "")
+            if bot_userid:
+                return ("@all" in mention_list) or (bot_userid in mention_list)
+            # 未配置机器人 userid：信任企微推送（必 @ 才到）
+            return True
+        # 无 mention_list：群语音信任企微推送；群文本需内容含 @
+        msgtype = callback.get("msgtype", "")
+        if msgtype == "voice":
+            return True
+        content = callback.get("text", {}).get("content", "")
+        return "@" in content
+
+    def _strip_mention(self, content: str) -> str:
+        """去掉开头的 @某人 前缀，便于意图解析"""
+        if not content:
+            return content
+        m = re.match(r'^@([A-Za-z0-9_\u4e00-\u9fff]{1,20})\s*', content)
+        if m:
+            return content[m.end():].strip()
+        return content
+
     def _dispatch(self, intent, entities, raw_text, emotion=None, strategy=None,
-                  dialect=None, ticket_id=None):
+                  dialect=None, ticket_id=None, chat_type="single", chat_id="",
+                  speaker_role="", speaker_userid=""):
         """分发到具体处理器（含情感策略 v2.2、方言+工单 v2.3）"""
+        # v2.9 暂存群聊上下文，供处理器（如群任务分发）读取身份/群维度
+        self._chat_ctx = {
+            "chat_type": chat_type, "chat_id": chat_id,
+            "speaker_role": speaker_role, "speaker_userid": speaker_userid,
+        }
         handlers = {
             "query_schedule": self._do_query_schedule,
             "create_todo": self._do_create_todo,
@@ -1274,10 +1467,10 @@ class MessageHandler:
         )
     
     def _do_create_todo(self, entities, raw_text):
-        """创建待办"""
+        """创建待办（v2.9 群聊支持任务指派分发）"""
         date = entities.get("date", "今天")
         tod = entities.get("time_of_day", "")
-        
+
         # 尝试提取待办内容
         todo_content = raw_text
         # 去掉"提醒" "记得" 等前缀
@@ -1285,10 +1478,12 @@ class MessageHandler:
             if kw in todo_content:
                 todo_content = todo_content.replace(kw, "").strip()
                 break
-        
+
         if not todo_content:
             todo_content = "（待办内容未识别）"
-        
+
+        # 单聊：维持原提示（需管理员授权才能真正创建企业微信待办）
+        # 群任务指派由 _dispatch_group_assignment 优先处理，不在此分支
         return self._text_resp(
             f"✅ 待办提醒已收到！\n\n"
             f"📝 内容：{todo_content}\n"
