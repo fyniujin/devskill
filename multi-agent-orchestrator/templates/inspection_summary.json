@@ -4,6 +4,11 @@
   "category": "monitoring",
   "version": "1.0",
   "tags": ["巡检", "监控", "定期"],
+  "three_elements": {
+    "time_estimate": "5-15 分钟（取决于巡检项数量）",
+    "api_key_required": "不需要",
+    "output_files": ["inspection_report.md", "inspection_state.json"]
+  },
   "dependencies": [],
   "pipeline": {
     "pipeline_name": "巡检汇总",
