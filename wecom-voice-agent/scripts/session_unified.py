@@ -69,7 +69,8 @@ class SessionRecord:
     def __init__(self, session_id: str, userid: str, direction: str,
                  status: str = "active", context: Dict = None,
                  created_at: str = None, updated_at: str = None,
-                 id: int = None):
+                 id: int = None, chat_id: str = "", speaker_userid: str = "",
+                 speaker_role: str = ""):
         self.id = id
         self.session_id = session_id
         self.userid = userid
@@ -78,6 +79,10 @@ class SessionRecord:
         self.context = context or {}
         self.created_at = created_at or datetime.now().isoformat()
         self.updated_at = updated_at or datetime.now().isoformat()
+        # v2.9 群聊维度：chat_id 为空表示单聊；speaker_* 记录群内发言者身份
+        self.chat_id = chat_id
+        self.speaker_userid = speaker_userid
+        self.speaker_role = speaker_role
 
     def to_dict(self) -> dict:
         return {
@@ -89,6 +94,9 @@ class SessionRecord:
             "context": self.context,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "chat_id": self.chat_id,
+            "speaker_userid": self.speaker_userid,
+            "speaker_role": self.speaker_role,
         }
 
 
@@ -116,7 +124,8 @@ class SessionDB:
                     status TEXT NOT NULL DEFAULT 'active',
                     context TEXT DEFAULT '{}',
                     created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
+                    updated_at TEXT NOT NULL,
+                    chat_id TEXT DEFAULT ''
                 )
             """)
             conn.execute("""
@@ -135,22 +144,54 @@ class SessionDB:
                 CREATE INDEX IF NOT EXISTS idx_sessions_created
                 ON sessions(created_at)
             """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_sessions_chat_id
+                ON sessions(chat_id)
+            """)
+            # 兼容旧库：补充 chat_id 列（v2.9 群聊维度）
+            self._ensure_column(conn, "sessions", "chat_id", "TEXT DEFAULT ''")
+
+    @staticmethod
+    def _ensure_column(conn, table: str, column: str, ddl: str):
+        """兼容旧库：若列不存在则追加（v2.9 群聊维度）"""
+        try:
+            cols = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+            if column not in cols:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+        except Exception as e:
+            logger.warning(f"补充列失败 {table}.{column}: {e}")
 
     def insert_session(self, session: SessionRecord) -> bool:
         """插入新会话"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute("""
-                    INSERT INTO sessions (session_id, userid, direction, status, context, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO sessions (session_id, userid, direction, status, context, created_at, updated_at, chat_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     session.session_id, session.userid, session.direction,
                     session.status, json.dumps(session.context, ensure_ascii=False),
-                    session.created_at, session.updated_at
+                    session.created_at, session.updated_at, session.chat_id or ""
                 ))
             return True
         except sqlite3.IntegrityError:
             return False
+
+    def get_active_group_session(self, chat_id: str) -> Optional[SessionRecord]:
+        """获取群聊活跃会话（以 chat_id 为主键维度，群内共享上下文）"""
+        if not chat_id:
+            return None
+        threshold = (datetime.now() - timedelta(minutes=5)).isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                "SELECT * FROM sessions WHERE chat_id = ? AND updated_at > ? AND status IN ('active', 'waiting', 'confirming', 'ivr') ORDER BY updated_at DESC LIMIT 1",
+                (chat_id, threshold)
+            )
+            row = cursor.fetchone()
+            if row:
+                return self._row_to_record(row)
+        return None
 
     def update_session(self, session_id: str, **kwargs) -> bool:
         """更新会话"""
@@ -247,6 +288,8 @@ class SessionDB:
             context = json.loads(row["context"]) if row["context"] else {}
         except (json.JSONDecodeError, TypeError):
             pass
+        keys = row.keys()
+        chat_id = row["chat_id"] if "chat_id" in keys else ""
         return SessionRecord(
             id=row["id"],
             session_id=row["session_id"],
@@ -256,6 +299,7 @@ class SessionDB:
             context=context,
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            chat_id=chat_id,
         )
 
 
@@ -292,57 +336,101 @@ class UnifiedSessionManager:
     # === 会话生命周期 ===
 
     def get_or_create_session(self, userid: str, direction: str = "inbound",
-                               context: Dict = None) -> SessionRecord:
+                               context: Dict = None, chat_type: str = "single",
+                               chat_id: str = None, speaker_userid: str = "",
+                               speaker_role: str = "") -> SessionRecord:
         """
         获取或创建会话
-        
+
         如果用户有活跃会话则恢复，否则创建新会话。
-        
+        v2.9 新增群聊维度：chat_type=group 时以 chat_id 为主键维度（群内共享上下文）。
+
         Args:
-            userid: 用户ID
+            userid: 用户ID（群聊时为发言者 userid）
             direction: 方向（inbound/outbound/voicemail）
             context: 初始上下文
-            
+            chat_type: 会话类型（single/group）
+            chat_id: 群聊ID（群聊时必填，作为群维度主键）
+            speaker_userid: 发言者 userid（群聊）
+            speaker_role: 发言者角色（member/admin/unknown）
+
         Returns:
             SessionRecord: 会话记录
         """
-        # 尝试恢复活跃会话
-        active = self.db.get_active_session(userid)
+        if chat_type == "group" and chat_id:
+            active = self.db.get_active_group_session(chat_id)
+            # 群维度：userid 字段用 chat_id，避免与单聊 userid 碰撞
+            effective_userid = chat_id
+        else:
+            active = self.db.get_active_session(userid)
+            effective_userid = userid
+
         if active:
             # 更新活跃时间
             self.db.update_session(active.session_id)
-            if context:
-                merged = {**active.context, **context}
-                self.db.update_session(active.session_id, context=merged)
-                active.context = merged
+            merged = {**active.context, **(context or {})}
+            # 群聊每轮刷新发言者身份，保证身份上下文最新
+            if chat_type == "group":
+                merged.update({
+                    "chat_type": "group",
+                    "chat_id": chat_id,
+                    "speaker_userid": speaker_userid,
+                    "speaker_role": speaker_role,
+                })
+                active.speaker_userid = speaker_userid
+                active.speaker_role = speaker_role
+            self.db.update_session(active.session_id, context=merged)
+            active.context = merged
             return active
 
         # 创建新会话
-        return self.create_session(userid, direction, context)
+        return self.create_session(
+            effective_userid, direction, context, chat_type=chat_type, chat_id=chat_id,
+            speaker_userid=speaker_userid, speaker_role=speaker_role,
+        )
 
     def create_session(self, userid: str, direction: str = "inbound",
-                        context: Dict = None) -> SessionRecord:
+                        context: Dict = None, chat_type: str = "single",
+                        chat_id: str = None, speaker_userid: str = "",
+                        speaker_role: str = "") -> SessionRecord:
         """
         创建新会话
-        
+
         Args:
-            userid: 用户ID
+            userid: 用户ID（群聊时为发言者 userid）
             direction: 方向
             context: 初始上下文
-            
+            chat_type: 会话类型（single/group）
+            chat_id: 群聊ID
+            speaker_userid: 发言者 userid
+            speaker_role: 发言者角色
+
         Returns:
             SessionRecord: 新会话记录
         """
-        session_id = self._generate_session_id(userid)
+        # 群聊以 chat_id 生成会话ID，单聊用 userid
+        seed = chat_id if (chat_type == "group" and chat_id) else userid
+        session_id = self._generate_session_id(seed)
+        ctx = dict(context or {})
+        if chat_type == "group":
+            ctx.update({
+                "chat_type": "group",
+                "chat_id": chat_id,
+                "speaker_userid": speaker_userid,
+                "speaker_role": speaker_role,
+            })
         session = SessionRecord(
             session_id=session_id,
             userid=userid,
             direction=direction,
             status="active",
-            context=context or {},
+            context=ctx,
+            chat_id=chat_id or "",
+            speaker_userid=speaker_userid,
+            speaker_role=speaker_role,
         )
         self.db.insert_session(session)
-        logger.info(f"创建会话: {session_id}, 用户: {userid}, 方向: {direction}")
+        logger.info(f"创建会话: {session_id}, 用户: {userid}, 方向: {direction}, 类型: {chat_type}")
         return session
 
     def create_outbound_session(self, target: str, script: str = "") -> SessionRecord:
