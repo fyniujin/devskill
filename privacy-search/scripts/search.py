@@ -235,6 +235,7 @@ class SearchResult:
             "snippet": self.snippet,
             "engine": self.engine,
             "engines": self.engine_set,
+            "engine_count": len(self.engine_set) if self.engines else 1,
             "rank": self.rank,
             "score": self.score,
         }
@@ -730,6 +731,8 @@ class SearchOrchestrator:
         self._classified_errors: List[ClassifiedError] = []
         self._cache_hit = False
         self._notices: List[str] = []
+        # V1.9 新增：记录本次搜索使用的引擎列表（用于可信度标记）
+        self._last_engines_used: List[str] = []
         # 配置层面的告警独立保存：_notices 每次搜索会被清空，
         # 而配置问题在整个进程生命周期内都应可见
         self._config_warnings: List[str] = list(
@@ -754,6 +757,11 @@ class SearchOrchestrator:
     def notices(self) -> List[str]:
         """本次搜索产生的提示信息"""
         return self._notices
+
+    @property
+    def last_engines_used(self) -> List[str]:
+        """本次搜索使用的引擎列表（V1.9 新增，用于可信度标记）"""
+        return self._last_engines_used
 
     def _check_rate_limit(self, engine_name: str) -> bool:
         """检查是否超过单引擎日请求上限"""
@@ -867,6 +875,8 @@ class SearchOrchestrator:
         self.privacy_manager.set_mode_silent(privacy_mode)
         active = self.resolve_engines(engines, privacy_mode, query)
         active = [e for e in active if self._check_rate_limit(e)]
+        # V1.9 新增：记录本次使用的引擎列表（用于可信度标记）
+        self._last_engines_used = active
 
         if not active:
             self._notices.append("没有可用引擎，请检查配置或引擎名是否正确")
@@ -1241,14 +1251,17 @@ def _print_results(results: List[SearchResult], args, orchestrator: SearchOrches
         print(f"    {r.url}")
         if r.snippet:
             print(f"    {r.snippet[:100]}")
-        # 展示全部收录引擎而非单个来源：
-        # 被多引擎共同收录是结果可信度的直接体现，
-        # 只显示 engine 单值会丢掉交叉验证信息
+        # V1.9 新增：引擎数可信度标记（多引擎交叉即可信度信号）
         sources = r.engine_set
         label = ", ".join(sources) if sources else r.engine
-        if len(sources) > 1:
-            label += f"（{len(sources)} 个引擎收录）"
-        print(f"    — {label}" + (f" | 得分 {r.score}" if args.verbose else ""))
+        engine_count = len(sources) if sources else 1
+        total_engines = len(orchestrator.last_engines_used) if hasattr(orchestrator, 'last_engines_used') else 10
+        trust_badge = f"🔍 {engine_count}/{total_engines} 引擎返回"
+        if engine_count >= 3:
+            trust_badge += " ✅ 高可信"
+        elif engine_count >= 2:
+            trust_badge += " ⚡ 较可信"
+        print(f"    — {label} | {trust_badge}" + (f" | 得分 {r.score}" if args.verbose else ""))
         print()
 
 
@@ -1478,6 +1491,7 @@ def main():
             "privacy_mode": args.privacy,
             "from_cache": orchestrator.cache_hit,
             "count": len(results),
+            "total_engines": len(orchestrator.last_engines_used) if hasattr(orchestrator, 'last_engines_used') else 10,
             "results": [r.to_dict() for r in results],
             "notices": orchestrator.notices,
             "errors": [
@@ -1555,14 +1569,27 @@ def main():
         print(format_privacy_summary(orchestrator.privacy_manager))
         print()
 
+    # V1.9 优化：口语化错误建议（非堆栈、可操作）
     if not results and errors and not args.verbose:
         categories = {e.category.value for e in errors}
         if "network" in categories:
-            print("网络连接失败，可加 --verbose 查看详情，或检查代理设置")
+            print("\n💡 网络连接失败，看起来是网络问题。")
+            print("   试试这些：")
+            print("   • 检查网络：ping www.baidu.com")
+            print("   • 确认代理设置：config.yaml 中 search.proxy")
+            print("   • 加 --verbose 查看具体错误")
         elif "config" in categories:
-            print("配置有误，请检查 config.yaml，或加 --verbose 查看详情")
+            print("\n💡 配置有问题，config.yaml 没读对。")
+            print("   试试这些：")
+            print("   • 确认 YAML 格式（冒号后面要有空格）")
+            print("   • 复制 references/config.yaml.example 重新配置")
+            print("   • 加 --verbose 查看具体错误")
         else:
-            print("引擎解析失败，可执行 --selftest 体检各引擎状态")
+            print("\n💡 搜索引擎解析失败，引擎可能改版了。")
+            print("   试试这些：")
+            print("   • 运行 --selftest 体检各引擎状态")
+            print("   • 更新到最新版本")
+            print("   • 用 --engines 排除问题引擎")
 
 
 def _run_startup_update_check(config: Dict[str, Any]) -> None:
