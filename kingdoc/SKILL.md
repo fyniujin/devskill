@@ -2,7 +2,7 @@
 name: kingdoc
 displayName: 金山文档 KingDoc
 slug: kingdoc
-version: 4.2.0
+version: 4.3.0
 description: >
   金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理
   （文档/智能画布/电子表格/演示文稿/多维表格/收集表/可视化/历史管理/全文搜索/附件），
@@ -25,7 +25,11 @@ description: >
   主题一键生成（WPS AI 适配层 generate：大纲→智能文档/PPT/表格初稿，本地降级可切换真源）、
   跨品类对比与时间线（版本历史轮询→who/when/what 时间线 + 表格单元格级 diff），
   OCR 收敛（唯一入口，优先桥接 wps-office-suite，未装则 Tesseract 最小兜底，数据不出域）。
-  本地生成、OCR、硬件画像、WPS AI、全文搜索、块级编辑、配额管理、桥接、AirScript、视图渲染、CRDT、数据 I/O、Webhook、知识中枢、政企合规、主题生成、跨品类对比等能力零密钥可用。
+  v4.3 合规中心 v2：合规套件门面（单入口两档输出 quick_scan/full_scan，合并 v4.2 政企合规中心与 v3.4 内容合规检查，敏感词加载逻辑唯一来源、维护面减半），
+  行业敏感词分包（base 通用 + 教培/医疗/金融/政务四行业包，各 200+ 词条，多包叠加，报告按高/中/低风险分级并定位段落与责任人字段），
+  全域扫描定时化（schtasks 周扫空间，新检出项经 webhook 三通道签名推送 + 跨周去重只推新增不扰民），
+  配额管理器阈值告警（用量 80% / 95% 两级经 webhook 三通道推送，按天+级别幂等）。
+  本地生成、OCR、硬件画像、WPS AI、全文搜索、块级编辑、配额管理、桥接、AirScript、视图渲染、CRDT、数据 I/O、Webhook、知识中枢、政企合规、主题生成、跨品类对比、合规门面、行业分包、周扫定时化、配额告警等能力零密钥可用。
 description_zh: "金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理（深度直连 WPS 开放平台 + 智能画布元素级编辑 + 全文搜索超越腾讯 + 块级编辑段落级 + 18 项增强）"
 platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
 tags: [文档处理, 表格处理, PPT生成, 多维表格, 表单收集, 思维导图, 流程图, OCR, 政企合规]
@@ -89,13 +93,7 @@ sudo apt-get install tesseract-ocr tesseract-ocr-chi-sim
 
 ### 3. 配置并加载
 
-```bash
-# Linux/macOS
-bash setup.sh
-# Windows (PowerShell)
-powershell -ExecutionPolicy Bypass -File setup.ps1
-```
-脚本引导输入 App ID/Secret，自动生成 `config.json`、`mcp-config.json`、模板与图标，并采集本机硬件画像。
+**首次配置由 AI 引导完成**：直接告诉我你的金山开放平台 **App ID / App Secret**，我会自动生成 `config.json`、`mcp-config.json`、模板与图标，并采集本机硬件画像。无需手动执行安装命令。
 
 ---
 
@@ -849,6 +847,10 @@ kdoc history destroy <file_id>  # ⚠️ 需二次确认
 | 超大表格（>10 万行） | 分块写入，单批不超过 `batch_chunk` | 分批 |
 | 思维导图/流程图为 SVG 图片 | 无法在金山内二次编辑，保留源 mermaid | 改源码重渲染 |
 | 文字/演示只能整文件替换 | 无法逐段编辑 | 本地改源→重新上传覆盖 |
+| 行业分包 YAML 格式错误 | 该包被加载器跳过（不影响其他包） | 用 `references/sensitive_packs/` 模板校验后重跑 |
+| schtasks 周扫仅产出命令未自动注册 | 不会自动写入系统定时 | 用户在宿主（管理员）执行产出的 schtasks/cron 命令 |
+| 配额告警需 webhook 订阅才推送 | 无订阅时仅本地记录不推送 | 配置 webhook 订阅（kdoc.webhook.subscribe）后三通道推送 |
+| 周扫去重依赖扫描级 SQLite | 清库会重置去重（重新推送历史项） | 一般无需清理，去重表独立存储 |
 
 **明确不支持**：本地直接修改已上传 DOCX/PPTX 的某一段（需整文件重生成）；
 对加密/损坏文件 OCR；超过配额的非付费批量操作。
@@ -867,6 +869,11 @@ kdoc history destroy <file_id>  # ⚠️ 需二次确认
 | 大文件超时（>阈值） | 上传失败 | 异步上传 + 轮询 |
 | 版本冲突 | 多人编辑丢数据 | 写入前校验版本号 |
 | 网络依赖 | 云端功能需联网 | 关键操作离线暂存 |
+| 行业分包需合法 YAML | 语法错误包被忽略，不会报错中断 | 提交前用 `kdoc.compliance.packs` 校验词数 |
+| 周扫定时化仅注册命令不托管执行 | 漏跑需手动触发 | 手动执行 `compliance_scheduler.py` 或部署 cron/schtasks |
+| 配额告警基于当日本地计数 | 多进程不共享计数可能漏警 | 单实例运行配额管理 |
+| webhook 推送需签名密钥一致 | 密钥不一致推送被拒（签名校验失败） | 保持默认签名密钥 `kingdoc_webhook_secret_v4` |
+| 合规门面为本地引擎 | 不调用任何外部 AI API | 零密钥可用，数据不出域 |
 
 ---
 
@@ -970,6 +977,7 @@ python -m engine.update_check --version 3.0.0 --reminder
 
 ## 更新日志
 
+| v4.3.0 | 2026-10-10 | 增加：合规套件门面 `engine/compliance_suite.py`（单入口两档输出 quick_scan/full_scan，合并 v4.2 政企合规中心与 v3.4 内容合规检查为统一引擎 ComplianceCore，敏感词加载逻辑收敛为唯一来源 SensitiveWordLoader，维护面减半；旧 `compliance_check.py`/`compliance_center.py` 改为委托 shim）；增加：行业敏感词分包 `references/sensitive_packs/`（base 通用包 + 教培/医疗/金融/政务四行业包，各 200+ 词条，多包叠加加载器，扫描报告按高/中/低风险分级并定位到段落行号与责任人字段）；增加：全域扫描定时化引擎 `engine/compliance_scheduler.py`（schtasks 周扫空间，新检出项经 webhook 三通道签名推送，扫描级跨周去重只推新增不扰民，非 Windows 输出 cron 行）；增加：配额管理器阈值告警（用量 80% / 95% 两级经 webhook 三通道推送，按天+级别幂等去重）；增加：MCP 工具 6 个（kdoc.compliance.quick_scan / full / packs / scheduler_register / scheduler_run / scheduler_status），kdoc.quota.check 现返回 alerts；优化：SKILL.md 版本号 4.2.0→4.3.0；优化：description 增强（合规门面/行业分包/周扫定时化/配额告警） |
 | v4.2.0 | 2026-09-19 | 增加：团队知识库模式引擎 `engine/knowledge_hub.py`（空间级本地倒排索引全文检索，可选 jieba 中文分词，权限矩阵先鉴权后检索，无 read 权限文档不进结果集，硬件自适应分块建索引）；增加：政企合规中心引擎 `engine/compliance_center.py`（密级标注公开/内部/秘密/机密随文档元数据落库，敏感词+数据泄露全量扫描聚合报告，数据不出域声明，本地 OCR 强制云端仅元数据）；增加：主题一键生成引擎 `engine/topic_generator.py`（WPS AI 适配层 generate：大纲→智能文档/PPT/表格初稿，本地降级模板驱动+分段生成，真源可用无缝切换）；增加：跨品类对比与时间线引擎 `engine/cross_compare.py`（版本历史轮询→who/when/what 时间线，表格/多维表格单元格级 diff 视图，跨品类差异化）；优化：OCR 收敛为唯一入口 `engine/local/ocr.py`（删除重复维护的 `engine/ocr/local_ocr.py`，优先桥接 wps-office-suite OCR，未装则 Tesseract 最小兜底，数据不出域）；增加：MCP 工具 19 个（kdoc.khub.* 4 个、kdoc.compliance.* 5 个、kdoc.topic.* 2 个、kdoc.compare.* 3 个、kdoc.ocr_bridge_status 1 个、复用 kdoc.local.ocr.extract_text_bridged）；增加：知识中枢/政企合规/主题生成/跨品类对比/OCR 桥接场景案例；优化：SKILL.md 版本号 4.1.0→4.2.0；优化：description 增强到 30 项增强 |
 | v4.1.0 | 2026-09-08 | 增加：AirScript 在线自动化引擎 `engine/airscript.py`（自然语言→脚本生成→预检（危险操作拦截）→用户确认→在线执行；能力域：定时通知/数据汇总/表格批量操作/字段计算；SQLite 执行历史+待确认队列）；增加：多维表格字段自动化引擎 `engine/dbf_auto.py`（公式字段/关联字段/汇总字段创建与批量填充，16 种字段类型，硬件自适应削峰）；增加：视图渲染引擎 `engine/view_render.py`（看板 matplotlib 柱图 + 甘特 mermaid 时间线，硬件自适应渲染并发）；增加：CRDT 表格扩展引擎 `engine/crdt_table.py`（单元格级操作日志 + 向量时钟，冲突时保留双方并标记，支持电子表格/多维表格/智能文档）；增加：Excel/CSV 双向导入导出引擎 `engine/bidata_io.py`（openpyxl 读写，date/link/select/person 四类字段序列化规则文档化，配额削峰）；增加：Webhook 与通知中心引擎 `engine/webhook_center.py`（新增/修改/删除事件订阅，HMAC 签名校验 + SQLite 去重队列，金山协作/企微/钉钉三通道分发，zwjh 记忆桥接）；增加：MCP 工具 24 个（kdoc.airscript.* 7 个、kdoc.dbf.* 5 个、kdoc.view.* 3 个、kdoc.crdt_table.* 6 个、kdoc.bidata.* 5 个、kdoc.webhook.* 8 个）；增加：AirScript/多维表格/视图渲染/CRDT/Webhook 场景案例；优化：SKILL.md 版本号 4.0.0→4.1.0；优化：description 增强到 24 项增强 |
 | v4.0.0 | 2026-08-31 | 增加：本地桥接引擎 `engine/local_bridge.py`（wps-office-suite 双向互通：白名单探测 + SQLite 映射表 + 下行拉取/处理/覆盖 + 上行 mtime 监听同步 + JSON 契约 + 子进程超时自动关闭）；增加：记忆桥接引擎 `engine/memory_bridge.py`（zwjh 记忆库打通：白名单探测 + stdio JSON-RPC 调用 deposit + 关键事件写入长期记忆 + 未安装→本地待迁移日志 + 一次性导入）；增加：表单答卷收集统计 `engine/form_analytics.py`（答卷列表/内容接口 + 按题统计 + 交叉分析 + 未填名单 + 图表生成 + 导出 CSV/Excel + 写回智能文档）；增加：MCP 工具 12 个（kdoc.bridge.* 5 个、kdoc.memory.* 3 个、kdoc.form.* 4 个）；增加：桥接/记忆/表单场景案例；优化：SKILL.md 版本号 3.9.0→4.0.0；优化：description 增强到 21 项增强 |
@@ -1008,13 +1016,7 @@ python -m engine.update_check --version 3.0.0 --reminder
 
 **前置要求**：Python 3.10+；云端功能需金山开放平台 App（免费）；OCR 可选装 Tesseract。
 
-```bash
-# Linux / macOS
-bash setup.sh
-# Windows (PowerShell)
-powershell -ExecutionPolicy Bypass -File setup.ps1
-```
-安装后重启 WorkBuddy 生效。本地生成/OCR/硬件画像无需任何配置即可用。
+**首次配置由 AI 引导完成**：告诉我你的金山开放平台 App ID / App Secret，AI 自动生成 `config.json`、`mcp-config.json` 并采集本机硬件画像，安装后重启 WorkBuddy 生效。本地生成/OCR/硬件画像无需任何配置即可用。
 
 ---
 
@@ -1057,7 +1059,7 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 ---
 
-*最后更新：2026-09-19 | v4.2.0*
+*最后更新：2026-10-10 | v4.3.0*
 
 ---
 
@@ -1580,6 +1582,35 @@ text / number / select / multi_select / date / person / link / formula / relatio
 - 未装 wps 保留 Tesseract 最小兜底；两路均本地引擎，数据不出域
 - MCP `kdoc.local.ocr.extract` 与 `kdoc.ocr.formula`/`kdoc.ocr.education` 均经此入口
 
+---
+
+## 44. 合规中心 v2（v4.3.0 合并重构，单入口两档）
+
+> 合并 v4.2 政企合规中心与 v3.4 内容合规检查为门面 `engine/compliance_suite.py`，敏感词加载逻辑唯一来源，维护面减半。
+
+### 44.1 单入口两档输出
+
+- `kdoc.compliance.quick_scan(text, packs)`：快速扫，敏感词命中即报 + 数据泄露，秒级
+- `kdoc.compliance.full(text, doc_id, include_history, packs)`：全域扫，全文敏感词 + 数据泄露 + 格式 + 密级建议 + 历史版本时间线
+- 底层统一 `ComplianceCore`；旧 `kdoc.compliance.sensitive/leak/format/classify` 与 `kdoc.compliance.label/scan/declare` 仍可用（委托门面）
+
+### 44.2 行业敏感词分包
+
+- `references/sensitive_packs/`：`base` 通用包 + `edu`（教培）/ `medical`（医疗）/ `finance`（金融）/ `gov`（政务）四行业包，各 200+ 词条
+- `kdoc.compliance.packs` 查看词数与责任人字段；`packs` 参数多包叠加（如 `"edu,finance"`）
+- 扫描报告按高/中/低三档风险分级，并定位到段落行号与责任人字段（包元数据）
+
+### 44.3 全域扫描定时化
+
+- `kdoc.compliance.scheduler_register(space_id, packs, weekday, scan_time)`：Windows 产出 schtasks 命令；非 Windows 产出 cron 行
+- `kdoc.compliance.scheduler_run(space_id, docs, packs)`：执行一次扫描，仅推送新增（扫描级跨周去重 + webhook 签名核验，只推新增不扰民）
+- `kdoc.compliance.scheduler_status`：查看已注册任务与去重计数
+
+### 44.4 配额阈值告警
+
+- 配额管理器用量越过 80% / 95% 时经 webhook 三通道推送（按天+级别幂等，不重复打扰）
+- `kdoc.quota.check` 现返回 `alerts` 字段，含已触发级别与推送状态
+
 ### 43.2 安全约束
 
 - 子进程超时自动关闭，不残留
@@ -1587,4 +1618,4 @@ text / number / select / multi_select / date / person / link / formula / relatio
 
 ---
 
-*最后更新：2026-09-19 | v4.2.0*
+*最后更新：2026-10-10 | v4.3.0*
