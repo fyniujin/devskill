@@ -4,6 +4,11 @@
   "category": "data-processing",
   "version": "1.0",
   "tags": ["政采", "招标", "日报", "监控"],
+  "three_elements": {
+    "time_estimate": "5-10 分钟",
+    "api_key_required": "不需要",
+    "output_files": ["gov_procurement_daily.md", "gov_procurement_state.json"]
+  },
   "dependencies": [
     {
       "skill_id": "patsnap-search",
