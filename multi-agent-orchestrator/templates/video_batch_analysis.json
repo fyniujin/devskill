@@ -4,6 +4,11 @@
   "category": "content-generation",
   "version": "1.0",
   "tags": ["视频", "分析", "批量", "图像识别"],
+  "three_elements": {
+    "time_estimate": "10-20 分钟（取决于视频数量）",
+    "api_key_required": "可选",
+    "output_files": ["video_batch_report.md", "video_analysis_state.json"]
+  },
   "dependencies": [
     {
       "skill_id": "kling-ai",
