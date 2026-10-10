@@ -116,6 +116,22 @@ class TodoFollowupManager:
                 CREATE INDEX IF NOT EXISTS idx_todos_due_date
                 ON todos(due_date)
             """)
+            # 兼容旧库：补充群任务相关列（v2.9）
+            self._ensure_column(conn, "todos", "assigner", "TEXT DEFAULT ''")
+            self._ensure_column(conn, "todos", "assignee", "TEXT DEFAULT ''")
+            self._ensure_column(conn, "todos", "chat_id", "TEXT DEFAULT ''")
+            self._ensure_column(conn, "todos", "confirm_status", "TEXT DEFAULT 'none'")
+            self._ensure_column(conn, "todos", "source_group", "INTEGER DEFAULT 0")
+
+    @staticmethod
+    def _ensure_column(conn, table: str, column: str, ddl: str):
+        """兼容旧库：若列不存在则追加（v2.9 群任务）"""
+        try:
+            cols = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+            if column not in cols:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+        except Exception as e:
+            logger.warning(f"补充列失败 {table}.{column}: {e}")
 
     def extract_todos_from_minutes(self, minutes: Dict[str, Any], call_id: str, userid: str) -> List[Dict[str, Any]]:
         """
@@ -167,28 +183,43 @@ class TodoFollowupManager:
         return todos
 
     def register_todo(self, todo: Dict[str, str], responsible_person: str = "",
-                      priority: str = "normal", auto_schedule: bool = True) -> bool:
+                      priority: str = "normal", auto_schedule: bool = True,
+                      assigner: str = "", assignee: str = "", chat_id: str = "",
+                      source_group: bool = False) -> bool:
         """
         登记待办并可选自动创建回拨任务
 
+        v2.9 新增群任务支持：assigner（指派人）/assignee（被指派人）/chat_id/
+        source_group。群任务默认进入「待确认」状态，需被指派人确认回执。
+
         Args:
             todo: 待办信息字典
-            responsible_person: 责任人
+            responsible_person: 责任人（缺省时取 assignee）
             priority: 优先级
             auto_schedule: 是否自动创建回拨任务
+            assigner: 指派人（群内发言者）
+            assignee: 被指派人（@提及或人名）
+            chat_id: 群聊ID（群任务）
+            source_group: 是否群来源
 
         Returns:
             bool: 成功返回 True
         """
         now = datetime.now().isoformat()
         todo_id = todo.get("todo_id", self._generate_todo_id(todo.get("content", ""), todo.get("call_id", "")))
+        # 群任务：被指派人即责任人
+        if not responsible_person:
+            responsible_person = assignee
+        # 群任务且指定被指派人：进入待确认（确认回执闭环）
+        confirm_status = "pending_confirm" if (source_group and assignee) else "none"
 
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute("""
                     INSERT OR IGNORE INTO todos 
-                    (todo_id, call_id, userid, content, responsible_person, due_date, status, priority, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (todo_id, call_id, userid, content, responsible_person, due_date, status, priority,
+                     created_at, updated_at, assigner, assignee, chat_id, confirm_status, source_group)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     todo_id,
                     todo.get("call_id", ""),
@@ -200,18 +231,83 @@ class TodoFollowupManager:
                     priority,
                     now,
                     now,
+                    assigner,
+                    assignee,
+                    chat_id or "",
+                    confirm_status,
+                    1 if source_group else 0,
                 ))
 
-            # 自动创建回拨任务
+            # 自动创建回拨任务（群任务到期提醒同样复用）
             if auto_schedule:
                 self._schedule_callback(todo)
 
-            logger.info(f"登记待办: {todo_id}, 内容: {todo.get('content', '')[:30]}")
+            logger.info(f"登记待办: {todo_id}, 内容: {todo.get('content', '')[:30]}, 群来源: {source_group}")
             return True
 
         except Exception as e:
             logger.warning(f"登记待办失败: {e}")
             return False
+
+    def confirm_todo(self, todo_id: str, accept: bool = True) -> Dict[str, Any]:
+        """
+        群任务确认回执（v2.9）：被指派人确认/拒绝指派
+
+        Args:
+            todo_id: 待办ID
+            accept: True=确认接受，False=拒绝
+
+        Returns:
+            dict: {"ok", "status", "receipt", "reason"}
+        """
+        now = datetime.now().isoformat()
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                row = conn.execute("SELECT * FROM todos WHERE todo_id = ?", (todo_id,)).fetchone()
+                if not row:
+                    return {"ok": False, "reason": "not_found"}
+                todo = dict(row)
+                new_confirm = "confirmed" if accept else "rejected"
+                new_status = "pending" if accept else "closed"
+                conn.execute(
+                    "UPDATE todos SET confirm_status = ?, status = ?, close_reason = ?, updated_at = ? WHERE todo_id = ?",
+                    (new_confirm, new_status, "被指派人拒绝" if not accept else "", now, todo_id)
+                )
+            assignee = todo.get("assignee") or todo.get("responsible_person") or "相关同事"
+            content = todo.get("content", "")
+            due = (todo.get("due_date") or "")[:10]
+            if accept:
+                receipt = f"✅ {assignee} 已确认任务：{content}（截止：{due}）。任务已记入待办，到期前会提醒。"
+            else:
+                receipt = f"⚠️ {assignee} 拒绝了任务：{content}。请指派人或管理员重新安排。"
+            return {"ok": True, "status": new_confirm, "receipt": receipt}
+        except Exception as e:
+            logger.warning(f"确认待办失败: {e}")
+            return {"ok": False, "reason": str(e)}
+
+    def query_by_assignee(self, assignee: str, keyword: str = "") -> List[Dict[str, Any]]:
+        """
+        按被指派人查询待办（v2.9 群任务：被指派人查看自己的任务）
+
+        Args:
+            assignee: 被指派人标识（@名或 userid）
+            keyword: 关键词筛选
+
+        Returns:
+            list: 待办列表
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            if keyword:
+                cursor = conn.execute(
+                    "SELECT * FROM todos WHERE assignee = ? AND content LIKE ? ORDER BY created_at DESC LIMIT 10",
+                    (assignee, f"%{keyword}%"))
+            else:
+                cursor = conn.execute(
+                    "SELECT * FROM todos WHERE assignee = ? AND status NOT IN ('closed', 'expired') ORDER BY created_at DESC LIMIT 10",
+                    (assignee,))
+            return [dict(row) for row in cursor.fetchall()]
 
     def check_due_todos(self) -> List[Dict[str, Any]]:
         """
