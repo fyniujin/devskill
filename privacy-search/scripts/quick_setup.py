@@ -126,21 +126,20 @@ def main():
     if result.returncode == 0:
         print("   ✅ update_checker.py 可运行")
 
-    print("""
+    # V1.9 优化：简化输出，一条命令出结果
+    python_cmd = "python" if os.name != "nt" else "python"
+    print(f"""
 ╔══════════════════════════════════════════════════════════════╗
 ║  ✅ 安装完成！                                              ║
 ╠══════════════════════════════════════════════════════════════╣
-║  快速使用：                                                 ║
-║  1. 启动 SearXNG（可选）：                                  ║
-║     python scripts/searxng_manager start --method pip     ║
-║  2. 开始搜索：                                              ║
-║     python scripts/search.py "关键词"                       ║
-║  3. 隐私搜索：                                              ║
-║     python scripts/search.py "关键词" --privacy strict     ║
-║  4. 查看隐私状态：                                          ║
-║     python scripts/privacy report                           ║
-║  5. 检查更新：                                              ║
-║     python scripts/update_checker check                     ║
+║  一条命令开始搜索：                                         ║
+║                                                              ║
+║     {python_cmd} scripts/search.py "关键词"                  ║
+║                                                              ║
+║  可选：                                                     ║
+║     --privacy strict    隐私模式（默认 normal）              ║
+║     --engines baidu,bing 指定引擎                            ║
+║     --selftest          体检引擎状态                         ║
 ╚══════════════════════════════════════════════════════════════╝
 """)
 
