@@ -1,9 +1,9 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Pipeline Template Metadata Schema",
-  "description": "预置流水线模板元数据规范，用于声明模板依赖的外部 skill 和分类信息",
+  "description": "预置流水线模板元数据规范，用于声明模板依赖的外部 skill、分类信息和三要素声明",
   "type": "object",
-  "required": ["name", "description", "category", "version"],
+  "required": ["name", "description", "category", "version", "three_elements"],
   "properties": {
     "name": {
       "type": "string",
@@ -15,7 +15,7 @@
     },
     "category": {
       "type": "string",
-      "enum": ["data-processing", "content-generation", "monitoring", "analysis"],
+      "enum": ["data-processing", "content-generation", "monitoring", "analysis", "office", "media"],
       "description": "模板分类"
     },
     "version": {
@@ -26,6 +26,27 @@
       "type": "array",
       "items": {"type": "string"},
       "description": "标签列表"
+    },
+    "three_elements": {
+      "type": "object",
+      "description": "三要素声明：耗时预估/依赖需求/产物清单",
+      "required": ["time_estimate", "api_key_required", "output_files"],
+      "properties": {
+        "time_estimate": {
+          "type": "string",
+          "description": "跑一次大概多久（如 5-10 分钟）"
+        },
+        "api_key_required": {
+          "type": "string",
+          "enum": ["不需要", "可选", "必需"],
+          "description": "是否需要 API Key"
+        },
+        "output_files": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "产生什么文件列表"
+        }
+      }
     },
     "dependencies": {
       "type": "array",
