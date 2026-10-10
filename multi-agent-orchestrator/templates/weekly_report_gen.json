@@ -4,6 +4,11 @@
   "category": "analysis",
   "version": "1.0",
   "tags": ["周报", "汇总", "自动化"],
+  "three_elements": {
+    "time_estimate": "3-5 分钟",
+    "api_key_required": "不需要",
+    "output_files": ["weekly_report.md", "weekly_report_state.json"]
+  },
   "dependencies": [
     {
       "skill_id": "tencent-docs",
