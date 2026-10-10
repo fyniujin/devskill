@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-模板库管理器 - 多Agent协作编排引擎 v5.3
+模板库管理器 - 多Agent协作编排引擎 v5.5
 
-功能：预置流水线模板的注册、探测、渲染
-- 预置 4 类高频流水线模板（政采日报/视频分析/周报/巡检）
-- 模板元数据声明建议安装的外部 skill
+功能：预置流水线模板的注册、探测、渲染 + newbie 向导
+- 预置 10 类高频流水线模板（政采日报/视频分析/周报/巡检/竞对监控/发票批量/文件整理/考试刷题/直播复盘/知识库周更）
+- 模板元数据声明建议安装的外部 skill + 三要素声明（耗时/依赖/产物）
 - 运行时探测依赖 skill 是否存在，缺失则标灰 + 附安装链接
 - 绝不自动安装或隐式依赖，保持单包合规
+- newbie 向导：交互式选模板 → 填参数 → dry-run 预览 → 确认生成
 
 零第三方依赖，仅使用 Python 标准库
 """
@@ -75,11 +76,12 @@ def list_templates():
             continue
         if fname in ('pipeline_dag_template.json', 'control_flow_template.json',
                      'sub_pipeline_template.json', 'parent_pipeline_template.json'):
-            continue  # 跳过旧模板，只展示新预置模板
+            continue
 
         fpath = os.path.join(TEMPLATES_DIR, fname)
         tpl = _load_template(fpath)
         if tpl and 'name' in tpl:
+            three_elems = tpl.get('three_elements', {})
             templates.append({
                 'file': fname,
                 'name': tpl.get('name', ''),
@@ -88,13 +90,16 @@ def list_templates():
                 'version': tpl.get('version', ''),
                 'tags': tpl.get('tags', []),
                 'dependency_count': len(tpl.get('dependencies', [])),
+                'time_estimate': three_elems.get('time_estimate', '-'),
+                'api_key_required': three_elems.get('api_key_required', '-'),
+                'output_files': three_elems.get('output_files', []),
             })
 
     return templates
 
 
 def show_template(template_file):
-    """显示模板详细信息 + 依赖状态"""
+    """显示模板详细信息 + 依赖状态 + 三要素"""
     fpath = os.path.join(TEMPLATES_DIR, template_file)
     tpl = _load_template(fpath)
 
@@ -110,6 +115,18 @@ def show_template(template_file):
     print(f"  版本：{tpl.get('version', '未知')}")
     print(f"  标签：{', '.join(tpl.get('tags', []))}")
     print()
+
+    # 三要素展示
+    three_elems = tpl.get('three_elements', {})
+    if three_elems:
+        print("  ┌─────────────────────────────────────")
+        print(f"  │ ⏱️  耗时预估：{three_elems.get('time_estimate', '-')}")
+        print(f"  │ 🔑 API Key：{three_elems.get('api_key_required', '-')}")
+        outputs = three_elems.get('output_files', [])
+        if outputs:
+            print(f"  │ 📄 产物清单：{', '.join(outputs)}")
+        print("  └─────────────────────────────────────")
+        print()
 
     # 依赖检查
     deps = tpl.get('dependencies', [])
@@ -198,9 +215,6 @@ def check_dependencies(template_file):
 def render_pipeline(template_file, check_deps=True):
     """
     渲染模板为可执行的 pipeline.json 格式。
-
-    如果 check_deps=True，缺失的依赖对应节点会被标记为
-    _missing_dependency=true，渲染时显示警告但不阻塞。
     """
     fpath = os.path.join(TEMPLATES_DIR, template_file)
     tpl = _load_template(fpath)
@@ -214,7 +228,6 @@ def render_pipeline(template_file, check_deps=True):
         print(f"错误：模板 {template_file} 缺少 pipeline 定义")
         return None
 
-    # 检查依赖并标记缺失节点
     if check_deps and tpl.get('dependencies'):
         missing_required, missing_optional = check_dependencies(template_file)
         if missing_required or missing_optional:
@@ -230,20 +243,177 @@ def render_pipeline(template_file, check_deps=True):
     return pipeline
 
 
+def validate_template(template_file):
+    """
+    CI 校验：检查模板是否符合 schema 规范（三要素齐全 + 结构完整）。
+    返回 (is_valid, errors_list)
+    """
+    fpath = os.path.join(TEMPLATES_DIR, template_file)
+    tpl = _load_template(fpath)
+
+    if not tpl:
+        return False, [f"无法加载模板文件 {template_file}"]
+
+    errors = []
+
+    # 检查必需字段
+    for field in ['name', 'description', 'category', 'version']:
+        if field not in tpl:
+            errors.append(f"缺少必需字段: {field}")
+
+    # 检查三要素
+    three_elems = tpl.get('three_elements', {})
+    if not three_elems:
+        errors.append("缺少三要素声明 (three_elements)")
+    else:
+        for field in ['time_estimate', 'api_key_required', 'output_files']:
+            if field not in three_elems:
+                errors.append(f"三要素缺少字段: {field}")
+
+    # 检查 pipeline 结构
+    pipeline = tpl.get('pipeline', {})
+    if not pipeline:
+        errors.append("缺少 pipeline 定义")
+    elif 'agents' not in pipeline or not pipeline['agents']:
+        errors.append("pipeline 缺少 agents 列表")
+
+    return len(errors) == 0, errors
+
+
+def newbie_wizard():
+    """
+    newbie 向导：交互式问答（选模板 → 填参数 → dry-run 预览 → 确认生成）
+    """
+    print()
+    print("=" * 60)
+    print("  🚀 multi-agent-orchestrator 新手向导")
+    print("=" * 60)
+    print()
+    print("  本向导将帮助你在 5 分钟内创建第一条流水线。")
+    print("  流程：选模板 → 填参数 → 预览 → 确认生成")
+    print()
+
+    # Step 1: 列出模板
+    templates = list_templates()
+    if not templates:
+        print("❌ 模板库为空，无法继续")
+        return
+
+    print("📋 可用模板列表：")
+    print()
+    for i, tpl in enumerate(templates, 1):
+        print(f"  {i}. {tpl['name']}")
+        print(f"     ⏱️ {tpl['time_estimate']} | 🔑 {tpl['api_key_required']} | 📄 {', '.join(tpl['output_files'][:2])}")
+        print(f"     {tpl['description'][:50]}...")
+        print()
+
+    # Step 2: 选模板
+    while True:
+        try:
+            choice = input(f"  请选择模板 (1-{len(templates)}): ").strip()
+            idx = int(choice) - 1
+            if 0 <= idx < len(templates):
+                selected = templates[idx]
+                break
+            else:
+                print(f"  请输入 1 到 {len(templates)} 的数字")
+        except (ValueError, EOFError):
+            print("  请输入有效的数字")
+
+    print()
+    print(f"  ✅ 已选择：{selected['name']}")
+    print()
+
+    # Step 3: 显示模板详情
+    show_template(selected['file'])
+
+    # Step 4: 收集参数
+    print("📝 填写流水线参数（直接回车使用默认值）：")
+    print()
+
+    pipeline = _load_template(os.path.join(TEMPLATES_DIR, selected['file']))['pipeline']
+    default_name = pipeline.get('pipeline_name', selected['name'])
+
+    pipeline_name = input(f"  流水线名称 [{default_name}]: ").strip()
+    if not pipeline_name:
+        pipeline_name = default_name
+
+    output_dir = input(f"  输出目录 [./]: ").strip()
+    if not output_dir:
+        output_dir = "./"
+
+    # Step 5: Dry-run 预览
+    print()
+    print("🔍 Dry-run 预览：")
+    print(f"  流水线名称：{pipeline_name}")
+    print(f"  输出目录：{output_dir}")
+    print(f"  节点序列：")
+
+    agents = pipeline.get('agents', [])
+    for i, agent in enumerate(agents, 1):
+        aid = agent.get('id', '')
+        name = agent.get('name', '')
+        atype = agent.get('type', 'task')
+        print(f"    {i}. [{aid}] {name} (type: {atype})")
+
+    # 依赖检查
+    deps = _load_template(os.path.join(TEMPLATES_DIR, selected['file'])).get('dependencies', [])
+    if deps:
+        print()
+        print("  依赖状态：")
+        for dep in deps:
+            skill_id = dep.get('skill_id', '')
+            available, _ = _check_skill_available(skill_id)
+            icon = '✅' if available else '⚠️'
+            print(f"    {icon} {skill_id}")
+
+    # Step 6: 确认生成
+    print()
+    while True:
+        confirm = input("  确认生成 pipeline.json? (y/n): ").strip().lower()
+        if confirm in ('y', 'yes', '是'):
+            break
+        elif confirm in ('n', 'no', '否'):
+            print("  已取消")
+            return
+        else:
+            print("  请输入 y 或 n")
+
+    # Step 7: 生成文件
+    output_path = os.path.join(output_dir, 'pipeline.json')
+    rendered = render_pipeline(selected['file'])
+    if rendered:
+        rendered['pipeline_name'] = pipeline_name
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(rendered, f, ensure_ascii=False, indent=2)
+        print()
+        print(f"  ✅ 已生成：{output_path}")
+        print()
+        print("  下一步：")
+        print(f"    python orchestrator.py run {output_path}")
+        print()
+    else:
+        print("  ❌ 生成失败")
+
+
 if __name__ == '__main__':
     if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
-        print("模板库管理器 - 多Agent协作编排引擎 v5.3")
+        print("模板库管理器 - 多Agent协作编排引擎 v5.5")
         print("=" * 50)
         print("命令：")
         print("  python template_lib.py list               列出所有预置模板")
-        print("  python template_lib.py show <template>    显示模板详情 + 依赖状态")
+        print("  python template_lib.py show <template>    显示模板详情 + 依赖状态 + 三要素")
         print("  python template_lib.py check <template>   检查依赖是否满足")
         print("  python template_lib.py render <template>  渲染为可执行 pipeline JSON")
+        print("  python template_lib.py validate <template> CI 校验（三要素 + 结构）")
+        print("  python template_lib.py init               新手向导（交互式）")
         print()
         print("示例：")
         print("  python template_lib.py list")
         print("  python template_lib.py show gov_procurement_daily.json")
         print("  python template_lib.py render gov_procurement_daily.json")
+        print("  python template_lib.py validate competitor_monitor_daily.json")
+        print("  python template_lib.py init")
         sys.exit(0)
 
     cmd = sys.argv[1]
@@ -259,6 +429,7 @@ if __name__ == '__main__':
             print("=" * 60)
             for tpl in templates:
                 print(f"\n  📋 {tpl['name']} ({tpl['category']}) v{tpl['version']}")
+                print(f"     ⏱️ {tpl['time_estimate']} | 🔑 {tpl['api_key_required']}")
                 print(f"     {tpl['description'][:60]}...")
                 print(f"     文件：{tpl['file']} | 标签：{', '.join(tpl['tags'])} | 依赖：{tpl['dependency_count']} 个")
             print(f"\n共 {len(templates)} 个模板")
@@ -299,6 +470,35 @@ if __name__ == '__main__':
                 print(f"✅ 已渲染到 {output_path}")
             else:
                 print(json.dumps(pipeline, ensure_ascii=False, indent=2))
+
+    elif cmd == 'validate':
+        if not args:
+            # 校验所有模板
+            all_valid = True
+            for fname in os.listdir(TEMPLATES_DIR):
+                if not fname.endswith('.json') or fname in ('template_schema.json', 'state_schema.json'):
+                    continue
+                if fname in ('pipeline_dag_template.json', 'control_flow_template.json',
+                             'sub_pipeline_template.json', 'parent_pipeline_template.json'):
+                    continue
+                valid, errors = validate_template(fname)
+                if not valid:
+                    all_valid = False
+                    print(f"❌ {fname}: {', '.join(errors)}")
+            if all_valid:
+                print("✅ 所有模板校验通过")
+            else:
+                sys.exit(1)
+        else:
+            valid, errors = validate_template(args[0])
+            if valid:
+                print(f"✅ {args[0]} 校验通过")
+            else:
+                print(f"❌ {args[0]} 校验失败：{', '.join(errors)}")
+                sys.exit(1)
+
+    elif cmd == 'init':
+        newbie_wizard()
 
     else:
         print(f"未知命令：{cmd}")
