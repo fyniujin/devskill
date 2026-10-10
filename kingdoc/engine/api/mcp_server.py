@@ -36,7 +36,7 @@ from engine.hardware import get_recommended_settings
 from engine.update_check import build_reminder, FEEDBACK_EMAIL
 from engine.exceptions import KingDocError
 
-APP_VERSION = "4.2.0"
+APP_VERSION = "4.3.0"
 
 # 配置路径：环境变量优先，其次 skill 根目录 config.json
 CONFIG_PATH = os.environ.get("KINGDOC_CONFIG", str(SKILL_ROOT / "config.json"))
@@ -1369,7 +1369,7 @@ async def kdoc_page_swap(file_id: str, source_path: str, page_number: int,
 async def kdoc_quota_check() -> str:
     """【免密钥】检查当前配额状态（按天计数，500 次/天限制）。
 
-    返回剩余配额、使用率、状态。
+    返回剩余配额、使用率、状态；用量越过 80% / 95% 时返回 alerts（已触发 webhook 告警）。
     本地模式，零配置可用。"""
     try:
         from engine.quota_manager import check_quota
@@ -2338,6 +2338,102 @@ async def kdoc_compliance_status() -> str:
         return _to_text(get_center_status())
     except Exception as e:
         return f"[ERR] 状态获取失败：{e}"
+
+
+# ===========================================================================
+# 三十九、合规套件门面 / 行业分包 / 周扫定时化 / 配额告警（v4.3.0 新增合并）
+# ===========================================================================
+@mcp.tool()
+async def kdoc_compliance_quick_scan(text: str, packs: str = "") -> str:
+    """【免密钥】合规快速扫（单入口两档·快档）：敏感词命中即报 + 数据泄露，秒级返回。
+
+    text: 待扫描全文
+    packs: 选中的行业包（逗号分隔，如 "edu,finance"）；base 通用包始终加载
+    返回风险三档（高/中/低）汇总 + 命中明细（含段落行号与责任人字段）。零配置可用。"""
+    try:
+        import json
+        from engine.compliance_suite import quick_scan
+        pack_ids = [p.strip() for p in packs.split(",") if p.strip()] if packs else None
+        return _to_text(quick_scan(text, packs=pack_ids))
+    except Exception as e:
+        return f"[ERR] 快速扫描失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_compliance_full(text: str, doc_id: str = "", include_history: str = "",
+                            packs: str = "") -> str:
+    """【免密钥】合规全域扫（单入口两档·全档）：全文敏感词 + 数据泄露 + 格式 + 密级建议 + 历史版本时间线。
+
+    text: 待扫描全文
+    doc_id: 文档 ID（可选，传入则自动落库密级建议）
+    include_history: 历史版本 JSON（可选），如 '[{"version":1,"author":"...","time":"...","content":"..."}]'
+    packs: 行业包（逗号分隔，可选）
+    复用 v4.3 合并后唯一引擎，零配置可用。"""
+    try:
+        import json
+        from engine.compliance_suite import full_scan
+        pack_ids = [p.strip() for p in packs.split(",") if p.strip()] if packs else None
+        hist = json.loads(include_history) if include_history else None
+        return _to_text(full_scan(text, doc_id=doc_id, include_history=hist, packs=pack_ids))
+    except Exception as e:
+        return f"[ERR] 全域扫描失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_compliance_packs() -> str:
+    """【免密钥】列出可用行业敏感词分包（教培/医疗/金融/政务 + base 通用），含词数与责任人字段。"""
+    try:
+        from engine.compliance_suite import list_packs
+        return _to_text({"packs": list_packs()})
+    except Exception as e:
+        return f"[ERR] 分包列表获取失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_compliance_scheduler_register(space_id: str, packs: str = "",
+                                          weekday: str = "MON",
+                                          scan_time: str = "03:00") -> str:
+    """【免密钥】注册合规周扫任务：Windows 产出 schtasks 命令；非 Windows 产出 cron 行。
+
+    space_id: 空间 ID
+    packs: 行业包（逗号分隔，可选）
+    weekday: MON/TUE/...；scan_time: HH:MM
+    命令需由用户在宿主环境（管理员）执行生效。零配置可用。"""
+    try:
+        import json
+        from engine.compliance_scheduler import register_weekly_scan
+        pack_ids = [p.strip() for p in packs.split(",") if p.strip()] if packs else None
+        return _to_text(register_weekly_scan(space_id, packs=pack_ids, weekday=weekday, scan_time=scan_time))
+    except Exception as e:
+        return f"[ERR] 周扫注册失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_compliance_scheduler_run(space_id: str, docs: str = "", packs: str = "") -> str:
+    """【免密钥】执行一次全域扫描（仅推送新增，去重防扰民）。
+
+    space_id: 空间 ID
+    docs: JSON 文档列表（云端模式由 backend 拉取后传入），如 '[{"doc_id":"d1","content":"..."}]'
+    packs: 行业包（逗号分隔，可选）
+    新检出项经 webhook 三通道推送（签名核验 + 跨周去重）。零配置可用。"""
+    try:
+        import json
+        from engine.compliance_scheduler import run_scan
+        pack_ids = [p.strip() for p in packs.split(",") if p.strip()] if packs else None
+        doc_list = json.loads(docs) if docs else []
+        return _to_text(run_scan(space_id, docs=doc_list, packs=pack_ids))
+    except Exception as e:
+        return f"[ERR] 周扫执行失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_compliance_scheduler_status() -> str:
+    """【免密钥】获取合规周扫调度状态（已注册任务 + 跨周去重计数）。"""
+    try:
+        from engine.compliance_scheduler import get_scheduler_status
+        return _to_text(get_scheduler_status())
+    except Exception as e:
+        return f"[ERR] 调度状态获取失败：{e}"
 
 @mcp.tool()
 async def kdoc_topic_generate(topic: str, outline: str, target_format: str = "doc") -> str:
