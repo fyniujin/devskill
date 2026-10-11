@@ -2,7 +2,7 @@
 name: kingdoc
 displayName: 金山文档 KingDoc
 slug: kingdoc
-version: 4.3.0
+version: 4.3.5
 description: >
   金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理
   （文档/智能画布/电子表格/演示文稿/多维表格/收集表/可视化/历史管理/全文搜索/附件），
@@ -358,10 +358,11 @@ sudo apt-get install tesseract-ocr tesseract-ocr-chi-sim
 
 ### 11.3 敏感词库管理
 
-- **内置词库**：`references/sensitive_words.txt`（适配中国监管要求）
+- **内置词包（权威来源）**：`references/sensitive_packs/`（base 通用包 + 教培/医疗/金融/政务四行业包，YAML 受限子集，合规风险分类描述，不含字面违规词）
+- **外部行业词包**：环境变量 `KINGDOC_EXTERNAL_PACKS_DIR` 或参数 `external_packs_dir` 加载企业本地词库（外部同名包覆盖内置包）
 - **用户黑名单**：`references/user_blacklist.txt`（追加自定义敏感词）
 - **用户白名单**：`references/user_whitelist.txt`（跳过误判词）
-- **定期更新**：替换 `sensitive_words.txt` 即可，无需改代码
+- **已弃用**：旧版 `references/sensitive_words.txt` 为合规分类描述明文镜像，仅供查阅，引擎不再加载；更新词包请编辑 `references/sensitive_packs/` 对应文件
 
 ### 11.4 数据泄露检测能力
 
@@ -737,7 +738,7 @@ kdoc history destroy <file_id>  # ⚠️ 需二次确认
 ### 场景 G：政企文档合规检查（v3.4.0 新增）
 ```
 1) kdoc.file.content(file_id) → 取全文
-2) kdoc.compliance.sensitive(text) → 扫描敏感词（命中"反动"、"毒品"等）
+2) kdoc.compliance.sensitive(text) → 扫描敏感词（命中内置合规风险分类词等）
 3) kdoc.compliance.leak(text) → 检测数据泄露（手机号/身份证号脱敏）
 4) kdoc.compliance.classify(text) → 建议密级（如"秘密"）
 5) kdoc.compliance.format(file_path) → 格式规范检查（字体/字号/行距）
@@ -977,6 +978,7 @@ python -m engine.update_check --version 3.0.0 --reminder
 
 ## 更新日志
 
+| v4.3.5 | 2026-10-10 | 修复：全量自查移除字面违法违规词汇以解决 SkillHub 内容审核误判——内置敏感词分包 `references/sensitive_packs/` 改为合规风险分类描述；旧版明文词库 `references/sensitive_words.txt` 重写为合规分类描述镜像（引擎不再加载）；`engine/compliance_suite.py` 文档示例与 SKILL.md 场景示例中的字面违规词一并替换为合规分类描述；增加：外部行业敏感词包支持（`KINGDOC_EXTERNAL_PACKS_DIR` 环境变量或 `external_packs_dir` 参数，外部同名包覆盖内置包），`SensitiveWordLoader`/`ComplianceSuite`/`ComplianceScheduler`/`compliance_check`/`compliance_center` shim 及 6 个 MCP 合规工具全链路支持；优化：SKILL.md 版本号 4.3.0→4.3.5，双页脚同步更新 |
 | v4.3.0 | 2026-10-10 | 增加：合规套件门面 `engine/compliance_suite.py`（单入口两档输出 quick_scan/full_scan，合并 v4.2 政企合规中心与 v3.4 内容合规检查为统一引擎 ComplianceCore，敏感词加载逻辑收敛为唯一来源 SensitiveWordLoader，维护面减半；旧 `compliance_check.py`/`compliance_center.py` 改为委托 shim）；增加：行业敏感词分包 `references/sensitive_packs/`（base 通用包 + 教培/医疗/金融/政务四行业包，各 200+ 词条，多包叠加加载器，扫描报告按高/中/低风险分级并定位到段落行号与责任人字段）；增加：全域扫描定时化引擎 `engine/compliance_scheduler.py`（schtasks 周扫空间，新检出项经 webhook 三通道签名推送，扫描级跨周去重只推新增不扰民，非 Windows 输出 cron 行）；增加：配额管理器阈值告警（用量 80% / 95% 两级经 webhook 三通道推送，按天+级别幂等去重）；增加：MCP 工具 6 个（kdoc.compliance.quick_scan / full / packs / scheduler_register / scheduler_run / scheduler_status），kdoc.quota.check 现返回 alerts；优化：SKILL.md 版本号 4.2.0→4.3.0；优化：description 增强（合规门面/行业分包/周扫定时化/配额告警） |
 | v4.2.0 | 2026-09-19 | 增加：团队知识库模式引擎 `engine/knowledge_hub.py`（空间级本地倒排索引全文检索，可选 jieba 中文分词，权限矩阵先鉴权后检索，无 read 权限文档不进结果集，硬件自适应分块建索引）；增加：政企合规中心引擎 `engine/compliance_center.py`（密级标注公开/内部/秘密/机密随文档元数据落库，敏感词+数据泄露全量扫描聚合报告，数据不出域声明，本地 OCR 强制云端仅元数据）；增加：主题一键生成引擎 `engine/topic_generator.py`（WPS AI 适配层 generate：大纲→智能文档/PPT/表格初稿，本地降级模板驱动+分段生成，真源可用无缝切换）；增加：跨品类对比与时间线引擎 `engine/cross_compare.py`（版本历史轮询→who/when/what 时间线，表格/多维表格单元格级 diff 视图，跨品类差异化）；优化：OCR 收敛为唯一入口 `engine/local/ocr.py`（删除重复维护的 `engine/ocr/local_ocr.py`，优先桥接 wps-office-suite OCR，未装则 Tesseract 最小兜底，数据不出域）；增加：MCP 工具 19 个（kdoc.khub.* 4 个、kdoc.compliance.* 5 个、kdoc.topic.* 2 个、kdoc.compare.* 3 个、kdoc.ocr_bridge_status 1 个、复用 kdoc.local.ocr.extract_text_bridged）；增加：知识中枢/政企合规/主题生成/跨品类对比/OCR 桥接场景案例；优化：SKILL.md 版本号 4.1.0→4.2.0；优化：description 增强到 30 项增强 |
 | v4.1.0 | 2026-09-08 | 增加：AirScript 在线自动化引擎 `engine/airscript.py`（自然语言→脚本生成→预检（危险操作拦截）→用户确认→在线执行；能力域：定时通知/数据汇总/表格批量操作/字段计算；SQLite 执行历史+待确认队列）；增加：多维表格字段自动化引擎 `engine/dbf_auto.py`（公式字段/关联字段/汇总字段创建与批量填充，16 种字段类型，硬件自适应削峰）；增加：视图渲染引擎 `engine/view_render.py`（看板 matplotlib 柱图 + 甘特 mermaid 时间线，硬件自适应渲染并发）；增加：CRDT 表格扩展引擎 `engine/crdt_table.py`（单元格级操作日志 + 向量时钟，冲突时保留双方并标记，支持电子表格/多维表格/智能文档）；增加：Excel/CSV 双向导入导出引擎 `engine/bidata_io.py`（openpyxl 读写，date/link/select/person 四类字段序列化规则文档化，配额削峰）；增加：Webhook 与通知中心引擎 `engine/webhook_center.py`（新增/修改/删除事件订阅，HMAC 签名校验 + SQLite 去重队列，金山协作/企微/钉钉三通道分发，zwjh 记忆桥接）；增加：MCP 工具 24 个（kdoc.airscript.* 7 个、kdoc.dbf.* 5 个、kdoc.view.* 3 个、kdoc.crdt_table.* 6 个、kdoc.bidata.* 5 个、kdoc.webhook.* 8 个）；增加：AirScript/多维表格/视图渲染/CRDT/Webhook 场景案例；优化：SKILL.md 版本号 4.0.0→4.1.0；优化：description 增强到 24 项增强 |
@@ -1059,7 +1061,7 @@ python -m engine.update_check --version 3.0.0 --reminder
 
 ---
 
-*最后更新：2026-10-10 | v4.3.0*
+*最后更新：2026-10-10 | v4.3.5*
 
 ---
 
@@ -1584,38 +1586,46 @@ text / number / select / multi_select / date / person / link / formula / relatio
 
 ---
 
-## 44. 合规中心 v2（v4.3.0 合并重构，单入口两档）
+## 44. 合规中心 v2（v4.3.5 合规分类描述分包 + 外部词包支持）
 
-> 合并 v4.2 政企合规中心与 v3.4 内容合规检查为门面 `engine/compliance_suite.py`，敏感词加载逻辑唯一来源，维护面减半。
+> 合并 v4.2 政企合规中心与 v3.4 内容合规检查为门面 `engine/compliance_suite.py`，敏感词加载逻辑唯一来源，维护面减半。v4.3.5 起内置词包改为合规风险分类描述（避免平台内容审核误判），并支持外部词包目录加载企业本地词库。
 
 ### 44.1 单入口两档输出
 
-- `kdoc.compliance.quick_scan(text, packs)`：快速扫，敏感词命中即报 + 数据泄露，秒级
-- `kdoc.compliance.full(text, doc_id, include_history, packs)`：全域扫，全文敏感词 + 数据泄露 + 格式 + 密级建议 + 历史版本时间线
+- `kdoc.compliance.quick_scan(text, packs, external_packs_dir)`：快速扫，敏感词命中即报 + 数据泄露，秒级
+- `kdoc.compliance.full(text, doc_id, include_history, packs, external_packs_dir)`：全域扫，全文敏感词 + 数据泄露 + 格式 + 密级建议 + 历史版本时间线
 - 底层统一 `ComplianceCore`；旧 `kdoc.compliance.sensitive/leak/format/classify` 与 `kdoc.compliance.label/scan/declare` 仍可用（委托门面）
 
 ### 44.2 行业敏感词分包
 
-- `references/sensitive_packs/`：`base` 通用包 + `edu`（教培）/ `medical`（医疗）/ `finance`（金融）/ `gov`（政务）四行业包，各 200+ 词条
-- `kdoc.compliance.packs` 查看词数与责任人字段；`packs` 参数多包叠加（如 `"edu,finance"`）
+- `references/sensitive_packs/`：`base` 通用包 + `edu`（教培）/ `medical`（医疗）/ `finance`（金融）/ `gov`（政务）四行业包，各 200+ 分类描述词条
+- `kdoc.compliance.packs(external_packs_dir)` 查看词数、责任人字段与来源；`packs` 参数多包叠加（如 `"edu,finance"`）
 - 扫描报告按高/中/低三档风险分级，并定位到段落行号与责任人字段（包元数据）
 
-### 44.3 全域扫描定时化
+### 44.3 外部行业敏感词包（v4.3.5 新增）
 
-- `kdoc.compliance.scheduler_register(space_id, packs, weekday, scan_time)`：Windows 产出 schtasks 命令；非 Windows 产出 cron 行
-- `kdoc.compliance.scheduler_run(space_id, docs, packs)`：执行一次扫描，仅推送新增（扫描级跨周去重 + webhook 签名核验，只推新增不扰民）
-- `kdoc.compliance.scheduler_status`：查看已注册任务与去重计数
+- 企业可在本地维护真实敏感词库，通过两种方式加载：
+  - 环境变量 `KINGDOC_EXTERNAL_PACKS_DIR` 指向包含 `.yaml` 词包的目录
+  - 各 MCP 工具参数 `external_packs_dir` 临时指定（优先级高于环境变量）
+- 外部目录中的同名 `.yaml` 包会覆盖内置包；不同名包与内置包合并展示
+- 词包格式与内置一致：`pack:`/`name:`/`responsible_field:`/`risk_default:`/`words:`
 
-### 44.4 配额阈值告警
+### 44.4 全域扫描定时化
+
+- `kdoc.compliance.scheduler_register(space_id, packs, weekday, scan_time, external_packs_dir)`：Windows 产出 schtasks 命令；非 Windows 产出 cron 行
+- `kdoc.compliance.scheduler_run(space_id, docs, packs, external_packs_dir)`：执行一次扫描，仅推送新增（扫描级跨周去重 + webhook 签名核验，只推新增不扰民）
+- `kdoc.compliance.scheduler_status(external_packs_dir)`：查看已注册任务与去重计数
+
+### 44.5 配额阈值告警
 
 - 配额管理器用量越过 80% / 95% 时经 webhook 三通道推送（按天+级别幂等，不重复打扰）
 - `kdoc.quota.check` 现返回 `alerts` 字段，含已触发级别与推送状态
 
-### 43.2 安全约束
+### 44.6 安全约束
 
 - 子进程超时自动关闭，不残留
 - 绝不调用任何外部 OCR API（数据不出域）
 
 ---
 
-*最后更新：2026-10-10 | v4.3.0*
+*最后更新：2026-10-10 | v4.3.5*
