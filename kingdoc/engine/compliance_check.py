@@ -23,22 +23,29 @@ from engine.compliance_suite import (
 _DEFAULT_CORE: Optional[ComplianceCore] = None
 
 
-def _core() -> ComplianceCore:
+def _core(external_packs_dir: Optional[str] = None) -> ComplianceCore:
     global _DEFAULT_CORE
     if _DEFAULT_CORE is None:
-        _DEFAULT_CORE = ComplianceCore()
+        _DEFAULT_CORE = ComplianceCore(external_packs_dir=external_packs_dir)
     return _DEFAULT_CORE
 
 
 class ComplianceChecker:
     """兼容别名：委托 ComplianceCore（v4.3.0 合并后唯一实现）。"""
 
-    def __init__(self):
-        self._c = ComplianceCore()
+    def __init__(self, external_packs_dir: Optional[str] = None):
+        self._c = ComplianceCore(external_packs_dir=external_packs_dir)
 
-    def scan_sensitive(self, text: str, custom_words: Optional[List[str]] = None,
-                       ignore_whitelist: bool = True) -> Dict:
-        return self._c.scan_sensitive(text, custom_words=custom_words, packs=None)
+    def scan_sensitive(
+        self,
+        text: str,
+        custom_words: Optional[List[str]] = None,
+        ignore_whitelist: bool = True,
+        external_packs_dir: Optional[str] = None,
+    ) -> Dict:
+        ext = external_packs_dir or self._c._external_packs_dir
+        return self._c.scan_sensitive(text, custom_words=custom_words, packs=None,
+                                      external_packs_dir=ext)
 
     def detect_leak(self, text: str) -> Dict:
         return self._c.detect_leak(text)
@@ -50,8 +57,13 @@ class ComplianceChecker:
         return self._c.classify(text)
 
 
-def scan_sensitive(text: str, custom_words: Optional[List[str]] = None) -> Dict:
-    return _core().scan_sensitive(text, custom_words=custom_words)
+def scan_sensitive(
+    text: str,
+    custom_words: Optional[List[str]] = None,
+    external_packs_dir: Optional[str] = None,
+) -> Dict:
+    return _core(external_packs_dir=external_packs_dir).scan_sensitive(
+        text, custom_words=custom_words, external_packs_dir=external_packs_dir)
 
 
 def detect_leak(text: str) -> Dict:
