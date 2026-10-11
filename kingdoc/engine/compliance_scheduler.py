@@ -38,10 +38,16 @@ EVENT_TYPE = "compliance_new_find"
 class ComplianceScheduler:
     """全域合规扫描调度器。"""
 
-    def __init__(self, backend: Optional[Any] = None, signing_secret: str = ""):
+    def __init__(
+        self,
+        backend: Optional[Any] = None,
+        signing_secret: str = "",
+        external_packs_dir: Optional[str] = None,
+    ):
         self.backend = backend
         self.signing_secret = signing_secret or DEFAULT_SIGNING_SECRET
-        self.suite = ComplianceSuite(backend=backend)
+        self.external_packs_dir = external_packs_dir
+        self.suite = ComplianceSuite(backend=backend, external_packs_dir=external_packs_dir)
         self._init_db()
 
     def _init_db(self):
@@ -128,6 +134,7 @@ class ComplianceScheduler:
         space_id: str,
         docs: Optional[List[Dict]] = None,
         packs: Optional[List[str]] = None,
+        external_packs_dir: Optional[str] = None,
     ) -> Dict:
         """扫描空间文档，仅把新增 finding 经 webhook 三通道推送。
 
@@ -137,6 +144,7 @@ class ComplianceScheduler:
         if docs is None:
             docs = []
         packs = packs or []
+        ext = external_packs_dir or self.external_packs_dir
 
         scanned = 0
         total_findings = 0
@@ -151,13 +159,14 @@ class ComplianceScheduler:
             if not content:
                 continue
             scanned += 1
-            report = self.suite.full_scan(content, doc_id=doc_id, packs=packs)
+            report = self.suite.full_scan(content, doc_id=doc_id, packs=packs,
+                                          external_packs_dir=ext)
             # 汇总该文档所有可定位 finding（敏感词 + 泄露）
             findings = []
             for h in report.get("sensitive_words", {}).get("risk_breakdown", {}) and []:
                 pass  # risk_breakdown 无明细，改用 quick 明细
             # 直接复用 quick_scan 明细以确保每行定位
-            q = self.suite.quick_scan(content, packs=packs)
+            q = self.suite.quick_scan(content, packs=packs, external_packs_dir=ext)
             for h in q["sensitive_detail"]:
                 findings.append({
                     "kind": "sensitive", "doc_id": doc_id, "pack": h.get("pack", ""),
@@ -280,38 +289,54 @@ class ComplianceScheduler:
 _scheduler: Optional[ComplianceScheduler] = None
 
 
-def get_scheduler(backend: Optional[Any] = None) -> ComplianceScheduler:
+def get_scheduler(
+    backend: Optional[Any] = None,
+    external_packs_dir: Optional[str] = None,
+) -> ComplianceScheduler:
     global _scheduler
     if _scheduler is None:
-        _scheduler = ComplianceScheduler(backend=backend)
+        _scheduler = ComplianceScheduler(backend=backend, external_packs_dir=external_packs_dir)
     return _scheduler
 
 
-def register_weekly_scan(space_id: str, packs: Optional[List[str]] = None,
-                         task_name: str = "kingdoc_compliance_weekly",
-                         weekday: str = "MON", scan_time: str = "03:00") -> Dict:
-    return get_scheduler().register_weekly_scan(space_id, packs, task_name, weekday, scan_time)
+def register_weekly_scan(
+    space_id: str,
+    packs: Optional[List[str]] = None,
+    task_name: str = "kingdoc_compliance_weekly",
+    weekday: str = "MON",
+    scan_time: str = "03:00",
+    external_packs_dir: Optional[str] = None,
+) -> Dict:
+    return get_scheduler(external_packs_dir=external_packs_dir).register_weekly_scan(
+        space_id, packs, task_name, weekday, scan_time)
 
 
-def run_scan(space_id: str, docs: Optional[List[Dict]] = None,
-             packs: Optional[List[str]] = None) -> Dict:
-    return get_scheduler().run_scan(space_id, docs, packs)
+def run_scan(
+    space_id: str,
+    docs: Optional[List[Dict]] = None,
+    packs: Optional[List[str]] = None,
+    external_packs_dir: Optional[str] = None,
+) -> Dict:
+    return get_scheduler(external_packs_dir=external_packs_dir).run_scan(
+        space_id, docs, packs, external_packs_dir=external_packs_dir)
 
 
-def get_scheduler_status() -> Dict:
-    return get_scheduler().get_status()
+def get_scheduler_status(external_packs_dir: Optional[str] = None) -> Dict:
+    return get_scheduler(external_packs_dir=external_packs_dir).get_status()
 
 
 def main():
-    """CLI：python compliance_scheduler.py --space <id> [--packs edu,finance]"""
+    """CLI：python compliance_scheduler.py --space <id> [--packs edu,finance] [--external-packs-dir DIR]"""
     import argparse
     ap = argparse.ArgumentParser(description="KingDoc 全域合规周扫运行器")
     ap.add_argument("--space", required=True)
     ap.add_argument("--packs", default="")
+    ap.add_argument("--external-packs-dir", default="")
     args = ap.parse_args()
     packs = [p.strip() for p in args.packs.split(",") if p.strip()]
+    ext = args.external_packs_dir or None
     # 云端模式应由 backend 拉取空间文档；本地 CLI 仅执行已注册配置或空扫描演示
-    result = run_scan(args.space, docs=[], packs=packs)
+    result = run_scan(args.space, docs=[], packs=packs, external_packs_dir=ext)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
