@@ -20,18 +20,19 @@ from engine.compliance_suite import (
 _SUITE: Optional[ComplianceSuite] = None
 
 
-def _suite_inst() -> ComplianceSuite:
+def _suite_inst(external_packs_dir: Optional[str] = None) -> ComplianceSuite:
     global _SUITE
     if _SUITE is None:
-        _SUITE = ComplianceSuite()
+        _SUITE = ComplianceSuite(external_packs_dir=external_packs_dir)
     return _SUITE
 
 
 class ComplianceCenter:
     """兼容别名：委托 ComplianceSuite 门面（v4.3.0 单入口）。"""
 
-    def __init__(self, backend: Optional[Any] = None):
-        self._s = ComplianceSuite(backend=backend)
+    def __init__(self, backend: Optional[Any] = None,
+                 external_packs_dir: Optional[str] = None):
+        self._s = ComplianceSuite(backend=backend, external_packs_dir=external_packs_dir)
 
     def label_classification(self, doc_id: str, level: str, reason: str = "") -> Dict:
         return self._s.core.label_classification(doc_id, level, reason)
@@ -39,8 +40,10 @@ class ComplianceCenter:
     def get_classification(self, doc_id: str) -> Dict:
         return self._s.core.get_classification(doc_id)
 
-    def full_scan(self, text: str, doc_id: str = "") -> Dict:
-        return self._s.full_scan(text, doc_id)
+    def full_scan(self, text: str, doc_id: str = "",
+                  external_packs_dir: Optional[str] = None) -> Dict:
+        ext = external_packs_dir or self._s._external_packs_dir
+        return self._s.full_scan(text, doc_id, external_packs_dir=ext)
 
     def declare_data_local(self, doc_id: str = "", engine: str = "tesseract") -> Dict:
         return self._s.core.declare_data_local(doc_id, engine)
@@ -49,8 +52,9 @@ class ComplianceCenter:
         return self._s.get_status()
 
 
-def get_compliance_center(backend: Optional[Any] = None) -> ComplianceCenter:
-    return ComplianceCenter(backend=backend)
+def get_compliance_center(backend: Optional[Any] = None,
+                          external_packs_dir: Optional[str] = None) -> ComplianceCenter:
+    return ComplianceCenter(backend=backend, external_packs_dir=external_packs_dir)
 
 
 def label_classification(doc_id: str, level: str, reason: str = "") -> Dict:
@@ -61,8 +65,10 @@ def get_classification(doc_id: str) -> Dict:
     return _suite_inst().core.get_classification(doc_id)
 
 
-def full_scan(text: str, doc_id: str = "") -> Dict:
-    return _suite_inst().full_scan(text, doc_id)
+def full_scan(text: str, doc_id: str = "",
+              external_packs_dir: Optional[str] = None) -> Dict:
+    return _suite_inst(external_packs_dir=external_packs_dir).full_scan(
+        text, doc_id, external_packs_dir=external_packs_dir)
 
 
 def declare_data_local(doc_id: str = "", engine: str = "tesseract") -> Dict:
