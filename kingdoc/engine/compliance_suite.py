@@ -13,6 +13,7 @@
 """
 from __future__ import annotations
 
+import os
 import re
 import sqlite3
 from datetime import datetime
@@ -100,7 +101,7 @@ DEFAULT_FORMAT_SPEC = {
 # 行业敏感词分包加载器（唯一来源，支持多包叠加）
 # ===========================================================================
 class SensitiveWordLoader:
-    """加载 references/sensitive_packs/ 下的规则包，多包叠加。
+    """加载 references/sensitive_packs/ 下的规则包，多包叠加；支持外部词包目录。
 
     每个包为 YAML（受限子集，零第三方依赖自研解析）：
         pack: edu
@@ -108,24 +109,42 @@ class SensitiveWordLoader:
         responsible_field: 教务合规负责人
         risk_default: medium
         words:
-          - 违规补课
-          - {word: 预收费跑路, risk: high}
+          - 招生宣传管理类风险信息
+          - {word: 收费公示管理类风险信息, risk: high}
 
     base 包始终加载；industry 包按 scan_sensitive(packs=[...]) 叠加。
+    用户可通过环境变量 KINGDOC_EXTERNAL_PACKS_DIR 或传参 external_packs_dir
+    加载自定义词包（外部同名包覆盖内置包，实现企业本地词库）。
     """
 
     PACK_DIR = SKILL_ROOT / "references" / "sensitive_packs"
 
-    def __init__(self):
+    def __init__(self, external_packs_dir: Optional[str] = None):
         self._cache: Dict[str, Optional[Dict]] = {}
+        self._external_dir = self._resolve_external_dir(external_packs_dir)
 
-    def load(self, pack_ids: Optional[List[str]] = None) -> List[Dict]:
+    @staticmethod
+    def _resolve_external_dir(external_packs_dir: Optional[str] = None) -> Optional[Path]:
+        """外部词包目录优先级：传参 > 环境变量 KINGDOC_EXTERNAL_PACKS_DIR。"""
+        src = external_packs_dir or os.environ.get("KINGDOC_EXTERNAL_PACKS_DIR", "")
+        if src:
+            p = Path(src)
+            if p.exists() and p.is_dir():
+                return p
+        return None
+
+    def load(
+        self,
+        pack_ids: Optional[List[str]] = None,
+        external_packs_dir: Optional[str] = None,
+    ) -> List[Dict]:
         """返回扁平词表：[{word, risk, pack, responsible_field}, ...]"""
+        ext = self._resolve_external_dir(external_packs_dir) or self._external_dir
         ids = ["base"] + list(pack_ids or [])
         seen = set()
         words: List[Dict] = []
         for pid in ids:
-            pack = self._load_pack(pid)
+            pack = self._load_pack(pid, ext)
             if not pack:
                 continue
             default_risk = pack.get("risk_default", "medium")
@@ -155,35 +174,66 @@ class SensitiveWordLoader:
                 pass
         return words
 
-    def list_packs(self) -> List[Dict]:
-        """列出可用规则包元信息。"""
+    def list_packs(self, external_packs_dir: Optional[str] = None) -> List[Dict]:
+        """列出可用规则包元信息（内置 + 外部）。"""
+        ext = self._resolve_external_dir(external_packs_dir) or self._external_dir
         out = []
-        if not self.PACK_DIR.exists():
-            return out
-        for p in sorted(self.PACK_DIR.glob("*.yaml")):
-            pack = self._load_pack(p.stem)
-            if pack:
-                out.append({
-                    "pack": pack.get("pack", p.stem),
-                    "name": pack.get("name", p.stem),
-                    "responsible_field": pack.get("responsible_field", ""),
-                    "risk_default": pack.get("risk_default", "medium"),
-                    "word_count": len(pack.get("words", [])),
-                })
+        seen = set()
+        # 内置包
+        if self.PACK_DIR.exists():
+            for p in sorted(self.PACK_DIR.glob("*.yaml")):
+                pack = self._load_pack(p.stem, ext)
+                if pack:
+                    seen.add(p.stem)
+                    out.append(self._pack_meta(pack, p.stem))
+        # 外部包（补充或覆盖）
+        if ext and ext.exists():
+            for p in sorted(ext.glob("*.yaml")):
+                if p.stem in seen:
+                    continue
+                pack = self._load_pack(p.stem, ext)
+                if pack:
+                    seen.add(p.stem)
+                    out.append(self._pack_meta(pack, p.stem, external=True))
         return out
 
-    def _load_pack(self, pid: str) -> Optional[Dict]:
-        if pid in self._cache:
-            return self._cache[pid]
-        p = self.PACK_DIR / f"{pid}.yaml"
-        if not p.exists():
-            self._cache[pid] = None
-            return None
-        try:
-            pack = _parse_pack_file(p)
-        except Exception:
-            pack = None
-        self._cache[pid] = pack
+    @staticmethod
+    def _pack_meta(pack: Dict, stem: str, external: bool = False) -> Dict:
+        meta = {
+            "pack": pack.get("pack", stem),
+            "name": pack.get("name", stem),
+            "responsible_field": pack.get("responsible_field", ""),
+            "risk_default": pack.get("risk_default", "medium"),
+            "word_count": len(pack.get("words", [])),
+        }
+        if external:
+            meta["source"] = "external"
+        return meta
+
+    def _load_pack(
+        self,
+        pid: str,
+        external_packs_dir: Optional[Path] = None,
+    ) -> Optional[Dict]:
+        cache_key = pid
+        if external_packs_dir:
+            cache_key = f"{external_packs_dir}:{pid}"
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+        # 外部同名包优先覆盖内置
+        candidates = []
+        if external_packs_dir and external_packs_dir.exists():
+            candidates.append(external_packs_dir / f"{pid}.yaml")
+        candidates.append(self.PACK_DIR / f"{pid}.yaml")
+        pack = None
+        for p in candidates:
+            if p.exists():
+                try:
+                    pack = _parse_pack_file(p)
+                    break
+                except Exception:
+                    pack = None
+        self._cache[cache_key] = pack
         return pack
 
 
@@ -259,12 +309,17 @@ def _parse_inline_mapping(text: str) -> Dict[str, str]:
 class ComplianceCore:
     """合规检查核心引擎（唯一实现，门面与兼容 shim 均委托于此）。"""
 
-    def __init__(self, backend: Optional[Any] = None):
+    def __init__(
+        self,
+        backend: Optional[Any] = None,
+        external_packs_dir: Optional[str] = None,
+    ):
         self.backend = backend
         self._local = backend is None
         self.hw = get_recommended_settings()
         self.max_chunk_chars = self.hw["batch_chunk"] * 200
-        self._loader = SensitiveWordLoader()
+        self._loader = SensitiveWordLoader(external_packs_dir=external_packs_dir)
+        self._external_packs_dir = external_packs_dir
         self._init_db()
 
     def _init_db(self):
@@ -301,12 +356,15 @@ class ComplianceCore:
         text: str,
         custom_words: Optional[List[str]] = None,
         packs: Optional[List[str]] = None,
+        external_packs_dir: Optional[str] = None,
     ) -> Dict:
         """扫描敏感词，返回命中列表（含风险档/段落/责任人字段）。
 
         packs: 选中的行业包（base 始终加载），如 ["edu", "finance"]
+        external_packs_dir: 外部词包目录（覆盖环境变量）
         """
-        words = self._loader.load(packs)
+        ext = external_packs_dir or self._external_packs_dir
+        words = self._loader.load(packs, external_packs_dir=ext)
         if custom_words:
             words = words + [{"word": w, "risk": "medium", "pack": "custom",
                               "responsible_field": "合规负责人"} for w in custom_words if w]
@@ -672,13 +730,24 @@ class ComplianceCore:
 class ComplianceSuite:
     """合规套件门面：消除「用哪个」困惑，统一两档扫描。"""
 
-    def __init__(self, backend: Optional[Any] = None):
-        self.core = ComplianceCore(backend=backend)
+    def __init__(
+        self,
+        backend: Optional[Any] = None,
+        external_packs_dir: Optional[str] = None,
+    ):
+        self.core = ComplianceCore(backend=backend, external_packs_dir=external_packs_dir)
         self._local = backend is None
+        self._external_packs_dir = external_packs_dir
 
-    def quick_scan(self, text: str, packs: Optional[List[str]] = None) -> Dict:
+    def quick_scan(
+        self,
+        text: str,
+        packs: Optional[List[str]] = None,
+        external_packs_dir: Optional[str] = None,
+    ) -> Dict:
         """快速扫：敏感词（命中即报）+ 数据泄露，秒级返回。"""
-        sensitive = self.core.scan_sensitive(text, packs=packs)
+        ext = external_packs_dir or self._external_packs_dir
+        sensitive = self.core.scan_sensitive(text, packs=packs, external_packs_dir=ext)
         leak = self.core.detect_leak(text)
         # 风险分级汇总
         tier = {"高": sensitive["risk_breakdown"]["高"], "中": sensitive["risk_breakdown"]["中"],
@@ -704,12 +773,15 @@ class ComplianceSuite:
         doc_id: str = "",
         include_history: Optional[List[Dict]] = None,
         packs: Optional[List[str]] = None,
+        external_packs_dir: Optional[str] = None,
     ) -> Dict:
         """全域扫：全文敏感词 + 数据泄露 + 格式 + 密级建议 + 历史版本时间线。
 
         include_history: 历史版本列表 [{"version":1,"author":"...","time":"...","content":"..."}]
+        external_packs_dir: 外部词包目录（覆盖环境变量）
         """
-        sensitive = self.core.scan_sensitive(text, packs=packs)
+        ext = external_packs_dir or self._external_packs_dir
+        sensitive = self.core.scan_sensitive(text, packs=packs, external_packs_dir=ext)
         leak = self.core.detect_leak(text)
         klass = self.core.classify(text)
         total_risk = self.core._overall_risk(sensitive, leak)
@@ -787,6 +859,7 @@ class ComplianceSuite:
             "levels": CLASSIFICATION_LEVELS,
             "local_ocr_engines": LOCAL_OCR_ENGINES,
             "available_packs": self.core._loader.list_packs(),
+            "external_packs_dir": self._external_packs_dir or os.environ.get("KINGDOC_EXTERNAL_PACKS_DIR", ""),
             "workers": self.core.hw.get("workers", 1),
         }
 
@@ -797,25 +870,40 @@ class ComplianceSuite:
 _suite: Optional[ComplianceSuite] = None
 
 
-def get_compliance_suite(backend: Optional[Any] = None) -> ComplianceSuite:
+def get_compliance_suite(
+    backend: Optional[Any] = None,
+    external_packs_dir: Optional[str] = None,
+) -> ComplianceSuite:
     global _suite
     if _suite is None:
-        _suite = ComplianceSuite(backend=backend)
+        _suite = ComplianceSuite(backend=backend, external_packs_dir=external_packs_dir)
     return _suite
 
 
-def quick_scan(text: str, packs: Optional[List[str]] = None) -> Dict:
-    return get_compliance_suite().quick_scan(text, packs=packs)
+def quick_scan(
+    text: str,
+    packs: Optional[List[str]] = None,
+    external_packs_dir: Optional[str] = None,
+) -> Dict:
+    return get_compliance_suite(external_packs_dir=external_packs_dir).quick_scan(
+        text, packs=packs, external_packs_dir=external_packs_dir)
 
 
-def full_scan(text: str, doc_id: str = "", include_history: Optional[List[Dict]] = None,
-              packs: Optional[List[str]] = None) -> Dict:
-    return get_compliance_suite().full_scan(text, doc_id, include_history, packs=packs)
+def full_scan(
+    text: str,
+    doc_id: str = "",
+    include_history: Optional[List[Dict]] = None,
+    packs: Optional[List[str]] = None,
+    external_packs_dir: Optional[str] = None,
+) -> Dict:
+    return get_compliance_suite(external_packs_dir=external_packs_dir).full_scan(
+        text, doc_id, include_history, packs=packs, external_packs_dir=external_packs_dir)
 
 
-def list_packs() -> List[Dict]:
-    return get_compliance_suite().core._loader.list_packs()
+def list_packs(external_packs_dir: Optional[str] = None) -> List[Dict]:
+    return get_compliance_suite(external_packs_dir=external_packs_dir).core._loader.list_packs(
+        external_packs_dir=external_packs_dir)
 
 
-def get_suite_status() -> Dict:
-    return get_compliance_suite().get_status()
+def get_suite_status(external_packs_dir: Optional[str] = None) -> Dict:
+    return get_compliance_suite(external_packs_dir=external_packs_dir).get_status()
