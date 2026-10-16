@@ -2,8 +2,8 @@
 name: wps-office-suite
 displayName: WPS Office 全家桶
 slug: wps-office-suite
-description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v5.1新增：kingdoc云端桥接（白名单探测+配置预检+subprocess上传+差异检查）、条件格式/数据验证跨引擎IO（JSON中间格式保真往返）、会议纪要三段式要素化（待办清单+决策记录+风险异议）+说话人标注（MFCC聚类）；v5.2新增：公文一键排版（GB/T 9704 规则库约束+结构识别套版+红头预留位+联合行文）、批量水印与敏感信息打码（身份证/手机号/银行卡/邮箱双轨识别+黑色矩形覆盖+打码清单）、跨文档知识检索与问答（本地TF-IDF零依赖+跳转+可选zwjh记忆桥接）；删除：与contract-review重复的轻量合同审查模块，改为文档互链引导；v5.2.5修复：MS Office引擎下Excel/PPT创建必然失败（错用Word COM对象），新增get_ms_excel/get_ms_ppt及三槽位统一释放release_ms，MS Office路径透传filepath参数;v5.3.0新增：统一CLI入口 wps（registry.json注册表分发，office --app/--action 与 convert 子命令、--list 一屏列出全部命令，薄路由层不改脚本内部逻辑）、全命令 --json 机器可读输出（固定 ok/error_id/elapsed/data 四字段，对齐 E001-E015，wps_error.py 新增 emit_json 统一出口）、_worker 启动优化（wps_pure 改惰性加载，pywin32/python-docx/openpyxl 经核查已惰性导入，ENGINE_CACHE 进程级单例复用，COM 释放统一走 release_ms 三槽位）、转换三入口合并为 convert（format_converter/md_converter/wps_docx_to_ppt 内部按目标格式路由，旧脚本保留为兼容别名并提示新命令，v6.0.0 移除）
-version: 5.3.0
+description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v5.1新增：kingdoc云端桥接（白名单探测+配置预检+subprocess上传+差异检查）、条件格式/数据验证跨引擎IO（JSON中间格式保真往返）、会议纪要三段式要素化（待办清单+决策记录+风险异议）+说话人标注（MFCC聚类）；v5.2新增：公文一键排版（GB/T 9704 规则库约束+结构识别套版+红头预留位+联合行文）、批量水印与敏感信息打码（身份证/手机号/银行卡/邮箱双轨识别+黑色矩形覆盖+打码清单）、跨文档知识检索与问答（本地TF-IDF零依赖+跳转+可选zwjh记忆桥接）；删除：与contract-review重复的轻量合同审查模块，改为文档互链引导；v5.2.5修复：MS Office引擎下Excel/PPT创建必然失败（错用Word COM对象），新增get_ms_excel/get_ms_ppt及三槽位统一释放release_ms，MS Office路径透传filepath参数;v5.3.5修复：SKILL.md frontmatter 修复 tags 块序列误混入联系方式行导致标准 YAML 解析失败；v5.3.0新增：统一CLI入口 wps（registry.json注册表分发，office --app/--action 与 convert 子命令、--list 一屏列出全部命令，薄路由层不改脚本内部逻辑）、全命令 --json 机器可读输出（固定 ok/error_id/elapsed/data 四字段，对齐 E001-E015，wps_error.py 新增 emit_json 统一出口）、_worker 启动优化（wps_pure 改惰性加载，pywin32/python-docx/openpyxl 经核查已惰性导入，ENGINE_CACHE 进程级单例复用，COM 释放统一走 release_ms 三槽位）、转换三入口合并为 convert（format_converter/md_converter/wps_docx_to_ppt 内部按目标格式路由，旧脚本保留为兼容别名并提示新命令，v6.0.0 移除）
+version: 5.3.5
 category: 办公协作与生产力工具
 platforms:
   - windows
@@ -19,6 +19,7 @@ dependency:
   - "WPS Office 2019+ 或 Microsoft Office（可选，增强模式）"
   - "LibreOffice（可选，跨平台兜底转换）"
 pricing: 免费
+contact: njskills@agent.qq.com
 tags:
   - WPS
   - MS-Office
@@ -39,10 +40,9 @@ tags:
   - 文档模板
   - 最佳实践
   - 避坑指南
-  建议反馈邮箱: njskills@agent.qq.com
 ---
 
-# WPS Office 全家桶 v5.3.0 ✅
+# WPS Office 全家桶 v5.3.5 ✅
 
 > 🏗️ **四引擎智能识别**：自动检测用户电脑已安装的软件，按 WPS → MS Office → LibreOffice → 纯Python 顺序选择最合适的引擎
 > ✨ **纯Python模式增强 v4.8**：排序、筛选、图表、公式、统计、条件格式、数据验证、合并单元格、命名区域 — 跨平台全部支持
@@ -657,6 +657,7 @@ python scripts/wps --json <任意命令> [参数]                 # 固定四字
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v5.3.5 | 2026-10-16 | 修复：SKILL.md YAML frontmatter tags 块序列误混入联系方式行（缺 - 前缀，导致标准 YAML 解析失败、元数据层不可用），将该行移出 tags 作为顶层 contact 键，frontmatter 恢复可解析，元数据工具链恢复正常 |
 | v5.3.0 | 2026-10-09 | 增加：统一 CLI 入口 scripts/wps.py（registry.json 注册表分发，office --app word/excel/ppt --action 与 convert 子命令 + --list 一屏列出全部命令，薄路由层不改脚本内部逻辑，原 47 个脚本 100% 兼容）；增加：全命令 --json 机器可读输出（wps_error.py 新增 emit_json 统一出口，固定 ok/error_id/elapsed/data 四字段，error_id 对齐 E001-E015）；优化：_worker 启动速度（wps_worker.py 的 wps_pure 改惰性加载，pywin32/python-docx/openpyxl 经核查已惰性导入，ENGINE_CACHE 进程级单例复用，COM 释放统一走 release_ms 三槽位）；合并：格式转换三入口收敛为 convert 子命令（format_converter/md_converter/wps_docx_to_ppt 内部按目标格式路由），旧脚本保留为兼容别名并提示新命令，v6.0.0 移除；优化：SKILL.md 命令速查改为由 registry.json 自动导出的一页表，主文档体积下降 ≥30% |
 | v5.2.5 | 2026-09-22 | 修复：MS Office 引擎下 Excel/PPT 创建必然失败（ms_create_excel/ms_create_ppt 错用 Word COM 对象，调用 get_ms_word 而非各自 Excel/PPT 对象）；增加：wps_common.py 新增 create_ms_excel/get_ms_excel 与 create_ms_ppt/get_ms_ppt，并新增 MS_EXCEL_CLIENT/MS_PPT_CLIENT 双槽位；修复：release_ms 改为统一释放 Word/Excel/PPT 三槽位并置空；修复：wps_ms.py 与 wps_worker.py 的 MS Office 路径透传 filepath 参数（不再硬编码写入桌面） |
 | v5.2.0 | 2026-09-19 | 增加：公文一键排版 gongwen.py + references/gongwen_rules.yaml（GB/T 9704 党政机关公文格式约束库，结构识别套版，支持红头预留位与联合行文，处理前自动备份原文件）；增加：批量水印 watermark.py（文字/图片水印，平铺与对角线，docx/pptx/图片批量目录处理）；增加：敏感信息打码 redact.py（正则+词典双轨识别身份证/手机号/银行卡/邮箱，黑色矩形覆盖，输出打码清单供人工复核，NER 可选增强）；增加：跨文档知识检索 doc_search.py（本地 TF-IDF char/bigram 自研零依赖，跨文档找内容问答，命中返回文件+段落+跳转，embedding 可选，zwjh 记忆桥接未装则跳过）；删除：与 contract-review 重复的轻量合同审查模块 wps_contract_review.py 及其在 wps_ai/wps_word/wps_worker 的入口命令，SKILL.md 改为文本互链引导（无代码依赖） |
