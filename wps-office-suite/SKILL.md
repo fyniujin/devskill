@@ -2,8 +2,8 @@
 name: wps-office-suite
 displayName: WPS Office 全家桶
 slug: wps-office-suite
-description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v5.1新增：kingdoc云端桥接（白名单探测+配置预检+subprocess上传+差异检查）、条件格式/数据验证跨引擎IO（JSON中间格式保真往返）、会议纪要三段式要素化（待办清单+决策记录+风险异议）+说话人标注（MFCC聚类）；v5.2新增：公文一键排版（GB/T 9704 规则库约束+结构识别套版+红头预留位+联合行文）、批量水印与敏感信息打码（身份证/手机号/银行卡/邮箱双轨识别+黑色矩形覆盖+打码清单）、跨文档知识检索与问答（本地TF-IDF零依赖+跳转+可选zwjh记忆桥接）；删除：与contract-review重复的轻量合同审查模块，改为文档互链引导；v5.2.5修复：MS Office引擎下Excel/PPT创建必然失败（错用Word COM对象），新增get_ms_excel/get_ms_ppt及三槽位统一释放release_ms，MS Office路径透传filepath参数;v5.3.5修复：SKILL.md frontmatter 修复 tags 块序列误混入联系方式行导致标准 YAML 解析失败；v5.3.0新增：统一CLI入口 wps（registry.json注册表分发，office --app/--action 与 convert 子命令、--list 一屏列出全部命令，薄路由层不改脚本内部逻辑）、全命令 --json 机器可读输出（固定 ok/error_id/elapsed/data 四字段，对齐 E001-E015，wps_error.py 新增 emit_json 统一出口）、_worker 启动优化（wps_pure 改惰性加载，pywin32/python-docx/openpyxl 经核查已惰性导入，ENGINE_CACHE 进程级单例复用，COM 释放统一走 release_ms 三槽位）、转换三入口合并为 convert（format_converter/md_converter/wps_docx_to_ppt 内部按目标格式路由，旧脚本保留为兼容别名并提示新命令，v6.0.0 移除）
-version: 5.3.5
+description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v5.1新增：kingdoc云端桥接（白名单探测+配置预检+subprocess上传+差异检查）、条件格式/数据验证跨引擎IO（JSON中间格式保真往返）、会议纪要三段式要素化（待办清单+决策记录+风险异议）+说话人标注（MFCC聚类）；v5.2新增：公文一键排版（GB/T 9704 规则库约束+结构识别套版+红头预留位+联合行文）、批量水印与敏感信息打码（身份证/手机号/银行卡/邮箱双轨识别+黑色矩形覆盖+打码清单）、跨文档知识检索与问答（本地TF-IDF零依赖+跳转+可选zwjh记忆桥接）；删除：与contract-review重复的轻量合同审查模块，改为文档互链引导；v5.2.5修复：MS Office引擎下Excel/PPT创建必然失败（错用Word COM对象），新增get_ms_excel/get_ms_ppt及三槽位统一释放release_ms，MS Office路径透传filepath参数;v5.3.5修复：SKILL.md frontmatter 修复 tags 块序列误混入联系方式行导致标准 YAML 解析失败;v5.4.0新增：留存型功能——定时任务与报告中心（schedule_register 升级为三平台统一调度层 schtasks/cron/launchd，错过策略 skip/run_once，注册表 JSON 可导出导入；新建 report_center.py 报告中心，templates/reports/*.json 参数化模板 + ECharts 单文件 HTML 输出（图表内联、无服务端、双击即开）；report_generator 升级支持 --format html；wps.py CLI 统一埋点 SQLite，自动供 report_center 生成周度使用摘要附在报告末尾；watch.py 职责收窄为纯事件采集）；v5.3.0新增：统一CLI入口 wps（registry.json注册表分发，office --app/--action 与 convert 子命令、--list 一屏列出全部命令，薄路由层不改脚本内部逻辑）、全命令 --json 机器可读输出（固定 ok/error_id/elapsed/data 四字段，对齐 E001-E015，wps_error.py 新增 emit_json 统一出口）、_worker 启动优化（wps_pure 改惰性加载，pywin32/python-docx/openpyxl 经核查已惰性导入，ENGINE_CACHE 进程级单例复用，COM 释放统一走 release_ms 三槽位）、转换三入口合并为 convert（format_converter/md_converter/wps_docx_to_ppt 内部按目标格式路由，旧脚本保留为兼容别名并提示新命令，v6.0.0 移除）
+version: 5.4.0
 category: 办公协作与生产力工具
 platforms:
   - windows
@@ -42,7 +42,7 @@ tags:
   - 避坑指南
 ---
 
-# WPS Office 全家桶 v5.3.5 ✅
+# WPS Office 全家桶 v5.4.0 ✅
 
 > 🏗️ **四引擎智能识别**：自动检测用户电脑已安装的软件，按 WPS → MS Office → LibreOffice → 纯Python 顺序选择最合适的引擎
 > ✨ **纯Python模式增强 v4.8**：排序、筛选、图表、公式、统计、条件格式、数据验证、合并单元格、命名区域 — 跨平台全部支持
@@ -572,7 +572,7 @@ python scripts/wps_feedback.py email  # 打开邮件客户端（自动附带系�
 
 ## 🔗 CLI 命令速查（由 registry.json 自动导出）
 
-> v5.3.0 起，全部能力收敛到统一入口 `python scripts/wps`，原 47 个脚本仍可单独调用（100% 兼容）。运行 `python scripts/wps --list` 查看完整动态清单。
+> v5.4.0 起，全部能力收敛到统一入口 `python scripts/wps`，原脚本仍可单独调用（100% 兼容）。运行 `python scripts/wps --list` 查看完整动态清单。
 
 ### 统一入口用法
 ```bash
@@ -603,18 +603,19 @@ python scripts/wps --json <任意命令> [参数]                 # 固定四字
 | watermark | 批量水印：文字/图片，平铺/对角线，docx/pptx/图片 | watermark.py |
 | doc-search | 跨文档检索问答：本地 TF-IDF 零依赖 | doc_search.py |
 | template | 文档模板管理：代码生成类模板 | template_manager.py |
-| report | 报告生成：关键点→结构化 Word | report_generator.py |
+| report | 报告生成：关键点→结构化 Word/HTML | report_generator.py |
+| report-center | 报告中心：周报/月报 ECharts 单文件 HTML，自动附 usage_stats 摘要 | report_center.py |
 | doc-manager | 文档管理：批量整理/重命名/归档 | document_manager.py |
 | doc-translate | 文档翻译：Word/Excel/PPT 多模型降级 | document_translator.py |
 | email-reply | 邮件智能回复：模板+LLM 个性化 | email_reply.py |
-| schedule | 日程登记：文本/结构化→日历 | schedule_register.py |
+| schedule | 定时调度：周报/月报/watch 日报注册系统计划任务（schtasks/cron/launchd），错过策略 skip/run_once，注册表 JSON 可导出导入 | schedule_register.py |
 | clarify | 需求澄清：歧义检测→槽位填充 | clarify.py |
 | com-health | COM 健康检查：WPS/MS/残留/强制释放 | com_health.py |
 | usage-stats | 使用统计：SQLite 埋点/引擎健康度 | usage_stats.py |
 | feedback | 反馈提交：邮件/issue | wps_feedback.py |
 | test | 环境自检：引擎/COM/依赖 | wps_test.py |
 | toc | 目录生成：提取/插入 Word 目录 | wps_toc.py |
-| watch | 文件监控：轮询+YAML 规则+大文件分片 | watch.py |
+| watch | 文件监控：轮询+YAML 规则+大文件分片（v5.4 职责收窄：纯事件采集，提醒逻辑剥离给调度层） | watch.py |
 | chart-recommend | 图表推荐：按数据特征推荐图表类型 | chart_recommender.py |
 
 > 其余脚本可直接 `python scripts/wps <脚本名> [参数]` 调用；`--json` 适用于全部命令。
@@ -657,6 +658,7 @@ python scripts/wps --json <任意命令> [参数]                 # 固定四字
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v5.4.0 | 2026-10-30 | 增加：留存型功能——定时任务与报告中心；优化：schedule_register 升级为三平台统一调度层 schtasks/cron/launchd，错过策略 skip/run_once，注册表 JSON 可导出导入备份迁移；新建：report_center.py 报告中心，templates/reports/*.json 参数化模板 + ECharts 单文件 HTML 输出（图表内联、无服务端、双击即开）；升级：report_generator 支持 --format html（共享渲染器）；优化：wps.py CLI 统一埋点 SQLite（script/action/duration_ms/success），自动供 report_center 生成周度使用摘要附在报告末尾；优化：watch.py 职责收窄为纯事件采集（轮询+规则匹配+大文件分片），提醒逻辑剥离给调度层 |
 | v5.3.5 | 2026-10-16 | 修复：SKILL.md YAML frontmatter tags 块序列误混入联系方式行（缺 - 前缀，导致标准 YAML 解析失败、元数据层不可用），将该行移出 tags 作为顶层 contact 键，frontmatter 恢复可解析，元数据工具链恢复正常 |
 | v5.3.0 | 2026-10-09 | 增加：统一 CLI 入口 scripts/wps.py（registry.json 注册表分发，office --app word/excel/ppt --action 与 convert 子命令 + --list 一屏列出全部命令，薄路由层不改脚本内部逻辑，原 47 个脚本 100% 兼容）；增加：全命令 --json 机器可读输出（wps_error.py 新增 emit_json 统一出口，固定 ok/error_id/elapsed/data 四字段，error_id 对齐 E001-E015）；优化：_worker 启动速度（wps_worker.py 的 wps_pure 改惰性加载，pywin32/python-docx/openpyxl 经核查已惰性导入，ENGINE_CACHE 进程级单例复用，COM 释放统一走 release_ms 三槽位）；合并：格式转换三入口收敛为 convert 子命令（format_converter/md_converter/wps_docx_to_ppt 内部按目标格式路由），旧脚本保留为兼容别名并提示新命令，v6.0.0 移除；优化：SKILL.md 命令速查改为由 registry.json 自动导出的一页表，主文档体积下降 ≥30% |
 | v5.2.5 | 2026-09-22 | 修复：MS Office 引擎下 Excel/PPT 创建必然失败（ms_create_excel/ms_create_ppt 错用 Word COM 对象，调用 get_ms_word 而非各自 Excel/PPT 对象）；增加：wps_common.py 新增 create_ms_excel/get_ms_excel 与 create_ms_ppt/get_ms_ppt，并新增 MS_EXCEL_CLIENT/MS_PPT_CLIENT 双槽位；修复：release_ms 改为统一释放 Word/Excel/PPT 三槽位并置空；修复：wps_ms.py 与 wps_worker.py 的 MS Office 路径透传 filepath 参数（不再硬编码写入桌面） |
