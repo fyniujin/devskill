@@ -49,6 +49,8 @@ from core.queue_manager import QueueManager
 from core.gpu_accelerator import GPUAccelerator
 from core.doctor import Doctor
 from core.model_downloader import ModelDownloader
+from core.podcast.podcast_pipeline import PodcastPipeline
+from core.podcast.weekly_briefing import WeeklyBriefing
 
 logger = get_logger(__name__)
 
@@ -174,6 +176,13 @@ def parse_args():
     parser.add_argument("--download-model", default=None,
                         choices=["tiny", "base", "small", "medium"],
                         help="下载 Whisper 模型（带进度可视化+断点续传+3次重试）")
+    parser.add_argument("--podcast", action="store_true",
+                        help="播客模式：说话人时间线+Podcasting 2.0 章节标记+金句提取（v4.6 新增）")
+    parser.add_argument("--diarize-profile", default=None,
+                        choices=["interview", "meeting", "phone"],
+                        help="说话人分离预设：访谈/会议/电话（v4.6 新增）")
+    parser.add_argument("--weekly-briefing", action="store_true",
+                        help="听后简报：生成周聚合 HTML 简报（v4.6 新增）")
     
     return parser.parse_args()
 
@@ -182,7 +191,7 @@ def print_banner():
     """打印启动横幅"""
     banner = """
 ╔══════════════════════════════════════════════════╗
-║          🎬 video-analyzer v4.5.0               ║
+║          🎬 video-analyzer v4.6.0               ║
 ║        视频分析处理 — 本地视频反编译工具         ║
 ╚══════════════════════════════════════════════════╝
     """
@@ -308,7 +317,7 @@ def main():
         # ========== 版本更新检查（非阻塞） ==========
         if not args.no_update_check:
             try:
-                notifier = UpdateNotifier(config, current_version="4.5.0")
+                notifier = UpdateNotifier(config, current_version="4.6.0")
                 update_result = notifier.check_for_updates()
                 update_msg = notifier.format_update_message(update_result)
                 if update_msg:
@@ -325,6 +334,10 @@ def main():
         # ========== 媒体探测（v4.3 新增：纯音频支持） ==========
         media_probe = MediaProbe(config)
         is_pure_audio = media_probe.is_pure_audio(video_path)
+        
+        # 初始化可选结果变量
+        podcast_result = None
+        weekly_briefing = None
         
         if is_pure_audio:
             logger.info("🎵 检测到纯音频输入，启用音频模式...")
@@ -404,22 +417,18 @@ def main():
         # ========== 说话人分离（可选） ==========
         diarize_result = None
         quality_score = None
-        if args.diarize:
+        if args.diarize or args.podcast:
             logger.info("🗣️  说话人分离...")
             diarizer = SpeakerDiarization(config)
-            diarize_result = diarizer.diarize(audio_path, transcript.get("segments", []))
+            diarize_result = diarizer.diarize(
+                audio_path, transcript.get("segments", []),
+                profile=args.diarize_profile if args.diarize_profile else None,
+            )
             logger.info(f"   分离完成: {diarize_result['n_speakers']} 人")
-            
-            # 分离质量评分（v4.1 新增）
-            if args.quality_score:
-                logger.info("📊 评估分离质量...")
-                scorer = QualityScorer(config)
-                # 提取特征用于评分
-                features = diarizer._extract_segment_features(audio_path, transcript.get("segments", []))
-                quality_score = scorer.score(diarize_result, features, transcript.get("segments", []))
-                logger.info(f"   质量评分: {quality_score.get('overall_score')} 分 ({quality_score.get('level')}可信度)")
-                logger.info(f"   声纹距离: {quality_score.get('voiceprint_distance')}, 重叠率得分: {quality_score.get('overlap_ratio')}")
-                logger.info(f"   建议: {quality_score.get('suggestion')}")
+            if diarize_result.get("quality_score"):
+                qs = diarize_result["quality_score"]
+                logger.info(f"   质量评分: {qs.get('overall_score')} 分 ({qs.get('level')}可信度)")
+                logger.info(f"   建议: {qs.get('suggestion')}")
         
         # ========== 纯音频模式跳过场景检测和视觉分析 ==========
         scenes = None
@@ -519,6 +528,8 @@ def main():
             cover_result=cover_result,
             translate_result=translate_result,
             bgm_result=bgm_result,
+            podcast_result=podcast_result,
+            weekly_briefing=weekly_briefing,
         )
         
         # ========== 章节切片（可选） ==========
@@ -732,6 +743,24 @@ def main():
                 for w in translate_result["warnings"]:
                     logger.warning(f"   ⚠️  {w}")
         
+        # ========== 播客模式（可选，v4.6 新增） ==========
+        podcast_result = None
+        if args.podcast:
+            logger.info("🎙️  [播客模式] 开始流水线...")
+            pipeline = PodcastPipeline(config)
+            podcast_result = pipeline.run(
+                audio_path=audio_path,
+                transcript=transcript,
+                output_dir=args.output,
+                n_speakers=None,
+                diarize_profile=args.diarize_profile,
+            )
+            if podcast_result.get("output_files"):
+                for fmt, path in podcast_result["output_files"].items():
+                    logger.info(f"   [{fmt}] {path}")
+            if podcast_result.get("highlights"):
+                logger.info(f"   金句: {len(podcast_result['highlights'])} 条")
+        
         # ========== BGM 识别（可选，v4.4 新增） ==========
         bgm_result = None
         if args.bgm_detect:
@@ -862,6 +891,15 @@ def main():
         summary_gen = TimestampedSummary(config)
         summary_result = summary_gen.generate(highlights, fused_data, summary_dir)
         output_paths["timestamped_summary"] = summary_result.get("markdown_path")
+        
+        # ========== 听后简报（可选，v4.6 新增） ==========
+        if args.weekly_briefing:
+            logger.info("📊 生成听后简报...")
+            briefing = WeeklyBriefing(config)
+            weekly_briefing = briefing.generate()
+            if weekly_briefing.get("output_path"):
+                output_paths["weekly_briefing"] = weekly_briefing["output_path"]
+                logger.info(f"   简报已生成: {weekly_briefing['output_path']}")
         
         # 清理缓存
         max_cache = config.get("processing", {}).get("max_memory_gb", 4)
@@ -1062,6 +1100,138 @@ def run_quick_mode(args, config):
     return 0
 
 
+def run_podcast_mode(args, config):
+    """
+    播客模式（v4.6.0 新增）。
+    
+    整合说话人分离 + 章节切片 + 金句提取，
+    输出 Podcasting 2.0 标准章节标记 + 金句列表 + 说话人时间线。
+    """
+    print_banner()
+    print("🎙️ 播客模式\n")
+    
+    start_time = time.time()
+    
+    # 加载配置
+    if not args.no_adaptive:
+        logger.info("🔍 检测硬件配置...")
+        probe = HardwareProbe(config)
+        config = probe.apply_to_config(config)
+        
+        nice_level = config.get("processing", {}).get("nice_level", 5)
+        apply_process_priority(nice_level)
+    
+    # 输入处理
+    logger.info("📥 处理输入...")
+    input_handler = InputHandler(config)
+    video_path = input_handler.process(args.input)
+    logger.info(f"   音频路径: {video_path}")
+    
+    # 媒体处理
+    media = MediaProcessor(config)
+    media_info = media.get_media_info(video_path)
+    logger.info(f"   时长: {media_info['duration']:.1f}s")
+    
+    # 提取音频
+    audio_path = media.extract_audio(video_path)
+    logger.info(f"   音频已提取: {audio_path}")
+    
+    # ASR 转写
+    logger.info("🎙️  语音转文字...")
+    asr_engine = args.asr_engine if args.asr_engine else config.get("asr", {}).get("engine", "auto")
+    asr_router = ASRRouter(config)
+    asr_result = asr_router.transcribe(
+        audio_path,
+        preferred_engine=asr_engine,
+        language=args.lang if args.lang else config.get("asr", {}).get("language", "auto"),
+    )
+    
+    transcript = {
+        "text": asr_result.text,
+        "language": asr_result.language,
+        "duration": asr_result.duration,
+        "segments": [
+            {
+                "id": seg.id,
+                "start": seg.start,
+                "end": seg.end,
+                "text": seg.text,
+                "confidence": seg.confidence,
+            }
+            for seg in asr_result.segments
+        ],
+    }
+    
+    logger.info(f"   识别完成: {len(transcript['segments'])} 个语音段")
+    
+    # 播客流水线
+    logger.info("🎬 播客流水线...")
+    pipeline = PodcastPipeline(config)
+    result = pipeline.run(
+        audio_path=audio_path,
+        transcript=transcript,
+        output_dir=args.output,
+        n_speakers=None,
+        diarize_profile=args.diarize_profile,
+    )
+    
+    # 输出结果
+    if result.get("output_files"):
+        logger.info(f"\n📄 播客输出:")
+        for fmt, path in result["output_files"].items():
+            logger.info(f"   [{fmt}] {path}")
+    
+    # 说话人时间线
+    if result.get("speaker_timeline"):
+        timeline = result["speaker_timeline"]
+        logger.info(f"\n🎙️ 说话人时间线 ({len(timeline)} 段):")
+        for item in timeline[:5]:
+            logger.info(f"   {item.get('speaker_name', '')}: "
+                       f"{item.get('start', 0):.1f}s - {item.get('end', 0):.1f}s "
+                       f"({item.get('duration', 0):.1f}s)")
+    
+    # 金句
+    if result.get("highlights"):
+        highlights = result["highlights"]
+        logger.info(f"\n🌟 金句 Top{len(highlights)}:")
+        for i, h in enumerate(highlights[:5], 1):
+            logger.info(f"   {i}. [{h.get('start', 0):.1f}s] "
+                       f"{h.get('text', '')[:50]}... "
+                       f"(置信度: {h.get('confidence', 0):.0%})")
+    
+    elapsed = time.time() - start_time
+    logger.info(f"\n{'='*50}")
+    logger.info(f"✅ 播客分析完成！耗时: {elapsed:.1f}s")
+    logger.info(f"{'='*50}")
+    
+    return 0
+
+
+def run_weekly_briefing_mode(args, config):
+    """
+    听后简报模式（v4.6.0 新增）。
+    
+    复用 queue_manager 的 SQLite 队列，按周聚合生成 HTML 简报。
+    """
+    print_banner()
+    print("📊 听后简报模式\n")
+    
+    briefing = WeeklyBriefing(config)
+    result = briefing.generate()
+    
+    output_path = result.get("output_path")
+    if output_path and os.path.exists(output_path):
+        logger.info(f"✅ 简报已生成: {output_path}")
+        logger.info(f"   周范围: {result.get('week_range', '')}")
+        stats = result.get("stats", {})
+        logger.info(f"   处理文件: {stats.get('total_tasks', 0)}")
+        logger.info(f"   总时长: {stats.get('total_duration', 0) / 60:.1f} 分钟")
+        return 0
+    else:
+        logger.warning("❌ 简报生成失败")
+        return 1
+
+
 def run_download_model_mode(args, config):
     """
     模型下载模式（v4.5.0 新增）。
@@ -1226,6 +1396,10 @@ if __name__ == "__main__":
     elif args.download_model:
         # 模型下载模式（v4.5.0）
         exit_code = run_download_model_mode(args, config)
+        sys.exit(exit_code)
+    elif args.weekly_briefing:
+        # 听后简报模式（v4.6.0）
+        exit_code = run_weekly_briefing_mode(args, config)
         sys.exit(exit_code)
     elif args.dir:
         # 批量处理模式
