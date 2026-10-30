@@ -1,6 +1,6 @@
 {
-  "version": "5.3.0",
-  "description": "WPS Office 全家桶 统一命令入口注册表。cli_entry.py 查本表将 'wps <命令>' 分发到现有脚本，不改脚本内部逻辑。",
+  "version": "5.4.0",
+  "description": "WPS Office 全家桶 统一命令入口注册表。wps.py 查本表将 'wps <命令>' 分发到现有脚本，不改脚本内部逻辑。",
   "apps": {
     "word": "wps_word.py",
     "excel": "wps_excel.py",
@@ -10,7 +10,7 @@
     "word": {"script": "wps_word.py", "app": "word", "desc": "Word：创建/编辑/排版/导出/公文/会议纪要/长文档"},
     "excel": {"script": "wps_excel.py", "app": "excel", "desc": "Excel：创建/输入/公式/排序/筛选/图表/分析/OCR"},
     "ppt": {"script": "wps_ppt.py", "app": "ppt", "desc": "PPT：创建/生成/导出/主题/Word转PPT"},
-    "convert": {"script": "convert（合并 format_converter/md_converter/wps_docx_to_ppt）", "desc": "格式转换：docx/xlsx/pptx ↔ pdf/txt/html/csv/png（合并 format_converter/md_converter/docx_to_ppt）"},
+    "convert": {"script": "format_converter/md_converter/wps_docx_to_ppt", "desc": "格式转换：docx/xlsx/pptx ↔ pdf/txt/html/csv/png（合并 format_converter/md_converter/docx_to_ppt）"},
     "long-document": {"script": "long_document.py", "desc": "长文档排版：目录/页眉页脚/编号/交叉引用/图表索引"},
     "gongwen": {"script": "gongwen.py", "desc": "公文一键排版：GB/T 9704 规则库，红头预留位/联合行文"},
     "meeting-minutes": {"script": "meeting_minutes.py", "desc": "会议纪要：ASR转写→LLM摘要→Word（待办/决策/风险异议）"},
@@ -23,18 +23,19 @@
     "watermark": {"script": "watermark.py", "desc": "批量水印：文字/图片，平铺/对角线，docx/pptx/图片"},
     "doc-search": {"script": "doc_search.py", "desc": "跨文档检索问答：本地 TF-IDF 零依赖"},
     "template": {"script": "template_manager.py", "desc": "文档模板管理：代码生成类模板"},
-    "report": {"script": "report_generator.py", "desc": "报告生成：关键点→结构化 Word"},
+    "report": {"script": "report_generator.py", "desc": "报告生成：关键点→结构化 Word/HTML"},
+    "report-center": {"script": "report_center.py", "desc": "报告中心：周报/月报 ECharts 单文件 HTML，自动附 usage_stats 摘要"},
     "doc-manager": {"script": "document_manager.py", "desc": "文档管理：批量整理/重命名/归档"},
     "doc-translate": {"script": "document_translator.py", "desc": "文档翻译：Word/Excel/PPT 多模型降级"},
     "email-reply": {"script": "email_reply.py", "desc": "邮件智能回复：模板+LLM 个性化"},
-    "schedule": {"script": "schedule_register.py", "desc": "日程登记：文本/结构化→日历"},
+    "schedule": {"script": "schedule_register.py", "desc": "定时调度：周报/月报/watch日报注册系统计划任务（schtasks/cron/launchd），错过策略 skip/run_once，注册表 JSON 可导出导入"},
     "clarify": {"script": "clarify.py", "desc": "需求澄清：歧义检测→槽位填充"},
     "com-health": {"script": "com_health.py", "desc": "COM 健康检查：WPS/MS/残留/强制释放"},
     "usage-stats": {"script": "usage_stats.py", "desc": "使用统计：SQLite 埋点/引擎健康度"},
     "feedback": {"script": "wps_feedback.py", "desc": "反馈提交：邮件/issue"},
     "test": {"script": "wps_test.py", "desc": "环境自检：引擎/COM/依赖"},
     "toc": {"script": "wps_toc.py", "desc": "目录生成：提取/插入 Word 目录"},
-    "watch": {"script": "watch.py", "desc": "文件监控：轮询+YAML 规则+大文件分片"},
+    "watch": {"script": "watch.py", "desc": "文件监控：轮询+YAML 规则+大文件分片（v5.4 职责收窄：纯事件采集，提醒逻辑剥离给调度层）"},
     "chart-recommend": {"script": "chart_recommender.py", "desc": "图表推荐：按数据特征推荐图表类型"}
   }
 }
