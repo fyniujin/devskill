@@ -100,6 +100,7 @@ class ReportGenerator:
         output: str = "",
         tone: str = "formal",
         polish: bool = False,
+        fmt: str = "docx",
     ) -> Dict[str, Any]:
         """生成报告
 
@@ -113,6 +114,7 @@ class ReportGenerator:
             output: 输出 .docx 路径（必填）
             tone: 语气风格，"formal" 或 "casual"（默认 formal）
             polish: 是否通过 llm_bridge 润色内容（默认 False）
+            fmt: 输出格式，"docx" 或 "html"（默认 docx；html 由 report_center 渲染器生成）
 
         Returns:
             dict: {"ok": bool, "error": str, "path": str, "content": dict}
@@ -147,16 +149,19 @@ class ReportGenerator:
             if polish:
                 content = self._polish_content(content)
 
-            # 生成 Word 文档
-            self.progress("生成 Word 文档", 50)
-            result = self._generate_docx(content, output)
+            if fmt == "html":
+                self.progress("生成 HTML 报告", 50)
+                result = self._generate_html(content, output)
+            else:
+                self.progress("生成 Word 文档", 50)
+                result = self._generate_docx(content, output)
 
             if result.get("ok"):
                 return {
                     "ok": True,
                     "path": str(output),
                     "content": content,
-                    "format": "docx",
+                    "format": "html" if fmt == "html" else "docx",
                     "version": self.VERSION,
                 }
             else:
@@ -164,7 +169,7 @@ class ReportGenerator:
                 return {
                     "ok": True,
                     "content": content,
-                    "format": "json (python-docx 不可用，已降级)",
+                    "format": "json (生成失败，已降级)",
                     "version": self.VERSION,
                     "warning": result.get("error", ""),
                 }
@@ -453,6 +458,30 @@ class ReportGenerator:
         except Exception as e:
             return {"ok": False, "error": f"DOCX 生成失败: {str(e)}"}
 
+    def _generate_html(self, content: Dict[str, Any], output: str) -> Dict[str, Any]:
+        """生成 HTML 报告（通过 report_center 共享渲染器）"""
+        try:
+            from report_center import ReportCenter
+            center = ReportCenter()
+            # 使用 report_center 的 HTML 渲染逻辑
+            stats = center.stats_reader.get_weekly_summary()
+            # 构建 report content template with points
+            template = {
+                "type": "custom",
+                "title": content.get("title", "工作报告"),
+                "sections": [
+                    {"key": "summary", "title": "📋 报告摘要", "type": "stats_cards"},
+                    {"key": "content", "title": content.get("title", "报告内容"), "type": "table"},
+                ],
+                "footer": f"由 WPS Office 全家桶 v5.4 生成 · {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M')}"
+            }
+            html = center._render_html(template, stats, "custom")
+            out_path = safe_path(output)
+            out_path.write_text(html, encoding="utf-8")
+            return {"ok": True, "path": str(out_path)}
+        except Exception as e:
+            return {"ok": False, "error": f"HTML 生成失败: {str(e)}"}
+
     def _generate_template_content(self, template_path: str, points: List[str]) -> Dict[str, Any]:
         """基于模板文件生成内容
 
@@ -547,6 +576,7 @@ def main():
     p_gen.add_argument("--output", required=True, help="输出 .docx 路径")
     p_gen.add_argument("--tone", default="formal", choices=["formal", "casual"], help="语气风格")
     p_gen.add_argument("--polish", action="store_true", help="通过 llm_bridge 润色内容（需 cn-llm-router）")
+    p_gen.add_argument("--format", default="docx", choices=["docx", "html"], help="输出格式：docx 或 html（默认 docx；html 由 report_center 共享渲染器生成）")
 
     # check 子命令
     p_check = sub.add_parser("check", help="查看可用的报告类型")
@@ -579,6 +609,7 @@ def main():
                 output=args.output,
                 tone=args.tone,
                 polish=args.polish,
+                fmt=args.format,
             )
     elif args.command == "check":
         r = gen.list_types()
