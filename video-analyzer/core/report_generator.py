@@ -26,9 +26,9 @@ class ReportGenerator:
         visual_data: Dict,
         aligned_data: Dict,
         fused_data: Dict,
-        highlights,  # 接受 dict (HighlightExtractor 输出) 或 None
-        media_info: Dict,
-        output_dir: str,
+        highlights=None,  # 接受 dict (HighlightExtractor 输出) 或 None
+        media_info: Dict = None,
+        output_dir: str = None,
         platform_analysis=None,
         platform_meta=None,
         editing_result=None,
@@ -38,13 +38,18 @@ class ReportGenerator:
         cover_result=None,
         translate_result=None,
         bgm_result=None,
+        podcast_result=None,
+        weekly_briefing=None,
     ) -> Dict[str, str]:
         """
-        生成所有格式的报告文件。
+        生成所有格式的报告文件（统一渲染器，v4.6 合并音频/视频路径）。
         
         Returns:
             格式 -> 文件路径 映射
         """
+        if output_dir is None:
+            output_dir = self.report_config.get("output_dir", "output")
+        
         os.makedirs(output_dir, exist_ok=True)
         
         # 创建子目录
@@ -54,7 +59,8 @@ class ReportGenerator:
         os.makedirs(scenes_dir, exist_ok=True)
         
         # 复制场景关键帧到 scenes 目录
-        self._copy_keyframes(scenes.get("scenes", []), scenes_dir)
+        if scenes:
+            self._copy_keyframes(scenes.get("scenes", []), scenes_dir)
         
         output_paths = {}
         
@@ -66,7 +72,7 @@ class ReportGenerator:
                 fused_data, highlights, media_info, output_dir, assets_dir,
                 platform_analysis, platform_meta, editing_result,
                 viral_result, live_stats, auto_edit_result, cover_result,
-                translate_result, bgm_result
+                translate_result, bgm_result, podcast_result, weekly_briefing
             )
             output_paths["html"] = html_path
         
@@ -76,7 +82,7 @@ class ReportGenerator:
                 fused_data, highlights, media_info, output_dir,
                 platform_analysis, platform_meta, editing_result,
                 viral_result, live_stats, auto_edit_result, cover_result,
-                translate_result, bgm_result
+                translate_result, bgm_result, podcast_result, weekly_briefing
             )
             output_paths["json"] = json_path
         
@@ -86,7 +92,7 @@ class ReportGenerator:
                 fused_data, highlights, media_info, output_dir,
                 platform_analysis, platform_meta, editing_result,
                 viral_result, live_stats, auto_edit_result, cover_result,
-                translate_result, bgm_result
+                translate_result, bgm_result, podcast_result, weekly_briefing
             )
             output_paths["md"] = md_path
         
@@ -99,7 +105,7 @@ class ReportGenerator:
         visual_data: Dict,
         aligned_data: Dict,
         fused_data: Dict,
-        highlights: List[Dict],
+        highlights,
         media_info: Dict,
         output_dir: str,
         assets_dir: str,
@@ -112,6 +118,8 @@ class ReportGenerator:
         cover_result=None,
         translate_result=None,
         bgm_result=None,
+        podcast_result=None,
+        weekly_briefing=None,
     ) -> str:
         """生成交互式 HTML 报告"""
         
@@ -119,7 +127,7 @@ class ReportGenerator:
             transcript, scenes, fused_data, highlights, media_info, aligned_data,
             platform_analysis, platform_meta, editing_result,
             viral_result, live_stats, auto_edit_result, cover_result,
-            translate_result, bgm_result
+            translate_result, bgm_result, podcast_result, weekly_briefing
         )
         
         output_path = os.path.join(output_dir, "report.html")
@@ -134,7 +142,7 @@ class ReportGenerator:
         transcript: Dict,
         scenes: Dict,
         fused_data: Dict,
-        highlights: List[Dict],
+        highlights,
         media_info: Dict,
         aligned_data: Dict,
         platform_analysis=None,
@@ -146,6 +154,8 @@ class ReportGenerator:
         cover_result=None,
         translate_result=None,
         bgm_result=None,
+        podcast_result=None,
+        weekly_briefing=None,
     ) -> str:
         """构建完整 HTML 文档"""
         
@@ -204,6 +214,9 @@ class ReportGenerator:
         
         # 构建 BGM 识别 HTML（v4.4 新增）
         bgm_html = self._build_bgm_html(bgm_result)
+        
+        # 构建播客工作流 HTML（v4.6 新增）
+        podcast_html = self._build_podcast_html(podcast_result, weekly_briefing)
         
         return f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -381,6 +394,8 @@ class ReportGenerator:
         {translate_html}
 
         {bgm_html}
+
+        {podcast_html}
 
         <div class="footer">
             video-analyzer · 视频分析处理 Skill<br>
@@ -883,6 +898,97 @@ class ReportGenerator:
         </div>
         """
 
+    def _build_podcast_html(self, podcast_result=None, weekly_briefing=None) -> str:
+        """构建播客结果 HTML（v4.6 新增）"""
+        if not podcast_result and not weekly_briefing:
+            return ""
+        
+        html_parts = []
+        
+        if podcast_result:
+            timeline = podcast_result.get("speaker_timeline", [])
+            chapters = podcast_result.get("chapters", {})
+            highlights = podcast_result.get("highlights", [])
+            
+            # 说话人时间线
+            if timeline:
+                speakers_html = ""
+                for item in timeline[:5]:
+                    speakers_html += f"""
+                    <div class="highlight-item">
+                        <strong>{item.get("speaker_name", "")}</strong>
+                        <span>{self._format_time(item.get("start", 0))} - {self._format_time(item.get("end", 0))}</span>
+                        <span style="color:#888;">({item.get("duration", 0):.1f}s)</span>
+                    </div>
+                    """
+                
+                html_parts.append(f"""
+                <h3>🎙️ 说话人时间线</h3>
+                <div>{speakers_html}</div>
+                """)
+            
+            # 章节标记
+            chapters_list = chapters.get("chapters", [])
+            if chapters_list:
+                chapters_html = ""
+                for ch in chapters_list[:5]:
+                    chapters_html += f"""
+                    <div class="highlight-item">
+                        <strong>{self._format_time(ch.get("startTime", 0))}</strong>
+                        <span>{ch.get("title", "")}</span>
+                        <span class="tag">{ch.get("speaker", "")}</span>
+                    </div>
+                    """
+                
+                html_parts.append(f"""
+                <h3>📑 章节标记 (Podcasting 2.0)</h3>
+                <p style="color:#888;">共 {chapters.get("total_chapters", 0)} 个章节</p>
+                <div>{chapters_html}</div>
+                """)
+            
+            # 金句列表
+            if highlights:
+                highlights_html = ""
+                for h in highlights[:5]:
+                    highlights_html += f"""
+                    <div class="highlight-item">
+                        <strong>{self._format_time(h.get("start", 0))}</strong>
+                        <span>{h.get("text", "")[:60]}...</span>
+                        <span class="tag">{h.get("confidence", 0):.0%}</span>
+                    </div>
+                    """
+                
+                html_parts.append(f"""
+                <h3>🌟 金句 Top{len(highlights)}</h3>
+                <div>{highlights_html}</div>
+                """)
+        
+        if weekly_briefing:
+            stats = weekly_briefing.get("stats", {})
+            html_parts.append(f"""
+            <h3>📊 本周简报</h3>
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <div class="metric-value">{stats.get("total_tasks", 0)}</div>
+                    <div class="metric-label">处理文件</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value">{stats.get("total_duration", 0) / 60:.0f}分</div>
+                    <div class="metric-label">总时长</div>
+                </div>
+            </div>
+            """)
+        
+        if not html_parts:
+            return ""
+        
+        return f"""
+        <div class="card">
+            <h2>🎙️ 播客工作流 (v4.6)</h2>
+            {''.join(html_parts)}
+        </div>
+        """
+
     def _build_editing_html(self, editing_result=None) -> str:
         """构建剪辑建议 HTML"""
         if not editing_result:
@@ -960,33 +1066,22 @@ class ReportGenerator:
         </div>
         """
     
-    def _generate_json(self, *args, **kwargs) -> str:
-        """生成 JSON 结构化数据"""
+    def _generate_json(
+        self,
+        transcript, scenes, visual_data, aligned_data, fused_data,
+        highlights, media_info, output_dir,
+        platform_analysis=None, platform_meta=None, editing_result=None,
+        viral_result=None, live_stats=None, auto_edit_result=None,
+        cover_result=None, translate_result=None, bgm_result=None,
+        podcast_result=None, weekly_briefing=None,
+    ) -> str:
+        """生成 JSON 结构化数据（统一渲染器，v4.6 合并音频/视频路径）"""
         import json
-        
-        # 解析参数（支持新旧两种调用方式）
-        viral_result = kwargs.get("viral_result")
-        live_stats = kwargs.get("live_stats")
-        
-        if len(args) >= 13:
-            transcript, scenes, visual_data, aligned_data, fused_data, highlights, media_info, output_dir, platform_analysis, platform_meta, editing_result, viral_result, live_stats = args[:13]
-        elif len(args) >= 11:
-            transcript, scenes, visual_data, aligned_data, fused_data, highlights, media_info, output_dir, platform_analysis, platform_meta, editing_result = args[:11]
-        elif len(args) >= 8:
-            transcript, scenes, visual_data, aligned_data, fused_data, highlights, media_info, output_dir = args[:8]
-            platform_analysis = kwargs.get("platform_analysis")
-            platform_meta = kwargs.get("platform_meta")
-            editing_result = kwargs.get("editing_result")
-        else:
-            transcript, scenes, visual_data, aligned_data, fused_data, highlights, media_info, output_dir = args
-            platform_analysis = kwargs.get("platform_analysis")
-            platform_meta = kwargs.get("platform_meta")
-            editing_result = kwargs.get("editing_result")
         
         data = {
             "meta": {
                 "generator": "video-analyzer",
-                "version": "4.4.0",
+                "version": "4.6.0",
                 "generated_at": datetime.now().isoformat(),
             },
             "media_info": media_info,
@@ -1001,43 +1096,54 @@ class ReportGenerator:
             "editing_result": editing_result,
             "viral_result": viral_result,
             "live_stats": live_stats,
+            "auto_edit_result": auto_edit_result,
+            "cover_result": cover_result,
+            "translate_result": translate_result,
+            "bgm_result": bgm_result,
+            "podcast_result": podcast_result,
+            "weekly_briefing": weekly_briefing,
         }
         
         output_path = os.path.join(output_dir, "data.json")
+        os.makedirs(output_dir, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2, default=str)
         
         logger.info(f"JSON 数据已保存: {output_path}")
         return output_path
     
-    def _generate_markdown(self, *args, **kwargs) -> str:
-        """生成 Markdown 剧本"""
-        
-        # 解析参数
-        viral_result = kwargs.get("viral_result")
-        live_stats = kwargs.get("live_stats")
-        
-        if len(args) >= 13:
-            transcript, scenes, visual_data, aligned_data, fused_data, highlights, media_info, output_dir, platform_analysis, platform_meta, editing_result, viral_result, live_stats = args[:13]
-        elif len(args) >= 11:
-            transcript, scenes, visual_data, aligned_data, fused_data, highlights, media_info, output_dir, platform_analysis, platform_meta, editing_result = args[:11]
-        elif len(args) >= 8:
-            transcript, scenes, visual_data, aligned_data, fused_data, highlights, media_info, output_dir = args[:8]
-            platform_analysis = kwargs.get("platform_analysis")
-            platform_meta = kwargs.get("platform_meta")
-            editing_result = kwargs.get("editing_result")
-        else:
-            transcript, scenes, visual_data, aligned_data, fused_data, highlights, media_info, output_dir = args
-            platform_analysis = kwargs.get("platform_analysis")
-            platform_meta = kwargs.get("platform_meta")
-            editing_result = kwargs.get("editing_result")
+    def _generate_markdown(
+        self,
+        transcript: Dict,
+        scenes: Dict,
+        visual_data: Dict,
+        aligned_data: Dict,
+        fused_data: Dict,
+        highlights,
+        media_info: Dict,
+        output_dir: str,
+        platform_analysis=None,
+        platform_meta=None,
+        editing_result=None,
+        viral_result=None,
+        live_stats=None,
+        auto_edit_result=None,
+        cover_result=None,
+        translate_result=None,
+        bgm_result=None,
+        podcast_result=None,
+        weekly_briefing=None,
+    ) -> str:
+        """生成 Markdown 剧本（统一渲染器，v4.6 合并音频/视频路径）"""
         
         md = self._build_markdown_content(
             transcript, scenes, fused_data, highlights, media_info,
-            platform_analysis, platform_meta, editing_result
+            platform_analysis, platform_meta, editing_result,
+            podcast_result, weekly_briefing
         )
         
         output_path = os.path.join(output_dir, "script.md")
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(md)
         
@@ -1049,200 +1155,99 @@ class ReportGenerator:
         transcript: Dict,
         scenes: Dict,
         fused_data: Dict,
-        highlights: List[Dict],
+        highlights,
         media_info: Dict,
         platform_analysis=None,
         platform_meta=None,
         editing_result=None,
         viral_result=None,
         live_stats=None,
+        podcast_result=None,
+        weekly_briefing=None,
     ) -> str:
-        """构建 Markdown 内容"""
-        duration = media_info.get("duration", 0)
-        summary = fused_data.get("summary", {})
-        metrics = fused_data.get("metrics", {})
+        """构建 Markdown 内容（v4.6 播客/简报整合）"""
+        duration = media_info.get("duration", 0) if media_info else 0
+        summary = fused_data.get("summary", {}) if fused_data else {}
         
         lines = [
             "# 视频解析报告",
             "",
             f"**生成时间:** {datetime.now().strftime('%Y-%m-%d %H:%M')}",
             f"**视频时长:** {self._format_time(duration)}",
-            f"**分辨率:** {media_info.get('width', '?')}x{media_info.get('height', '?')}",
-            "",
-            "## 摘要",
-            "",
-            summary.get("text", "无"),
-            "",
-            "## 场景分析",
-            "",
-            f"| 场景 | 时间段 | 时长 | 对话覆盖率 | 标签 |",
-            f"|------|--------|------|------------|------|",
         ]
         
-        for scene in fused_data.get("scenes", []):
-            tr = scene.get("time_range", {})
-            tags = ", ".join(scene.get("semantic_tags", [])[:3])
-            lines.append(
-                f"| 场景 {scene.get('index')} "
-                f"| {self._format_time(tr.get('start', 0))} - {self._format_time(tr.get('end', 0))} "
-                f"| {tr.get('duration', 0):.1f}s "
-                f"| {int(scene.get('metrics', {}).get('dialog_coverage', 0) * 100)}% "
-                f"| {tags} |"
-            )
+        if media_info:
+            lines.append(f"**分辨率:** {media_info.get('width', '?')}x{media_info.get('height', '?')}")
         
-        lines.extend([
-            "",
-            "## 完整剧本（语音转文字）",
-            "",
-        ])
+        lines.extend(["", "## 摘要", "", summary.get("text", "无"), ""])
         
+        if fused_data:
+            lines.extend([
+                "## 场景分析",
+                "",
+                "| 场景 | 时间段 | 时长 | 对话覆盖率 | 标签 |",
+                "|------|--------|------|------------|------|",
+            ])
+            for scene in fused_data.get("scenes", []):
+                tr = scene.get("time_range", {})
+                tags = ", ".join(scene.get("semantic_tags", [])[:3])
+                lines.append(
+                    f"| 场景 {scene.get('index')} "
+                    f"| {self._format_time(tr.get('start', 0))} - {self._format_time(tr.get('end', 0))} "
+                    f"| {tr.get('duration', 0):.1f}s "
+                    f"| {int(scene.get('metrics', {}).get('dialog_coverage', 0) * 100)}% "
+                    f"| {tags} |"
+                )
+            lines.append("")
+        
+        lines.extend(["## 完整剧本（语音转文字）", ""])
         for seg in transcript.get("segments", []):
-            start = seg.get("start", 0)
-            text = seg.get("text", "")
-            lines.append(f"[{self._format_time(start)}] {text}")
+            lines.append(f"[{self._format_time(seg.get('start', 0))}] {seg.get('text', '')}")
         
         if highlights:
-            lines.extend([
-                "",
-                "## 精华片段",
-                "",
-            ])
+            lines.extend(["", "## 精华片段", ""])
             for h in highlights:
-                lines.append(
-                    f"- **{self._format_time(h.get('start_time', 0))}** "
-                    f"(评分: {h.get('score', 0)}) — "
-                    f"{h.get('text_preview', '')[:60]}"
-                )
+                if isinstance(h, dict):
+                    start_time = h.get("start_time", h.get("start", 0))
+                    score = h.get("score", h.get("confidence", 0))
+                    preview = h.get("text_preview", h.get("text", ""))[:60]
+                    lines.append(f"- **{self._format_time(start_time)}** (评分: {score}) — {preview}")
         
-        # 平台分析
         if platform_meta or platform_analysis:
-            lines.extend([
-                "",
-                "## 📱 平台分析",
-                "",
-            ])
-            
+            lines.extend(["", "## 📱 平台分析", ""])
             if platform_meta:
-                lines.extend([
-                    f"**平台:** {platform_meta.platform}",
-                    f"**标题:** {platform_meta.title}",
-                    f"**作者:** {platform_meta.author}",
-                    f"**点赞:** {platform_meta.like_count} | **评论:** {platform_meta.comment_count} | **播放:** {platform_meta.view_count}",
-                    "",
-                ])
-            
-            if platform_analysis:
-                opening = platform_analysis.opening_3s
-                ecommerce = platform_analysis.ecommerce_analysis
-                rhythm = platform_analysis.rhythm_analysis
-                
-                lines.extend([
-                    f"**开场类型:** {opening.get('hook_type', '未知')}",
-                    f"**带货视频:** {'是' if ecommerce.get('is_ecommerce') else '否'}",
-                    f"**节奏类型:** {rhythm.get('rhythm_type', '未知')}",
-                    "",
-                ])
-                
-                if ecommerce.get('is_ecommerce'):
-                    lines.extend([
-                        "### 带货分析",
-                        f"- 促销词: {', '.join(ecommerce.get('promotion_keywords', []))}",
-                        f"- 价格: {', '.join(ecommerce.get('price_mentions', []))}",
-                        f"- 行动号召: {', '.join(ecommerce.get('call_to_action', []))}",
-                        "",
-                    ])
+                lines.append(f"**平台:** {platform_meta.platform}")
+                lines.append(f"**标题:** {platform_meta.title}")
+                lines.append(f"**作者:** {platform_meta.author}")
+            lines.append("")
         
-        # 爆款预测
-        if viral_result:
-            lines.extend([
-                "",
-                "## 🔥 爆款预测",
-                "",
-                f"**爆款得分:** {viral_result.get('viral_score', 0)}/100",
-                f"**等级:** {viral_result.get('level', '未知')}",
-                f"**方法:** {viral_result.get('method', 'rule_based')}",
-                "",
-            ])
-            
-            benchmark = viral_result.get("benchmark", {})
-            if benchmark:
-                lines.extend([
-                    f"**分位:** {benchmark.get('percentile', '未知')}",
-                    f"**对比:** {benchmark.get('comparison', '未知')}",
-                    f"**潜力:** {benchmark.get('potential', '未知')}",
-                    "",
-                ])
-            
-            suggestions = viral_result.get("suggestions", [])
-            if suggestions:
-                lines.extend([
-                    "### 改进建议",
-                    "",
-                ])
-                for s in suggestions:
-                    lines.append(f"- **{s.get('title', '')}:** {s.get('description', '')}")
+        # v4.6: podcast chapters + highlights
+        if podcast_result:
+            chapters = podcast_result.get("chapters", {})
+            chapters_list = chapters.get("chapters", [])
+            if chapters_list:
+                lines.extend(["## 播客章节 (Podcasting 2.0)", ""])
+                for ch in chapters_list:
+                    lines.append(f"- [{self._format_time(ch.get('startTime', 0))}] {ch.get('title', '')}")
                 lines.append("")
-        
-        # 实时直播分析
-        if live_stats:
-            lines.extend([
-                "",
-                "## 🔴 实时直播分析",
-                "",
-                f"**运行时长:** {live_stats.get('duration', 0):.1f}s",
-                f"**总段数:** {live_stats.get('total_segments', 0)}",
-                f"**敏感词次数:** {live_stats.get('total_sensitive_detected', 0)}",
-                f"**告警次数:** {live_stats.get('total_alerts', 0)}",
-                f"**风险等级:** {live_stats.get('risk_level', '未知')}",
-                "",
-            ])
-        
-        # 剪辑建议
-        if editing_result:
-            lines.extend([
-                "",
-                "## 🎬 自动剪辑建议",
-                "",
-            ])
             
-            highlights_list = editing_result.get("highlights", [])
-            redundancies = editing_result.get("redundancies", [])
-            timeline = editing_result.get("timeline", {})
-            
-            if timeline:
-                lines.extend([
-                    "### 时间线",
-                    f"- 片段数: {len(timeline.get('clips', []))}",
-                    f"- 输出时长: {self._format_time(timeline.get('total_duration', 0))}",
-                    f"- 压缩比: {int(timeline.get('compression_ratio', 0) * 100)}%",
-                    "",
-                ])
-            
+            highlights_list = podcast_result.get("highlights", [])
             if highlights_list:
-                lines.extend([
-                    "### 高光片段",
-                    "",
-                ])
-                for h in highlights_list[:10]:
-                    lines.append(
-                        f"- **{self._format_time(h.get('start', 0))} - "
-                        f"{self._format_time(h.get('end', 0))}** "
-                        f"(评分: {h.get('score', 0)}) - {h.get('type', '')}"
-                    )
+                lines.extend(["## 金句", ""])
+                for h in highlights_list:
+                    lines.append(f"- [{self._format_time(h.get('start', 0))}] {h.get('text', '')} ({h.get('confidence', 0):.0%})")
                 lines.append("")
-            
-            if redundancies:
-                lines.extend([
-                    "### 冗余片段",
-                    "",
-                ])
-                for r in redundancies[:10]:
-                    lines.append(
-                        f"- **{self._format_time(r.get('start', 0))} - "
-                        f"{self._format_time(r.get('end', 0))}** "
-                        f"- {r.get('type', '')} - {r.get('reason', '')}"
-                    )
-                lines.append("")
+        
+        # v4.6: weekly briefing
+        if weekly_briefing:
+            stats = weekly_briefing.get("stats", {})
+            lines.extend([
+                "## 本周简报",
+                "",
+                f"- 处理文件: {stats.get('total_tasks', 0)} 个",
+                f"- 总时长: {stats.get('total_duration', 0) / 60:.1f} 分钟",
+                "",
+            ])
         
         return "\n".join(lines)
     
