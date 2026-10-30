@@ -2,8 +2,8 @@
 slug: video-analyzer-local
 displayName: 视频分析处理
 name: video-analyzer
-description: "视频分析处理 — 本地视频反编译分析工具。将视频拆解为时间轴剧本、语音转文字、场景分析、跨模态关联和精华摘要，支持多ASR引擎切换（Whisper/Paraformer/SenseVoice）、中文NLP增强、PaddleOCR中文识别。v4.0 新增短视频平台适配（抖音/快手/B站/视频号）和自动剪辑建议（高光检测/冗余标记/EDL导出/字幕样式）。v4.1 新增tiny模型优先体验（75MB低门槛）、说话人分离质量评分、剪映draft.json导出。v4.2 新增场景管理（detect→slice一条链）、短视频爆款预测、实时直播分析（流式ASR+敏感词检测）。v4.3 新增纯音频输入（mp3/m4a/wav播客与录音）、批量队列（SQLite+硬件档位并发）、GPU自动加速（CT2 int8量化）、ASR配置统一（--asr-engine单参数）。v4.4 新增一键成片（ffmpeg filter_complex 自动剪辑+平台规格包导出）、封面帧智能选取（Laplacian+人脸+三分法构图）、自动字幕翻译（cn-llm-router桥接，EN/JP/KO）、BGM识别（chromaprint指纹+本地库匹配）、剪映6.0适配+EDL导入指南。v4.5.0 新增首跑自检（doctor 探测 ffmpeg/模型/磁盘/内存/GPU + 修复命令清单）、模型下载链路（进度可视化+3次重试+断点续传+清华镜像交互提示）、--quick 快速模式（仅转写+摘要，5分钟出稿）、首跑「下一步建议」（功能发现引导）。"
-version: 4.5.0
+description: "视频分析处理 — 本地视频反编译分析工具。将视频拆解为时间轴剧本、语音转文字、场景分析、跨模态关联和精华摘要，支持多ASR引擎切换（Whisper/Paraformer/SenseVoice）、中文NLP增强、PaddleOCR中文识别。v4.0 新增短视频平台适配（抖音/快手/B站/视频号）和自动剪辑建议（高光检测/冗余标记/EDL导出/字幕样式）。v4.1 新增tiny模型优先体验（75MB低门槛）、说话人分离质量评分、剪映draft.json导出。v4.2 新增场景管理（detect→slice一条链）、短视频爆款预测、实时直播分析（流式ASR+敏感词检测）。v4.3 新增纯音频输入（mp3/m4a/wav播客与录音）、批量队列（SQLite+硬件档位并发）、GPU自动加速（CT2 int8量化）、ASR配置统一（--asr-engine单参数）。v4.4 新增一键成片（ffmpeg filter_complex 自动剪辑+平台规格包导出）、封面帧智能选取（Laplacian+人脸+三分法构图）、自动字幕翻译（cn-llm-router桥接，EN/JP/KO）、BGM识别（chromaprint指纹+本地库匹配）、剪映6.0适配+EDL导入指南。v4.5.0 新增首跑自检（doctor 探测 ffmpeg/模型/磁盘/内存/GPU + 修复命令清单）、模型下载链路（进度可视化+3次重试+断点续传+清华镜像交互提示）、--quick 快速模式（仅转写+摘要，5分钟出稿）、首跑「下一步建议」（功能发现引导）。v4.6.0 新增播客模式（说话人时间线+Podcasting 2.0 章节标记+金句三信号本地评分（句长/语义完整度/关键词密度））、说话人分离三类预设（访谈/会议/电话，阈值/窗口/说话人上限可配，质量评分随结果自动输出）、听后简报（周聚合HTML简报：本周处理列表/时长分布/金句Top10）、报告渲染器统一（音频/视频单源化）。"
+version: 4.6.0
 tags: ["video", "analysis", "transcription", "local-offline", "chinese", "asr", "auto-edit", "subtitle-translate", "bgm-detect", "doctor", "quick-mode"]
 icon: "🎬"
 author: "njskills"
@@ -150,6 +150,9 @@ output/
 | `--doctor` |  | 首跑自检：探测 ffmpeg/模型/磁盘/内存/GPU，输出修复命令清单（v4.5.0 新增） |
 | `--quick` |  | 快速模式：仅转写+时间戳摘要，跳过视觉/场景/剪辑链（v4.5.0 新增） |
 | `--download-model` |  | 下载 Whisper 模型（带进度可视化+断点续传+3次重试，v4.5.0 新增） |
+| `--podcast` |  | 播客模式：说话人时间线+Podcasting 2.0 章节标记+金句提取（v4.6.0 新增） |
+| `--diarize-profile` |  | 说话人分离预设：`interview`/`meeting`/`phone`（v4.6.0 新增） |
+| `--weekly-briefing` |  | 听后简报：生成周聚合 HTML 简报（v4.6.0 新增） |
 
 ## 功能说明
 
@@ -335,6 +338,23 @@ A: tiny 模型（75MB）识别速度更快但准确率略低；small 模型（46
 **Q: 为什么优先推荐 tiny 模型？**
 A: v4.1 新增 tiny 模型优先体验（75MB），首次使用门槛从 466MB 降至 75MB。低配电脑也会自动使用 tiny 模型。如需更高精度，可手动切换 `--model small/medium`。
 
+### v4.6.0 新增功能 FAQ
+
+**Q: 播客模式怎么用？**
+A: 运行 `--podcast` 即可。工具会执行完整的播客流水线：说话人分离 → Podcasting 2.0 章节标记 → 金句提取。输出包含 `chapters.json`（可直接导入播客平台）、`highlights.json`（金句+时间戳+置信度）、`speaker_timeline.json`（逐说话人时间线）。
+
+**Q: 三类说话人分离预设有什么区别？**
+A: `interview`（访谈/播客：2-3人，中等间隔，merge_gap=1.0秒）；`meeting`（会议/讨论：3-6人，短间隔，merge_gap=0.8秒）；`phone`（电话/对讲：2人，长间隔，merge_gap=2.0秒）。通过 `--diarize-profile` 指定。质量评分自动输出，无需额外参数。
+
+**Q: 金句评分原理是什么？**
+A: 纯本地三信号评分（无API）：句长（15-80字最佳，占25%权重）+ 语义完整度（是否含动词/主语/判断词，占45%权重）+ 关键词密度（命中核心观点词如"关键""方法""经验"等，占30%权重）。置信度≥0.5的才会输出。
+
+**Q: 听后简报怎么用？**
+A: 运行 `--weekly-briefing` 即可。工具会查询 queue_manager 的 SQLite 队列，按周聚合生成 HTML 简报。简报包含：本周处理文件数、每日处理分布、总时长、金句 Top10。适合"每周等报告"的使用习惯。
+
+**Q: Podcasting 2.0 标准是什么？**
+A: Podcasting 2.0 是播客行业的现代标准，支持章节标记、章节图片、链接、字幕等。本工具生成的 `chapters.json` 遵循该标准，可直接导入 Apple Podcasts、Overcast、Pocket Casts 等平台，让听众可以按章节跳转。
+
 ### v4.5.0 新增功能 FAQ
 
 **Q: 首跑自检怎么用？**
@@ -377,7 +397,7 @@ A: 升级了 draft.json 生成器以对齐剪映 6.0 新 schema（materials/trac
 
 ## 更新日志
 
-| v4.5.0 | 2026-09-11 | 增加：首跑自检（doctor 模块，一次性探测 ffmpeg/模型缓存/磁盘空间/内存水位/GPU 可用性，输出「缺什么→给什么」修复命令清单，检查项 YAML 可配，先清单后确认交互范式）；增加：模型下载链路（进度可视化+3次自动重试+HTTP Range 断点续传+清华 PyPI 镜像交互提示）；增加：--quick 快速模式（仅转写+时间戳摘要，跳过视觉/场景/剪辑链，单文件 Markdown 产出）；增加：首跑「下一步建议」（quick 结果末尾附 3 条可继续命令：--editing-suggest / --diarize / --platform）；增加：--doctor / --quick / --download-model 参数 |
+| v4.6.0 | 2026-11-02 | 增加：播客模式（core/podcast 模块：PodcastPipeline 整合说话人时间线+Podcasting 2.0 章节标记+金句提取，HighlightExtractor 三信号本地评分（句长/语义完整度/关键词密度），输出 chapters.json/highlights.json/speaker_timeline.json）；增加：说话人分离三类预设（interview/meeting/phone，阈值/窗口/说话人上限可配，v4.1 质量评分改为随结果自动输出）；增加：听后简报（WeeklyBriefing 复用 queue_manager SQLite + 周聚合视图，HTML 简报含本周处理/时长分布/金句Top10）；增加：报告渲染器统一（合并音频/视频重复分支到统一渲染器，删除旧音频 JSON 路径）；增加：--podcast / --diarize-profile / --weekly-briefing 参数 |
 
 <details>
 <summary>历史版本</summary>
