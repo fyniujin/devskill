@@ -1,5 +1,5 @@
 # video-analyzer 配置文件
-# 视频分析处理 Skill v4.5.0
+# 视频分析处理 Skill v4.6.0
 
 # ==================== ASR 语音识别配置 (v3.5 新增) ====================
 asr:
@@ -281,6 +281,37 @@ quality_scorer:
   distance_weight: 0.6
   # 重叠率权重
   overlap_weight: 0.4
+
+# ==================== 说话人分离预设配置 (v4.6 新增) ====================
+diarization_profiles:
+  # 默认预设
+  default: interview
+  # 自定义预设覆盖（可选）
+  custom:
+    interview:
+      threshold: 0.5
+      window: 1.5
+      max_speakers: 3
+      merge_gap: 1.0
+    meeting:
+      threshold: 0.6
+      window: 2.0
+      max_speakers: 6
+      merge_gap: 0.8
+    phone:
+      threshold: 0.4
+      window: 3.0
+      max_speakers: 2
+      merge_gap: 2.0
+
+# ==================== 听后简报配置 (v4.6 新增) ====================
+weekly_briefing:
+  # 队列数据库路径
+  db_path: null
+  # 输出目录
+  output_dir: .cache/briefings
+  # 金句显示数量
+  highlights_count: 10
 
 # ==================== 爆款预测配置 (v4.2 新增) ====================
 viral_predictor:
