@@ -39,6 +39,8 @@ from core.editing import HighlightDetector, RedundancyDetector, TimelineGenerato
 from core.editing.auto_editor import AutoEditor
 from core.editing.cover_selector import CoverSelector
 from core.editing.subtitle_translator import SubtitleTranslator
+from core.editing.subtitle_burner import SubtitleBurner
+from core.editing.glossary_engine import GlossaryEngine
 from core.editing.bgm_recognizer import BGMRecognizer
 from core.speaker_diarization.quality_scorer import QualityScorer
 from core.scene_manager import SceneManager
@@ -183,6 +185,21 @@ def parse_args():
                         help="说话人分离预设：访谈/会议/电话（v4.6 新增）")
     parser.add_argument("--weekly-briefing", action="store_true",
                         help="听后简报：生成周聚合 HTML 简报（v4.6 新增）")
+    parser.add_argument("--subtitle-preset", default=None,
+                        choices=["variety", "interview", "course", "minimal", "vertical"],
+                        help="字幕样式包：综艺/访谈/课程/极简/竖屏（v4.7 新增）")
+    parser.add_argument("--bilingual", action="store_true",
+                        help="双语同轴字幕：原文轨+译文轨（配合 --translate-subs，v4.7 新增）")
+    parser.add_argument("--original-track", action="store_true", default=True,
+                        help="双语时显示原文轨（默认开启，v4.7 新增）")
+    parser.add_argument("--no-original-track", dest="original_track", action="store_false",
+                        help="双语时隐藏原文轨（v4.7 新增）")
+    parser.add_argument("--no-translation-track", dest="translation_track", action="store_false",
+                        help="双语时隐藏译文轨（v4.7 新增）")
+    parser.add_argument("--glossary", default=None,
+                        help="术语表 JSON 路径（人名/产品名/专业词强制校正，v4.7 新增）")
+    parser.add_argument("--burn-subtitle", action="store_true",
+                        help="烧录硬字幕到视频（ffmpeg 一条命令，样式包直连，v4.7 新增）")
     
     return parser.parse_args()
 
@@ -191,7 +208,7 @@ def print_banner():
     """打印启动横幅"""
     banner = """
 ╔══════════════════════════════════════════════════╗
-║          🎬 video-analyzer v4.6.0               ║
+║          🎬 video-analyzer v4.7.0               ║
 ║        视频分析处理 — 本地视频反编译工具         ║
 ╚══════════════════════════════════════════════════╝
     """
@@ -258,6 +275,17 @@ def main():
     
     # 加载配置
     config = load_config(args.config if os.path.exists(args.config) else None)
+
+    # ===== v4.7 字幕工作流：CLI 参数注入配置（单源化，供各模块统一读取） =====
+    if args.glossary:
+        config.setdefault("glossary", {})["glossary_path"] = args.glossary
+    if args.subtitle_preset:
+        config.setdefault("subtitle_presets", {})["default"] = args.subtitle_preset
+    config.setdefault("subtitle_workflow", {})
+    config["subtitle_workflow"]["bilingual"] = args.bilingual
+    config["subtitle_workflow"]["original_track"] = args.original_track
+    config["subtitle_workflow"]["translation_track"] = args.translation_track
+    config["subtitle_workflow"]["burn"] = args.burn_subtitle
     
     # ========== 硬件自适应配置 ==========
     if not args.no_adaptive:
@@ -317,7 +345,7 @@ def main():
         # ========== 版本更新检查（非阻塞） ==========
         if not args.no_update_check:
             try:
-                notifier = UpdateNotifier(config, current_version="4.6.0")
+                notifier = UpdateNotifier(config, current_version="4.7.0")
                 update_result = notifier.check_for_updates()
                 update_msg = notifier.format_update_message(update_result)
                 if update_msg:
@@ -636,9 +664,11 @@ def main():
             subtitle_dir = os.path.join(args.output, "subtitles")
             os.makedirs(subtitle_dir, exist_ok=True)
             subtitle_path = os.path.join(subtitle_dir, f"subtitle.{args.subtitle_format}")
+            # v4.7：样式包优先于旧样式名
+            effective_style = args.subtitle_preset or args.subtitle_style
             subtitle_stylist.generate(
                 transcript, subtitle_path,
-                style=args.subtitle_style,
+                style=effective_style,
                 format=args.subtitle_format
             )
             output_paths["subtitle"] = subtitle_path
@@ -742,7 +772,84 @@ def main():
             if translate_result.get("warnings"):
                 for w in translate_result["warnings"]:
                     logger.warning(f"   ⚠️  {w}")
+
+        # ========== 术语校对报告（v4.7 新增） ==========
+        if translate_result and translate_result.get("glossary_report"):
+            gr = translate_result["glossary_report"]
+            if gr.get("glossary_size", 0) > 0:
+                logger.info(f"📖 [术语校对] 命中 {gr['hit_terms']}/{gr['total_terms']} "
+                            f"({gr.get('hit_rate', 0):.0%})")
+            if gr.get("pending_list_path"):
+                logger.info(f"   待确认清单: {gr['pending_list_path']}")
+                output_paths["glossary_pending"] = gr["pending_list_path"]
+
+        # ========== 双语同轴字幕（v4.7 新增） ==========
+        bilingual_path = None
+        if args.bilingual:
+            if translate_result and translate_result.get("output_path"):
+                logger.info("🔤 [双语字幕] 生成原文轨+译文轨同轴字幕...")
+                stylist = SubtitleStylist(config)
+                sub_dir = os.path.join(args.output, "subtitles")
+                os.makedirs(sub_dir, exist_ok=True)
+                # 解析译文文件为 segments
+                tmp_translator = SubtitleTranslator(config)
+                translation_segments = tmp_translator._parse_subtitles(
+                    translate_result["output_path"]
+                )
+                bilingual_path = os.path.join(sub_dir, "subtitle_bilingual.ass")
+                stylist.generate(
+                    transcript, bilingual_path,
+                    style=args.subtitle_preset,
+                    format="ass",
+                    bilingual=True,
+                    original_track=args.original_track,
+                    translation_track=args.translation_track,
+                    translation_segments=translation_segments,
+                )
+                output_paths["subtitle_bilingual"] = bilingual_path
+                logger.info(f"   ✅ 双语字幕: {bilingual_path}")
+            else:
+                logger.warning("⚠️  --bilingual 需要配合 --translate-subs 使用，已跳过")
         
+        # ========== 字幕烧录（v4.7 新增） ==========
+        if args.burn_subtitle:
+            logger.info("🔥 [字幕烧录] ffmpeg 硬字幕压制...")
+            burner = SubtitleBurner(config)
+            # 选择烧录用的字幕：双语优先，其次翻译字幕，其次原字幕
+            burn_sub = bilingual_path
+            if not burn_sub and translate_result and translate_result.get("output_path"):
+                burn_sub = translate_result["output_path"]
+            if not burn_sub:
+                burn_sub = output_paths.get("subtitle")
+
+            # 兜底：无任何字幕时用转写结果现生成一份
+            if not burn_sub and transcript:
+                stylist0 = SubtitleStylist(config)
+                sub_dir = os.path.join(args.output, "subtitles")
+                os.makedirs(sub_dir, exist_ok=True)
+                burn_sub = os.path.join(sub_dir, "subtitle.ass")
+                stylist0.generate(transcript, burn_sub, style=args.subtitle_preset, format="ass")
+                output_paths["subtitle"] = burn_sub
+
+            if burn_sub:
+                # 加载样式包（ASS 双语内嵌样式，无需 force_style 覆盖）
+                stylist = SubtitleStylist(config)
+                pack = stylist.load_style_pack(args.subtitle_preset)
+                burn_pack = None if burn_sub.endswith(".ass") and args.bilingual else pack
+                burn_result = burner.burn(
+                    video_path=video_path,
+                    subtitle_path=burn_sub,
+                    style_pack=burn_pack,
+                    hardware_tier=args.hardware_tier,
+                )
+                if burn_result.get("success"):
+                    output_paths["burned_video"] = burn_result["output_path"]
+                    logger.info(f"   ✅ 烧录完成: {burn_result['output_path']}")
+                else:
+                    logger.warning(f"   ⚠️  烧录失败: {burn_result.get('error')}")
+            else:
+                logger.warning("⚠️  无可烧录的字幕，请先启用字幕生成或翻译")
+
         # ========== 播客模式（可选，v4.6 新增） ==========
         podcast_result = None
         if args.podcast:
