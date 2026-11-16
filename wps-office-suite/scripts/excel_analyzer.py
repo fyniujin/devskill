@@ -5,7 +5,7 @@ Excel 智能分析器 v4.9.0
   1. 公式自动纠错（#REF!/#VALUE!/#DIV/0!/#N/A/#NAME?）
   2. 数据清洗辅助（缺失值/重复行/异常值/格式不一致）
   3. 透视表自动生成（智能选行/列/值字段）
-  4. 数据可视化建议（基于数据特征推荐图表类型）
+  4. 图表建议统一委托 chart_recommender（v5.5 合并旧分支，口径单源化）
   5. 数据预测（移动平均/指数平滑/线性回归）
   6. 自然语言转公式（NL → Excel 公式，规则引擎优先 + 多轮澄清 + LLM 可选降级）
 
@@ -954,6 +954,187 @@ class NL2Formula:
             "explanation": "条件判断 = IF(条件, 条件为真时的值, 条件为假时的值)",
             "example": "=IF(B2>100,\"高\",\"低\")",
         },
+        # ===== v5.5: 黄金集驱动扩充（SUMIFS / INDEX-MATCH / 动态数组 等）=====
+        {
+            "patterns": ["多条件求和", "多条件汇总", "sumifs", "按多个条件求和"],
+            "formula": "=SUMIFS(求和区域, 条件区域1, 条件1, 条件区域2, 条件2)",
+            "explanation": "多条件求和 = SUMIFS(求和区域, 条件区域1, 条件1, ...)",
+            "example": "=SUMIFS(C:C,A:A,\"华东\",B:B,\"手机\")",
+        },
+        {
+            "patterns": ["多条件计数", "多条件统计个数", "countifs"],
+            "formula": "=COUNTIFS(条件区域1, 条件1, 条件区域2, 条件2)",
+            "explanation": "多条件计数 = COUNTIFS(条件区域1, 条件1, ...)",
+            "example": "=COUNTIFS(A:A,\"华东\",B:B,\"手机\")",
+        },
+        {
+            "patterns": ["index match", "index-match", "反向查找", "向左查找", "indexmatch"],
+            "formula": "=INDEX(返回列, MATCH(查找值, 查找列, 0))",
+            "explanation": "INDEX+MATCH 精确查找（可向左查找，优于 VLOOKUP）",
+            "example": "=INDEX(C:C,MATCH(D2,A:A,0))",
+        },
+        {
+            "patterns": ["xlookup", "新查找", "多条件查找"],
+            "formula": "=XLOOKUP(查找值, 查找数组, 返回数组, \"未找到\", 0)",
+            "explanation": "XLOOKUP 全向查找（动态数组函数，Excel 365/WPS 支持）",
+            "example": "=XLOOKUP(D2,A:A,C:C,\"未找到\",0)",
+        },
+        {
+            "patterns": ["去重", "唯一值", "不重复列表", "unique"],
+            "formula": "=UNIQUE(区域)",
+            "explanation": "UNIQUE 提取唯一值（动态数组，自动溢出）",
+            "example": "=UNIQUE(A2:A100)",
+        },
+        {
+            "patterns": ["筛选数据", "动态筛选", "filter函数", "按条件筛选数据"],
+            "formula": "=FILTER(区域, 条件, \"无结果\")",
+            "explanation": "FILTER 按条件动态筛选（动态数组，自动溢出）",
+            "example": "=FILTER(A2:C100,B2:B100>100,\"无结果\")",
+        },
+        {
+            "patterns": ["排序函数", "动态排序", "sort函数", "自动排序"],
+            "formula": "=SORT(区域, 排序列, 升序, TRUE)",
+            "explanation": "SORT 动态排序（动态数组，自动溢出）",
+            "example": "=SORT(A2:C100,2,1,TRUE)",
+        },
+        {
+            "patterns": ["排序并去重", "sort unique", "sortunique"],
+            "formula": "=SORT(UNIQUE(区域))",
+            "explanation": "SORT+UNIQUE 排序去重组合（动态数组）",
+            "example": "=SORT(UNIQUE(A2:A100))",
+        },
+        {
+            "patterns": ["iferror", "错误处理", "出错显示", "容错"],
+            "formula": "=IFERROR(公式, 出错时的值)",
+            "explanation": "IFERROR 出错时返回指定值",
+            "example": "=IFERROR(VLOOKUP(D2,A:B,2,FALSE),\"\")",
+        },
+        {
+            "patterns": ["ifs多条件", "多个条件判断", "ifs函数"],
+            "formula": "=IFS(条件1, 值1, 条件2, 值2, TRUE, 默认值)",
+            "explanation": "IFS 多条件判断（避免嵌套 IF）",
+            "example": "=IFS(B2>=90,\"优\",B2>=60,\"及格\",TRUE,\"不及格\")",
+        },
+        {
+            "patterns": ["文本拼接", "合并文本", "连接字符串", "concat"],
+            "formula": "=TEXTJOIN(\",\", TRUE, 区域)",
+            "explanation": "TEXTJOIN 带分隔符合并文本（可忽略空单元格）",
+            "example": "=TEXTJOIN(\"-\",TRUE,A2:C2)",
+        },
+        {
+            "patterns": ["左截取", "取前几个字符", "取前", "left函数", "left"],
+            "formula": "=LEFT(文本, 字符数)",
+            "explanation": "LEFT 从左侧截取指定字符数",
+            "example": "=LEFT(A2,3)",
+        },
+        {
+            "patterns": ["右截取", "取后几个字符", "取后", "right函数", "right"],
+            "formula": "=RIGHT(文本, 字符数)",
+            "explanation": "RIGHT 从右侧截取指定字符数",
+            "example": "=RIGHT(A2,4)",
+        },
+        {
+            "patterns": ["中间截取", "截取中间", "mid函数"],
+            "formula": "=MID(文本, 起始位置, 字符数)",
+            "explanation": "MID 从中间截取指定字符数",
+            "example": "=MID(A2,4,2)",
+        },
+        {
+            "patterns": ["文本长度", "字符数", "len函数"],
+            "formula": "=LEN(文本)",
+            "explanation": "LEN 计算文本字符数",
+            "example": "=LEN(A2)",
+        },
+        {
+            "patterns": ["去除空格", "trim函数", "清理空格"],
+            "formula": "=TRIM(文本)",
+            "explanation": "TRIM 去除多余空格",
+            "example": "=TRIM(A2)",
+        },
+        {
+            "patterns": ["日期差", "相差天数", "datedif", "天数差"],
+            "formula": "=DATEDIF(开始日期, 结束日期, \"D\")",
+            "explanation": "DATEDIF 计算日期间隔（D=天/M=月/Y=年）",
+            "example": "=DATEDIF(A2,B2,\"D\")",
+        },
+        {
+            "patterns": ["今天日期", "当前日期", "today函数"],
+            "formula": "=TODAY()",
+            "explanation": "TODAY 返回当前日期（自动更新）",
+            "example": "=TODAY()",
+        },
+        {
+            "patterns": ["条件格式标红", "突出显示", "高亮重复"],
+            "formula": "=COUNTIF(区域, 首个单元格)>1",
+            "explanation": "COUNTIF>1 标记重复值（条件格式规则）",
+            "example": "=COUNTIF($A$2:$A$100,A2)>1",
+        },
+        {
+            "patterns": ["四舍五入取整", "向上取整", "roundup", "向下取整", "rounddown"],
+            "formula": "=ROUNDUP(数值, 小数位数)",
+            "explanation": "ROUNDUP 向上舍入（ROUNDDOWN 向下）",
+            "example": "=ROUNDUP(B2,0)",
+        },
+        {
+            "patterns": ["绝对值", "abs函数"],
+            "formula": "=ABS(数值)",
+            "explanation": "ABS 返回绝对值",
+            "example": "=ABS(B2)",
+        },
+        {
+            "patterns": ["平方根", "sqrt函数"],
+            "formula": "=SQRT(数值)",
+            "explanation": "SQRT 计算平方根",
+            "example": "=SQRT(B2)",
+        },
+        {
+            "patterns": ["幂运算", "次方", "power函数"],
+            "formula": "=POWER(底数, 指数)",
+            "explanation": "POWER 计算幂",
+            "example": "=POWER(B2,2)",
+        },
+        {
+            "patterns": ["随机数", "rand函数", "随机整数"],
+            "formula": "=RANDBETWEEN(最小值, 最大值)",
+            "explanation": "RANDBETWEEN 生成随机整数",
+            "example": "=RANDBETWEEN(1,100)",
+        },
+        {
+            "patterns": ["满足条件的平均值", "条件平均", "averageif"],
+            "formula": "=AVERAGEIF(条件区域, 条件, 平均区域)",
+            "explanation": "AVERAGEIF 按条件求平均",
+            "example": "=AVERAGEIF(A:A,\"华东\",B:B)",
+        },
+        {
+            "patterns": ["第二个最大值", "第n大", "large函数", "第几大", "第2大", "第二大值", "large"],
+            "formula": "=LARGE(区域, n)",
+            "explanation": "LARGE 返回第 n 个最大值",
+            "example": "=LARGE(B2:B100,2)",
+        },
+        {
+            "patterns": ["第二个最小值", "第n小", "small函数", "第几小", "第2小", "第二小", "倒数第二小", "small"],
+            "formula": "=SMALL(区域, n)",
+            "explanation": "SMALL 返回第 n 个最小值",
+            "example": "=SMALL(B2:B100,2)",
+        },
+        {
+            "patterns": ["出现次数最多的文本", "众数", "mode函数"],
+            "formula": "=MODE(区域)",
+            "explanation": "MODE 返回出现频率最高的数值",
+            "example": "=MODE(B2:B100)",
+        },
+        {
+            "patterns": ["跨表引用", "引用其他工作表", "sheet引用"],
+            "formula": "=工作表名!单元格",
+            "explanation": "跨工作表引用 = 工作表名!单元格地址",
+            "example": "=Sheet2!A1",
+        },
+        {
+            "patterns": ["文本转日期", "datevalue", "字符串转日期"],
+            "formula": "=DATEVALUE(日期文本)",
+            "explanation": "DATEVALUE 文本日期转序列值",
+            "example": "=DATEVALUE(\"2026-01-01\")",
+        },
     ]
 
     def __init__(self, filepath: str = None, sheet: str = "Sheet1"):
@@ -990,18 +1171,21 @@ class NL2Formula:
             except ImportError:
                 pass
 
-        # 规则引擎匹配
+        # 规则引擎匹配（v5.5: 最长 pattern 优先，避免 "round" 抢先命中 "roundup"）
         best_match = None
         best_score = 0
 
+        all_patterns = []
         for template in self.FORMULA_TEMPLATES:
             for pattern in template["patterns"]:
-                if pattern in query:
-                    score = len(pattern)
-                    if score > best_score:
-                        best_score = score
-                        best_match = template
-                    break
+                all_patterns.append((pattern, template))
+        all_patterns.sort(key=lambda x: len(x[0]), reverse=True)
+        for pattern, template in all_patterns:
+            if pattern in query:
+                if len(pattern) > best_score:
+                    best_score = len(pattern)
+                    best_match = template
+                break
 
         if best_match:
             return {
@@ -1197,11 +1381,23 @@ def analyze_excel(filepath: str, task: str, **kwargs) -> Dict:
             cleaner = DataCleaner(filepath, sheet)
             return cleaner.analyze_cleaning()
 
+        elif task == "chart":
+            # v5.5: 旧图表建议分支合并 —— 统一委托 chart_recommender（口径单源化）
+            from chart_recommender import DataAnalyzer, ChartRecommender
+            analyzer = DataAnalyzer(filepath, sheet)
+            if not analyzer.load():
+                return {"success": False, "error": "图表分析：无法加载文件"}
+            profile = analyzer.get_profile()
+            analyzer.close()
+            cr = ChartRecommender()
+            result = cr.recommend_smart(profile, use_llm=kwargs.get("use_llm", False))
+            return {"success": result.get("success", True), **result}
+
         else:
             return {
                 "success": False,
                 "error": f"未知任务类型: {task}",
-                "available_tasks": ["profile", "fix_formulas", "pivot", "predict", "nl2formula", "clean"],
+                "available_tasks": ["profile", "fix_formulas", "pivot", "predict", "nl2formula", "clean", "chart"],
             }
 
     except Exception as e:
