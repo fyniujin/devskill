@@ -116,7 +116,7 @@ def main():
     p = sub.add_parser("excel-analyze", help="Excel 深度分析（公式纠错/数据清洗/透视表/预测/NL2Formula）")
     p.add_argument("--file", required=True, help="Excel 文件路径")
     p.add_argument("--task", default="profile",
-                   choices=["profile", "fix_formulas", "pivot", "predict", "nl2formula", "clean"],
+                   choices=["profile", "fix_formulas", "pivot", "predict", "nl2formula", "clean", "chart"],
                    help="分析任务类型")
     p.add_argument("--sheet", default="Sheet1")
     p.add_argument("--column", help="预测列名（predict 任务）")
@@ -133,7 +133,7 @@ def main():
     p = sub.add_parser("excel-smart", help="Excel 智能分析（统一入口，--action 路由到对应功能）")
     p.add_argument("--file", required=True, help="Excel 文件路径")
     p.add_argument("--action", default="profile",
-                   choices=["profile", "fix_formulas", "pivot", "predict", "nl2formula", "clean", "hardware"],
+                   choices=["profile", "fix_formulas", "pivot", "predict", "nl2formula", "clean", "chart", "hardware"],
                    help="分析动作")
     p.add_argument("--sheet", default="Sheet1")
     p.add_argument("--column", help="预测/分析列名")
@@ -147,11 +147,23 @@ def main():
     p.add_argument("--agg-func", default="sum", help="透视表聚合方式")
 
     # v4.6: 数据图表生成器
+    # v5.5: 原生透视表构建器（openpyxl OOXML，真 pivot 而非静态汇总）
+    p = sub.add_parser("pivot-native", help="原生透视表（openpyxl OOXML，WPS/MS/纯Python 均可识别）")
+    p.add_argument("--file", required=True, help="Excel 文件路径")
+    p.add_argument("--row-field", required=True, help="行维度字段")
+    p.add_argument("--value-field", required=True, help="值字段")
+    p.add_argument("--col-field", default="", help="列维度字段（可选）")
+    p.add_argument("--agg", default="sum", help="聚合: sum/avg/count/max/min")
+    p.add_argument("--sheet", default="", help="数据源 Sheet")
+    p.add_argument("--output", default="", help="输出路径（空则同目录新文件）")
+    p.add_argument("--verify", action="store_true", help="仅校验已有文件的 pivot 部件")
+
     p = sub.add_parser("chart-gen", help="数据图表生成器（分析数据特征→推荐图表类型→生成图表）")
     p.add_argument("--file", required=True, help="Excel 文件路径")
     p.add_argument("--sheet", default="Sheet1")
     p.add_argument("--action", default="auto", choices=["analyze", "recommend", "generate", "auto"],
                    help="图表生成动作")
+    p.add_argument("--smart", action="store_true", help="v5.5: 推荐时接入 LLM 语义层（无 Key 自动降级）")
     p.add_argument("--type", default="", help="图表类型（不指定则自动推荐）")
     p.add_argument("--output", default="", help="输出路径")
 
@@ -296,6 +308,16 @@ def main():
             "col_field": args.col_field or "",
             "agg_func": args.agg_func,
         })
+    elif args.command == "pivot-native":
+        # v5.5: 原生透视表构建器
+        from pivot_builder import build_pivot, verify_pivot
+        if args.verify:
+            r = verify_pivot(args.file)
+        else:
+            out = args.output or (str(Path(args.file).with_suffix("")) + "_pivot.xlsx")
+            r = build_pivot(args.file, args.row_field, args.value_field,
+                            col_field=args.col_field, agg_func=args.agg,
+                            sheet=args.sheet, output=out)
     elif args.command == "chart-gen":
         # v4.6: 数据图表生成器
         from chart_recommender import ChartRecommender, DataAnalyzer
@@ -311,8 +333,12 @@ def main():
             if a.load():
                 profile = a.get_profile()
                 cr = ChartRecommender()
-                recs = cr.recommend(profile)
-                r = {"ok": True, "recommendations": recs}
+                smart = getattr(args, "smart", False)
+                r = cr.recommend_smart(profile, use_llm=True) if smart else {
+                    "success": True, "source": "local_rules",
+                    "recommendations": cr.recommend(profile),
+                }
+                r["ok"] = r.get("success", True)
                 a.close()
             else:
                 r = {"ok": False, "error": "加载失败"}
