@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from ..logger import get_logger
+from .glossary_engine import GlossaryEngine
 
 logger = get_logger(__name__)
 
@@ -68,8 +69,12 @@ class SubtitleTranslator:
         os.makedirs(self.output_dir, exist_ok=True)
         os.makedirs(self.temp_dir, exist_ok=True)
 
-        # 加载术语表
+        # 加载术语表（旧版扁平表，向后兼容）
         self.glossary = self._load_glossary()
+
+        # v4.7 术语表引擎（前置替换 + 后置校对 + 待确认清单）
+        self.glossary_engine = GlossaryEngine(config)
+        self.glossary_enabled = self.translator_config.get("glossary_enabled", True)
 
     def translate_subtitles(
         self,
@@ -104,6 +109,8 @@ class SubtitleTranslator:
             "skipped_count": 0,
             "warnings": [],
             "used_fallback": False,
+            "glossary_report": None,
+            "pending_list_path": None,
         }
 
         if not subtitles_path or not os.path.exists(subtitles_path):
@@ -136,13 +143,29 @@ class SubtitleTranslator:
             result["warnings"].append("字幕文件解析失败或为空")
             return result
 
-        # 批量翻译
+        # ===== v4.7 术语前置替换：加载术语表 =====
+        glossary = {}
+        if self.glossary_enabled:
+            glossary = self.glossary_engine.load(target_lang=target_lang)
+            if not glossary and self.glossary:
+                glossary = dict(self.glossary)  # 兼容旧版扁平术语表
+
+        # ===== v4.7 术语保护：先对全部原文做占位符隔离 =====
+        original_texts = [seg["text"] for seg in segments]
+        if glossary:
+            protected_texts, ph_map = self.glossary_engine.protect(original_texts, glossary)
+            logger.info(f"术语前置替换: 保护 {len(ph_map)} 个术语占位符")
+        else:
+            protected_texts, ph_map = list(original_texts), {}
+
+        # 批量翻译（翻译带占位符的文本，术语不会被机翻改写）
         translated_segments = []
+        translated_texts_all = [""] * len(segments)
         for i in range(0, len(segments), self.batch_size):
             batch = segments[i:i + self.batch_size]
-            batch_texts = [seg["text"] for seg in batch]
+            batch_texts = protected_texts[i:i + self.batch_size]
 
-            # 构建翻译 prompt
+            # 构建翻译 prompt（术语表约束占位符保持原样）
             prompt = self._build_translation_prompt(batch_texts, target_lang)
 
             # 调用 router 翻译
@@ -154,16 +177,41 @@ class SubtitleTranslator:
                 )
                 for j, seg in enumerate(batch):
                     if j < len(translated_texts):
-                        seg["text"] = translated_texts[j]
+                        translated_texts_all[i + j] = translated_texts[j]
                         result["translated_count"] += 1
                     else:
                         result["skipped_count"] += 1
                 translated_segments.extend(batch)
             else:
                 # 翻译失败，保留原文
+                for j, seg in enumerate(batch):
+                    translated_texts_all[i + j] = seg["text"]
                 translated_segments.extend(batch)
                 result["skipped_count"] += len(batch)
                 result["warnings"].append(f"批次 {i // self.batch_size + 1} 翻译失败，保留原文")
+
+        # ===== v4.7 术语后置校对：还原占位符 + 命中率统计 + 待确认清单 =====
+        if ph_map:
+            restored_texts, unresolved = self.glossary_engine.restore(translated_texts_all, ph_map)
+            for idx, text in enumerate(restored_texts):
+                if idx < len(translated_segments):
+                    translated_segments[idx]["text"] = text
+            report = self.glossary_engine.proofread(
+                original_texts, restored_texts, glossary, target_lang
+            )
+            result["glossary_report"] = report
+            result["pending_list_path"] = report.get("pending_list_path")
+            if unresolved:
+                result["warnings"].append(
+                    f"{len(unresolved)} 个术语占位符翻译后被破坏，已列入待确认清单"
+                )
+        else:
+            # 无术语表时也产出空报告，口径统一（死规则：报告单源化）
+            result["glossary_report"] = {
+                "target_lang": target_lang, "glossary_size": 0, "total_terms": 0,
+                "hit_terms": 0, "hit_rate": 1.0, "hits": [], "pending": [],
+                "pending_list_path": None,
+            }
 
         # 输出翻译后的字幕
         output_name = f"subtitle_{target_lang}.{output_format}"
@@ -250,7 +298,8 @@ class SubtitleTranslator:
         prompt = f"""请将以下中文短视频字幕翻译为{lang_name}。要求：
 1. 保持口语化风格，符合短视频语境
 2. 每条翻译独立一行，格式为 "序号. 翻译内容"
-3. 保留原始序号{glossary_constraint}
+3. 保留原始序号
+4. 文本中形如 GL0 的标记是受保护术语占位符，必须原样保留在译文中，不得翻译、改写或删除{glossary_constraint}
 
 待翻译文本：
 {text_list}"""
