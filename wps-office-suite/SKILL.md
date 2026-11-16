@@ -2,8 +2,8 @@
 name: wps-office-suite
 displayName: WPS Office 全家桶
 slug: wps-office-suite
-description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v5.1新增：kingdoc云端桥接（白名单探测+配置预检+subprocess上传+差异检查）、条件格式/数据验证跨引擎IO（JSON中间格式保真往返）、会议纪要三段式要素化（待办清单+决策记录+风险异议）+说话人标注（MFCC聚类）；v5.2新增：公文一键排版（GB/T 9704 规则库约束+结构识别套版+红头预留位+联合行文）、批量水印与敏感信息打码（身份证/手机号/银行卡/邮箱双轨识别+黑色矩形覆盖+打码清单）、跨文档知识检索与问答（本地TF-IDF零依赖+跳转+可选zwjh记忆桥接）；删除：与contract-review重复的轻量合同审查模块，改为文档互链引导；v5.2.5修复：MS Office引擎下Excel/PPT创建必然失败（错用Word COM对象），新增get_ms_excel/get_ms_ppt及三槽位统一释放release_ms，MS Office路径透传filepath参数;v5.3.5修复：SKILL.md frontmatter 修复 tags 块序列误混入联系方式行导致标准 YAML 解析失败;v5.4.0新增：留存型功能——定时任务与报告中心（schedule_register 升级为三平台统一调度层 schtasks/cron/launchd，错过策略 skip/run_once，注册表 JSON 可导出导入；新建 report_center.py 报告中心，templates/reports/*.json 参数化模板 + ECharts 单文件 HTML 输出（图表内联、无服务端、双击即开）；report_generator 升级支持 --format html；wps.py CLI 统一埋点 SQLite，自动供 report_center 生成周度使用摘要附在报告末尾；watch.py 职责收窄为纯事件采集）；v5.3.0新增：统一CLI入口 wps（registry.json注册表分发，office --app/--action 与 convert 子命令、--list 一屏列出全部命令，薄路由层不改脚本内部逻辑）、全命令 --json 机器可读输出（固定 ok/error_id/elapsed/data 四字段，对齐 E001-E015，wps_error.py 新增 emit_json 统一出口）、_worker 启动优化（wps_pure 改惰性加载，pywin32/python-docx/openpyxl 经核查已惰性导入，ENGINE_CACHE 进程级单例复用，COM 释放统一走 release_ms 三槽位）、转换三入口合并为 convert（format_converter/md_converter/wps_docx_to_ppt 内部按目标格式路由，旧脚本保留为兼容别名并提示新命令，v6.0.0 移除）
-version: 5.4.0
+description: WPS Office 全家桶 - 四引擎（WPS/MS Office/LibreOffice/纯Python）智能识别用户已安装软件，纯Python模式支持排序/筛选/图表/公式/统计，含文档模板（代码生成）、最佳实践案例、故障排除大章（20+避坑+15 FAQ+15错误ID 统一索引）、自动重试、硬件自适应、环境自检、Skill更新提醒；v5.1新增：kingdoc云端桥接（白名单探测+配置预检+subprocess上传+差异检查）、条件格式/数据验证跨引擎IO（JSON中间格式保真往返）、会议纪要三段式要素化（待办清单+决策记录+风险异议）+说话人标注（MFCC聚类）；v5.2新增：公文一键排版（GB/T 9704 规则库约束+结构识别套版+红头预留位+联合行文）、批量水印与敏感信息打码（身份证/手机号/银行卡/邮箱双轨识别+黑色矩形覆盖+打码清单）、跨文档知识检索与问答（本地TF-IDF零依赖+跳转+可选zwjh记忆桥接）；删除：与contract-review重复的轻量合同审查模块，改为文档互链引导；v5.2.5修复：MS Office引擎下Excel/PPT创建必然失败（错用Word COM对象），新增get_ms_excel/get_ms_ppt及三槽位统一释放release_ms，MS Office路径透传filepath参数;v5.3.5修复：SKILL.md frontmatter 修复 tags 块序列误混入联系方式行导致标准 YAML 解析失败;v5.4.0新增：留存型功能——定时任务与报告中心（schedule_register 升级为三平台统一调度层 schtasks/cron/launchd，错过策略 skip/run_once，注册表 JSON 可导出导入；新建 report_center.py 报告中心，templates/reports/*.json 参数化模板 + ECharts 单文件 HTML 输出（图表内联、无服务端、双击即开）；report_generator 升级支持 --format html；wps.py CLI 统一埋点 SQLite，自动供 report_center 生成周度使用摘要附在报告末尾；watch.py 职责收窄为纯事件采集）；v5.3.0新增：统一CLI入口 wps（registry.json注册表分发，office --app/--action 与 convert 子命令、--list 一屏列出全部命令，薄路由层不改脚本内部逻辑）、全命令 --json 机器可读输出（固定 ok/error_id/elapsed/data 四字段，对齐 E001-E015，wps_error.py 新增 emit_json 统一出口）、_worker 启动优化（wps_pure 改惰性加载，pywin32/python-docx/openpyxl 经核查已惰性导入，ENGINE_CACHE 进程级单例复用，COM 释放统一走 release_ms 三槽位）、转换三入口合并为 convert（format_converter/md_converter/wps_docx_to_ppt 内部按目标格式路由，旧脚本保留为兼容别名并提示新命令，v6.0.0 移除）；v5.5.0新增：Excel 深度模式与数据准确性承诺——原生透视表构建器 pivot_builder.py（openpyxl OOXML 真 pivotCache/pivotTable，非静态汇总，WPS/MS/纯Python 均可识别，nl2sql「按X汇总Y」直出透视表+clarify 澄清维度/度量）、NL2Formula 黄金集自检（tests/golden_formula.json 50 条基准，run_golden.py 逐条断言，本版准确率 100%）、chart_recommender 接入 llm_bridge 语义层（cn-llm-router 白名单优先，无 Key 降级本地规则，理由中文化+数据特征依据）；合并：excel_analyzer 旧图表建议分支统一为 --action chart 路由（口径单源化）
+version: 5.5.0
 category: 办公协作与生产力工具
 platforms:
   - windows
@@ -42,7 +42,7 @@ tags:
   - 避坑指南
 ---
 
-# WPS Office 全家桶 v5.4.0 ✅
+# WPS Office 全家桶 v5.5.0 ✅
 
 > 🏗️ **四引擎智能识别**：自动检测用户电脑已安装的软件，按 WPS → MS Office → LibreOffice → 纯Python 顺序选择最合适的引擎
 > ✨ **纯Python模式增强 v4.8**：排序、筛选、图表、公式、统计、条件格式、数据验证、合并单元格、命名区域 — 跨平台全部支持
@@ -594,7 +594,9 @@ python scripts/wps --json <任意命令> [参数]                 # 固定四字
 | long-document | 长文档排版：目录/页眉页脚/编号/交叉引用/图表索引 | long_document.py |
 | gongwen | 公文一键排版：GB/T 9704 规则库，红头预留位/联合行文 | gongwen.py |
 | meeting-minutes | 会议纪要：ASR转写→LLM摘要→Word（待办/决策/风险异议） | meeting_minutes.py |
-| excel-analyze | Excel 深度分析：数据画像/透视/预测/NL2SQL | excel_analyzer.py |
+| excel-analyze | Excel 深度分析：数据画像/透视/预测/NL2SQL/公式黄金集（44 模板，准确率 100%）/chart 单源路由 | excel_analyzer.py |
+| pivot-native | 原生透视表：openpyxl OOXML 真 pivot（按行/列/值字段），--verify 校验部件 | pivot_builder.py |
+| nl2sql-pivot | 「按X汇总Y」自然语言直出原生透视表（数据驱动识别字段+澄清补全） | nl2sql_engine.py pivot |
 | invoice-ocr | 发票 OCR 入账：PDF/图片→Excel 本地识别 | wps_invoice_ocr.py |
 | formula-explain | 公式解释：Excel 公式→自然语言解读 | formula_explainer.py |
 | ppt-generate | PPT 智能生成：多源输入/演讲者备注/动画/配色 | ppt_generator.py |
@@ -616,7 +618,7 @@ python scripts/wps --json <任意命令> [参数]                 # 固定四字
 | test | 环境自检：引擎/COM/依赖 | wps_test.py |
 | toc | 目录生成：提取/插入 Word 目录 | wps_toc.py |
 | watch | 文件监控：轮询+YAML 规则+大文件分片（v5.4 职责收窄：纯事件采集，提醒逻辑剥离给调度层） | watch.py |
-| chart-recommend | 图表推荐：按数据特征推荐图表类型 | chart_recommender.py |
+| chart-recommend | 图表推荐：本地规则 + --smart 语义层（cn-llm-router 白名单，无 Key 降级），理由中文化+数据特征依据 | chart_recommender.py |
 
 > 其余脚本可直接 `python scripts/wps <脚本名> [参数]` 调用；`--json` 适用于全部命令。
 
@@ -658,6 +660,7 @@ python scripts/wps --json <任意命令> [参数]                 # 固定四字
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v5.5.0 | 2026-11-16 | 增加：原生透视表构建器 scripts/pivot_builder.py（openpyxl OOXML 构建真 pivotCacheDefinition/pivotCacheRecords/pivotTableDefinition 五部件，非静态汇总行，ws.add_pivot 官方 API，重载可识别，WPS/MS Office/纯Python 三引擎结构兼容；大文件缓存上限 10000 行+高基数字段保护）；增加：wps_excel.py pivot-native 命令（--row-field/--value-field/--col-field/--agg/--verify）；优化：nl2sql_engine.py 新增 nl_to_pivot「按X汇总Y」直出原生透视表（数值列数据驱动识别行维度/度量，复用 clarify 参数补全，新增 pivot CLI 子命令）；增加：NL2Formula 黄金集 tests/golden_formula.json（50 条 SUMIFS/VLOOKUP/INDEX-MATCH/动态数组/XLOOKUP/FILTER/SORT 等基准）+ tests/run_golden.py 逐条断言跑分（阈值可配，CI 退出码）；优化：excel_analyzer.py 公式模板库从 14 条扩至 44 条并改最长 pattern 优先匹配，黄金集准确率 100%（50/50，≥85% 目标达标并公示）；优化：chart_recommender.py 新增 recommend_smart 接入 llm_bridge 语义层（cn-llm-router 白名单探测优先，无 Key/无 router 自动降级本地规则，推荐理由中文化+数据特征→图表类型依据，--smart 开关）；合并：excel_analyzer 旧图表建议分支统一委托 chart_recommender --action chart 路由（口径单源化，删除重复能力声明） |
 | v5.4.0 | 2026-10-30 | 增加：留存型功能——定时任务与报告中心；优化：schedule_register 升级为三平台统一调度层 schtasks/cron/launchd，错过策略 skip/run_once，注册表 JSON 可导出导入备份迁移；新建：report_center.py 报告中心，templates/reports/*.json 参数化模板 + ECharts 单文件 HTML 输出（图表内联、无服务端、双击即开）；升级：report_generator 支持 --format html（共享渲染器）；优化：wps.py CLI 统一埋点 SQLite（script/action/duration_ms/success），自动供 report_center 生成周度使用摘要附在报告末尾；优化：watch.py 职责收窄为纯事件采集（轮询+规则匹配+大文件分片），提醒逻辑剥离给调度层 |
 | v5.3.5 | 2026-10-16 | 修复：SKILL.md YAML frontmatter tags 块序列误混入联系方式行（缺 - 前缀，导致标准 YAML 解析失败、元数据层不可用），将该行移出 tags 作为顶层 contact 键，frontmatter 恢复可解析，元数据工具链恢复正常 |
 | v5.3.0 | 2026-10-09 | 增加：统一 CLI 入口 scripts/wps.py（registry.json 注册表分发，office --app word/excel/ppt --action 与 convert 子命令 + --list 一屏列出全部命令，薄路由层不改脚本内部逻辑，原 47 个脚本 100% 兼容）；增加：全命令 --json 机器可读输出（wps_error.py 新增 emit_json 统一出口，固定 ok/error_id/elapsed/data 四字段，error_id 对齐 E001-E015）；优化：_worker 启动速度（wps_worker.py 的 wps_pure 改惰性加载，pywin32/python-docx/openpyxl 经核查已惰性导入，ENGINE_CACHE 进程级单例复用，COM 释放统一走 release_ms 三槽位）；合并：格式转换三入口收敛为 convert 子命令（format_converter/md_converter/wps_docx_to_ppt 内部按目标格式路由），旧脚本保留为兼容别名并提示新命令，v6.0.0 移除；优化：SKILL.md 命令速查改为由 registry.json 自动导出的一页表，主文档体积下降 ≥30% |
