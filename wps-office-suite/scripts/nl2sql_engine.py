@@ -754,6 +754,165 @@ class ConversationManager:
         return self.history
 
 
+# ==================== v5.5: 按X汇总Y → 原生透视表 ====================
+
+def _read_headers(filepath: str, sheet: str) -> List[str]:
+    """读取 Excel 表头（惰性导入 openpyxl）"""
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(filepath, read_only=True)
+        ws = wb[sheet] if sheet in wb.sheetnames else wb[wb.sheetnames[0]]
+        headers = []
+        for c in range(1, ws.max_column + 1):
+            v = next(ws.iter_rows(min_row=1, max_row=1, min_col=c, max_col=c,
+                                  values_only=True), (None,))[0]
+            headers.append(str(v).strip() if v is not None else f"列{c}")
+        wb.close()
+        return headers
+    except Exception:
+        return []
+
+
+MEASURE_KW = ("金额", "销售额", "收入", "支出", "利润", "成本", "数量", "额", "amount", "sales",
+              "revenue", "profit", "cost", "count", "qty", "value", "sum", "price", "销量", "产值")
+DIM_KW = ("地区", "区域", "月份", "日期", "产品", "类别", "部门", "客户", "省", "市", "年",
+          "region", "area", "month", "date", "product", "category", "dept", "name", "类型", "分类")
+
+
+def _sample_numeric_cols(filepath: str, sheet: str, headers: List[str]) -> set:
+    """采样判断哪些列是数值列（数据驱动，优于纯列名猜测）"""
+    numeric = set()
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+        ws = wb[sheet] if sheet in wb.sheetnames else wb[wb.sheetnames[0]]
+        samples = {i: [] for i in range(len(headers))}
+        n_rows = 0
+        for row in ws.iter_rows(min_row=2, max_row=21, values_only=True):
+            n_rows += 1
+            for i, v in enumerate(row):
+                if i < len(headers) and isinstance(v, (int, float)) and not isinstance(v, bool):
+                    samples[i].append(v)
+        wb.close()
+        threshold = max(1, int(n_rows * 0.6))
+        for i, vals in samples.items():
+            if len(vals) >= threshold:
+                numeric.add(headers[i])
+    except Exception:
+        pass
+    return numeric
+
+
+def _match_column(query: str, headers: List[str], prefer: str = "dim",
+                  numeric_cols: set = None, used: set = None) -> str:
+    """
+    匹配实际列名。
+    优先 query 中明确出现的列名；再按「数据驱动的数值/维度属性 + 关键词」补齐。
+    """
+    used = used or set()
+    numeric_cols = numeric_cols if numeric_cols is not None else set()
+    candidates = [h for h in headers if h not in used]
+
+    # 1) query 中明确出现的完整列名（最长优先），且符合数值/维度属性
+    hits = [h for h in candidates if h and h in query]
+    hits.sort(key=len, reverse=True)
+    for h in hits:
+        is_num = h in numeric_cols
+        if prefer == "measure" and is_num:
+            return h
+        if prefer == "dim" and not is_num:
+            return h
+    # query 明确出现的列名（属性不符也接受，避免漏配）
+    if hits:
+        return hits[0]
+
+    # 2) 关键词匹配（结合数值属性）
+    kws = MEASURE_KW if prefer == "measure" else DIM_KW
+    for kw in kws:
+        for h in candidates:
+            kw_in_name = kw.lower() in h.lower()
+            kw_in_query = kw in query
+            if kw_in_name and ((h in numeric_cols) == (prefer == "measure") or not numeric_cols):
+                return h
+            if kw_in_query and ((h in numeric_cols) == (prefer == "measure") or not numeric_cols):
+                return h
+    # 3) 纯数据属性兜底（仅 query 有汇总/分组意图时）
+    if numeric_cols:
+        for h in candidates:
+            if (h in numeric_cols) == (prefer == "measure"):
+                return h
+    return ""
+
+
+def _extract_agg(query: str) -> str:
+    if any(k in query for k in ("平均", "均值", "avg", "average", "mean")):
+        return "average"
+    if any(k in query for k in ("计数", "个数", "数量", "count", "有多少")):
+        return "count"
+    if any(k in query for k in ("最大", "最高", "max")):
+        return "max"
+    if any(k in query for k in ("最小", "最低", "min")):
+        return "min"
+    return "sum"
+
+
+def nl_to_pivot(filepath: str, query: str, sheet: str = "",
+                output: str = "", clarify_missing: bool = True) -> Dict[str, Any]:
+    """
+    把「按 X 汇总 Y」类自然语言直接转成原生透视表。
+    维度/度量/筛选三参数由 query 解析，缺失时可选 clarify 补全。
+
+    Returns:
+        {success, pivot_config, build_result, clarification}
+    """
+    if not Path(filepath).exists():
+        return {"success": False, "error": f"文件不存在: {filepath}"}
+
+    headers = _read_headers(filepath, sheet or "Sheet1")
+    if not headers:
+        return {"success": False, "error": "无法读取表头"}
+
+    numeric_cols = _sample_numeric_cols(filepath, sheet or "Sheet1", headers)
+    # 先定度量（数值列），再定行维度（非数值列），避免互相抢占
+    value_field = _match_column(query, headers, prefer="measure", numeric_cols=numeric_cols)
+    row_field = _match_column(query, headers, prefer="dim", numeric_cols=numeric_cols,
+                              used={value_field} if value_field else set())
+    col_field = ""
+    dim_hits = [h for h in headers if h and h in query and h != row_field and h != value_field
+                and h not in numeric_cols]
+    if dim_hits:
+        col_field = dim_hits[0]
+    agg = _extract_agg(query)
+
+    clarification = None
+    missing = []
+    if not row_field:
+        missing.append("行维度字段")
+    if not value_field:
+        missing.append("度量字段")
+
+    if missing and clarify_missing:
+        clarification = {"needed": True, "missing": missing,
+                         "slots": {"row_field": row_field, "value_field": value_field,
+                                   "col_field": col_field, "agg": agg},
+                         "available_columns": headers,
+                         "hint": "请补充：" + "、".join(missing) + f"；可用列：{headers}"}
+        return {"success": False, "error": "参数不完整，需澄清", "clarification": clarification,
+                "pivot_config": clarification["slots"]}
+
+    # 调原生透视表构建器
+    try:
+        from pivot_builder import build_pivot
+        build = build_pivot(filepath, row_field, value_field, col_field=col_field,
+                            agg_func=agg, sheet=sheet, output=output)
+        return {"success": build.get("success", False),
+                "pivot_config": {"row_field": row_field, "value_field": value_field,
+                                 "col_field": col_field or None, "agg_func": agg},
+                "build_result": build, "clarification": clarification}
+    except ImportError:
+        return {"success": False, "error": "pivot_builder 模块不可用"}
+
+
 # ==================== CLI 入口 ====================
 
 def main():
@@ -778,9 +937,22 @@ def main():
     p_hist = sub.add_parser("history", help="查看查询历史")
     p_hist.add_argument("--file", required=True, help="Excel 文件路径")
 
+    # pivot 子命令（v5.5：按X汇总Y → 原生透视表）
+    p_pivot = sub.add_parser("pivot", help="自然语言直接生成原生透视表（按X汇总Y）")
+    p_pivot.add_argument("--file", required=True, help="Excel 文件路径")
+    p_pivot.add_argument("--query", required=True, help="自然语言，如：按地区汇总销售额")
+    p_pivot.add_argument("--sheet", default="", help="工作表")
+    p_pivot.add_argument("--output", default="", help="输出路径")
+    p_pivot.add_argument("--no-clarify", action="store_true", help="禁用缺失参数澄清")
+
     args = parser.parse_args()
 
-    if args.command == "query":
+    if args.command == "pivot":
+        result = nl_to_pivot(args.file, args.query, sheet=args.sheet, output=args.output,
+                             clarify_missing=not args.no_clarify)
+        print(json.dumps(result, ensure_ascii=False, default=str))
+
+    elif args.command == "query":
         conv = ConversationManager(args.file, args.sheet)
         result = conv.query(args.query)
         print(json.dumps(result, ensure_ascii=False, default=str))
