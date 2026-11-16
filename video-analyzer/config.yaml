@@ -1,5 +1,5 @@
 # video-analyzer 配置文件
-# 视频分析处理 Skill v4.6.0
+# 视频分析处理 Skill v4.7.0
 
 # ==================== ASR 语音识别配置 (v3.5 新增) ====================
 asr:
@@ -422,6 +422,41 @@ translator:
   batch_size: 10
   # 超时（秒）
   timeout: 120
+  # 是否启用术语表强制校正（v4.7 新增）
+  glossary_enabled: true
+
+# ==================== 字幕样式包配置 (v4.7 新增) ====================
+subtitle_presets:
+  # 默认样式包: variety(综艺)/interview(访谈)/course(课程)/minimal(极简)/vertical(竖屏)
+  default: variety
+  # 样式包目录（null 则使用包内 templates/subtitle_styles）
+  style_dir: null
+
+# ==================== 术语表配置 (v4.7 新增) ====================
+glossary:
+  # 是否启用术语前置替换+后置校对
+  enabled: true
+  # 术语表 JSON 路径（null 则不使用；CLI --glossary 可覆盖）
+  glossary_path: null
+  # 待确认清单输出目录
+  pending_dir: .cache/glossary
+  # 术语表 JSON 格式: {"源词": "目标词"} 或 {"en": {...}, "ja": {...}}
+
+# ==================== 双语字幕工作流配置 (v4.7 新增) ====================
+subtitle_workflow:
+  bilingual: false
+  original_track: true
+  translation_track: true
+  burn: false
+
+# ==================== 字幕烧录配置 (v4.7 新增) ====================
+burn:
+  ffmpeg_path: ffmpeg
+  # 编码器与档位（低配可选 ultrafast）
+  codec: libx264
+  preset: veryfast
+  crf: 23
+  output_dir: output
 
 # ==================== BGM 识别配置 (v4.4 新增) ====================
 bgm:
