@@ -228,7 +228,86 @@ class ChartRecommender:
         # 按优先级排序
         recommendations.sort(key=lambda x: x["priority"], reverse=True)
         return recommendations
-    
+
+    def recommend_smart(self, profile: Dict, use_llm: bool = True) -> Dict:
+        """
+        v5.5: 语义层图表推荐。
+        llm_bridge 优先（白名单探测 cn-llm-router），无 Key/无 router 自动降级本地规则。
+        推荐理由中文化，并注明「数据特征→图表类型」依据。
+
+        Returns:
+            {success, source, recommendations, reason, basis}
+        """
+        local = self.recommend(profile)
+        fallback = {
+            "success": True,
+            "source": "local_rules",
+            "recommendations": local,
+            "reason": self._local_reason(profile, local),
+            "basis": self._local_basis(profile),
+        }
+        if not use_llm:
+            return fallback
+
+        try:
+            from llm_bridge import get_best_method, call_router
+            if get_best_method("auto") != "cn-llm-router":
+                return fallback
+        except Exception:
+            return fallback
+
+        # 构造数据画像摘要给 LLM
+        col_desc = ", ".join(
+            f"{name}({typ})" for name, typ in profile.get("col_types", {}).items()
+        )
+        prompt = (
+            "你是数据分析专家。根据以下 Excel 数据画像，推荐最合适的 1-3 种图表类型。\n"
+            f"列名(类型): {col_desc}\n"
+            f"数据行数: {profile.get('data_rows', 0)}\n"
+            "要求：只输出 JSON，格式 "
+            '[{"chart_type":"line|bar|pie|scatter|area","name":"中文名","reason":"中文理由",'
+            '"basis":"数据特征→图表类型的依据"}]，不要其它文字。'
+        )
+        try:
+            resp = call_router(prompt=prompt, task="chat", timeout=20)
+            if not resp.get("ok") or not resp.get("text"):
+                return fallback
+            import re
+            text = resp["text"]
+            m = re.search(r"\[.*\]", text, re.S)
+            parsed = json.loads(m.group(0) if m else text)
+            if not isinstance(parsed, list) or not parsed:
+                return fallback
+            recs = []
+            for item in parsed[:3]:
+                recs.append({
+                    "chart_type": str(item.get("chart_type", "bar")),
+                    "name": str(item.get("name", "智能推荐")),
+                    "reason": str(item.get("reason", "")),
+                    "basis": str(item.get("basis", "")),
+                    "priority": 95,
+                })
+            return {"success": True, "source": "cn-llm-router",
+                    "recommendations": recs,
+                    "reason": recs[0].get("reason", ""),
+                    "basis": recs[0].get("basis", ""),
+                    "model": resp.get("model", "")}
+        except Exception:
+            return fallback
+
+    def _local_reason(self, profile: Dict, local: List[Dict]) -> str:
+        if not local:
+            return "未能从数据特征识别推荐图表"
+        top = local[0]
+        return f"推荐「{top['name']}」：{top['description']}（基于本地规则，未接入语义层）"
+
+    def _local_basis(self, profile: Dict) -> str:
+        types = list(profile.get("col_types", {}).values())
+        n_num = sum(1 for t in types if t == "numeric")
+        n_date = sum(1 for t in types if t == "datetime")
+        n_cat = sum(1 for t in types if t == "category")
+        return f"数据特征：{n_num}个数值列、{n_date}个日期列、{n_cat}个类别列，{profile.get('data_rows',0)}行 → 按规则映射图表类型"
+
     def auto_generate(self, filepath: str, sheet: str = "Sheet1",
                       output_path: str = "", chart_type: str = "") -> Dict:
         """自动生成图表"""
@@ -345,6 +424,7 @@ def _cli():
     p = sub.add_parser("recommend", help="推荐图表类型")
     p.add_argument("--file", required=True)
     p.add_argument("--sheet", default="Sheet1")
+    p.add_argument("--smart", action="store_true", help="v5.5: 接入 LLM 语义层（无 Key 自动降级本地规则）")
     
     # generate
     p = sub.add_parser("generate", help="生成图表")
@@ -374,9 +454,13 @@ def _cli():
         a = DataAnalyzer(args.file, args.sheet)
         if a.load():
             profile = a.get_profile()
-            r = ChartRecommender()
-            recs = r.recommend(profile)
-            print(json.dumps({"success": True, "recommendations": recs}, ensure_ascii=False, default=str))
+            cr = ChartRecommender()
+            if args.smart:
+                result = cr.recommend_smart(profile, use_llm=True)
+            else:
+                result = {"success": True, "source": "local_rules",
+                          "recommendations": cr.recommend(profile)}
+            print(json.dumps(result, ensure_ascii=False, default=str))
             a.close()
         else:
             print(json.dumps({"success": False, "error": "加载失败"}, ensure_ascii=False))
