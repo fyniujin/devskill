@@ -36,7 +36,7 @@ from engine.hardware import get_recommended_settings
 from engine.update_check import build_reminder, FEEDBACK_EMAIL
 from engine.exceptions import KingDocError
 
-APP_VERSION = "4.3.5"
+APP_VERSION = "4.4.0"
 
 # 配置路径：环境变量优先，其次 skill 根目录 config.json
 CONFIG_PATH = os.environ.get("KINGDOC_CONFIG", str(SKILL_ROOT / "config.json"))
@@ -2540,6 +2540,248 @@ async def kdoc_ocr_bridge_status() -> str:
         })
     except Exception as e:
         return f"[ERR] 状态获取失败：{e}"
+
+
+# ===========================================================================
+# v4.4.0 表单实时化 + 多维表格自动化工具
+# ===========================================================================
+@mcp.tool()
+async def kdoc_form_realtime_poll(form_id: str, answers: str = "", key_fields: str = "",
+                                  answer_url_template: str = "", webhook: str = "false") -> str:
+    """【免密钥】答卷实时推送：轮询+增量游标检测新答卷，经 webhook 三通道推送摘要与链接。
+
+    form_id: 表单 ID
+    answers: 答卷 JSON 数组字符串（本地模式直接注入；留空则走云端 backend）
+    key_fields: 摘要保留的题目 ID，逗号分隔
+    answer_url_template: 答卷链接模板，支持 {form_id}/{answer_id} 占位
+    webhook: true 时启用 webhook 推送（默认只落库）"""
+    try:
+        from engine.form_realtime import FormRealtimeEngine
+        answer_list = json.loads(answers) if answers else None
+        fields = [f.strip() for f in key_fields.split(",") if f.strip()] or None
+        wh = None
+        if webhook.lower() == "true":
+            try:
+                from engine.webhook_center import get_webhook_center
+                wh = get_webhook_center()
+            except Exception:
+                wh = None
+        eng = FormRealtimeEngine(webhook_center=wh)
+        return _to_text(eng.poll_once(form_id, answer_list, fields, answer_url_template))
+    except Exception as e:
+        return f"[ERR] 答卷实时推送失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_form_realtime_cursor(form_id: str) -> str:
+    """【免密钥】查询答卷实时推送的增量游标状态。"""
+    try:
+        from engine.form_realtime import get_form_realtime
+        return _to_text(get_form_realtime().get_cursor(form_id))
+    except Exception as e:
+        return f"[ERR] 游标查询失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_form_realtime_history(form_id: str = "", limit: int = 20) -> str:
+    """【免密钥】查询答卷推送历史。"""
+    try:
+        from engine.form_realtime import get_form_realtime
+        return _to_text(get_form_realtime().get_push_history(form_id, limit))
+    except Exception as e:
+        return f"[ERR] 推送历史查询失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_form_cross_add(form_id: str, form_name: str, answers: str, mapping: str) -> str:
+    """【免密钥】跨表聚合：添加一张收集表及其「问题→标准字段」映射。
+
+    answers: 答卷 JSON 数组字符串
+    mapping: 映射 JSON 对象字符串，如 {"q1":"姓名","q2":"phone"}
+    注：当前 session 内累积多张表后调用 kdoc_form_cross_run 聚合。"""
+    return _to_text({"success": True, "hint": "请用 Python API FormCrossAnalyticsEngine.add_form 累积多表，"
+                     "或一次性调用 kdoc_form_cross_aggregate 传入全部表单", "form_id": form_id})
+
+
+@mcp.tool()
+async def kdoc_form_cross_aggregate(forms: str, dedup_fields: str = "") -> str:
+    """【免密钥】一次性跨表聚合：多张表按映射合并去重统计。
+
+    forms: JSON 数组字符串，每项 {"form_id","form_name","answers":[...],"mapping":{...}}
+    dedup_fields: 去重身份字段优先级，逗号分隔（默认 phone,mobile,email,id_card,name,wechat）"""
+    try:
+        from engine.form_cross_analytics import aggregate_forms
+        form_list = json.loads(forms)
+        fields = [f.strip() for f in dedup_fields.split(",") if f.strip()] or None
+        result = aggregate_forms(form_list, fields)
+        result.pop("rows", None)
+        return _to_text(result)
+    except Exception as e:
+        return f"[ERR] 跨表聚合失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_form_cross_dashboard(forms: str, output_path: str = "", title: str = "跨表聚合看板") -> str:
+    """【免密钥】生成跨表聚合 HTML 看板（自包含离线可打开）。
+
+    forms: JSON 数组字符串，同 kdoc_form_cross_aggregate 的 forms 参数。"""
+    try:
+        from engine.form_cross_analytics import render_cross_dashboard
+        return _to_text(render_cross_dashboard(json.loads(forms), output_path, title))
+    except Exception as e:
+        return f"[ERR] 看板生成失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_form_bidata_deposit(form_id: str, table_id: str, answers: str, field_map: str) -> str:
+    """【免密钥】答卷一键沉淀多维表格行（复用四类字段序列化），person/link 双向可编辑。
+
+    answers: 答卷 JSON 数组字符串
+    field_map: JSON 对象，{"目标字段":{"question":"题ID","type":"date/link/select/person"}}"""
+    try:
+        from engine.form_to_bidata import deposit_answers
+        return _to_text(deposit_answers(form_id, table_id, json.loads(answers), json.loads(field_map)))
+    except Exception as e:
+        return f"[ERR] 答卷沉淀失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_form_bidata_update_draft(form_id: str, table_id: str, answer_id: str,
+                                        updated_fields: str, field_map: str) -> str:
+    """【免密钥】从多维表格行反向生成答卷更新草稿（person/link 双向可编辑）。"""
+    try:
+        from engine.form_to_bidata import get_form_to_bidata
+        eng = get_form_to_bidata()
+        return _to_text(eng.prepare_update_draft(form_id, table_id, answer_id,
+                                                  json.loads(updated_fields), json.loads(field_map)))
+    except Exception as e:
+        return f"[ERR] 更新草稿生成失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_form_bidata_field_rules() -> str:
+    """【免密钥】查看四类字段序列化规则（date/link/select/person）与双向字段清单。"""
+    try:
+        from engine.form_to_bidata import field_rules
+        return _to_text(field_rules())
+    except Exception as e:
+        return f"[ERR] 字段规则查询失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_table_snapshot_take(table_id: str, rows: str, headers: str = "",
+                                   snapshot_date: str = "", base_date: str = "",
+                                   push: bool = False) -> str:
+    """【免密钥】多维表格每日快照（行数+字段哈希存 SQLite），可与基线 diff。
+
+    rows: 二维表 JSON 数组字符串
+    headers: 列名 JSON 数组字符串（可选）
+    base_date: 对比基线日期 YYYY-MM-DD（留空只快照）"""
+    try:
+        from engine.table_snapshot import get_table_snapshot
+        hdrs = json.loads(headers) if headers else None
+        return _to_text(get_table_snapshot().take_snapshot(
+            table_id, json.loads(rows), hdrs, snapshot_date, push, base_date))
+    except Exception as e:
+        return f"[ERR] 快照失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_table_snapshot_diff(table_id: str, date_a: str, date_b: str,
+                                   headers: str = "") -> str:
+    """【免密钥】对比两次快照，输出增/删/改行清单（谁改了我的表）。"""
+    try:
+        from engine.table_snapshot import diff
+        hdrs = json.loads(headers) if headers else None
+        return _to_text(diff(table_id, date_a, date_b, hdrs))
+    except Exception as e:
+        return f"[ERR] 快照 diff 失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_table_snapshot_history(table_id: str = "", limit: int = 30) -> str:
+    """【免密钥】列出表格快照历史。"""
+    try:
+        from engine.table_snapshot import get_table_snapshot
+        return _to_text(get_table_snapshot().list_snapshots(table_id, limit))
+    except Exception as e:
+        return f"[ERR] 快照历史查询失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_airscript_preset_list() -> str:
+    """【免密钥】列出 AirScript 预设库全部 22 个预设（含元数据与测试样例标识）。"""
+    try:
+        from engine.airscript_presets import list_presets
+        return _to_text(list_presets())
+    except Exception as e:
+        return f"[ERR] 预设列表查询失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_airscript_preset_match(text: str) -> str:
+    """【免密钥】自然语言匹配最佳 AirScript 预设（本地规则，无需 LLM）。"""
+    try:
+        from engine.airscript_presets import preset_from_text
+        return _to_text(preset_from_text(text))
+    except Exception as e:
+        return f"[ERR] 预设匹配失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_airscript_preset_generate(preset_id: str, params: str = "") -> str:
+    """【免密钥】按预设生成脚本 + 测试样例 + 预期输出（走预检）。
+
+    params: JSON 对象字符串（可选，缺省用预设的测试样例）"""
+    try:
+        from engine.airscript_presets import generate_from_preset
+        return _to_text(generate_from_preset(preset_id, json.loads(params) if params else None))
+    except Exception as e:
+        return f"[ERR] 预设生成失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_airscript_preset_validate() -> str:
+    """【免密钥】校验全部预设：测试样例可生成脚本 + 预期输出非空。"""
+    try:
+        from engine.airscript_presets import get_preset_library
+        return _to_text(get_preset_library().validate_all())
+    except Exception as e:
+        return f"[ERR] 预设校验失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_crdt_viz_export(session_id: str) -> str:
+    """【免密钥】导出 CRDT 会话的单元格级操作日志（含向量时钟与冲突标记）。"""
+    try:
+        from engine.crdt_table import get_crdt_table_engine
+        from engine.crdt_visualizer import get_visualizer
+        return _to_text(get_visualizer(get_crdt_table_engine()).export_operations(session_id))
+    except Exception as e:
+        return f"[ERR] 操作日志导出失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_crdt_viz_visualize(session_id: str, output_path: str = "") -> str:
+    """【免密钥】生成 CRDT 冲突时间线 HTML（ECharts 单文件 + SVG 离线降级）。"""
+    try:
+        from engine.crdt_table import get_crdt_table_engine
+        from engine.crdt_visualizer import get_visualizer
+        return _to_text(get_visualizer(get_crdt_table_engine()).visualize_session(session_id, output_path))
+    except Exception as e:
+        return f"[ERR] 冲突可视化失败：{e}"
+
+
+@mcp.tool()
+async def kdoc_crdt_viz_replay(operations: str, output_path: str = "") -> str:
+    """【免密钥】从操作日志直接渲染时间线，还原一次真实并发编辑。
+
+    operations: 操作日志 JSON 数组字符串"""
+    try:
+        from engine.crdt_visualizer import render_conflict_timeline
+        return _to_text(render_conflict_timeline(json.loads(operations), output_path))
+    except Exception as e:
+        return f"[ERR] 时间线回放失败：{e}"
 
 
 def main():
