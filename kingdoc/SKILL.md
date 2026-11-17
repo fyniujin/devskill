@@ -2,7 +2,7 @@
 name: kingdoc
 displayName: 金山文档 KingDoc
 slug: kingdoc
-version: 4.3.5
+version: 4.4.0
 description: >
   金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理
   （文档/智能画布/电子表格/演示文稿/多维表格/收集表/可视化/历史管理/全文搜索/附件），
@@ -29,7 +29,13 @@ description: >
   行业敏感词分包（base 通用 + 教培/医疗/金融/政务四行业包，各 200+ 词条，多包叠加，报告按高/中/低风险分级并定位段落与责任人字段），
   全域扫描定时化（schtasks 周扫空间，新检出项经 webhook 三通道签名推送 + 跨周去重只推新增不扰民），
   配额管理器阈值告警（用量 80% / 95% 两级经 webhook 三通道推送，按天+级别幂等）。
-  本地生成、OCR、硬件画像、WPS AI、全文搜索、块级编辑、配额管理、桥接、AirScript、视图渲染、CRDT、数据 I/O、Webhook、知识中枢、政企合规、主题生成、跨品类对比、合规门面、行业分包、周扫定时化、配额告警等能力零密钥可用。
+  v4.4 表单实时化与多维表格自动化：答卷实时推送（轮询 + 增量游标 + webhook 三通道，端到端 ≤30 秒）、
+  跨表聚合分析（问题→标准字段映射 + 多渠道报名去重 + HTML 看板，去重准确率 ≥98%）、
+  答卷沉淀多维表格（复用 date/link/select/person 四类字段序列化，person/link 双向可编辑）、
+  多维表格定时快照与变更摘要（每日快照存 SQLite + 单元格级 diff，5000 行 ≤10 秒）、
+  AirScript 预设库 20+（去重提醒/到期扫描/自动编号/状态流转等，全部带测试样例与预期输出）、
+  CRDT 冲突可视化（操作日志 + 向量时钟 ECharts 时间线，冲突可审查可追溯）。
+  本地生成、OCR、硬件画像、WPS AI、全文搜索、块级编辑、配额管理、桥接、AirScript、视图渲染、CRDT、数据 I/O、Webhook、知识中枢、政企合规、主题生成、跨品类对比、合规门面、行业分包、周扫定时化、配额告警、答卷实时推送、跨表聚合、答卷沉淀、表格快照、预设库、冲突可视化等能力零密钥可用。
 description_zh: "金山文档 AI 协作助手 — 9 品类在线文档全生命周期管理（深度直连 WPS 开放平台 + 智能画布元素级编辑 + 全文搜索超越腾讯 + 块级编辑段落级 + 18 项增强）"
 platforms: [WorkBuddy, QClaw, ima, Claude Code, Cursor]
 tags: [文档处理, 表格处理, PPT生成, 多维表格, 表单收集, 思维导图, 流程图, OCR, 政企合规]
@@ -978,6 +984,7 @@ python -m engine.update_check --version 3.0.0 --reminder
 
 ## 更新日志
 
+| v4.4.0 | 2026-11-17 | 增加：答卷实时推送引擎 `engine/form_realtime.py`（轮询 + 增量游标检测新答卷，经 webhook_center 三通道推送关键字段摘要与答卷链接，端到端延迟统计验收 ≤30 秒，本地降级只落库）；增加：跨表聚合分析引擎 `engine/form_cross_analytics.py`（问题→标准字段映射配置 + 多渠道报名按身份键去重 + 自包含 HTML 看板，去重准确率 ≥98%）；增加：答卷沉淀多维表格引擎 `engine/form_to_bidata.py`（复用 v4.1 的 date/link/select/person 四类字段序列化，person/link 双向可编辑，支持反向生成答卷更新草稿）；增加：多维表格定时快照与变更摘要引擎 `engine/table_snapshot.py`（每日快照行数+关键字段哈希存 SQLite，行哈希加速 + 复用单元格级 diff 输出增/删/改清单，5000 行 ≤10 秒，可推送或写周报）；增加：AirScript 预设库 `engine/airscript_presets.py`（22 个高频预设全部带元数据/测试样例/预期输出，自然语言关键词匹配，走生成-预检-预览-确认-执行链路）；增加：CRDT 冲突可视化引擎 `engine/crdt_visualizer.py`（导出单元格级操作日志 + 向量时钟，ECharts 单文件时间线 + SVG 离线降级，冲突可审查可追溯）；增加：MCP 工具 19 个（kdoc.form_realtime.* 3 个、kdoc.form_cross.* 3 个、kdoc.form_bidata.* 3 个、kdoc.table_snapshot.* 3 个、kdoc.airscript_preset.* 4 个、kdoc.crdt_viz.* 3 个）；优化：SKILL.md 版本号 4.3.5→4.4.0；优化：description 增强（表单实时化 + 多维表格自动化） |
 | v4.3.5 | 2026-10-10 | 修复：全量自查移除字面违法违规词汇以解决 SkillHub 内容审核误判——内置敏感词分包 `references/sensitive_packs/` 改为合规风险分类描述；旧版明文词库 `references/sensitive_words.txt` 重写为合规分类描述镜像（引擎不再加载）；`engine/compliance_suite.py` 文档示例与 SKILL.md 场景示例中的字面违规词一并替换为合规分类描述；增加：外部行业敏感词包支持（`KINGDOC_EXTERNAL_PACKS_DIR` 环境变量或 `external_packs_dir` 参数，外部同名包覆盖内置包），`SensitiveWordLoader`/`ComplianceSuite`/`ComplianceScheduler`/`compliance_check`/`compliance_center` shim 及 6 个 MCP 合规工具全链路支持；优化：SKILL.md 版本号 4.3.0→4.3.5，双页脚同步更新 |
 | v4.3.0 | 2026-10-10 | 增加：合规套件门面 `engine/compliance_suite.py`（单入口两档输出 quick_scan/full_scan，合并 v4.2 政企合规中心与 v3.4 内容合规检查为统一引擎 ComplianceCore，敏感词加载逻辑收敛为唯一来源 SensitiveWordLoader，维护面减半；旧 `compliance_check.py`/`compliance_center.py` 改为委托 shim）；增加：行业敏感词分包 `references/sensitive_packs/`（base 通用包 + 教培/医疗/金融/政务四行业包，各 200+ 词条，多包叠加加载器，扫描报告按高/中/低风险分级并定位到段落行号与责任人字段）；增加：全域扫描定时化引擎 `engine/compliance_scheduler.py`（schtasks 周扫空间，新检出项经 webhook 三通道签名推送，扫描级跨周去重只推新增不扰民，非 Windows 输出 cron 行）；增加：配额管理器阈值告警（用量 80% / 95% 两级经 webhook 三通道推送，按天+级别幂等去重）；增加：MCP 工具 6 个（kdoc.compliance.quick_scan / full / packs / scheduler_register / scheduler_run / scheduler_status），kdoc.quota.check 现返回 alerts；优化：SKILL.md 版本号 4.2.0→4.3.0；优化：description 增强（合规门面/行业分包/周扫定时化/配额告警） |
 | v4.2.0 | 2026-09-19 | 增加：团队知识库模式引擎 `engine/knowledge_hub.py`（空间级本地倒排索引全文检索，可选 jieba 中文分词，权限矩阵先鉴权后检索，无 read 权限文档不进结果集，硬件自适应分块建索引）；增加：政企合规中心引擎 `engine/compliance_center.py`（密级标注公开/内部/秘密/机密随文档元数据落库，敏感词+数据泄露全量扫描聚合报告，数据不出域声明，本地 OCR 强制云端仅元数据）；增加：主题一键生成引擎 `engine/topic_generator.py`（WPS AI 适配层 generate：大纲→智能文档/PPT/表格初稿，本地降级模板驱动+分段生成，真源可用无缝切换）；增加：跨品类对比与时间线引擎 `engine/cross_compare.py`（版本历史轮询→who/when/what 时间线，表格/多维表格单元格级 diff 视图，跨品类差异化）；优化：OCR 收敛为唯一入口 `engine/local/ocr.py`（删除重复维护的 `engine/ocr/local_ocr.py`，优先桥接 wps-office-suite OCR，未装则 Tesseract 最小兜底，数据不出域）；增加：MCP 工具 19 个（kdoc.khub.* 4 个、kdoc.compliance.* 5 个、kdoc.topic.* 2 个、kdoc.compare.* 3 个、kdoc.ocr_bridge_status 1 个、复用 kdoc.local.ocr.extract_text_bridged）；增加：知识中枢/政企合规/主题生成/跨品类对比/OCR 桥接场景案例；优化：SKILL.md 版本号 4.1.0→4.2.0；优化：description 增强到 30 项增强 |
@@ -1061,7 +1068,7 @@ python -m engine.update_check --version 3.0.0 --reminder
 
 ---
 
-*最后更新：2026-10-10 | v4.3.5*
+*最后更新：2026-11-17 | v4.4.0*
 
 ---
 
@@ -1628,4 +1635,63 @@ text / number / select / multi_select / date / person / link / formula / relatio
 
 ---
 
-*最后更新：2026-10-10 | v4.3.5*
+## 45. 表单实时化（v4.4.0 新增）
+
+> 把「收集 → 实时看 → 合并统计 → 沉淀业务表」打通成闭环，全部自研零外部 API。
+
+### 45.1 答卷实时推送（`engine/form_realtime.py`）
+
+- `kdoc.form_realtime.poll(form_id, answers, key_fields, answer_url_template)`：轮询答卷接口 + 增量游标检测新答卷，命中即经 webhook_center 三通道推送关键字段摘要与答卷链接
+- 增量游标优先取答卷时间字段（update_time/submit_time/created_at），其次 answer_id，均缺失用内容哈希兜底；首次运行只建基线不推历史
+- 端到端延迟统计（`latency_ms` / `within_target`），验收目标 ≤30 秒
+- 本地降级：无 webhook 时只落本地 SQLite，不中断主流程
+- `kdoc.form_realtime.cursor(form_id)`：查游标状态；`kdoc.form_realtime.history(form_id)`：查推送历史
+
+### 45.2 跨表聚合分析（`engine/form_cross_analytics.py`）
+
+- `kdoc.form_cross.add(form_id, form_name, answers, mapping)`：添加收集表与「问题→标准字段」映射（支持中文别名）
+- `kdoc.form_cross.run()`：多表按映射合并统计，按身份键（phone>email>name）归一化去重，输出去重率与字段分布（验收 ≥98%）
+- `kdoc.form_cross.dashboard(output_path)`：生成自包含 HTML 看板（离线可打开，零第三方依赖）
+- 同一活动多渠道报名合并去重，渠道×分组交叉分布一目了然
+
+### 45.3 答卷沉淀多维表格（`engine/form_to_bidata.py`）
+
+- `kdoc.form_bidata.deposit(form_id, table_id, answers, field_map)`：答卷一键转多维表格行，复用 v4.1 `bidata_io` 的 date/link/select/person 四类字段序列化（唯一真相源）
+- `kdoc.form_bidata.prepare_update(form_id, table_id, answer_id, updated_fields, field_map)`：person/link 双向可编辑，从表格行反向生成答卷更新草稿
+- 硬件自适应批量削峰，本地降级输出结构化行并落库
+
+---
+
+## 46. 多维表格自动化（v4.4.0 新增）
+
+> 让「谁改了表 / 自动生成 / 冲突」可审查、可对话、可追溯。
+
+### 46.1 定时快照与变更摘要（`engine/table_snapshot.py`）
+
+- `kdoc.table_snapshot.take(table_id, rows, headers, base_date, push)`：每日快照（行数 + 关键字段哈希）存本地 SQLite
+- 行哈希 O(n) 快速筛选变化行，只对变化行做单元格级 diff（复用 cross_compare），输出增/删/改行清单（验收 5000 行 ≤10 秒）
+- `kdoc.table_snapshot.diff(table_id, date_a, date_b)`：对比任意两次快照；`kdoc.table_snapshot.history(table_id)`：列快照历史
+- 变更摘要可经 webhook 推送或写入周报文本
+
+### 46.2 AirScript 预设库 20+（`engine/airscript_presets.py`）
+
+- `kdoc.airscript_preset.list()`：列出 22 个预设（去重提醒/到期扫描/自动编号/状态流转/重复值标记/库存预警等）
+- `kdoc.airscript_preset.match(text)`：自然语言关键词匹配最佳预设（本地规则，无需 LLM）
+- `kdoc.airscript_preset.generate(preset_id, params)`：生成脚本 + 测试样例 + 预期输出，走 airscript 预检
+- 全部预设带元数据与测试样例（`kdoc.airscript_preset.validate()` 校验），全程中文
+
+### 46.3 CRDT 冲突可视化（`engine/crdt_visualizer.py`）
+
+- `kdoc.crdt_viz.export(session_id)`：导出单元格级操作日志（含向量时钟与冲突标记）
+- `kdoc.crdt_viz.visualize(session_id)`：生成 ECharts 单文件时间线 HTML（CDN + 内联 SVG 离线降级），冲突以红色标记、可审查可追溯
+- `kdoc.crdt_viz.replay(operations)`：从操作日志直接渲染时间线，用于还原一次真实并发编辑
+
+### 46.4 安全与性能约束
+
+- 6 个新引擎全部零第三方 Python 依赖（仅标准库）
+- HTML 看板/时间线自包含，离线可读，不上传任何用户数据
+- 硬件自适应批量分块，子进程不残留
+
+---
+
+*最后更新：2026-11-17 | v4.4.0*
