@@ -27,7 +27,7 @@ https://atomgit.com/fyniujin/devskill
 | receipt-compliance | v4.5.0 | 会计助手：发票OCR识别→真伪查验→报销单自动填充→对接审批系统。企业自主配置，数据本地处理。 |
 | skill-security-checker | v3.7.0 | Skill Security — 安全审计扫描器，审一下这个 skill、装之前帮我查查、这个 skill 安全吗？守护模式（--gate 安装前自动拦截，三档 exit code 0/1/2，宿主可调用不驻留）、一键快扫 30 秒出三档裁定（✅干净/⚠️可疑/🚫恶意）+ Top3 风险 + 一句话理由；指纹库每日静默增量更新（失败保留旧库+标注数据时点）、拦截日志（JSONL 装机审计，90 天可回溯）、给老板的一页纸报告（中文零术语 HTML 可导 PDF）、版本安全 diff（新增风险标红）；全量模式覆盖轻量 SAST 污点追踪、规则引擎、社区规则、提示注入 ML 检测、系统级行为捕获、动态沙箱、供应链风险分析、OSV.dev 离线数据包、锁文件深度解析、恶意 Skill 指纹库、健康度与合规检查、全局排除配置、CI/CD 集成、JSON/HTML/SARIF 报告生成。 |
 | cn-model-gateway | v2.1.0 | 国产大模型统一 MCP 服务器（v2.1.0 网关 2.0），通过标准 JSON-RPC 2.0 协议为 Claude Code / Cursor / Cline 等 Agent 框架提供 DeepSeek、通义千问、智谱 GLM、Kimi、腾讯混元、火山豆包、MiniMax、零一万物、百川智能、阶跃星辰十家模型的统一调用接口。13 个 MCP 工具（ask_model/describe_image/embed_text/rerank/audio_transcribe/video_understand/batch_submit/batch_result/list_providers/health_check/health_report/key_pool_health/member_report）+ 3 个标准资源（models://catalog 模型目录/usage://summary 用量快照/cn-model-gateway://status 网关状态，支持订阅变更）+ 2 个 prompt 模板。内置采样级策略路由（auto/cheap/quality，与 router 同源决策）、Key 池（同厂商多 Key 轮询+429 自动换 Key）、局域网多租户（成员用量分摊）、统一错误映射（429/451/余额不足/内容审查四类 + 中文处置建议）、Function Calling 归一（6 厂商 OpenAI 风格出入参 + 多轮链路）、流式 SSE 输出+心跳保活+断线重连、每日健康晨报 + 厂商变更雷达（3σ 异常检测）、使用量统计、硬件感知并发控制、SQLite WAL 批量任务队列、自动故障转移、环境变量优先读取 API key。支持多模态视觉、5 个非 MCP 框架适配器、性能基准测试和 Token 价格追踪。config.json 填写 api_key（单值或数组）即可启动，无需 GPU、不做微调、不做私有部署，只做标准 MCP 协议网关。 |
-| privacy-search | v1.9.0 | 隐私优先的多引擎并行搜索 Skill，十大搜索引擎并行检索。V1.9 新增可信度标记和口语化错误建议，SKILL.md 瘦身至 ≤12KB。V1.8 新增可信合成与垂直搜索。V1.7 新增 MCP Server 形态。V1.6 新增 Perplexity 式答案合成。V1.5 新增网页正文抓取、结果导出、LLM 摘要。V1.2 统一 HTTP 出口、SimHash 去重、多因子排序、结果缓存、SearXNG 本地部署、隐私模式切换。 |
+| privacy-search | v2.1.0 | 隐私优先的多引擎并行搜索 Skill，十大搜索引擎并行检索。V2.1 新增可信答案 RAG-lite（本地 TF-IDF，结论/依据/反证三段，零 Key）和隐私量化报告（隐私分数+档案周报+DNS 泄露提示+SearXNG 一键自检）；无源论断标注保留；答案缓存「上次搜过」提示。V1.9 可信度标记与口语化错误建议。V1.8 可信合成与垂直搜索。V1.7 MCP Server。 |
 
 ---
 
@@ -395,6 +395,7 @@ your-skill-name/
 
 | 版本 | 日期 | 本次更新 |
 |------|------|---------|
+| v2.1.0 | 2026-11-18 | 增加：可信答案 RAG-lite（多源正文→本地分块→TF-IDF 选块→结论/依据/反证三段答案，无 Key 抽取式为主）；优化：核查与合成合链（无源论断标注 [无源] 保留进正文，非黑盒剔除）；增加：答案缓存「上次搜过」提示；增加：隐私分数体系（五指标加权，累计隐私档案周报）；增加：strict DNS 泄露提示与 cookie 零残留自证；增加：SearXNG 一键自检清单；修复：--synthesize-pro 参数未注册问题 |
 | v1.9.0 | 2026-10-10 | 增加：结果可信度标记（每条结果标注「引擎数/10 引擎返回」）；优化：错误诊断升级为口语化建议；优化：SKILL.md 瘦身至 ≤12KB（引擎细节/语法表/FAQ 迁 references/）；优化：quick_setup 输出简化 |
 | v1.8.0 | 2026-09-19 | 增加：事实核查层（逐论断回链原文做相似度比对，标注支撑度三级：充分/部分/无源，无源论断默认剔除）；增加：垂直搜索模式（news/realtime/academic/image 四类，各配引擎优先级与参数）；增加：高级检索语法（after:/before:/site:/filetype: 解析为各引擎等价参数，不支持的引擎本地过滤并注明）；增加：内容处理管线（正文抓取→分块→摘要显式链，中间产物可查）；调整：synthesiser 集成事实核查层，--synthesize-pro 输出自动附带核查报告；调整：MCP Server synthesize 工具 schema 更新（V1.8 新增事实核查层说明） |
 | v1.7.0 | 2026-08-24 | 增加：MCP Server 形态（stdio JSON-RPC 2.0 暴露 search/synthesize/fetch 三工具）；增加：生态桥接文档（references/mcp_schema.md）；增加：MCP Server 配置段（config.yaml） |
